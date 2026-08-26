@@ -4,8 +4,12 @@ import { Readable } from "node:stream";
 
 /*
  * Reynolds & Reynolds monthly transaction report.
- * Cron: runs on the 2nd of each month for the prior calendar month.
- * Manual: GET /api/reports/reyrey?month=YYYYMM[&dry=1]  (Authorization: Bearer CRON_SECRET)
+ *
+ * Cron (2nd of month): submits prior month. Auth: Authorization: Bearer CRON_SECRET
+ * Admin UI:            GET ?month=YYYYMM&mode=preview|submit|csv
+ *                      Auth: Authorization: Bearer <Supabase user access token>
+ *
+ * Every run is logged to Supabase public.rr_report_runs.
  */
 
 const ENV = {
@@ -22,6 +26,9 @@ const ENV = {
   companyPrefix: process.env.RR_COMPANY_PREFIX!,
   accountNumber: process.env.RR_ACCOUNT_NUMBER!,
   cronSecret: process.env.CRON_SECRET!,
+  supabaseUrl: process.env.SUPABASE_URL!,
+  supabaseAnonKey: process.env.SUPABASE_ANON_KEY!,
+  supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
 };
 
 const FINALIZED_STATUS = "Completed Sale (Accounting)";
@@ -39,10 +46,13 @@ const HEADERS = [
   "Deal Number (Deal ID)",
 ];
 
+type Mode = "preview" | "submit" | "csv";
+
 interface DocuRideRow {
   id: string;
   Name: string;
   Sale_Date: string;
+  Store_Location: string | null;
   Reynolds_Documents: string | null;
   Dealership_Name: string | null;
   Dealership_Street: string | null;
@@ -51,10 +61,28 @@ interface DocuRideRow {
   Dealership_ZIP: string | null;
 }
 
+interface Actor { trigger: "cron" | "admin"; email: string }
+
+// ---------- auth ----------
+
+async function authenticate(req: VercelRequest): Promise<Actor | null> {
+  const auth = req.headers.authorization ?? "";
+  if (!auth.startsWith("Bearer ")) return null;
+  const token = auth.slice(7);
+  if (token === ENV.cronSecret) return { trigger: "cron", email: "cron" };
+
+  const r = await fetch(`${ENV.supabaseUrl}/auth/v1/user`, {
+    headers: { apikey: ENV.supabaseAnonKey, Authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) return null;
+  const u = (await r.json()) as { email?: string };
+  return u.email ? { trigger: "admin", email: u.email } : null;
+}
+
 // ---------- period ----------
 
 function resolvePeriod(monthParam?: string) {
-  let y: number, m: number; // m = 1..12
+  let y: number, m: number;
   if (monthParam && /^\d{6}$/.test(monthParam)) {
     y = Number(monthParam.slice(0, 4));
     m = Number(monthParam.slice(4, 6));
@@ -94,8 +122,8 @@ async function fetchDeals(token: string, start: string, end: string): Promise<Do
   let offset = 0;
   for (;;) {
     const select_query =
-      `SELECT id, Name, Sale_Date, Reynolds_Documents, Dealership_Name, Dealership_Street, ` +
-      `Dealership_City, Dealership_State, Dealership_ZIP FROM DocuRide ` +
+      `SELECT id, Name, Sale_Date, Store_Location, Reynolds_Documents, Dealership_Name, ` +
+      `Dealership_Street, Dealership_City, Dealership_State, Dealership_ZIP FROM DocuRide ` +
       `WHERE Sale_Date between '${start}' and '${end}' ` +
       `and Deal_Status = '${FINALIZED_STATUS}' ` +
       `and eSign_Status = '${SIGNED_STATUS}' ` +
@@ -138,28 +166,33 @@ function csvCell(v: unknown): string {
   return `"${s.replace(/"/g, '""')}"`;
 }
 
-function buildRows(deals: DocuRideRow[]): string[][] {
-  const rows: string[][] = [];
+interface ReportRow { cells: string[]; store: string }
+
+function buildRows(deals: DocuRideRow[]): ReportRow[] {
+  const rows: ReportRow[] = [];
   for (const d of deals) {
     for (const formId of parseFormIds(d.Reynolds_Documents)) {
-      rows.push([
-        toMMDDYYYY(d.Sale_Date),
-        formId,
-        d.Dealership_Name ?? "",
-        d.Dealership_Name ?? "", // dba — same as name unless a distinct dba field exists
-        d.Dealership_Street ?? "",
-        d.Dealership_City ?? "",
-        d.Dealership_State ?? "",
-        d.Dealership_ZIP ?? "",
-        d.Name,
-      ]);
+      rows.push({
+        store: d.Store_Location ?? "",
+        cells: [
+          toMMDDYYYY(d.Sale_Date),
+          formId,
+          d.Dealership_Name ?? "",
+          d.Dealership_Name ?? "", // dba
+          d.Dealership_Street ?? "",
+          d.Dealership_City ?? "",
+          d.Dealership_State ?? "",
+          d.Dealership_ZIP ?? "",
+          d.Name,
+        ],
+      });
     }
   }
   return rows;
 }
 
-function toCsv(rows: string[][]): string {
-  return [HEADERS, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
+function toCsv(rows: ReportRow[]): string {
+  return [HEADERS, ...rows.map((r) => r.cells)].map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
 
 // ---------- ftps ----------
@@ -172,7 +205,7 @@ async function uploadFtps(filename: string, content: string): Promise<string> {
       port: ENV.ftpPort,
       user: ENV.ftpUser,
       password: ENV.ftpPass,
-      secure: true, // explicit FTPS (AUTH TLS) on port 21
+      secure: true,
     });
     if (ENV.ftpPath) await client.ensureDir(ENV.ftpPath);
     const res = await client.uploadFrom(Readable.from([Buffer.from(content, "utf8")]), filename);
@@ -182,16 +215,46 @@ async function uploadFtps(filename: string, content: string): Promise<string> {
   }
 }
 
+// ---------- run log ----------
+
+async function logRun(row: Record<string, unknown>): Promise<void> {
+  try {
+    await fetch(`${ENV.supabaseUrl}/rest/v1/rr_report_runs`, {
+      method: "POST",
+      headers: {
+        apikey: ENV.supabaseServiceKey,
+        Authorization: `Bearer ${ENV.supabaseServiceKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(row),
+    });
+  } catch (e) {
+    console.error("run log failed", e);
+  }
+}
+
 // ---------- handler ----------
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const auth = req.headers.authorization ?? "";
-  if (auth !== `Bearer ${ENV.cronSecret}`) return res.status(401).json({ error: "unauthorized" });
+  const actor = await authenticate(req);
+  if (!actor) return res.status(401).json({ error: "Sign in required" });
 
   const monthParam = typeof req.query.month === "string" ? req.query.month : undefined;
-  const dry = req.query.dry === "1";
+  const modeParam = typeof req.query.mode === "string" ? req.query.mode : undefined;
+  const mode: Mode = actor.trigger === "cron" ? "submit" : (modeParam as Mode) ?? "preview";
+  if (!["preview", "submit", "csv"].includes(mode)) return res.status(400).json({ error: "Bad mode" });
+
   const period = resolvePeriod(monthParam);
   const filename = `${ENV.companyPrefix}_${ENV.accountNumber}_${period.yyyymm}.csv`;
+
+  const base = {
+    period: period.yyyymm,
+    filename,
+    mode: mode === "csv" ? "preview" : mode,
+    trigger: actor.trigger,
+    run_by: actor.email,
+  };
 
   try {
     const token = await zohoAccessToken();
@@ -199,23 +262,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rows = buildRows(deals);
     const csv = toCsv(rows);
 
-    if (dry) {
+    if (mode === "csv") {
       res.setHeader("Content-Type", "text/csv");
-      res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
       return res.status(200).send(csv);
     }
 
-    const ftpMessage = await uploadFtps(filename, csv);
+    const byStore: Record<string, number> = {};
+    for (const r of rows) byStore[r.store] = (byStore[r.store] ?? 0) + 1;
+
+    let ftp: string | null = null;
+    if (mode === "submit") ftp = await uploadFtps(filename, csv);
+
+    await logRun({ ...base, status: "ok", deal_count: deals.length, row_count: rows.length, ftp_response: ftp });
+
     return res.status(200).json({
       period: period.yyyymm,
+      range: { start: period.start, end: period.end },
       filename,
+      mode,
       deals: deals.length,
       transactions: rows.length,
-      ftp: ftpMessage,
+      byStore,
+      headers: HEADERS,
+      rows: rows.map((r) => r.cells),
+      ftp,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("reyrey report failed", message);
+    await logRun({ ...base, status: "error", error: message });
     return res.status(500).json({ period: period.yyyymm, filename, error: message });
   }
 }

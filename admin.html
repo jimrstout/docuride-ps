@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>DocuRide · Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#16181D;--ink-2:#4A4E56;--ink-3:#7C818B;
+  --paper:#F2F2EE;--paper-2:#FBFBF9;--rule:#D2D3CC;--rule-2:#E4E5DF;
+  --canary:#FFD84D;--stamp:#E23B1E;--ok:#1F7A4D;
+  --display:'Archivo',system-ui,sans-serif;--body:'Public Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100%}
+a{color:inherit}
+button{font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.mono{font-family:var(--mono)}
+.eyebrow{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);display:flex;align-items:center;gap:12px}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+
+header{display:flex;align-items:center;justify-content:space-between;padding:18px 28px;border-bottom:1px solid var(--rule);background:var(--paper-2)}
+.brand{font-family:var(--display);font-weight:800;font-size:18px;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+.brand small{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);padding-left:10px;border-left:1px solid var(--rule)}
+.who{font-family:var(--mono);font-size:12px;color:var(--ink-2);display:flex;gap:14px;align-items:center}
+.who button{background:none;border:0;text-decoration:underline;color:var(--ink-3)}
+
+main{max-width:1180px;margin:0 auto;padding:36px 28px 80px}
+
+/* ---- sign in ---- */
+#signin{max-width:380px;margin:80px auto 0}
+#signin h1{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-.02em;line-height:1.05;margin:16px 0 22px}
+label{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:14px 0 6px}
+input[type=email],input[type=password],input[type=month]{width:100%;padding:11px 12px;border:1px solid var(--rule);background:var(--paper-2);font:inherit;border-radius:4px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 16px;border-radius:4px;border:1px solid var(--ink);background:var(--ink);color:var(--paper-2);font-weight:600;font-size:14px}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.stamp{background:var(--stamp);border-color:var(--stamp)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.msg{font-family:var(--mono);font-size:12.5px;margin-top:12px;min-height:18px}
+.msg.err{color:var(--stamp)}
+
+/* ---- app ---- */
+#app{display:none}
+.grid{display:grid;grid-template-columns:300px 1fr;gap:36px}
+@media(max-width:860px){.grid{grid-template-columns:1fr}}
+.panel h1{font-family:var(--display);font-weight:800;font-size:26px;letter-spacing:-.02em;line-height:1.05;margin:14px 0 6px}
+.panel p{color:var(--ink-2);font-size:14px}
+.actions{display:flex;flex-direction:column;gap:10px;margin-top:22px}
+.actions .btn{justify-content:center}
+
+/* report sheet — the deal jacket page */
+.sheet{position:relative;background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;padding:28px 28px 22px;min-height:360px;box-shadow:0 1px 0 var(--rule-2)}
+.sheet .fn{font-family:var(--mono);font-size:13px;color:var(--ink-2)}
+.sheet h2{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.02em;margin-top:4px}
+.tally{display:flex;gap:26px;margin:18px 0 6px;flex-wrap:wrap}
+.tally div{font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+.tally b{display:block;font-family:var(--display);font-weight:800;font-size:28px;color:var(--ink);letter-spacing:-.02em;line-height:1.1}
+.stores{margin-top:14px;border-top:1px solid var(--rule-2);padding-top:10px;font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.stores span{display:inline-block;margin:0 18px 6px 0}
+.stores span b{color:var(--ink);font-weight:600}
+.stamp-mark{position:absolute;top:22px;right:26px;font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.18em;text-transform:uppercase;padding:6px 12px;border:3px solid currentColor;border-radius:4px;transform:rotate(-6deg);opacity:.9;mix-blend-mode:multiply;pointer-events:none}
+.stamp-mark.preview{color:var(--ink-3)}
+.stamp-mark.submitted{color:var(--stamp)}
+.stamp-mark.error{color:var(--stamp)}
+.empty{color:var(--ink-3);font-size:14px;padding:60px 0;text-align:center}
+.tablewrap{margin-top:18px;overflow:auto;border-top:1px solid var(--rule)}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+th{text-align:left;font-weight:500;color:var(--ink-3);padding:9px 10px 8px 0;border-bottom:1px solid var(--rule);white-space:nowrap;letter-spacing:.04em;font-size:11px;text-transform:uppercase}
+td{padding:7px 10px 7px 0;border-bottom:1px solid var(--rule-2);white-space:nowrap;vertical-align:top}
+tr:hover td{background:#F6F6F1}
+td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%);display:inline-block;padding-left:2px;padding-right:2px}
+
+.hist{margin-top:44px}
+.hist table td.ok{color:var(--ok);font-weight:600}
+.hist table td.error{color:var(--stamp);font-weight:600}
+.hist .err{color:var(--stamp)}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:s .7s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">DocuRide <small>Admin</small></div>
+  <div class="who" id="who"></div>
+</header>
+
+<main>
+  <section id="signin">
+    <div class="eyebrow">Admin sign in</div>
+    <h1>Reynolds usage reports.</h1>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username">
+    <label for="pw">Password</label>
+    <input id="pw" type="password" autocomplete="current-password">
+    <div style="margin-top:18px"><button class="btn" id="signinBtn">Sign in</button></div>
+    <div class="msg err" id="signinMsg"></div>
+  </section>
+
+  <section id="app">
+    <div class="grid">
+      <aside class="panel">
+        <div class="eyebrow">Monthly report</div>
+        <h1>Reynolds &amp; Reynolds</h1>
+        <p>Finalized, signed deals with Reynolds forms. One row per form per deal. Due the 14th.</p>
+        <label for="month">Reporting period</label>
+        <input id="month" type="month">
+        <div class="actions">
+          <button class="btn ghost" id="previewBtn">Preview</button>
+          <button class="btn ghost" id="csvBtn" disabled>Download CSV</button>
+          <button class="btn stamp" id="submitBtn" disabled>Submit to Reynolds</button>
+        </div>
+        <div class="msg" id="appMsg"></div>
+      </aside>
+
+      <div>
+        <div class="sheet" id="sheet">
+          <div class="empty">Pick a month and preview to see what will be reported.</div>
+        </div>
+      </div>
+    </div>
+
+    <section class="hist">
+      <div class="eyebrow">Run history</div>
+      <div class="tablewrap" id="hist"></div>
+    </section>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = "https://fovccigwlcmmzfubpfny.supabase.co";
+const SUPABASE_KEY = "sb_publishable_s4cFTF1i1Wff1m3n7zmg5A_9re6X7yj";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const $ = (id) => document.getElementById(id);
+let session = null, lastPeriod = null;
+
+function defaultMonth(){
+  const d = new Date(); d.setMonth(d.getMonth()-1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+}
+function yyyymm(){ return $("month").value.replace("-",""); }
+function label(p){ const y=p.slice(0,4), m=Number(p.slice(4)); return new Date(y,m-1,1).toLocaleString("en-US",{month:"long",year:"numeric"}); }
+function esc(s){ return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function busy(btn,on){ btn.disabled=on; btn.innerHTML = on ? '<span class="spin"></span> Working' : btn.dataset.label; }
+
+async function boot(){
+  const { data } = await sb.auth.getSession();
+  session = data.session;
+  render();
+  sb.auth.onAuthStateChange((_e,s)=>{ session=s; render(); });
+}
+
+function render(){
+  $("signin").style.display = session ? "none" : "block";
+  $("app").style.display = session ? "block" : "none";
+  $("who").innerHTML = session ? `${esc(session.user.email)} <button id="out">Sign out</button>` : "";
+  if (session){
+    $("out").onclick = () => sb.auth.signOut();
+    if (!$("month").value) $("month").value = defaultMonth();
+    loadHistory();
+  }
+}
+
+$("signinBtn").onclick = async () => {
+  $("signinMsg").textContent = "";
+  const { error } = await sb.auth.signInWithPassword({ email: $("email").value.trim(), password: $("pw").value });
+  if (error) $("signinMsg").textContent = error.message;
+};
+$("pw").addEventListener("keydown", e => { if (e.key==="Enter") $("signinBtn").click(); });
+
+async function callReport(mode){
+  const r = await fetch(`/api/reports/reyrey?month=${yyyymm()}&mode=${mode}`, {
+    headers: { Authorization: `Bearer ${session.access_token}` }
+  });
+  if (mode==="csv"){
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    return r.blob();
+  }
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+function drawSheet(j, stamp){
+  const stores = Object.entries(j.byStore).map(([s,n])=>`<span><b>${n}</b> ${esc(s.replace("All Seasons Powersports, ",""))}</span>`).join("");
+  const rows = j.rows.length ? j.rows.map(r=>`<tr>${r.map((c,i)=>`<td>${i===1?`<span class="formid">${esc(c)}</span>`:esc(c)}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="9" class="empty">No transactions this period. A zero-row file is still required — submit it.</td></tr>`;
+  $("sheet").innerHTML = `
+    <div class="stamp-mark ${stamp}">${stamp}</div>
+    <div class="fn">${esc(j.filename)}</div>
+    <h2>${label(j.period)}</h2>
+    <div class="tally">
+      <div><b>${j.transactions}</b>transactions</div>
+      <div><b>${j.deals}</b>deals</div>
+      <div><b>${j.range.start} → ${j.range.end}</b>sale dates</div>
+    </div>
+    ${stores ? `<div class="stores">${stores}</div>` : ""}
+    <div class="tablewrap"><table><thead><tr>${j.headers.map(h=>`<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
+    ${j.ftp ? `<div class="msg">FTPS: ${esc(j.ftp)}</div>` : ""}`;
+}
+
+for (const b of ["previewBtn","csvBtn","submitBtn"]) $(b).dataset.label = $(b).textContent;
+
+$("previewBtn").onclick = async () => {
+  $("appMsg").className="msg"; $("appMsg").textContent="";
+  busy($("previewBtn"),true);
+  try {
+    const j = await callReport("preview");
+    drawSheet(j,"preview"); lastPeriod = j.period;
+    $("csvBtn").disabled=false; $("submitBtn").disabled=false;
+    loadHistory();
+  } catch(e){ $("appMsg").className="msg err"; $("appMsg").textContent=e.message; }
+  busy($("previewBtn"),false);
+};
+
+$("csvBtn").onclick = async () => {
+  busy($("csvBtn"),true);
+  try {
+    const blob = await callReport("csv");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = $("sheet").querySelector(".fn").textContent; a.click();
+    URL.revokeObjectURL(a.href);
+  } catch(e){ $("appMsg").className="msg err"; $("appMsg").textContent=e.message; }
+  busy($("csvBtn"),false);
+};
+
+$("submitBtn").onclick = async () => {
+  if (yyyymm() !== lastPeriod){ $("appMsg").className="msg err"; $("appMsg").textContent="Preview this month before submitting."; return; }
+  if (!confirm(`Upload ${label(lastPeriod)} to Reynolds & Reynolds via FTPS?`)) return;
+  busy($("submitBtn"),true);
+  try {
+    const j = await callReport("submit");
+    drawSheet(j,"submitted");
+    $("appMsg").className="msg"; $("appMsg").textContent="Submitted. Watch for the “Transactional Report Received Successfully” email from Reynolds.";
+    loadHistory();
+  } catch(e){ $("appMsg").className="msg err"; $("appMsg").textContent=e.message; $("sheet").querySelector(".stamp-mark")?.classList.replace("preview","error"); }
+  busy($("submitBtn"),false);
+};
+
+async function loadHistory(){
+  const { data, error } = await sb.from("rr_report_runs").select("*").order("created_at",{ascending:false}).limit(50);
+  if (error){ $("hist").innerHTML = `<div class="msg err">${esc(error.message)}</div>`; return; }
+  if (!data.length){ $("hist").innerHTML = `<div class="empty">No runs yet.</div>`; return; }
+  $("hist").innerHTML = `<table><thead><tr><th>When</th><th>Period</th><th>Action</th><th>Rows</th><th>Deals</th><th>By</th><th>Result</th></tr></thead><tbody>${
+    data.map(r=>`<tr>
+      <td>${new Date(r.created_at).toLocaleString("en-US",{dateStyle:"short",timeStyle:"short"})}</td>
+      <td>${label(r.period)}</td>
+      <td>${r.mode}</td><td>${r.row_count}</td><td>${r.deal_count}</td>
+      <td>${esc(r.run_by)}</td>
+      <td class="${r.status}">${r.status==="ok" ? (r.ftp_response ? esc(r.ftp_response) : "ok") : esc(r.error)}</td>
+    </tr>`).join("")}</tbody></table>`;
+}
+
+boot();
+</script>
+</body>
+</html>
