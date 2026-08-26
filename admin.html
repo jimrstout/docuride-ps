@@ -79,9 +79,25 @@ td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%)
 .hist table td.ok{color:var(--ok);font-weight:600}
 .hist table td.error{color:var(--stamp);font-weight:600}
 .hist .err{color:var(--stamp)}
+.users{margin-top:44px}
+.invite{display:flex;gap:10px;align-items:flex-end;margin:14px 0 6px;flex-wrap:wrap}
+.invite div{flex:1;min-width:240px}
+.invite label{margin-top:0}
+.pill{font-family:var(--mono);font-size:11px;padding:2px 8px;border:1px solid var(--rule);border-radius:99px;color:var(--ink-3)}
+.pill.on{color:var(--ok);border-color:var(--ok)}
+#setpw{max-width:380px;margin:80px auto 0;display:none}
+#setpw h1{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-.02em;line-height:1.05;margin:16px 0 22px}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:s .7s linear infinite}
 @keyframes s{to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){.spin{animation:none}}
+@media(prefers-reduced-motion:reduce){.users{margin-top:44px}
+.invite{display:flex;gap:10px;align-items:flex-end;margin:14px 0 6px;flex-wrap:wrap}
+.invite div{flex:1;min-width:240px}
+.invite label{margin-top:0}
+.pill{font-family:var(--mono);font-size:11px;padding:2px 8px;border:1px solid var(--rule);border-radius:99px;color:var(--ink-3)}
+.pill.on{color:var(--ok);border-color:var(--ok)}
+#setpw{max-width:380px;margin:80px auto 0;display:none}
+#setpw h1{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-.02em;line-height:1.05;margin:16px 0 22px}
+.spin{animation:none}}
 </style>
 </head>
 <body>
@@ -100,6 +116,18 @@ td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%)
     <input id="pw" type="password" autocomplete="current-password">
     <div style="margin-top:18px"><button class="btn" id="signinBtn">Sign in</button></div>
     <div class="msg err" id="signinMsg"></div>
+  </section>
+
+  <section id="setpw">
+    <div class="eyebrow">Welcome</div>
+    <h1>Choose a password.</h1>
+    <p class="msg" id="setpwWho"></p>
+    <label for="pw1">Password</label>
+    <input id="pw1" type="password" autocomplete="new-password">
+    <label for="pw2">Confirm</label>
+    <input id="pw2" type="password" autocomplete="new-password">
+    <div style="margin-top:18px"><button class="btn" id="setpwBtn">Save password</button></div>
+    <div class="msg err" id="setpwMsg"></div>
   </section>
 
   <section id="app">
@@ -129,6 +157,16 @@ td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%)
       <div class="eyebrow">Run history</div>
       <div class="tablewrap" id="hist"></div>
     </section>
+
+    <section class="users">
+      <div class="eyebrow">Admin users</div>
+      <div class="invite">
+        <div><label for="invEmail">Invite by email</label><input id="invEmail" type="email" placeholder="name@company.com"></div>
+        <button class="btn" id="invBtn">Send invite</button>
+      </div>
+      <div class="msg" id="invMsg"></div>
+      <div class="tablewrap" id="userlist"></div>
+    </section>
   </section>
 </main>
 
@@ -140,6 +178,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = (id) => document.getElementById(id);
 let session = null, lastPeriod = null;
+const arrivedByInvite = /type=(invite|recovery)/.test(location.hash);
 
 function defaultMonth(){
   const d = new Date(); d.setMonth(d.getMonth()-1);
@@ -158,14 +197,53 @@ async function boot(){
 }
 
 function render(){
+  const needsPw = session && arrivedByInvite && !localStorage.getItem("pwset:"+session.user.id);
   $("signin").style.display = session ? "none" : "block";
-  $("app").style.display = session ? "block" : "none";
+  $("setpw").style.display = needsPw ? "block" : "none";
+  $("app").style.display = session && !needsPw ? "block" : "none";
+  if (needsPw){ $("setpwWho").textContent = session.user.email; return; }
   $("who").innerHTML = session ? `${esc(session.user.email)} <button id="out">Sign out</button>` : "";
   if (session){
     $("out").onclick = () => sb.auth.signOut();
     if (!$("month").value) $("month").value = defaultMonth();
-    loadHistory();
+    loadHistory(); loadUsers();
   }
+}
+
+$("setpwBtn").onclick = async () => {
+  $("setpwMsg").textContent="";
+  const a=$("pw1").value, b=$("pw2").value;
+  if (a.length<8){ $("setpwMsg").textContent="Use at least 8 characters."; return; }
+  if (a!==b){ $("setpwMsg").textContent="Passwords don't match."; return; }
+  const { error } = await sb.auth.updateUser({ password:a });
+  if (error){ $("setpwMsg").textContent=error.message; return; }
+  localStorage.setItem("pwset:"+session.user.id,"1");
+  history.replaceState(null,"",location.pathname);
+  render();
+};
+
+$("invBtn").dataset.label="Send invite";
+$("invBtn").onclick = async () => {
+  $("invMsg").className="msg"; $("invMsg").textContent="";
+  busy($("invBtn"),true);
+  try {
+    const r = await fetch("/api/admin/users",{ method:"POST", headers:{ Authorization:`Bearer ${session.access_token}`, "Content-Type":"application/json" }, body: JSON.stringify({ email:$("invEmail").value }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error);
+    $("invMsg").textContent = `Invite sent to ${j.email}.`; $("invEmail").value="";
+    loadUsers();
+  } catch(e){ $("invMsg").className="msg err"; $("invMsg").textContent=e.message; }
+  busy($("invBtn"),false);
+};
+
+async function loadUsers(){
+  const r = await fetch("/api/admin/users",{ headers:{ Authorization:`Bearer ${session.access_token}` } });
+  const j = await r.json();
+  if (!r.ok){ $("userlist").innerHTML=`<div class="msg err">${esc(j.error)}</div>`; return; }
+  const fmt = d => d ? new Date(d).toLocaleDateString("en-US") : "—";
+  $("userlist").innerHTML = `<table><thead><tr><th>Email</th><th>Status</th><th>Added</th><th>Last sign in</th></tr></thead><tbody>${
+    j.users.map(u=>`<tr><td>${esc(u.email)}</td><td><span class="pill ${u.confirmed?"on":""}">${u.confirmed?"active":"invited"}</span></td><td>${fmt(u.created_at)}</td><td>${fmt(u.last_sign_in_at)}</td></tr>`).join("")
+  }</tbody></table>`;
 }
 
 $("signinBtn").onclick = async () => {
