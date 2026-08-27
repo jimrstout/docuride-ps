@@ -10,9 +10,10 @@
  *   Sold_1_*          -> financials
  *   Trade_1..3_*      -> trades (array, empty trades dropped)
  *
- * The verbatim record always lands in `raw`, so a field we did not think to
- * promote is still queryable via the gin index and a later migration can
- * promote it without a re-sync.
+ * The record also lands in `raw`, minus the identity fields listed in
+ * REDACTED_FIELDS below, so a field we did not think to promote is still
+ * queryable via the gin index and a later migration can promote it without a
+ * re-sync.
  *
  * Zoho field API names are case-sensitive (CLAUDE.md). Every name below was
  * verified against getFields for the DocuRide module.
@@ -76,6 +77,38 @@ export const PROMOTED_COLUMNS: Record<string, keyof DealRow> = {
   Sold_1_Model: "unit_model",
   Reynolds_Documents: "reynolds_documents",
 };
+
+/**
+ * Fields dropped on the way into `raw`.
+ *
+ * `raw` exists so an "off a penny" argument becomes a diff, and none of these
+ * are money fields — but deals_read grants select on the whole row to every
+ * user in the tenant, so mirroring them would put SSNs and dates of birth in
+ * front of anyone who can log in. Keeping them out of Postgres entirely is
+ * cheaper than guarding them once they are in (MIGRATION_PATH.md §6).
+ *
+ * Zoho remains the system of record for these until there is a table with
+ * tighter RLS to hold them. The DL_Upload fields are attachment references,
+ * which resolve to a scan of the licence, so they go too.
+ */
+const REDACTED_FIELDS = new Set([
+  "Buyer_SSN",
+  "Co_Buyer_SSN",
+  "Buyer_DOB",
+  "Co_Buyer_DOB",
+  "Buyer_DL_Number",
+  "Co_Buyer_DL_Number",
+  "Buyer_DL_Upload",
+  "Co_Buyer_DL_Upload",
+]);
+
+function redact(record: ZohoRecord): ZohoRecord {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(record)) {
+    if (!REDACTED_FIELDS.has(k)) out[k] = v;
+  }
+  return out as ZohoRecord;
+}
 
 // ---------- coercion ----------
 
@@ -159,6 +192,6 @@ export function mapDeal(record: ZohoRecord, tenantId: string): DealRow {
     financials: group(record, "Sold_1_"),
     trades: mapTrades(record),
 
-    raw: record,
+    raw: redact(record),
   };
 }
