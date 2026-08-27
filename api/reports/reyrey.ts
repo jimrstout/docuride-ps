@@ -124,10 +124,10 @@ async function fetchDeals(token: string, start: string, end: string): Promise<Do
     const select_query =
       `SELECT id, Name, Sale_Date, Store_Location, Reynolds_Documents, Dealership_Name, ` +
       `Dealership_Street, Dealership_City, Dealership_State, Dealership_ZIP FROM DocuRide ` +
-      `WHERE Sale_Date between '${start}' and '${end}' ` +
-      `and Deal_Status = '${FINALIZED_STATUS}' ` +
-      `and eSign_Status = '${SIGNED_STATUS}' ` +
-      `and Reynolds_Documents is not null ` +
+      `WHERE ((((Sale_Date between '${start}' and '${end}') ` +
+      `and (Deal_Status = '${FINALIZED_STATUS}')) ` +
+      `and (eSign_Status = '${SIGNED_STATUS}')) ` +
+      `and (Reynolds_Documents is not null)) ` +
       `ORDER BY Sale_Date asc, Name asc LIMIT ${pageSize} OFFSET ${offset}`;
 
     const r = await fetch(`${ENV.zohoApi}/crm/v8/coql`, {
