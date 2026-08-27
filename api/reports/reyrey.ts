@@ -217,6 +217,33 @@ async function uploadFtps(filename: string, content: string): Promise<string> {
 
 // ---------- run log ----------
 
+// Phase 1 is single-tenant (MIGRATION_PATH.md §4: All Seasons is tenant #1).
+// rr_report_runs is scoped by RLS on tenant_id, so a run logged without one is
+// invisible to dealership users in admin.html — platform admins still see it.
+// Cached per warm instance; resolved by slug rather than hardcoded so the uuid
+// is not duplicated between here and the migrations.
+let cachedTenantId: string | null = null;
+
+async function tenantId(): Promise<string | null> {
+  if (cachedTenantId) return cachedTenantId;
+  try {
+    const r = await fetch(`${ENV.supabaseUrl}/rest/v1/tenants?slug=eq.allseasons&select=id`, {
+      headers: {
+        apikey: ENV.supabaseServiceKey,
+        Authorization: `Bearer ${ENV.supabaseServiceKey}`,
+      },
+    });
+    if (!r.ok) return null;
+    const rows = (await r.json()) as { id: string }[];
+    cachedTenantId = rows[0]?.id ?? null;
+    return cachedTenantId;
+  } catch (e) {
+    // Never let tenant lookup cost us the run log itself.
+    console.error("tenant lookup failed", e);
+    return null;
+  }
+}
+
 async function logRun(row: Record<string, unknown>): Promise<void> {
   try {
     await fetch(`${ENV.supabaseUrl}/rest/v1/rr_report_runs`, {
@@ -227,7 +254,7 @@ async function logRun(row: Record<string, unknown>): Promise<void> {
         "Content-Type": "application/json",
         Prefer: "return=minimal",
       },
-      body: JSON.stringify(row),
+      body: JSON.stringify({ ...row, tenant_id: await tenantId() }),
     });
   } catch (e) {
     console.error("run log failed", e);
