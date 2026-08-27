@@ -308,11 +308,11 @@ function drawSheet(j, stamp){
     (all?storeRows:storeRows.slice(0,6)).map(([k,v])=>`<tr><td>${esc(short(k))}</td><td class="n">${v.deals}</td><td class="n">${v.forms}</td></tr>`).join("")
   }</tbody></table>${storeRows.length>6&&!all?`<button id="allStores">show all ${storeRows.length} stores</button>`:""}`;
 
-  const rows = deals.size ? [...deals.values()].map(d=>`<tr>
-      <td>${esc(d.date)}</td>
-      <td>${esc(d.deal)}</td>
-      <td class="deal-forms">${d.forms.map(f=>`<span class="formid">${esc(f)}</span>`).join("<br>")}</td>
-      <td class="dealer"><b>${esc(d.name)}</b><br>${esc(d.addr)}, ${esc(d.city)}, ${esc(d.state)} ${esc(d.zip)}</td>
+  const rows = j.rows.length ? j.rows.map(r=>`<tr>
+      <td>${esc(r[0])}</td>
+      <td>${esc(r[8])}</td>
+      <td><span class="formid">${esc(r[1])}</span></td>
+      <td class="dealer"><b>${esc(r[2])}</b><br>${esc(r[4])}, ${esc(r[5])}, ${esc(r[6])} ${esc(r[7])}</td>
     </tr>`).join("")
     : `<tr><td colspan="4" class="empty">No forms used this period. A zero-row file is still required — submit it.</td></tr>`;
 
@@ -326,7 +326,7 @@ function drawSheet(j, stamp){
       <div><b>${j.range.start} → ${j.range.end}</b>sale dates</div>
     </div>
     ${storeRows.length ? `<div class="tally-store" id="tallyStore">${tallyHtml(false)}</div>` : ""}
-    <div class="tablewrap"><table class="compact"><thead><tr><th>Date</th><th>Deal</th><th>Forms used</th><th>Dealer</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="tablewrap"><table class="compact"><thead><tr><th>Date</th><th>Deal</th><th>Form ID</th><th>Dealer</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${j.ftp ? `<div class="msg">FTPS: ${esc(j.ftp)}</div>` : ""}`;
   $("allStores")?.addEventListener("click",()=>{ $("tallyStore").innerHTML = tallyHtml(true); });
 }
