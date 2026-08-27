@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { updateRecord } from "../../lib/zoho/client";
 import { PROMOTED_COLUMNS } from "../../lib/zoho/dealmap";
+import type { AuthedUser } from "../../lib/supabase/service";
 import { sbInsert, sbSelect, sbUpdate, userFromRequest } from "../../lib/supabase/service";
 
 /*
@@ -32,9 +33,15 @@ interface DealRecord {
 
 // ---------- helpers ----------
 
-async function loadDeal(id: string, tenantId: string): Promise<DealRecord | null> {
+/**
+ * A tenant user sees only their own tenant's deals; a platform operator, who
+ * has no tenant of their own, sees any deal so they can troubleshoot across
+ * customers.
+ */
+async function loadDeal(id: string, user: AuthedUser): Promise<DealRecord | null> {
+  const scope = user.isPlatformAdmin ? "" : `&tenant_id=eq.${user.tenantId}`;
   const rows = await sbSelect<DealRecord>(
-    `deals?id=eq.${encodeURIComponent(id)}&tenant_id=eq.${tenantId}&select=*`,
+    `deals?id=eq.${encodeURIComponent(id)}${scope}&select=*`,
   );
   return rows[0] ?? null;
 }
@@ -58,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!UUID_RE.test(id)) return res.status(400).json({ error: "Invalid deal id" });
 
   try {
-    const deal = await loadDeal(id, user.tenantId);
+    const deal = await loadDeal(id, user);
     if (!deal) return res.status(404).json({ error: "Deal not found" });
 
     if (req.method === "GET") return res.status(200).json(deal);
@@ -68,7 +75,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const fields = Object.keys(patch);
     if (fields.length === 0) return res.status(400).json({ error: "Empty patch" });
 
-    const writable = await webWritableFields(user.tenantId);
+    // Keyed on the deal's tenant, not the caller's: ownership is a property of
+    // the tenant whose record is being written, and a platform operator has no
+    // tenant of their own to look it up under.
+    const writable = await webWritableFields(deal.tenant_id);
     const rejected = fields.filter((f) => !writable.has(f));
     if (rejected.length > 0) {
       return res.status(403).json({

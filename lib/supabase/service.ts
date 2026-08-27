@@ -104,8 +104,10 @@ export async function sbUpdate<T>(
 export interface AuthedUser {
   id: string;
   email: string;
-  tenantId: string;
+  /** Null for a platform operator, who belongs to no single tenant. */
+  tenantId: string | null;
   role: string;
+  isPlatformAdmin: boolean;
 }
 
 /**
@@ -124,9 +126,11 @@ export async function userFromRequest(authorization?: string): Promise<AuthedUse
   const user = (await r.json()) as { id?: string; email?: string };
   if (!user.id) return null;
 
-  const profiles = await sbSelect<{ tenant_id: string; role: string }>(
-    `profiles?user_id=eq.${user.id}&select=tenant_id,role`,
-  );
+  const profiles = await sbSelect<{
+    tenant_id: string | null;
+    role: string;
+    is_platform_admin: boolean;
+  }>(`profiles?user_id=eq.${user.id}&select=tenant_id,role,is_platform_admin`);
   const profile = profiles[0];
   if (!profile) return null;
 
@@ -135,6 +139,7 @@ export async function userFromRequest(authorization?: string): Promise<AuthedUse
     email: user.email ?? "",
     tenantId: profile.tenant_id,
     role: profile.role,
+    isPlatformAdmin: profile.is_platform_admin,
   };
 }
 
