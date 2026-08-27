@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getRecord } from "../../lib/zoho/client";
-import { mapDeal } from "../../lib/zoho/dealmap";
-import { isCronRequest, sbSelect, sbUpdate, sbUpsert } from "../../lib/supabase/service";
+import { getRecord } from "../../lib/zoho/client.js";
+import { mapDeal } from "../../lib/zoho/dealmap.js";
+import { isCronRequest, sbSelect, sbUpdate, sbUpsert } from "../../lib/supabase/service.js";
 
 /*
  * Cron worker: drains sync_queue into public.deals.

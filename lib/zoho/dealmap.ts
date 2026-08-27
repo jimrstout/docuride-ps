@@ -19,7 +19,7 @@
  * verified against getFields for the DocuRide module.
  */
 
-import type { ZohoRecord } from "./client";
+import type { ZohoRecord } from "./client.js";
 
 export interface DealRow {
   tenant_id: string;

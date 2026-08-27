@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { coqlAll } from "../../lib/zoho/client";
-import { isCronRequest, sbInsert, zohoTenantId } from "../../lib/supabase/service";
+import { coqlAll } from "../../lib/zoho/client.js";
+import { isCronRequest, sbInsert, zohoTenantId } from "../../lib/supabase/service.js";
 
 /*
  * One-shot backfill: enqueue every DocuRide record id.

@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { updateRecord } from "../../lib/zoho/client";
-import { PROMOTED_COLUMNS } from "../../lib/zoho/dealmap";
-import type { AuthedUser } from "../../lib/supabase/service";
-import { sbInsert, sbSelect, sbUpdate, userFromRequest } from "../../lib/supabase/service";
+import { updateRecord } from "../../lib/zoho/client.js";
+import { PROMOTED_COLUMNS } from "../../lib/zoho/dealmap.js";
+import type { AuthedUser } from "../../lib/supabase/service.js";
+import { sbInsert, sbSelect, sbUpdate, userFromRequest } from "../../lib/supabase/service.js";
 
 /*
  * Deal read + narrow write-back.

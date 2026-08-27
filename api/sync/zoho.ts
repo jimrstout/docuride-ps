@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { sbInsert, secretsMatch, zohoTenantId } from "../../lib/supabase/service";
+import { sbInsert, secretsMatch, zohoTenantId } from "../../lib/supabase/service.js";
 
 /*
  * Zoho CRM workflow webhook.
