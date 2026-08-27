@@ -37,11 +37,5 @@
         }
       ]
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/reports/reyrey",
-      "schedule": "0 12 2 * *"
-    }
   ]
 }

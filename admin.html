@@ -177,6 +177,7 @@ td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%)
 <script>
 const SUPABASE_URL = "https://fovccigwlcmmzfubpfny.supabase.co";
 const SUPABASE_KEY = "sb_publishable_s4cFTF1i1Wff1m3n7zmg5A_9re6X7yj";
+const FN = SUPABASE_URL + "/functions/v1";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { detectSessionInUrl: true, flowType: "implicit" } });
 
 const $ = (id) => document.getElementById(id);
@@ -232,7 +233,7 @@ $("invBtn").onclick = async () => {
   $("invMsg").className="msg"; $("invMsg").textContent="";
   busy($("invBtn"),true);
   try {
-    const r = await fetch("/api/users",{ method:"POST", headers:{ Authorization:`Bearer ${session.access_token}`, "Content-Type":"application/json" }, body: JSON.stringify({ email:$("invEmail").value }) });
+    const r = await fetch(FN+"/admin-users",{ method:"POST", headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${session.access_token}`, "Content-Type":"application/json" }, body: JSON.stringify({ email:$("invEmail").value }) });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error);
     $("invMsg").textContent = `Invite sent to ${j.email}.`; $("invEmail").value="";
@@ -242,7 +243,7 @@ $("invBtn").onclick = async () => {
 };
 
 async function loadUsers(){
-  const r = await fetch("/api/users",{ headers:{ Authorization:`Bearer ${session.access_token}` } });
+  const r = await fetch(FN+"/admin-users",{ headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${session.access_token}` } });
   const j = await r.json();
   if (!r.ok){ $("userlist").innerHTML=`<div class="msg err">${esc(j.error)}</div>`; return; }
   const fmt = d => d ? new Date(d).toLocaleDateString("en-US") : "—";
@@ -269,8 +270,8 @@ $("signinBtn").onclick = async () => {
 $("pw").addEventListener("keydown", e => { if (e.key==="Enter") $("signinBtn").click(); });
 
 async function callReport(mode){
-  const r = await fetch(`/api/reports/reyrey?month=${yyyymm()}&mode=${mode}`, {
-    headers: { Authorization: `Bearer ${session.access_token}` }
+  const r = await fetch(`${FN}/rr-report?month=${yyyymm()}&mode=${mode}`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${session.access_token}` }
   });
   if (mode==="csv"){
     if (!r.ok) throw new Error((await r.json()).error || r.statusText);
