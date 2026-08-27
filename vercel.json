@@ -43,13 +43,5 @@
       "path": "/api/reports/reyrey",
       "schedule": "0 12 2 * *"
     }
-  ],
-  "functions": {
-    "api/reports/reyrey.ts": {
-      "maxDuration": 60
-    },
-    "api/admin/users.ts": {
-      "maxDuration": 15
-    }
-  }
+  ]
 }
