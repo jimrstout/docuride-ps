@@ -40,15 +40,15 @@
   ],
   "crons": [
     {
-      "path": "/api/reyrey",
+      "path": "/api/reports/reyrey",
       "schedule": "0 12 2 * *"
     }
   ],
   "functions": {
-    "api/reyrey.ts": {
+    "api/reports/reyrey.ts": {
       "maxDuration": 60
     },
-    "api/users.ts": {
+    "api/admin/users.ts": {
       "maxDuration": 15
     }
   }
