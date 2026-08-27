@@ -89,7 +89,8 @@ export const PROMOTED_COLUMNS: Record<string, keyof DealRow> = {
  *
  * Zoho remains the system of record for these until there is a table with
  * tighter RLS to hold them. The DL_Upload fields are attachment references,
- * which resolve to a scan of the licence, so they go too.
+ * which resolve to a scan of the licence, so they go too. Credit scores are
+ * FCRA-regulated and nothing in Phase 1 reads them.
  */
 const REDACTED_FIELDS = new Set([
   "Buyer_SSN",
@@ -100,6 +101,8 @@ const REDACTED_FIELDS = new Set([
   "Co_Buyer_DL_Number",
   "Buyer_DL_Upload",
   "Co_Buyer_DL_Upload",
+  "Buyer_Credit_Score",
+  "Co_Buyer_Credit_Score",
 ]);
 
 function redact(record: ZohoRecord): ZohoRecord {
