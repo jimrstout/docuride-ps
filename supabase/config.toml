@@ -1,0 +1,12 @@
+project_id = "fovccigwlcmmzfubpfny"
+
+# Both functions authenticate with a shared secret, not a Supabase JWT.
+# Zoho's webhook builder cannot attach one, and the pg_cron sweeper calls in
+# over pg_net. verify_jwt must stay false or every call 401s before reaching
+# the handler.
+
+[functions.zoho-sync]
+verify_jwt = false
+
+[functions.zoho-backfill]
+verify_jwt = false
