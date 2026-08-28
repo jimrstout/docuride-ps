@@ -87,6 +87,7 @@ tr:hover td{background:#F6F6F1}
 td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%);display:inline-block;padding-left:2px;padding-right:2px}
 
 .hist{margin-top:44px}
+.hist summary{cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);padding:4px 0}
 .hist table td.ok{color:var(--ok);font-weight:600}
 .hist table td.error{color:var(--stamp);font-weight:600}
 .hist .err{color:var(--stamp)}
@@ -179,11 +180,6 @@ td.act button.danger{color:var(--stamp);border-color:var(--stamp)}
       </div>
     </div>
 
-    <section class="hist">
-      <div class="eyebrow">Run history</div>
-      <div class="tablewrap" id="hist"></div>
-    </section>
-
     <section class="users">
       <div class="eyebrow">Users</div>
       <div class="uform">
@@ -208,6 +204,13 @@ td.act button.danger{color:var(--stamp);border-color:var(--stamp)}
       </div>
       <div class="msg" id="invMsg"></div>
       <div class="tablewrap" id="userlist"></div>
+    </section>
+
+    <section class="hist">
+      <details id="histBox">
+        <summary>R&amp;R run history</summary>
+        <div class="tablewrap" id="hist"></div>
+      </details>
     </section>
   </section>
 </main>
@@ -251,7 +254,11 @@ function render(){
   if (session){
     $("out").onclick = () => sb.auth.signOut();
     if (!$("month").value) $("month").value = defaultMonth();
-    loadHistory(); loadUsers();
+    // Run history is lazy — see the histBox toggle below. Refresh only if it
+    // has already been opened, so signing in does not fetch a collapsed panel.
+    histLoaded = false;
+    if ($("histBox").open) loadHistory();
+    loadUsers();
   }
 }
 
@@ -509,7 +516,7 @@ $("previewBtn").onclick = async () => {
     const j = await callReport("preview");
     drawSheet(j,"preview"); lastPeriod = j.period;
     $("csvBtn").disabled=false; $("submitBtn").disabled=false;
-    loadHistory();
+    if (histLoaded) loadHistory();
   } catch(e){ $("appMsg").className="msg err"; $("appMsg").textContent=e.message; }
   busy($("previewBtn"),false);
 };
@@ -533,12 +540,18 @@ $("submitBtn").onclick = async () => {
     const j = await callReport("submit");
     drawSheet(j,"submitted");
     $("appMsg").className="msg"; $("appMsg").textContent="Submitted. Watch for the “Transactional Report Received Successfully” email from Reynolds.";
-    loadHistory();
+    if (histLoaded) loadHistory();
   } catch(e){ $("appMsg").className="msg err"; $("appMsg").textContent=e.message; $("sheet").querySelector(".stamp-mark")?.classList.replace("preview","error"); }
   busy($("submitBtn"),false);
 };
 
+let histLoaded = false;
+$("histBox").addEventListener("toggle", () => {
+  if ($("histBox").open && !histLoaded) loadHistory();
+});
+
 async function loadHistory(){
+  histLoaded = true;   // set first, so a second toggle cannot race a second fetch
   const { data, error } = await sb.from("rr_report_runs").select("*").order("created_at",{ascending:false}).limit(50);
   if (error){ $("hist").innerHTML = `<div class="msg err">${esc(error.message)}</div>`; return; }
   if (!data.length){ $("hist").innerHTML = `<div class="empty">No runs yet.</div>`; return; }
