@@ -96,6 +96,16 @@ td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%)
 .invite label{margin-top:0}
 .pill{font-family:var(--mono);font-size:11px;padding:2px 8px;border:1px solid var(--rule);border-radius:99px;color:var(--ink-3)}
 .pill.on{color:var(--ok);border-color:var(--ok)}
+.uform{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:14px 0 4px}
+.uform label{margin-top:0}
+.uform select{width:100%;padding:11px 12px;border:1px solid var(--rule);background:var(--paper-2);font:inherit;border-radius:4px}
+.opts{display:flex;flex-wrap:wrap;gap:10px 18px;padding:9px 0 2px}
+.opts label{margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink);display:flex;align-items:center;gap:6px}
+.opts .hint{font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+.uactions{display:flex;gap:10px;margin:14px 0 6px}
+td.act{white-space:nowrap;text-align:right}
+td.act button{background:none;border:1px solid var(--rule);border-radius:4px;padding:3px 9px;font-family:var(--mono);font-size:11px;color:var(--ink-2);margin-left:6px}
+td.act button.danger{color:var(--stamp);border-color:var(--stamp)}
 #setpw{max-width:380px;margin:80px auto 0;display:none}
 #setpw h1{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-.02em;line-height:1.05;margin:16px 0 22px}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:s .7s linear infinite}
@@ -175,10 +185,26 @@ td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%)
     </section>
 
     <section class="users">
-      <div class="eyebrow">Admin users</div>
-      <div class="invite">
-        <div><label for="invEmail">Invite by email</label><input id="invEmail" type="email" placeholder="name@company.com"></div>
-        <button class="btn" id="invBtn">Send invite</button>
+      <div class="eyebrow">Users</div>
+      <div class="uform">
+        <div><label for="uEmail">Email</label><input id="uEmail" type="email" placeholder="name@company.com"></div>
+        <div><label for="uTenant">Tenant</label><select id="uTenant"></select></div>
+        <div><label for="uRole">Role</label><select id="uRole">
+          <option value="admin">admin</option>
+          <option value="editor">editor</option>
+          <option value="viewer">viewer</option>
+        </select></div>
+        <div><label>Scope</label>
+          <div class="opts">
+            <label><input type="radio" name="uScope" value="group" checked> group</label>
+            <label><input type="radio" name="uScope" value="store"> store</label>
+          </div>
+        </div>
+      </div>
+      <div id="uStoresWrap" style="display:none"><label>Stores</label><div class="opts" id="uStores"></div></div>
+      <div class="uactions">
+        <button class="btn" id="uSubmit">Send invite</button>
+        <button class="btn ghost" id="uCancel" style="display:none">Cancel</button>
       </div>
       <div class="msg" id="invMsg"></div>
       <div class="tablewrap" id="userlist"></div>
@@ -241,29 +267,156 @@ $("setpwBtn").onclick = async () => {
   render();
 };
 
-$("invBtn").dataset.label="Send invite";
-$("invBtn").onclick = async () => {
-  $("invMsg").className="msg"; $("invMsg").textContent="";
-  busy($("invBtn"),true);
-  try {
-    const r = await fetch(FN+"/admin-users",{ method:"POST", headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${session.access_token}`, "Content-Type":"application/json" }, body: JSON.stringify({ email:$("invEmail").value }) });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error);
-    $("invMsg").textContent = `Invite sent to ${j.email}.`; $("invEmail").value="";
-    loadUsers();
-  } catch(e){ $("invMsg").className="msg err"; $("invMsg").textContent=e.message; }
-  busy($("invBtn"),false);
-};
+// ---------- users panel ----------
+// Values are written with textContent only; nothing here builds markup from
+// server strings. admin-users GET returns {users, tenants, stores}.
+
+let userData = { users:[], tenants:[], stores:[] };
+let editing = null;   // the user being edited, or null in invite mode
+
+const authHeaders = () => ({ apikey:SUPABASE_KEY, Authorization:`Bearer ${session.access_token}`, "Content-Type":"application/json" });
+const mk = (tag, cls, text) => { const n=document.createElement(tag); if(cls) n.className=cls; if(text!==undefined&&text!==null) n.textContent=String(text); return n; };
+const clr = (n) => { while(n.firstChild) n.removeChild(n.firstChild); };
+const fmtDay = (d) => d ? new Date(d).toLocaleDateString("en-US") : "—";
+// The edge function keys writes on user_id; tolerate either shape from GET.
+const uid = (u) => u.user_id ?? u.id;
+
+const scopeValue = () => document.querySelector('input[name="uScope"]:checked').value;
+const checkedStores = () => [...document.querySelectorAll("#uStores input:checked")].map(i=>i.value);
+
+function renderStoreChecks(selected){
+  const wrap = $("uStores"); clr(wrap);
+  const list = userData.stores.filter(s => s.tenant_id === $("uTenant").value);
+  if (!list.length){ wrap.appendChild(mk("div","hint","No stores for this tenant.")); return; }
+  for (const st of list){
+    const lab = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.value = st.id; cb.checked = selected.includes(st.id);
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(" " + (st.name ?? st.id)));
+    wrap.appendChild(lab);
+  }
+}
+
+function syncScope(){ $("uStoresWrap").style.display = scopeValue()==="store" ? "block" : "none"; }
+
+/** null -> invite mode; a user -> edit mode (email locked). */
+function setMode(user){
+  editing = user || null;
+  $("uEmail").disabled = !!user;
+  $("uEmail").value = user ? (user.email ?? "") : "";
+  $("uSubmit").textContent = user ? "Save changes" : "Send invite";
+  $("uSubmit").dataset.label = $("uSubmit").textContent;
+  $("uCancel").style.display = user ? "inline-flex" : "none";
+  if (user && user.tenant_id) $("uTenant").value = user.tenant_id;
+  $("uRole").value = (user && user.role) || "viewer";
+  const sc = (user && user.scope) || "group";
+  for (const r of document.querySelectorAll('input[name="uScope"]')) r.checked = (r.value === sc);
+  renderStoreChecks(user && sc === "store" ? (user.store_ids || []) : []);
+  syncScope();
+}
+
+function storeNames(ids){
+  const byId = new Map(userData.stores.map(s => [s.id, s.name ?? s.id]));
+  return (ids || []).map(i => byId.get(i) ?? i).join(", ");
+}
+
+function renderUsers(){
+  const wrap = $("userlist"); clr(wrap);
+  if (!userData.users.length){ wrap.appendChild(mk("div","msg","No users yet.")); return; }
+  const table = mk("table"), thead = mk("thead"), htr = mk("tr");
+  for (const h of ["Email","Role","Scope","Stores","Confirmed","Last sign-in",""]) htr.appendChild(mk("th",null,h));
+  thead.appendChild(htr); table.appendChild(thead);
+  const tbody = mk("tbody");
+  for (const u of userData.users){
+    const tr = mk("tr");
+    tr.appendChild(mk("td",null,u.email));
+    if (u.is_platform_admin){
+      // Platform operators are not tenant-scoped and are not editable here.
+      tr.appendChild(mk("td",null,"platform admin"));
+      tr.appendChild(mk("td",null,"—"));
+      tr.appendChild(mk("td",null,"—"));
+    } else {
+      tr.appendChild(mk("td",null,u.role || "—"));
+      tr.appendChild(mk("td",null,u.scope || "—"));
+      tr.appendChild(mk("td",null,u.scope === "group" ? "all" : (storeNames(u.store_ids) || "—")));
+    }
+    const conf = mk("td");
+    conf.appendChild(mk("span", u.confirmed ? "pill on" : "pill", u.confirmed ? "active" : "invited"));
+    tr.appendChild(conf);
+    tr.appendChild(mk("td",null,fmtDay(u.last_sign_in_at)));
+    const act = mk("td","act");
+    if (!u.is_platform_admin){
+      const ed = mk("button",null,"Edit");   ed.onclick = () => setMode(u);     act.appendChild(ed);
+      const rm = mk("button","danger","Remove"); rm.onclick = () => removeUser(u); act.appendChild(rm);
+    }
+    tr.appendChild(act);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody); wrap.appendChild(table);
+}
 
 async function loadUsers(){
-  const r = await fetch(FN+"/admin-users",{ headers:{ apikey:SUPABASE_KEY, Authorization:`Bearer ${session.access_token}` } });
-  const j = await r.json();
-  if (!r.ok){ $("userlist").innerHTML=`<div class="msg err">${esc(j.error)}</div>`; return; }
-  const fmt = d => d ? new Date(d).toLocaleDateString("en-US") : "—";
-  $("userlist").innerHTML = `<table><thead><tr><th>Email</th><th>Status</th><th>Added</th><th>Last sign in</th></tr></thead><tbody>${
-    j.users.map(u=>`<tr><td>${esc(u.email)}</td><td><span class="pill ${u.confirmed?"on":""}">${u.confirmed?"active":"invited"}</span></td><td>${fmt(u.created_at)}</td><td>${fmt(u.last_sign_in_at)}</td></tr>`).join("")
-  }</tbody></table>`;
+  const r = await fetch(FN+"/admin-users",{ headers: authHeaders() });
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok){ clr($("userlist")); $("userlist").appendChild(mk("div","msg err", j.error || r.statusText)); return; }
+  userData = { users: j.users || [], tenants: j.tenants || [], stores: j.stores || [] };
+
+  const sel = $("uTenant"), keep = sel.value;
+  clr(sel);
+  for (const t of userData.tenants){
+    const o = document.createElement("option");
+    o.value = t.id; o.textContent = t.name ?? t.slug ?? t.id;
+    sel.appendChild(o);
+  }
+  if (keep && userData.tenants.some(t => t.id === keep)) sel.value = keep;
+
+  renderUsers();
+  if (!editing) renderStoreChecks(checkedStores());
 }
+
+async function removeUser(u){
+  if (!confirm(`Remove ${u.email}?`)) return;
+  $("invMsg").className="msg"; $("invMsg").textContent="";
+  try {
+    const r = await fetch(FN+"/admin-users",{ method:"DELETE", headers: authHeaders(), body: JSON.stringify({ user_id: uid(u) }) });
+    const j = await r.json().catch(()=>({}));
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    $("invMsg").className="msg ok"; $("invMsg").textContent = `Removed ${u.email}.`;
+    if (editing && uid(editing) === uid(u)) setMode(null);
+    loadUsers();
+  } catch(e){ $("invMsg").className="msg err"; $("invMsg").textContent = e.message; }
+}
+
+$("uTenant").onchange = () => renderStoreChecks([]);   // stores are tenant-specific
+for (const r of document.querySelectorAll('input[name="uScope"]')) r.onchange = syncScope;
+$("uCancel").onclick = () => { setMode(null); $("invMsg").className="msg"; $("invMsg").textContent=""; };
+
+$("uSubmit").onclick = async () => {
+  $("invMsg").className="msg"; $("invMsg").textContent="";
+  busy($("uSubmit"),true);
+  try {
+    const scope = scopeValue();
+    const body = {
+      tenant_id: $("uTenant").value,
+      role: $("uRole").value,
+      scope,
+      store_ids: scope === "store" ? checkedStores() : [],
+    };
+    const r = editing
+      ? await fetch(FN+"/admin-users",{ method:"PATCH", headers: authHeaders(), body: JSON.stringify({ user_id: uid(editing), ...body }) })
+      : await fetch(FN+"/admin-users",{ method:"POST",  headers: authHeaders(), body: JSON.stringify({ email: $("uEmail").value.trim(), ...body }) });
+    const j = await r.json().catch(()=>({}));
+    if (!r.ok) throw new Error(j.error || r.statusText);   // server strings shown verbatim
+    $("invMsg").className="msg ok";
+    $("invMsg").textContent = editing ? `Updated ${editing.email}.` : `Invite sent to ${j.email ?? $("uEmail").value.trim()}.`;
+    setMode(null);
+    loadUsers();
+  } catch(e){ $("invMsg").className="msg err"; $("invMsg").textContent = e.message; }
+  busy($("uSubmit"),false);
+};
+
+setMode(null);
 
 $("forgotBtn").onclick = async () => {
   const email = $("email").value.trim();
