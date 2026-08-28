@@ -40,7 +40,18 @@ async function refresh(): Promise<string> {
   });
   const r = await fetch(`${ENV.accounts}/oauth/v2/token`, { method: "POST", body });
   const j = (await r.json()) as { access_token?: string; expires_in?: number; error?: string };
-  if (!j.access_token) throw new Error(`Zoho token error: ${j.error ?? "unknown"}`);
+  if (!j.access_token) {
+    // Lengths only, never values — tells an unset credential apart from a
+    // wrong one without putting anything sensitive in the log.
+    console.error("zoho token refresh rejected", {
+      error: j.error ?? "unknown",
+      clientIdLength: ENV.clientId?.length ?? 0,
+      clientSecretLength: ENV.clientSecret?.length ?? 0,
+      refreshTokenLength: ENV.refreshToken?.length ?? 0,
+      accounts: ENV.accounts,
+    });
+    throw new Error(`Zoho token error: ${j.error ?? "unknown"}`);
+  }
   cached = {
     token: j.access_token,
     expiresAt: Date.now() + (j.expires_in ?? 3600) * 1000 - TOKEN_SKEW_MS,

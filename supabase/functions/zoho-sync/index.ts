@@ -202,7 +202,21 @@ Deno.serve(async (req: Request) => {
   // Query for Zoho (its webhook builder sets the URL, not headers); header for
   // the pg_cron sweeper, so the secret stays out of request logs.
   const presented = url.searchParams.get("secret") ?? req.headers.get("x-webhook-secret");
-  if (!secretsMatch(presented, Deno.env.get("ZOHO_WEBHOOK_SECRET"))) {
+  const configured = Deno.env.get("ZOHO_WEBHOOK_SECRET");
+  if (!secretsMatch(presented, configured)) {
+    // Lengths and presence only, never the values themselves. This is enough
+    // to tell "secret not set" from "secrets differ" from the usual culprit,
+    // a trailing newline picked up when pasting into the secrets UI.
+    console.warn("zoho-sync auth failed", {
+      configuredSet: configured !== undefined,
+      configuredLength: configured?.length ?? 0,
+      presentedVia: url.searchParams.get("secret")
+        ? "query"
+        : req.headers.get("x-webhook-secret")
+        ? "header"
+        : "none",
+      presentedLength: presented?.length ?? 0,
+    });
     return json(401, { error: "Bad secret" });
   }
 
