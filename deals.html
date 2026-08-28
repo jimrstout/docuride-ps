@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>DocuRide · Deals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#16181D;--ink-2:#4A4E56;--ink-3:#7C818B;
+  --paper:#F2F2EE;--paper-2:#FBFBF9;--rule:#D2D3CC;--rule-2:#E4E5DF;
+  --canary:#FFD84D;--stamp:#E23B1E;--ok:#1F7A4D;
+  --display:'Archivo',system-ui,sans-serif;--body:'Public Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100%}
+a{color:inherit}
+button{font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.mono{font-family:var(--mono)}
+.eyebrow{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);display:flex;align-items:center;gap:12px}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+
+header{display:flex;align-items:center;justify-content:space-between;padding:18px 28px;border-bottom:1px solid var(--rule);background:var(--paper-2)}
+.brand{font-family:var(--display);font-weight:800;font-size:18px;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+.brand small{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);padding-left:10px;border-left:1px solid var(--rule)}
+.who{font-family:var(--mono);font-size:12px;color:var(--ink-2);display:flex;gap:14px;align-items:center}
+.who button{background:none;border:0;text-decoration:underline;color:var(--ink-3)}
+
+main{max-width:1180px;margin:0 auto;padding:36px 28px 80px}
+
+/* ---- sign in ---- */
+#signin{max-width:380px;margin:80px auto 0}
+#signin h1{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-.02em;line-height:1.05;margin:16px 0 22px}
+label{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:14px 0 6px}
+input[type=email],input[type=password],input[type=search],input[type=text]{width:100%;padding:11px 12px;border:1px solid var(--rule);background:var(--paper-2);font:inherit;border-radius:4px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 16px;border-radius:4px;border:1px solid var(--ink);background:var(--ink);color:var(--paper-2);font-weight:600;font-size:14px}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.msg{font-family:var(--mono);font-size:12.5px;margin-top:12px;min-height:18px}
+.msg.err{color:var(--stamp)}
+.msg.ok{color:var(--ok)}
+
+/* ---- app ---- */
+#app{display:none}
+#detailView{display:none}
+h1.page{font-family:var(--display);font-weight:800;font-size:26px;letter-spacing:-.02em;line-height:1.05;margin:14px 0 6px}
+.sub{color:var(--ink-2);font-size:14px}
+
+/* ---- list ---- */
+.filterbar{display:flex;align-items:flex-end;gap:16px;margin:22px 0 6px}
+.filterbar > div:first-child{flex:1;max-width:420px}
+.count{font-family:var(--mono);font-size:12px;color:var(--ink-3);padding-bottom:11px;white-space:nowrap}
+table{width:100%;border-collapse:collapse;background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;margin-top:12px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--rule-2);font-size:13.5px;vertical-align:top}
+th{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);background:var(--paper);border-bottom:1px solid var(--rule);white-space:nowrap}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--canary)}
+tbody tr:last-child td{border-bottom:0}
+td.num{font-family:var(--mono);white-space:nowrap}
+.empty{padding:34px 12px;text-align:center;color:var(--ink-3);font-family:var(--mono);font-size:12.5px}
+
+/* ---- detail ---- */
+.back{background:none;border:0;font-family:var(--mono);font-size:12px;color:var(--ink-3);text-decoration:underline;padding:0;margin-bottom:6px}
+.group{margin-top:26px}
+.kv{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;margin-top:10px}
+.kv .row{display:grid;grid-template-columns:230px 1fr;gap:16px;padding:8px 14px;border-bottom:1px solid var(--rule-2)}
+.kv .row:last-child{border-bottom:0}
+@media(max-width:640px){.kv .row{grid-template-columns:1fr;gap:2px}}
+.kv .k{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);padding-top:2px}
+.kv .v{font-family:var(--mono);font-size:13px;word-break:break-word;white-space:pre-wrap}
+.kv .v.null{color:var(--ink-3)}
+
+details.blob{background:var(--paper-2);border:1px solid var(--rule);border-radius:6px;margin-top:10px}
+details.blob > summary{cursor:pointer;padding:11px 14px;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);display:flex;align-items:center;gap:10px}
+details.blob[open] > summary{border-bottom:1px solid var(--rule)}
+details.blob .tag{color:var(--ink-3);letter-spacing:0;text-transform:none;font-size:11.5px}
+.blobtools{padding:10px 14px 0}
+.blobtools button{background:none;border:1px solid var(--rule);border-radius:4px;padding:4px 9px;font-family:var(--mono);font-size:11px;color:var(--ink-2)}
+pre{font-family:var(--mono);font-size:12px;line-height:1.45;background:var(--paper);border:1px solid var(--rule-2);border-radius:4px;padding:12px;margin:10px 14px 14px;overflow-x:auto;white-space:pre}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">DocuRide <small>Deals</small></div>
+  <div class="who" id="who"></div>
+</header>
+
+<main>
+  <section id="signin">
+    <div class="eyebrow">Sign in</div>
+    <h1>Deal viewer.</h1>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username">
+    <label for="pw">Password</label>
+    <input id="pw" type="password" autocomplete="current-password">
+    <div style="margin-top:18px;display:flex;align-items:center;gap:16px">
+      <button class="btn" id="signinBtn">Sign in</button>
+      <button id="forgotBtn" style="background:none;border:0;font-family:var(--mono);font-size:12px;color:var(--ink-3);text-decoration:underline">Forgot password?</button>
+    </div>
+    <div class="msg" id="signinMsg"></div>
+  </section>
+
+  <section id="app">
+    <div id="listView">
+      <div class="eyebrow">Mirrored from Zoho</div>
+      <h1 class="page">Deals</h1>
+      <p class="sub">Read-only. Most recently updated first, 200 max.</p>
+      <div class="filterbar">
+        <div>
+          <label for="q">Filter — deal number, buyer, stock, VIN</label>
+          <input id="q" type="search" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="count" id="count"></div>
+      </div>
+      <div id="listBody"></div>
+    </div>
+
+    <div id="detailView">
+      <button class="back" id="backBtn">&larr; All deals</button>
+      <div class="eyebrow">Deal</div>
+      <h1 class="page" id="detailTitle"></h1>
+      <p class="sub" id="detailSub"></p>
+      <div id="detailBody"></div>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = "https://fovccigwlcmmzfubpfny.supabase.co";
+const SUPABASE_KEY = "sb_publishable_s4cFTF1i1Wff1m3n7zmg5A_9re6X7yj";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { detectSessionInUrl: true, flowType: "implicit" } });
+
+const $ = (id) => document.getElementById(id);
+let session = null, rows = [];
+
+// Columns pulled for the list. stock_number and vin are selected for the
+// client-side filter only — they are not table columns.
+const LIST_COLS = "id, deal_number, buyer_display_name, store_location, deal_status, esign_status, sale_date, updated_at, stock_number, vin";
+const TABLE_COLS = [
+  ["deal_number","Deal #"],
+  ["buyer_display_name","Buyer"],
+  ["store_location","Store"],
+  ["deal_status","Deal status"],
+  ["esign_status","eSign status"],
+  ["sale_date","Sale date"],
+  ["updated_at","Updated"],
+];
+const FILTER_COLS = ["deal_number","buyer_display_name","stock_number","vin"];
+
+const DETAIL_GROUPS = [
+  ["Identity", ["deal_number","zoho_id","store_location","sale_class","sale_date","salesperson"]],
+  ["Statuses", ["deal_status","esign_status","titlework_status","archive_status"]],
+  ["Buyer",    ["buyer_display_name","buyer_last_name","cobuyer_display_name"]],
+  ["Unit",     ["stock_number","vin","unit_year","unit_make","unit_model"]],
+  ["Meta",     ["zoho_modified_time","created_at","updated_at","tenant_id"]],
+];
+const JSONB_COLS = ["dealership","tila","financials","trades","raw"];
+
+// detectSessionInUrl puts #access_token=... in the hash on a recovery or
+// invite link. Only a uuid is a deal id, so auth fragments never route.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const dealId = () => { const h = location.hash.replace(/^#/,""); return UUID.test(h) ? h : null; };
+
+// ---------- dom helpers (textContent only, never innerHTML) ----------
+
+function el(tag, cls, text){
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined && text !== null) n.textContent = String(text);
+  return n;
+}
+function clear(node){ while (node.firstChild) node.removeChild(node.firstChild); }
+
+function fmtDate(v){ if (!v) return null; const d = new Date(v); return isNaN(d) ? String(v) : d.toLocaleDateString("en-US"); }
+function fmtStamp(v){ if (!v) return null; const d = new Date(v); return isNaN(d) ? String(v) : d.toLocaleString("en-US"); }
+
+/** Scalar -> display string. Objects/arrays are pretty-printed JSON. */
+function display(v){
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "object") return JSON.stringify(v, null, 2);
+  return String(v);
+}
+
+function kvRow(key, value){
+  const row = el("div","row");
+  row.appendChild(el("div","k",key));
+  const shown = display(value);
+  row.appendChild(el("div", shown === null ? "v null" : "v", shown === null ? "—" : shown));
+  return row;
+}
+
+// ---------- list view ----------
+
+function matches(r, q){
+  if (!q) return true;
+  return FILTER_COLS.some(c => String(r[c] ?? "").toLowerCase().includes(q));
+}
+
+function renderList(){
+  const q = $("q").value.trim().toLowerCase();
+  const shown = rows.filter(r => matches(r, q));
+  const body = $("listBody");
+  clear(body);
+
+  $("count").textContent = q
+    ? `${shown.length} of ${rows.length}`
+    : `${rows.length} deal${rows.length === 1 ? "" : "s"}`;
+
+  if (shown.length === 0){
+    body.appendChild(el("div","empty", rows.length === 0
+      ? "No deals mirrored yet."
+      : "No deals match that filter."));
+    return;
+  }
+
+  const table = el("table");
+  const thead = el("thead");
+  const htr = el("tr");
+  for (const [, label] of TABLE_COLS) htr.appendChild(el("th", null, label));
+  thead.appendChild(htr);
+  table.appendChild(thead);
+
+  const tbody = el("tbody");
+  for (const r of shown){
+    const tr = el("tr");
+    tr.tabIndex = 0;
+    for (const [col] of TABLE_COLS){
+      let v = r[col];
+      if (col === "sale_date") v = fmtDate(v);
+      if (col === "updated_at") v = fmtStamp(v);
+      const mono = col === "deal_number" || col === "sale_date" || col === "updated_at";
+      tr.appendChild(el("td", mono ? "num" : null, v ?? "—"));
+    }
+    const open = () => { location.hash = r.id; };
+    tr.onclick = open;
+    tr.onkeydown = (e) => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); open(); } };
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  body.appendChild(table);
+}
+
+async function loadList(){
+  const body = $("listBody");
+  clear(body);
+  body.appendChild(el("div","empty","Loading…"));
+  const { data, error } = await sb.from("deals")
+    .select(LIST_COLS)
+    .order("updated_at",{ ascending:false })
+    .limit(200);
+  if (error){
+    clear(body);
+    body.appendChild(el("div","msg err",error.message));
+    return;
+  }
+  rows = data || [];
+  renderList();
+}
+
+// ---------- detail view ----------
+
+/**
+ * One jsonb column as a collapsed <details>: flat key/value rows one level
+ * deep, nested objects and arrays pretty-printed inside their own row, plus a
+ * toggle for the whole blob.
+ */
+function blobSection(name, value){
+  const d = el("details","blob");
+  const s = el("summary");
+  s.appendChild(el("span",null,name));
+  const isArr = Array.isArray(value);
+  const entries = value && typeof value === "object"
+    ? (isArr ? value.map((v,i) => [`[${i}]`, v]) : Object.entries(value))
+    : [];
+  s.appendChild(el("span","tag", entries.length === 0
+    ? (isArr ? "empty array" : "empty")
+    : `${entries.length} ${isArr ? "item" : "key"}${entries.length === 1 ? "" : "s"}`));
+  d.appendChild(s);
+
+  const tools = el("div","blobtools");
+  const btn = el("button",null,"raw JSON");
+  tools.appendChild(btn);
+  d.appendChild(tools);
+
+  const pre = el("pre", null, JSON.stringify(value === undefined ? null : value, null, 2));
+  pre.style.display = "none";
+  d.appendChild(pre);
+  btn.onclick = () => {
+    const on = pre.style.display === "none";
+    pre.style.display = on ? "block" : "none";
+    btn.textContent = on ? "hide raw JSON" : "raw JSON";
+  };
+
+  if (entries.length){
+    const kv = el("div","kv");
+    kv.style.margin = "10px 14px 14px";
+    for (const [k, v] of entries) kv.appendChild(kvRow(k, v));
+    d.appendChild(kv);
+  }
+  return d;
+}
+
+async function loadDetail(id){
+  const body = $("detailBody");
+  clear(body);
+  $("detailTitle").textContent = "";
+  $("detailSub").textContent = "";
+  body.appendChild(el("div","empty","Loading…"));
+
+  const { data, error } = await sb.from("deals").select("*").eq("id", id).single();
+  clear(body);
+  if (error){
+    $("detailTitle").textContent = "Not found";
+    body.appendChild(el("div","msg err",error.message));
+    return;
+  }
+
+  $("detailTitle").textContent = data.deal_number || "(no deal number)";
+  $("detailSub").textContent = [data.buyer_display_name, data.store_location].filter(Boolean).join(" · ");
+
+  for (const [title, cols] of DETAIL_GROUPS){
+    const g = el("div","group");
+    g.appendChild(el("div","eyebrow",title));
+    const kv = el("div","kv");
+    for (const c of cols){
+      let v = data[c];
+      if (c === "sale_date") v = fmtDate(v);
+      if (c === "zoho_modified_time" || c === "created_at" || c === "updated_at") v = fmtStamp(v);
+      kv.appendChild(kvRow(c, v));
+    }
+    g.appendChild(kv);
+    body.appendChild(g);
+  }
+
+  const jg = el("div","group");
+  jg.appendChild(el("div","eyebrow","JSON columns"));
+  body.appendChild(jg);
+  for (const c of JSONB_COLS) body.appendChild(blobSection(c, data[c]));
+}
+
+// ---------- routing ----------
+
+function route(){
+  if (!session) return;
+  const id = dealId();
+  $("listView").style.display   = id ? "none" : "block";
+  $("detailView").style.display = id ? "block" : "none";
+  if (id) loadDetail(id);
+  else if (rows.length === 0) loadList();
+  else renderList();
+}
+
+addEventListener("hashchange", route);
+$("backBtn").onclick = () => {
+  // Clear the fragment without leaving "#" behind or reloading.
+  history.pushState("", document.title, location.pathname + location.search);
+  route();
+};
+$("q").addEventListener("input", renderList);
+
+// ---------- auth ----------
+
+async function boot(){
+  const { data } = await sb.auth.getSession();
+  session = data.session;
+  render();
+  sb.auth.onAuthStateChange((_e,s)=>{ const had = !!session; session = s; render(); if (!had && s) route(); });
+}
+
+function render(){
+  $("signin").style.display = session ? "none" : "block";
+  $("app").style.display    = session ? "block" : "none";
+  clear($("who"));
+  if (session){
+    $("who").appendChild(el("span",null,session.user.email));
+    const out = el("button",null,"Sign out");
+    out.onclick = () => sb.auth.signOut();
+    $("who").appendChild(out);
+    route();
+  }
+}
+
+$("forgotBtn").onclick = async () => {
+  const email = $("email").value.trim();
+  $("signinMsg").className="msg err";
+  if (!email){ $("signinMsg").textContent="Enter your email first, then click Forgot password."; return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + "/admin" });
+  if (error){ $("signinMsg").textContent=error.message; return; }
+  $("signinMsg").className="msg";
+  $("signinMsg").textContent=`Reset link sent to ${email}. Open it to choose a new password.`;
+};
+
+$("signinBtn").onclick = async () => {
+  $("signinMsg").className="msg err"; $("signinMsg").textContent = "";
+  const { error } = await sb.auth.signInWithPassword({ email: $("email").value.trim(), password: $("pw").value });
+  if (error) $("signinMsg").textContent = error.message;
+};
+$("pw").addEventListener("keydown", e => { if (e.key==="Enter") $("signinBtn").click(); });
+
+boot();
+</script>
+</body>
+</html>
