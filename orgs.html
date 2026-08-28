@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>DocuRide · Groups &amp; Stores</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#16181D;--ink-2:#4A4E56;--ink-3:#7C818B;
+  --paper:#F2F2EE;--paper-2:#FBFBF9;--rule:#D2D3CC;--rule-2:#E4E5DF;
+  --canary:#FFD84D;--stamp:#E23B1E;--ok:#1F7A4D;
+  --display:'Archivo',system-ui,sans-serif;--body:'Public Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100%}
+a{color:inherit}
+button{font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.eyebrow{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);display:flex;align-items:center;gap:12px}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+
+header{display:flex;align-items:center;justify-content:space-between;padding:18px 28px;border-bottom:1px solid var(--rule);background:var(--paper-2)}
+.brand{font-family:var(--display);font-weight:800;font-size:18px;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+.brand small{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);padding-left:10px;border-left:1px solid var(--rule)}
+.who{font-family:var(--mono);font-size:12px;color:var(--ink-2);display:flex;gap:14px;align-items:center}
+.who button{background:none;border:0;text-decoration:underline;color:var(--ink-3)}
+
+main{max-width:1180px;margin:0 auto;padding:36px 28px 80px}
+
+/* ---- sign in ---- */
+#signin{max-width:380px;margin:80px auto 0}
+#signin h1{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-.02em;line-height:1.05;margin:16px 0 22px}
+label{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:14px 0 6px}
+input[type=email],input[type=password],input[type=text],select{width:100%;padding:11px 12px;border:1px solid var(--rule);background:var(--paper-2);font:inherit;border-radius:4px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 16px;border-radius:4px;border:1px solid var(--ink);background:var(--ink);color:var(--paper-2);font-weight:600;font-size:14px}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.msg{font-family:var(--mono);font-size:12.5px;margin-top:12px;min-height:18px;word-break:break-word}
+.msg.err{color:var(--stamp)}
+.msg.ok{color:var(--ok)}
+
+/* ---- app ---- */
+#app{display:none}
+h1.page{font-family:var(--display);font-weight:800;font-size:26px;letter-spacing:-.02em;line-height:1.05;margin:14px 0 6px}
+.sub{color:var(--ink-2);font-size:14px}
+.panel{margin-top:40px}
+.panel:first-of-type{margin-top:22px}
+
+.oform{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:14px 0 4px}
+.oform label{margin-top:0}
+.oform .hint{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:5px;text-transform:none;letter-spacing:0;line-height:1.4}
+.oactions{display:flex;gap:10px;margin:14px 0 6px}
+
+.tablewrap{margin-top:18px;overflow:auto;border-top:1px solid var(--rule)}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+th{text-align:left;font-weight:500;color:var(--ink-3);padding:9px 10px 8px 0;border-bottom:1px solid var(--rule);white-space:nowrap;letter-spacing:.04em;font-size:11px;text-transform:uppercase}
+td{padding:7px 10px 7px 0;border-bottom:1px solid var(--rule-2);vertical-align:top}
+tr:hover td{background:#F6F6F1}
+td.act{white-space:nowrap;text-align:right}
+td.act button{background:none;border:1px solid var(--rule);border-radius:4px;padding:3px 9px;font-family:var(--mono);font-size:11px;color:var(--ink-2);margin-left:6px}
+td.act button.danger{color:var(--stamp);border-color:var(--stamp)}
+.empty{padding:22px 0;color:var(--ink-3);font-family:var(--mono);font-size:12.5px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:s .7s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">DocuRide <small>Groups &amp; Stores</small></div>
+  <div class="who" id="who"></div>
+</header>
+
+<main>
+  <section id="signin">
+    <div class="eyebrow">Sign in</div>
+    <h1>Groups &amp; stores.</h1>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username">
+    <label for="pw">Password</label>
+    <input id="pw" type="password" autocomplete="current-password">
+    <div style="margin-top:18px;display:flex;align-items:center;gap:16px">
+      <button class="btn" id="signinBtn">Sign in</button>
+      <button id="forgotBtn" style="background:none;border:0;font-family:var(--mono);font-size:12px;color:var(--ink-3);text-decoration:underline">Forgot password?</button>
+    </div>
+    <div class="msg" id="signinMsg"></div>
+  </section>
+
+  <section id="app">
+    <nav style="margin-bottom:20px;font-family:var(--mono);font-size:12px"><a href="/deals">Deals</a> · <a href="/admin">Admin</a></nav>
+
+    <!-- ---------- groups (tenants) ---------- -->
+    <div class="panel">
+      <div class="eyebrow">Dealer groups</div>
+      <h1 class="page">Groups</h1>
+      <p class="sub">One row per dealer group. A group cannot be deleted while it still has stores, users, or deals.</p>
+      <div class="oform">
+        <div><label for="gName">Name</label><input id="gName" type="text" placeholder="All Seasons Powersports"></div>
+        <div><label for="gSlug">Slug</label><input id="gSlug" type="text" placeholder="allseasons" autocapitalize="off" spellcheck="false">
+          <div class="hint">Lowercase letters, numbers and hyphens. Fixed once created.</div></div>
+        <div><label for="gCrm">CRM sync</label><select id="gCrm"><option value="zoho">zoho</option></select></div>
+      </div>
+      <div class="oactions">
+        <button class="btn" id="gSubmit">Add group</button>
+        <button class="btn ghost" id="gCancel" style="display:none">Cancel</button>
+      </div>
+      <div class="msg" id="gMsg"></div>
+      <div class="tablewrap" id="gList"></div>
+    </div>
+
+    <!-- ---------- stores ---------- -->
+    <div class="panel">
+      <div class="eyebrow">Store locations</div>
+      <h1 class="page">Stores</h1>
+      <p class="sub">One row per rooftop. The Zoho store location is what the deal mirror matches on.</p>
+      <div class="oform">
+        <div><label for="sTenant">Group</label><select id="sTenant"></select></div>
+        <div><label for="sName">Name</label><input id="sName" type="text" placeholder="Parkersburg"></div>
+        <div><label for="sZoho">Zoho store location</label><input id="sZoho" type="text" placeholder="All Seasons Powersports, Parkersburg" spellcheck="false">
+          <div class="hint">Must exactly match the Zoho Store Location picklist value — this is the deal-mapping key.</div></div>
+        <div><label for="sDms">DMS type</label><select id="sDms"><option value="dx1">dx1</option></select></div>
+        <div><label for="sStreet">Street</label><input id="sStreet" type="text"></div>
+        <div><label for="sCity">City</label><input id="sCity" type="text"></div>
+        <div><label for="sState">State</label><input id="sState" type="text"></div>
+        <div><label for="sZip">ZIP</label><input id="sZip" type="text"></div>
+      </div>
+      <div class="oactions">
+        <button class="btn" id="sSubmit">Add store</button>
+        <button class="btn ghost" id="sCancel" style="display:none">Cancel</button>
+      </div>
+      <div class="msg" id="sMsg"></div>
+      <div class="tablewrap" id="sList"></div>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = "https://fovccigwlcmmzfubpfny.supabase.co";
+const SUPABASE_KEY = "sb_publishable_s4cFTF1i1Wff1m3n7zmg5A_9re6X7yj";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { detectSessionInUrl: true, flowType: "implicit" } });
+
+const $ = (id) => document.getElementById(id);
+let session = null;
+let tenants = [], stores = [];
+let editGroup = null, editStore = null;
+
+// Writes go straight to the tables. RLS gates them on is_platform_admin();
+// a tenant user gets a policy violation back, which is surfaced verbatim.
+const SLUG_RE = /^[a-z0-9-]+$/;
+
+// ---------- dom helpers (textContent only, never innerHTML) ----------
+
+const mk = (tag, cls, text) => { const n=document.createElement(tag); if(cls) n.className=cls; if(text!==undefined&&text!==null) n.textContent=String(text); return n; };
+const clr = (n) => { while(n.firstChild) n.removeChild(n.firstChild); };
+const busy = (btn,on) => { btn.disabled=on; clr(btn); if(on){ btn.appendChild(mk("span","spin")); btn.appendChild(document.createTextNode(" Working")); } else { btn.textContent = btn.dataset.label; } };
+
+function say(id, text, ok){
+  const n = $(id);
+  n.className = "msg" + (text ? (ok ? " ok" : " err") : "");
+  n.textContent = text || "";
+}
+
+function table(headers, rows){
+  const t = mk("table"), thead = mk("thead"), htr = mk("tr");
+  for (const h of headers) htr.appendChild(mk("th",null,h));
+  thead.appendChild(htr); t.appendChild(thead);
+  const tb = mk("tbody");
+  for (const r of rows) tb.appendChild(r);
+  t.appendChild(tb);
+  return t;
+}
+function actions(onEdit, onDelete){
+  const td = mk("td","act");
+  const e = mk("button",null,"Edit");   e.onclick = onEdit;   td.appendChild(e);
+  const d = mk("button","danger","Delete"); d.onclick = onDelete; td.appendChild(d);
+  return td;
+}
+
+// ---------- load ----------
+
+async function loadAll(){
+  const [t, s] = await Promise.all([
+    sb.from("tenants").select("id, slug, name, crm_sync").order("name"),
+    sb.from("stores").select("id, tenant_id, name, zoho_store_location, dms_type, address").order("name"),
+  ]);
+  if (t.error){ clr($("gList")); $("gList").appendChild(mk("div","msg err",t.error.message)); }
+  else tenants = t.data || [];
+  if (s.error){ clr($("sList")); $("sList").appendChild(mk("div","msg err",s.error.message)); }
+  else stores = s.data || [];
+
+  const sel = $("sTenant"), keep = sel.value;
+  clr(sel);
+  for (const g of tenants){
+    const o = document.createElement("option");
+    o.value = g.id; o.textContent = g.name ?? g.slug ?? g.id;
+    sel.appendChild(o);
+  }
+  if (keep && tenants.some(g => g.id === keep)) sel.value = keep;
+
+  if (!t.error) renderGroups();
+  if (!s.error) renderStores();
+}
+
+// ---------- groups ----------
+
+function renderGroups(){
+  const wrap = $("gList"); clr(wrap);
+  if (!tenants.length){ wrap.appendChild(mk("div","empty","No groups yet.")); return; }
+  const counts = new Map();
+  for (const st of stores) counts.set(st.tenant_id, (counts.get(st.tenant_id) ?? 0) + 1);
+  const rows = tenants.map(g => {
+    const tr = mk("tr");
+    tr.appendChild(mk("td",null,g.name));
+    tr.appendChild(mk("td",null,g.slug));
+    tr.appendChild(mk("td",null,g.crm_sync));
+    tr.appendChild(mk("td",null,String(counts.get(g.id) ?? 0)));
+    tr.appendChild(actions(() => editGroupMode(g), () => deleteGroup(g)));
+    return tr;
+  });
+  wrap.appendChild(table(["Name","Slug","CRM sync","Stores",""], rows));
+}
+
+function editGroupMode(g){
+  editGroup = g || null;
+  $("gName").value = g ? (g.name ?? "") : "";
+  $("gSlug").value = g ? (g.slug ?? "") : "";
+  $("gSlug").disabled = !!g;                       // the slug is an identity, not a label
+  $("gCrm").value = (g && g.crm_sync) || "zoho";
+  $("gSubmit").textContent = g ? "Save group" : "Add group";
+  $("gSubmit").dataset.label = $("gSubmit").textContent;
+  $("gCancel").style.display = g ? "inline-flex" : "none";
+  say("gMsg","");
+}
+
+$("gCancel").onclick = () => editGroupMode(null);
+
+$("gSubmit").onclick = async () => {
+  say("gMsg","");
+  const name = $("gName").value.trim();
+  const slug = $("gSlug").value.trim();
+  if (!name) return say("gMsg","Name is required.");
+  if (!editGroup && !SLUG_RE.test(slug)) return say("gMsg","Slug must be lowercase letters, numbers and hyphens only.");
+  busy($("gSubmit"),true);
+  const { error } = editGroup
+    ? await sb.from("tenants").update({ name, crm_sync:$("gCrm").value }).eq("id", editGroup.id)
+    : await sb.from("tenants").insert({ name, slug, crm_sync:$("gCrm").value });
+  busy($("gSubmit"),false);
+  if (error) return say("gMsg", error.message);      // verbatim
+  say("gMsg", editGroup ? `Saved ${name}.` : `Added ${name}.`, true);
+  editGroupMode(null);
+  loadAll();
+};
+
+async function deleteGroup(g){
+  if (!confirm(`Delete group ${g.name}?`)) return;
+  say("gMsg","");
+  const { error } = await sb.from("tenants").delete().eq("id", g.id);
+  // A foreign key from stores/profiles/deals will block this. That rejection
+  // is correct, and the database's wording says which table objected.
+  if (error) return say("gMsg", error.message);
+  say("gMsg", `Deleted ${g.name}.`, true);
+  if (editGroup && editGroup.id === g.id) editGroupMode(null);
+  loadAll();
+}
+
+// ---------- stores ----------
+
+function renderStores(){
+  const wrap = $("sList"); clr(wrap);
+  if (!stores.length){ wrap.appendChild(mk("div","empty","No stores yet.")); return; }
+  const byId = new Map(tenants.map(g => [g.id, g.name ?? g.slug ?? g.id]));
+  const rows = stores.map(st => {
+    const tr = mk("tr");
+    tr.appendChild(mk("td",null,st.name));
+    tr.appendChild(mk("td",null,byId.get(st.tenant_id) ?? st.tenant_id));
+    tr.appendChild(mk("td",null,st.zoho_store_location ?? "—"));
+    tr.appendChild(mk("td",null,st.dms_type ?? "—"));
+    tr.appendChild(actions(() => editStoreMode(st), () => deleteStore(st)));
+    return tr;
+  });
+  wrap.appendChild(table(["Name","Group","Zoho store location","DMS",""], rows));
+}
+
+function editStoreMode(st){
+  editStore = st || null;
+  const a = (st && st.address) || {};
+  if (st && st.tenant_id) $("sTenant").value = st.tenant_id;
+  $("sName").value  = st ? (st.name ?? "") : "";
+  $("sZoho").value  = st ? (st.zoho_store_location ?? "") : "";
+  $("sDms").value   = (st && st.dms_type) || "dx1";
+  $("sStreet").value = a.street ?? "";
+  $("sCity").value   = a.city ?? "";
+  $("sState").value  = a.state ?? "";
+  $("sZip").value    = a.zip ?? "";
+  $("sSubmit").textContent = st ? "Save store" : "Add store";
+  $("sSubmit").dataset.label = $("sSubmit").textContent;
+  $("sCancel").style.display = st ? "inline-flex" : "none";
+  say("sMsg","");
+}
+
+$("sCancel").onclick = () => editStoreMode(null);
+
+$("sSubmit").onclick = async () => {
+  say("sMsg","");
+  const name = $("sName").value.trim();
+  if (!name) return say("sMsg","Name is required.");
+  if (!$("sTenant").value) return say("sMsg","Pick a group first.");
+  // Only non-empty address parts are stored, so the jsonb stays clean.
+  const address = {};
+  for (const [k,id] of [["street","sStreet"],["city","sCity"],["state","sState"],["zip","sZip"]]){
+    const v = $(id).value.trim();
+    if (v) address[k] = v;
+  }
+  const row = {
+    tenant_id: $("sTenant").value,
+    name,
+    zoho_store_location: $("sZoho").value.trim() || null,
+    dms_type: $("sDms").value,
+    address,
+  };
+  busy($("sSubmit"),true);
+  const { error } = editStore
+    ? await sb.from("stores").update(row).eq("id", editStore.id)
+    : await sb.from("stores").insert(row);
+  busy($("sSubmit"),false);
+  if (error) return say("sMsg", error.message);      // verbatim
+  say("sMsg", editStore ? `Saved ${name}.` : `Added ${name}.`, true);
+  editStoreMode(null);
+  loadAll();
+};
+
+async function deleteStore(st){
+  if (!confirm(`Delete store ${st.name}?`)) return;
+  say("sMsg","");
+  const { error } = await sb.from("stores").delete().eq("id", st.id);
+  if (error) return say("sMsg", error.message);
+  say("sMsg", `Deleted ${st.name}.`, true);
+  if (editStore && editStore.id === st.id) editStoreMode(null);
+  loadAll();
+}
+
+// ---------- auth ----------
+
+async function boot(){
+  const { data } = await sb.auth.getSession();
+  session = data.session;
+  render();
+  sb.auth.onAuthStateChange((_e,s)=>{ const had = !!session; session = s; render(); if (!had && s) loadAll(); });
+}
+
+function render(){
+  $("signin").style.display = session ? "none" : "block";
+  $("app").style.display    = session ? "block" : "none";
+  clr($("who"));
+  if (session){
+    $("who").appendChild(mk("span",null,session.user.email));
+    const out = mk("button",null,"Sign out");
+    out.onclick = () => sb.auth.signOut();
+    $("who").appendChild(out);
+    loadAll();
+  }
+}
+
+$("forgotBtn").onclick = async () => {
+  const email = $("email").value.trim();
+  $("signinMsg").className="msg err";
+  if (!email){ $("signinMsg").textContent="Enter your email first, then click Forgot password."; return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + "/admin" });
+  if (error){ $("signinMsg").textContent=error.message; return; }
+  $("signinMsg").className="msg";
+  $("signinMsg").textContent=`Reset link sent to ${email}. Open it to choose a new password.`;
+};
+
+$("signinBtn").onclick = async () => {
+  $("signinMsg").className="msg err"; $("signinMsg").textContent = "";
+  const { error } = await sb.auth.signInWithPassword({ email: $("email").value.trim(), password: $("pw").value });
+  if (error) $("signinMsg").textContent = error.message;
+};
+$("pw").addEventListener("keydown", e => { if (e.key==="Enter") $("signinBtn").click(); });
+
+editGroupMode(null);
+editStoreMode(null);
+boot();
+</script>
+</body>
+</html>
