@@ -4,10 +4,6 @@
   "trailingSlash": false,
   "crons": [
     {
-      "path": "/api/sync/process",
-      "schedule": "* * * * *"
-    },
-    {
       "path": "/api/reports/reyrey",
       "schedule": "0 6 2 * *"
     }
