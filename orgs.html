@@ -118,8 +118,9 @@ td.act button.danger{color:var(--stamp);border-color:var(--stamp)}
       <p class="sub">One row per rooftop. The Zoho store location is what the deal mirror matches on.</p>
       <div class="oform">
         <div><label for="sTenant">Group</label><select id="sTenant"></select></div>
-        <div><label for="sName">Name</label><input id="sName" type="text" placeholder="Parkersburg"></div>
-        <div><label for="sZoho">Zoho store location</label><input id="sZoho" type="text" placeholder="All Seasons Powersports, Parkersburg" spellcheck="false">
+        <div><label for="sName">Display name</label><input id="sName" type="text" placeholder="Parkersburg">
+          <div class="hint">Shown throughout DocuRide.</div></div>
+        <div><label for="sZoho">Zoho location key</label><input id="sZoho" type="text" placeholder="All Seasons Powersports, Parkersburg" spellcheck="false">
           <div class="hint">Must exactly match the Zoho Store Location picklist value — this is the deal-mapping key.</div></div>
         <div><label for="sDms">DMS type</label><select id="sDms"><option value="dx1">dx1</option></select></div>
         <div><label for="sStreet">Street</label><input id="sStreet" type="text"></div>
@@ -282,7 +283,7 @@ function renderStores(){
     tr.appendChild(actions(() => editStoreMode(st), () => deleteStore(st)));
     return tr;
   });
-  wrap.appendChild(table(["Name","Group","Zoho store location","DMS",""], rows));
+  wrap.appendChild(table(["Display name","Group","Zoho location key","DMS",""], rows));
 }
 
 function editStoreMode(st){
