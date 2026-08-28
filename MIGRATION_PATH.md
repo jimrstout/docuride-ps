@@ -110,28 +110,41 @@ Zoho stays master. Supabase becomes a read replica.
 - **Exit criteria:** Supabase has every deal Zoho has; R&R runs off Supabase.
 
 ### Phase 2 — Port the logic (4–6 weeks)
-The Deluge functions become TypeScript modules. Do these in dependency order, mirroring `DX1_Full_Data_Sync`:
-1. `dms/dx1.ts` — `Get_DX1_MUI_Info` + Parts/Labor + F&I + Tax mapping. Add the MISC line-item workaround here.
-2. `lienholders/match.ts` — first-two-words `starts_with` matcher.
-3. `tila/calc.ts` — Appendix J APR, US Rule amortization, all three day-count bases. **Port the four validated lenders as unit tests first**, then write the code to pass them. This is the one place a bug costs real money.
-4. `credit/link.ts`, `leads/link.ts`.
 
-Run both in parallel: Deluge writes to Zoho, TS writes to Supabase, a nightly job diffs them. Any penny off is a ticket.
+Per ARCHITECTURE.md, the Deluge functions become **Supabase Edge Functions and
+Deno modules under `supabase/functions/_shared/`** — not Vercel functions. Do
+them in dependency order, mirroring `DX1_Full_Data_Sync`:
 
-- **Exit criteria:** 30 days of parallel run with zero unexplained diffs.
+1. `_shared/dms/dx1.ts` — `Get_DX1_MUI_Info` + Parts/Labor + F&I + Tax mapping. Add the MISC line-item workaround here. Per-store DX1 credentials come from `stores.dms_config`, decrypted inside the function; they never reach the browser.
+2. `_shared/lienholders/match.ts` — first-two-words `starts_with` matcher.
+3. `_shared/tila/calc.ts` — Appendix J APR, US Rule amortization, all three day-count bases. **Port the four validated lenders as unit tests first** (`deno test`), then write the code to pass them. This is the one place a bug costs real money.
+4. `_shared/credit/link.ts`, `_shared/leads/link.ts`.
+
+Pure calculation belongs in `_shared/`, not in a function entrypoint: it is the
+part that must be unit-testable without HTTP, and the part a nightly diff job
+calls directly.
+
+Run both in parallel: Deluge writes to Zoho, the Deno port writes to Supabase,
+and a `pg_cron` job invokes a `deal-diff` Edge Function nightly to compare
+them. Any penny off is a ticket.
+
+- **Exit criteria:** 30 days of parallel run with zero unexplained diffs, and TILA passing the four lender fixtures under `deno test`.
 
 ### Phase 3 — Flip the source of truth (2–3 weeks)
-- "Refresh from DMS" button in the web UI calls the TS pipeline. Result writes to Supabase, then pushes to Zoho (reverse of Phase 1). Deluge functions retired.
-- Document generation moves to `/api/documents/generate` → Writer merge API with JSON payload → PDF to Supabase Storage (or WorkDrive during transition) → `documents` row.
-- Zoho Sign called from `/api/documents/send`. Completion webhook lands in `/api/esign/callback`, updates `documents.status`. Your self-routing filename scheme becomes a column instead of a naming convention.
-- Finalize action in the web UI is what writes `rr_document_log`.
-- **Exit criteria:** a deal can go DMS → docs → signed → filed → reported without a human opening Zoho CRM.
+
+- "Refresh from DMS" in the web UI calls Edge Function `deal-refresh`, which runs the Phase 2 pipeline, writes Supabase, then pushes to Zoho (reverse of Phase 1). Deluge functions retired. The UI holds a Supabase user JWT; the function resolves tenant and store from `profiles`, so the browser never carries a service-role key.
+- Document generation is Edge Function `documents-generate` → Zoho Writer merge API with a JSON payload → PDF into Supabase Storage → `documents` row. No Vercel involvement: this is HTTPS and object storage, both of which Deno does natively.
+- Zoho Sign is called from Edge Function `documents-send`. The completion webhook lands on Edge Function `esign-callback` with `verify_jwt = false` and a shared-secret query parameter, matching the `zoho-sync` pattern — an external service cannot present a Supabase JWT. It updates `documents.status`, and the self-routing filename scheme becomes a column instead of a naming convention.
+- The finalize action writes `rr_document_log`, inside the same Edge Function that performs the finalize, so the billing record and the state change share a transaction boundary.
+- R&R submission stays split exactly once: Edge Function `rr-report` assembles and logs the CSV, then hands the bytes to the Vercel FTPS relay, which transmits and returns the FTP response. The relay holds FTPS credentials and no business logic (ARCHITECTURE.md, "The one standing exception").
+- **Exit criteria:** a deal can go DMS → docs → signed → filed → reported without a human opening Zoho CRM, and the only Vercel function invoked anywhere in that path is the FTPS relay.
 
 ### Phase 4 — Zoho becomes optional (ongoing)
-- Zoho push from Phase 3 becomes a toggle per tenant (`tenants.crm_sync = 'zoho' | 'none' | 'hubspot'...`).
-- Second tenant onboarded with `crm_sync = 'none'`. This is the real test of "CRM-agnostic."
-- Credit app intake: `credit_applications` table + hosted form (paid add-on, as scoped).
-- F&I menu: slot-based `fi_selections`, per-vendor dispatch module, sequence allocator.
+
+- Zoho push from Phase 3 becomes a toggle per tenant (`tenants.crm_sync = 'zoho' | 'none' | 'hubspot'...`), read by the Edge Functions rather than branched in the UI.
+- Second tenant onboarded with `crm_sync = 'none'`. This is the real test of "CRM-agnostic," and also of the tenant resolution in `zoho-sync`, which currently asserts exactly one tenant with `crm_sync = 'zoho'` and must become an explicit mapping before a second Zoho tenant exists.
+- Credit app intake: `credit_applications` table under tighter RLS than `deals`, plus a hosted form posting to an Edge Function (paid add-on, as scoped). GLBA retention policy applies here, not to `deals`.
+- F&I menu: slot-based `fi_selections`, a per-vendor dispatch Edge Function, and the sequence allocator in Postgres so numbers are allocated transactionally rather than by read-then-write.
 
 ---
 
