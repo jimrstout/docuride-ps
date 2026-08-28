@@ -27,6 +27,11 @@ import {
  */
 
 const MODULES = new Set(["DocuRide"]);
+// Zoho's workflow webhook UI drops literal custom parameters inconsistently
+// (observed 2026-08-28: only `secret` and `id` arrive). Since this endpoint
+// only serves the DocuRide module today, default it rather than require Zoho
+// to transmit it. Revisit when a second module is mirrored.
+const DEFAULT_MODULE = "DocuRide";
 const MAX_ATTEMPTS = 5;
 const BATCH = 50;
 // Leave room inside the Edge Function wall clock to finish the item in flight.
@@ -227,7 +232,7 @@ Deno.serve(async (req: Request) => {
     if (!drainOnly) {
       const p = await params(req, url);
       const id = (p.id ?? "").trim();
-      const module = (p.module ?? "").trim();
+      const module = (p.module ?? "").trim() || DEFAULT_MODULE;
 
       if (!id || !MODULES.has(module)) {
         // Key names only, never values: the query string carries the secret.
