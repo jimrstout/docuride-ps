@@ -2,12 +2,9 @@
   "name": "docuride",
   "private": true,
   "type": "module",
-  "dependencies": {
-    "basic-ftp": "^5.0.5"
-  },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "@vercel/node": "^5.1.0",
-    "typescript": "^5.6.0",
-    "@types/node": "^22.0.0"
+    "typescript": "^5.6.0"
   }
 }
