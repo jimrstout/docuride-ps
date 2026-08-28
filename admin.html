@@ -43,6 +43,7 @@ input[type=email],input[type=password],input[type=month]{width:100%;padding:11px
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .msg{font-family:var(--mono);font-size:12.5px;margin-top:12px;min-height:18px}
 .msg.err{color:var(--stamp)}
+.msg.ok{color:var(--ok)}
 
 /* ---- app ---- */
 #app{display:none}
@@ -152,6 +153,7 @@ td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%)
         <label for="month">Reporting period</label>
         <input id="month" type="month">
         <div class="actions">
+          <button class="btn ghost" id="testBtn">Test Connection</button>
           <button class="btn ghost" id="previewBtn">Preview</button>
           <button class="btn ghost" id="csvBtn" disabled>Download CSV</button>
           <button class="btn stamp" id="submitBtn" disabled>Submit to Reynolds</button>
@@ -331,7 +333,20 @@ function drawSheet(j, stamp){
   $("allStores")?.addEventListener("click",()=>{ $("tallyStore").innerHTML = tallyHtml(true); });
 }
 
-for (const b of ["previewBtn","csvBtn","submitBtn"]) $(b).dataset.label = $(b).textContent;
+for (const b of ["testBtn","previewBtn","csvBtn","submitBtn"]) $(b).dataset.label = $(b).textContent;
+
+$("testBtn").onclick = async () => {
+  $("appMsg").className="msg"; $("appMsg").textContent="";
+  busy($("testBtn"),true);
+  try {
+    const j = await callReport("login-test");
+    // rr-report answers 500 + {ok:false,error} on failure, so callReport has
+    // already thrown by here; this guards a 200 that somehow lacks ok.
+    if (!j.ok) throw new Error(j.error || "Connection failed");
+    $("appMsg").className="msg ok"; $("appMsg").textContent=`Connected (${j.ms}ms)`;
+  } catch(e){ $("appMsg").className="msg err"; $("appMsg").textContent=e.message; }
+  busy($("testBtn"),false);
+};
 
 $("previewBtn").onclick = async () => {
   $("appMsg").className="msg"; $("appMsg").textContent="";
