@@ -36,7 +36,7 @@ main{max-width:1180px;margin:0 auto;padding:36px 28px 80px}
 #signin{max-width:380px;margin:80px auto 0}
 #signin h1{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-.02em;line-height:1.05;margin:16px 0 22px}
 label{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:14px 0 6px}
-input[type=email],input[type=password],input[type=month]{width:100%;padding:11px 12px;border:1px solid var(--rule);background:var(--paper-2);font:inherit;border-radius:4px}
+input[type=email],input[type=password],input[type=month],input[type=text]{width:100%;padding:11px 12px;border:1px solid var(--rule);background:var(--paper-2);font:inherit;border-radius:4px}
 .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 16px;border-radius:4px;border:1px solid var(--ink);background:var(--ink);color:var(--paper-2);font-weight:600;font-size:14px}
 .btn.ghost{background:transparent;color:var(--ink)}
 .btn.stamp{background:var(--stamp);border-color:var(--stamp)}
@@ -86,11 +86,16 @@ td{padding:7px 10px 7px 0;border-bottom:1px solid var(--rule-2);white-space:nowr
 tr:hover td{background:#F6F6F1}
 td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%);display:inline-block;padding-left:2px;padding-right:2px}
 
-.approval{margin-top:16px;font-family:var(--mono);font-size:12px;min-height:20px}
-.approval .done{color:var(--ok)}
+/* Approval sits with the report actions — same column, same button width. */
+.approval{margin-top:10px}
+.approval .btn{width:100%;justify-content:center}
+.approval .note{font-family:var(--mono);font-size:11px;color:var(--ink-3);line-height:1.45;margin-top:8px}
+.approval .done{font-family:var(--mono);font-size:12px;color:var(--ok);line-height:1.45}
+.approval .err{font-family:var(--mono);font-size:12px;color:var(--stamp);line-height:1.45}
 .settings{margin-top:26px;padding-top:20px;border-top:1px solid var(--rule)}
 .settings label{margin-top:0}
-.settings .hint{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:5px;text-transform:none;letter-spacing:0;line-height:1.4}
+.settings .hint{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:6px;text-transform:none;letter-spacing:0;line-height:1.45}
+.settings .btn{width:100%;justify-content:center}
 .hist{margin-top:44px}
 .hist summary{cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);padding:4px 0}
 .hist table td.ok{color:var(--ok);font-weight:600}
@@ -599,25 +604,47 @@ $("emailsBtn").onclick = async () => {
 
 // ---------- approval for submission (rr_report_approvals, one row per period) ----------
 
+// Every render replaces the container's contents in one step. The previous
+// version cleared *before* awaiting the query, so two overlapping calls — a
+// period change landing while the initial load was still in flight — each
+// cleared, then each appended, and you got two Approve buttons. Build
+// detached, swap in after the await, and let a newer call win.
+let approvalSeq = 0;
+
 async function loadApproval(){
-  const box = $("approvalBox"); clr(box);
+  const box = $("approvalBox");
+  const seq = ++approvalSeq;
   const period = yyyymm();
-  if (!period) return;                       // no month picked yet
+  if (!period){ clr(box); return; }          // no month picked yet
 
   const { data, error } = await sb.from("rr_report_approvals")
     .select("period, approved_by, approved_at").eq("period", period).maybeSingle();
-  if (error){ box.appendChild(mk("span","err",error.message)); return; }
 
-  if (data){
-    const when = data.approved_at ? new Date(data.approved_at).toLocaleString("en-US") : "";
-    box.appendChild(mk("span","done", `Approved by ${data.approved_by}${when ? ` on ${when}` : ""}`));
-    return;
+  // A newer render started while this query was in flight; its result wins.
+  if (seq !== approvalSeq) return;
+
+  const frag = document.createDocumentFragment();
+  const when = period ? label(period) : "";
+
+  if (error){
+    frag.appendChild(mk("div","err",error.message));
+  } else if (data){
+    const on = data.approved_at
+      ? new Date(data.approved_at).toLocaleDateString("en-US",{ month:"short", day:"numeric", year:"numeric" })
+      : "";
+    frag.appendChild(mk("div","done", `\u2713 ${when} approved by ${data.approved_by}${on ? ` on ${on}` : ""}`));
+  } else {
+    // Name the object and the consequence: which month, and what happens next.
+    const btn = mk("button","btn", `Approve ${when} for submission`);
+    btn.dataset.label = btn.textContent;
+    btn.onclick = () => approvePeriod(period, btn);
+    frag.appendChild(btn);
+    frag.appendChild(mk("div","note",
+      "Approved reports submit automatically on the 7th. Unreviewed reports submit on the 9th."));
   }
 
-  const btn = mk("button","btn ghost","Approve for submission");
-  btn.dataset.label = btn.textContent;
-  btn.onclick = () => approvePeriod(period, btn);
-  box.appendChild(btn);
+  clr(box);
+  box.appendChild(frag);
 }
 
 async function approvePeriod(period, btn){
