@@ -92,6 +92,8 @@ td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%)
 .approval .btn{width:100%;justify-content:center;text-align:center;line-height:1.35}
 .approval .cancelrow{text-align:center;margin-top:8px}
 .approval .cancelrow button{background:none;border:0;padding:0;font-family:var(--mono);font-size:11.5px;color:var(--ink-3);text-decoration:underline}
+.approval .cancelrow button + button{margin-left:16px}
+.approval .ask{font-family:var(--mono);font-size:11.5px;color:var(--ink-2);line-height:1.45;margin-bottom:10px}
 .approval .note{font-family:var(--mono);font-size:11px;color:var(--ink-3);line-height:1.45;margin-top:8px}
 .approval .done{font-family:var(--mono);font-size:12px;color:var(--ok);line-height:1.45}
 .approval .err{font-family:var(--mono);font-size:12px;color:var(--stamp);line-height:1.45}
@@ -626,6 +628,9 @@ let approvalSeq = 0;
 // Set while the confirm step is on screen: the period and the figures the
 // admin is being asked to attest to, taken from the preview they just saw.
 let approvalConfirm = null;
+// Set while the withdrawal confirm is on screen — just the period, since
+// withdrawing attests to nothing.
+let approvalWithdraw = null;
 
 function renderApproval(state){
   const box = $("approvalBox");
@@ -660,6 +665,22 @@ function renderApproval(state){
     frag.appendChild(mk("div","note",
       "That report is what you are approving. Approved reports submit automatically on the 7th. Unreviewed reports submit on the 9th."));
 
+  // Withdrawing outranks the stored row for the same reason a pending approval
+  // does: it is the question currently on screen.
+  } else if (state.withdraw){
+    frag.appendChild(mk("div","ask",
+      `Withdraw approval for ${when}? The report still auto-submits on the 9th unless re-approved.`));
+    const btn = mk("button","btn","Confirm withdrawal");
+    btn.dataset.label = btn.textContent;
+    btn.onclick = () => withdrawPeriod(state.period, btn);
+    frag.appendChild(btn);
+
+    const row = mk("div","cancelrow");
+    const cancel = mk("button",null,"Cancel");
+    cancel.onclick = () => { approvalWithdraw = null; loadApproval(); };
+    row.appendChild(cancel);
+    frag.appendChild(row);
+
   } else if (state.approved){
     const a = state.approved;
     const on = a.approved_at
@@ -679,6 +700,14 @@ function renderApproval(state){
     again.dataset.label = again.textContent;
     again.onclick = () => startApproval(state.period, again, true);
     row.appendChild(again);
+
+    const drop = mk("button",null,"Withdraw approval");
+    drop.onclick = () => {
+      approvalConfirm = null;
+      approvalWithdraw = state.period;
+      renderApproval({ period: state.period, withdraw: true });
+    };
+    row.appendChild(drop);
     frag.appendChild(row);
 
   } else {
@@ -710,7 +739,8 @@ async function loadApproval(){
     period,
     error: error ? error.message : null,
     approved: data || null,
-    confirm: approvalConfirm && approvalConfirm.period === period ? approvalConfirm : null
+    confirm: approvalConfirm && approvalConfirm.period === period ? approvalConfirm : null,
+    withdraw: approvalWithdraw === period && !!data
   });
 }
 
@@ -721,6 +751,7 @@ async function loadApproval(){
 // moved, so the figures you confirm must be freshly fetched.
 async function startApproval(period, btn, again){
   $("appMsg").className="msg"; $("appMsg").textContent="";
+  approvalWithdraw = null;
   let report = (!again && lastReport && lastReport.period === period) ? lastReport : null;
 
   if (!report){
@@ -786,10 +817,44 @@ async function approvePeriod(c, btn){
     : `Approved ${label(j.period)} for submission.`;
 }
 
+// Withdrawal is a delete on the server, and the browser never touched this
+// table anyway. mode=unapprove answers {withdrawn:true} or, if someone got
+// there first, {skipped:"no approval to withdraw"} — both mean the period is
+// now unapproved, which is what was asked for.
+async function withdrawPeriod(period, btn){
+  $("appMsg").className="msg"; $("appMsg").textContent="";
+  busy(btn,true);
+  let j;
+  try {
+    j = await callReport("unapprove", period);
+  } catch(e){
+    busy(btn,false);
+    $("appMsg").className="msg err"; $("appMsg").textContent=e.message;
+    return;                       // stay on the question so it can be retried
+  }
+  busy(btn,false);
+
+  if (!j.withdrawn && !j.skipped){
+    $("appMsg").className="msg err";
+    $("appMsg").textContent=`Unexpected reply from unapprove: ${JSON.stringify(j)}`;
+    return;
+  }
+
+  approvalWithdraw = null;
+  if (histLoaded && j.withdrawn) loadHistory();
+  $("appMsg").className="msg ok";
+  $("appMsg").textContent = j.withdrawn
+    ? `Approval withdrawn for ${label(period)}. It still submits on the 9th unless re-approved.`
+    : `${label(period)} was already unapproved.`;
+  // Re-read rather than assume: the row is gone, so this lands on the plain
+  // Approve button, and it stays honest if it somehow is not.
+  loadApproval();
+}
+
 // The approval is per reporting period, so switching months must re-check —
 // and must drop any pending confirmation, which was raised against figures
 // from the month you just left.
-$("month").addEventListener("change", () => { approvalConfirm = null; loadApproval(); });
+$("month").addEventListener("change", () => { approvalConfirm = null; approvalWithdraw = null; loadApproval(); });
 
 let histLoaded = false;
 $("histBox").addEventListener("toggle", () => {
