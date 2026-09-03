@@ -77,6 +77,7 @@ table.compact td{padding:6px 10px 6px 0;vertical-align:top}
 .stamp-mark{position:absolute;top:22px;right:26px;font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.18em;text-transform:uppercase;padding:6px 12px;border:3px solid currentColor;border-radius:4px;transform:rotate(-6deg);opacity:.9;mix-blend-mode:multiply;pointer-events:none}
 .stamp-mark.preview{color:var(--ink-3)}
 .stamp-mark.submitted{color:var(--stamp)}
+.stamp-mark.approved{color:var(--ok)}
 .stamp-mark.error{color:var(--stamp)}
 .empty{color:var(--ink-3);font-size:14px;padding:60px 0;text-align:center}
 .tablewrap{margin-top:18px;overflow:auto;border-top:1px solid var(--rule)}
@@ -465,8 +466,10 @@ $("signinBtn").onclick = async () => {
 };
 $("pw").addEventListener("keydown", e => { if (e.key==="Enter") $("signinBtn").click(); });
 
-async function callReport(mode){
-  const r = await fetch(`${FN}/rr-report?month=${yyyymm()}&mode=${mode}`, {
+// period is explicit so a caller that already knows which month it is acting
+// on cannot be re-pointed by the picker moving between click and fetch.
+async function callReport(mode, period){
+  const r = await fetch(`${FN}/rr-report?month=${period || yyyymm()}&mode=${mode}`, {
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${session.access_token}` }
   });
   if (mode==="csv"){
@@ -504,12 +507,12 @@ function drawSheet(j, stamp){
 
   $("sheet").innerHTML = `
     <div class="stamp-mark ${stamp}">${stamp}</div>
-    <div class="fn">${esc(j.filename)}</div>
+    <div class="fn">${esc(j.filename ?? "")}</div>
     <h2>${label(j.period)}</h2>
     <div class="tally">
       <div><b>${j.transactions}</b>forms used</div>
       <div><b>${j.deals}</b>deals</div>
-      <div><b>${j.range.start} → ${j.range.end}</b>sale dates</div>
+      ${j.range ? `<div><b>${j.range.start} → ${j.range.end}</b>sale dates</div>` : ""}
     </div>
     ${storeRows.length ? `<div class="tally-store" id="tallyStore">${tallyHtml(false)}</div>` : ""}
     <div class="tablewrap"><table class="compact"><thead><tr><th>Date</th><th>Deal</th><th>Form ID</th><th>Dealer</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -535,8 +538,8 @@ $("testBtn").onclick = async () => {
 // The single place a preview is fetched and drawn. Both the Preview button
 // and the Approve flow go through it, so approving cannot happen against a
 // report nobody has seen.
-async function runPreview(){
-  const j = await callReport("preview");
+async function runPreview(period){
+  const j = await callReport("preview", period);
   drawSheet(j,"preview");
   lastPeriod = j.period; lastReport = j;
   $("csvBtn").disabled=false; $("submitBtn").disabled=false;
@@ -634,25 +637,16 @@ function renderApproval(state){
   if (state.error){
     frag.appendChild(mk("div","err",state.error));
 
-  } else if (state.approved){
-    const a = state.approved;
-    const on = a.approved_at
-      ? new Date(a.approved_at).toLocaleDateString("en-US",{ month:"short", day:"numeric", year:"numeric" })
-      : "";
-    // Rows written before the counts existed have nulls; say only what we know.
-    const counts = (a.row_count !== null && a.row_count !== undefined &&
-                    a.deal_count !== null && a.deal_count !== undefined)
-      ? ` \u2014 ${a.row_count} forms / ${a.deal_count} deals.` : "";
-    frag.appendChild(mk("div","done",
-      `\u2713 ${when} approved by ${a.approved_by}${on ? ` on ${on}` : ""}${counts}`));
-
+  // A pending confirmation outranks the stored row: re-approving an already
+  // approved period is the whole point of the Re-approve link below.
   } else if (state.confirm){
     const c = state.confirm;
+    const verb = c.again ? "re-approve" : "approve";
     // Approving nothing is a real decision, so name it as one rather than
     // letting "0 forms across 0 deals" slide past as a normal-looking figure.
     const btn = mk("button","btn", c.rows
-      ? `Confirm: approve ${c.rows} forms across ${c.deals} deals for ${when}`
-      : `Confirm: approve an empty report (0 forms) for ${when}`);
+      ? `Confirm: ${verb} ${c.rows} forms across ${c.deals} deals for ${when}`
+      : `Confirm: ${verb} an empty report (0 forms) for ${when}`);
     btn.dataset.label = btn.textContent;
     btn.onclick = () => approvePeriod(c, btn);
     frag.appendChild(btn);
@@ -666,10 +660,31 @@ function renderApproval(state){
     frag.appendChild(mk("div","note",
       "That report is what you are approving. Approved reports submit automatically on the 7th. Unreviewed reports submit on the 9th."));
 
+  } else if (state.approved){
+    const a = state.approved;
+    const on = a.approved_at
+      ? new Date(a.approved_at).toLocaleDateString("en-US",{ month:"short", day:"numeric", year:"numeric" })
+      : "";
+    // Rows written before the counts existed have nulls; say only what we know.
+    const counts = (a.row_count !== null && a.row_count !== undefined &&
+                    a.deal_count !== null && a.deal_count !== undefined)
+      ? ` \u2014 ${a.row_count} forms / ${a.deal_count} deals.` : "";
+    frag.appendChild(mk("div","done",
+      `\u2713 ${when} approved by ${a.approved_by}${on ? ` on ${on}` : ""}${counts}`));
+
+    // Deals can still qualify after an approval. Re-approving rebuilds the
+    // report and refreshes the server-side snapshot the submit diffs against.
+    const row = mk("div","cancelrow");
+    const again = mk("button",null,"Re-approve");
+    again.dataset.label = again.textContent;
+    again.onclick = () => startApproval(state.period, again, true);
+    row.appendChild(again);
+    frag.appendChild(row);
+
   } else {
     const btn = mk("button","btn", `Approve ${when} for submission`);
     btn.dataset.label = btn.textContent;
-    btn.onclick = () => startApproval(state.period, btn);
+    btn.onclick = () => startApproval(state.period, btn, false);
     frag.appendChild(btn);
     frag.appendChild(mk("div","note",
       "Shows you the report first, then asks you to confirm. Approved reports submit automatically on the 7th. Unreviewed reports submit on the 9th."));
@@ -702,14 +717,16 @@ async function loadApproval(){
 // Step one of approving: put the report on screen. Reuse the preview already
 // displayed for this period; otherwise fetch and draw it the same way the
 // Preview button does, then ask for confirmation against its figures.
-async function startApproval(period, btn){
+// A re-approval never reuses: the reason to re-approve is that the deals have
+// moved, so the figures you confirm must be freshly fetched.
+async function startApproval(period, btn, again){
   $("appMsg").className="msg"; $("appMsg").textContent="";
-  let report = (lastReport && lastReport.period === period) ? lastReport : null;
+  let report = (!again && lastReport && lastReport.period === period) ? lastReport : null;
 
   if (!report){
     busy(btn,true);
     try {
-      report = await runPreview();
+      report = await runPreview(period);
     } catch(e){
       busy(btn,false);
       $("appMsg").className="msg err"; $("appMsg").textContent=e.message;
@@ -721,34 +738,52 @@ async function startApproval(period, btn){
     if (report.period !== period){ approvalConfirm = null; loadApproval(); return; }
   }
 
-  approvalConfirm = { period, rows: report.transactions, deals: report.deals };
+  approvalConfirm = { period, rows: report.transactions, deals: report.deals, again: !!again };
   renderApproval({ period, approved: null, confirm: approvalConfirm });
 }
 
-// Step two: the only path that writes an approval row.
+// Step two. The browser no longer writes to rr_report_approvals; mode=approve
+// rebuilds the report server-side and upserts the row with the counts and a
+// row-level snapshot, so what is recorded is what the server itself assembled.
+// It upserts on period, so a repeat approval succeeds and refreshes the
+// snapshot rather than colliding.
 async function approvePeriod(c, btn){
   $("appMsg").className="msg"; $("appMsg").textContent="";
   busy(btn,true);
-  const { error } = await sb.from("rr_report_approvals").insert({
-    period: c.period,
-    approved_by: session.user.email,
-    row_count: c.rows,
-    deal_count: c.deals
-  });
-  busy(btn,false);
-
-  // period is UNIQUE. A duplicate means someone else approved it between the
-  // read and this insert, which is the outcome we wanted — not an error.
-  if (error && error.code !== "23505"){
-    $("appMsg").className="msg err"; $("appMsg").textContent=error.message;
+  let j;
+  try {
+    j = await callReport("approve", c.period);
+  } catch(e){
+    busy(btn,false);
+    $("appMsg").className="msg err"; $("appMsg").textContent=e.message;
     return;                       // stay in confirm state so it can be retried
   }
-  if (!error){
-    $("appMsg").className="msg ok";
-    $("appMsg").textContent=`Approved ${label(c.period)} for submission.`;
-  }
+  busy(btn,false);
+
+  // The response is the report the server just recorded. Keep the filename and
+  // sale-date range from the preview of the same period — mode=approve does not
+  // return them, and the CSV button reads the filename off the sheet.
+  const shown = (lastReport && lastReport.period === j.period) ? { ...lastReport, ...j } : j;
+  drawSheet(shown,"approved");
+  lastPeriod = j.period; lastReport = shown;
+  $("csvBtn").disabled=false; $("submitBtn").disabled=false;
+  if (histLoaded) loadHistory();
+
   approvalConfirm = null;
-  loadApproval();
+  renderApproval({
+    period: j.period,
+    approved: { approved_by: j.approved_by, approved_at: j.approved_at,
+                row_count: j.transactions, deal_count: j.deals }
+  });
+
+  // The server re-queried Zoho, so it can legitimately have found more (or
+  // fewer) than the preview showed. Say so rather than letting the figures
+  // change under the admin without comment.
+  const moved = j.transactions !== c.rows || j.deals !== c.deals;
+  $("appMsg").className="msg ok";
+  $("appMsg").textContent = moved
+    ? `Approved ${label(j.period)} — the report changed since your preview and now covers ${j.transactions} forms across ${j.deals} deals.`
+    : `Approved ${label(j.period)} for submission.`;
 }
 
 // The approval is per reporting period, so switching months must re-check —
