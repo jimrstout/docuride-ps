@@ -88,7 +88,9 @@ td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%)
 
 /* Approval sits with the report actions — same column, same button width. */
 .approval{margin-top:10px}
-.approval .btn{width:100%;justify-content:center}
+.approval .btn{width:100%;justify-content:center;text-align:center;line-height:1.35}
+.approval .cancelrow{text-align:center;margin-top:8px}
+.approval .cancelrow button{background:none;border:0;padding:0;font-family:var(--mono);font-size:11.5px;color:var(--ink-3);text-decoration:underline}
 .approval .note{font-family:var(--mono);font-size:11px;color:var(--ink-3);line-height:1.45;margin-top:8px}
 .approval .done{font-family:var(--mono);font-size:12px;color:var(--ok);line-height:1.45}
 .approval .err{font-family:var(--mono);font-size:12px;color:var(--stamp);line-height:1.45}
@@ -242,7 +244,7 @@ const FN = SUPABASE_URL + "/functions/v1";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { detectSessionInUrl: true, flowType: "implicit" } });
 
 const $ = (id) => document.getElementById(id);
-let session = null, lastPeriod = null;
+let session = null, lastPeriod = null, lastReport = null;
 const arrivedByInvite = /type=(invite|recovery|magiclink)/.test(location.hash + location.search) || /[?&]code=/.test(location.search);
 if (arrivedByInvite) sessionStorage.setItem("invite","1");
 const inviteFlow = () => sessionStorage.getItem("invite")==="1";
@@ -530,15 +532,23 @@ $("testBtn").onclick = async () => {
   busy($("testBtn"),false);
 };
 
+// The single place a preview is fetched and drawn. Both the Preview button
+// and the Approve flow go through it, so approving cannot happen against a
+// report nobody has seen.
+async function runPreview(){
+  const j = await callReport("preview");
+  drawSheet(j,"preview");
+  lastPeriod = j.period; lastReport = j;
+  $("csvBtn").disabled=false; $("submitBtn").disabled=false;
+  if (histLoaded) loadHistory();
+  return j;
+}
+
 $("previewBtn").onclick = async () => {
   $("appMsg").className="msg"; $("appMsg").textContent="";
   busy($("previewBtn"),true);
-  try {
-    const j = await callReport("preview");
-    drawSheet(j,"preview"); lastPeriod = j.period;
-    $("csvBtn").disabled=false; $("submitBtn").disabled=false;
-    if (histLoaded) loadHistory();
-  } catch(e){ $("appMsg").className="msg err"; $("appMsg").textContent=e.message; }
+  try { await runPreview(); }
+  catch(e){ $("appMsg").className="msg err"; $("appMsg").textContent=e.message; }
   busy($("previewBtn"),false);
 };
 
@@ -604,70 +614,147 @@ $("emailsBtn").onclick = async () => {
 
 // ---------- approval for submission (rr_report_approvals, one row per period) ----------
 
-// Every render replaces the container's contents in one step. The previous
+// Every render replaces the container's contents in one step. An earlier
 // version cleared *before* awaiting the query, so two overlapping calls — a
 // period change landing while the initial load was still in flight — each
-// cleared, then each appended, and you got two Approve buttons. Build
-// detached, swap in after the await, and let a newer call win.
+// cleared, then each appended, and you got two Approve buttons. Every path
+// below ends at renderApproval(), which clears and rebuilds from scratch.
 let approvalSeq = 0;
+// Set while the confirm step is on screen: the period and the figures the
+// admin is being asked to attest to, taken from the preview they just saw.
+let approvalConfirm = null;
 
-async function loadApproval(){
+function renderApproval(state){
   const box = $("approvalBox");
-  const seq = ++approvalSeq;
-  const period = yyyymm();
-  if (!period){ clr(box); return; }          // no month picked yet
-
-  const { data, error } = await sb.from("rr_report_approvals")
-    .select("period, approved_by, approved_at").eq("period", period).maybeSingle();
-
-  // A newer render started while this query was in flight; its result wins.
-  if (seq !== approvalSeq) return;
-
+  // Any query still in flight is now stale — this render is the newer truth.
+  approvalSeq++;
   const frag = document.createDocumentFragment();
-  const when = period ? label(period) : "";
+  const when = state.period ? label(state.period) : "";
 
-  if (error){
-    frag.appendChild(mk("div","err",error.message));
-  } else if (data){
-    const on = data.approved_at
-      ? new Date(data.approved_at).toLocaleDateString("en-US",{ month:"short", day:"numeric", year:"numeric" })
+  if (state.error){
+    frag.appendChild(mk("div","err",state.error));
+
+  } else if (state.approved){
+    const a = state.approved;
+    const on = a.approved_at
+      ? new Date(a.approved_at).toLocaleDateString("en-US",{ month:"short", day:"numeric", year:"numeric" })
       : "";
-    frag.appendChild(mk("div","done", `\u2713 ${when} approved by ${data.approved_by}${on ? ` on ${on}` : ""}`));
+    // Rows written before the counts existed have nulls; say only what we know.
+    const counts = (a.row_count !== null && a.row_count !== undefined &&
+                    a.deal_count !== null && a.deal_count !== undefined)
+      ? ` \u2014 ${a.row_count} forms / ${a.deal_count} deals.` : "";
+    frag.appendChild(mk("div","done",
+      `\u2713 ${when} approved by ${a.approved_by}${on ? ` on ${on}` : ""}${counts}`));
+
+  } else if (state.confirm){
+    const c = state.confirm;
+    // Approving nothing is a real decision, so name it as one rather than
+    // letting "0 forms across 0 deals" slide past as a normal-looking figure.
+    const btn = mk("button","btn", c.rows
+      ? `Confirm: approve ${c.rows} forms across ${c.deals} deals for ${when}`
+      : `Confirm: approve an empty report (0 forms) for ${when}`);
+    btn.dataset.label = btn.textContent;
+    btn.onclick = () => approvePeriod(c, btn);
+    frag.appendChild(btn);
+
+    const row = mk("div","cancelrow");
+    const cancel = mk("button",null,"Cancel");
+    cancel.onclick = () => { approvalConfirm = null; loadApproval(); };
+    row.appendChild(cancel);
+    frag.appendChild(row);
+
+    frag.appendChild(mk("div","note",
+      "That report is what you are approving. Approved reports submit automatically on the 7th. Unreviewed reports submit on the 9th."));
+
   } else {
-    // Name the object and the consequence: which month, and what happens next.
     const btn = mk("button","btn", `Approve ${when} for submission`);
     btn.dataset.label = btn.textContent;
-    btn.onclick = () => approvePeriod(period, btn);
+    btn.onclick = () => startApproval(state.period, btn);
     frag.appendChild(btn);
     frag.appendChild(mk("div","note",
-      "Approved reports submit automatically on the 7th. Unreviewed reports submit on the 9th."));
+      "Shows you the report first, then asks you to confirm. Approved reports submit automatically on the 7th. Unreviewed reports submit on the 9th."));
   }
 
   clr(box);
   box.appendChild(frag);
 }
 
-async function approvePeriod(period, btn){
+async function loadApproval(){
+  const seq = ++approvalSeq;
+  const period = yyyymm();
+  if (!period){ clr($("approvalBox")); return; }   // no month picked yet
+
+  const { data, error } = await sb.from("rr_report_approvals")
+    .select("period, approved_by, approved_at, row_count, deal_count")
+    .eq("period", period).maybeSingle();
+
+  // A newer render started while this query was in flight; its result wins.
+  if (seq !== approvalSeq) return;
+
+  renderApproval({
+    period,
+    error: error ? error.message : null,
+    approved: data || null,
+    confirm: approvalConfirm && approvalConfirm.period === period ? approvalConfirm : null
+  });
+}
+
+// Step one of approving: put the report on screen. Reuse the preview already
+// displayed for this period; otherwise fetch and draw it the same way the
+// Preview button does, then ask for confirmation against its figures.
+async function startApproval(period, btn){
+  $("appMsg").className="msg"; $("appMsg").textContent="";
+  let report = (lastReport && lastReport.period === period) ? lastReport : null;
+
+  if (!report){
+    busy(btn,true);
+    try {
+      report = await runPreview();
+    } catch(e){
+      busy(btn,false);
+      $("appMsg").className="msg err"; $("appMsg").textContent=e.message;
+      return;
+    }
+    busy(btn,false);
+    // The month picker moved while the preview was in flight, so the sheet now
+    // shows a different period than this button named. Re-render, don't confirm.
+    if (report.period !== period){ approvalConfirm = null; loadApproval(); return; }
+  }
+
+  approvalConfirm = { period, rows: report.transactions, deals: report.deals };
+  renderApproval({ period, approved: null, confirm: approvalConfirm });
+}
+
+// Step two: the only path that writes an approval row.
+async function approvePeriod(c, btn){
   $("appMsg").className="msg"; $("appMsg").textContent="";
   busy(btn,true);
-  const { error } = await sb.from("rr_report_approvals")
-    .insert({ period, approved_by: session.user.email });
+  const { error } = await sb.from("rr_report_approvals").insert({
+    period: c.period,
+    approved_by: session.user.email,
+    row_count: c.rows,
+    deal_count: c.deals
+  });
   busy(btn,false);
+
   // period is UNIQUE. A duplicate means someone else approved it between the
   // read and this insert, which is the outcome we wanted — not an error.
   if (error && error.code !== "23505"){
     $("appMsg").className="msg err"; $("appMsg").textContent=error.message;
-    return;
+    return;                       // stay in confirm state so it can be retried
   }
   if (!error){
     $("appMsg").className="msg ok";
-    $("appMsg").textContent=`Approved ${label(period)} for submission.`;
+    $("appMsg").textContent=`Approved ${label(c.period)} for submission.`;
   }
+  approvalConfirm = null;
   loadApproval();
 }
 
-// The approval is per reporting period, so switching months must re-check.
-$("month").addEventListener("change", loadApproval);
+// The approval is per reporting period, so switching months must re-check —
+// and must drop any pending confirmation, which was raised against figures
+// from the month you just left.
+$("month").addEventListener("change", () => { approvalConfirm = null; loadApproval(); });
 
 let histLoaded = false;
 $("histBox").addEventListener("toggle", () => {
