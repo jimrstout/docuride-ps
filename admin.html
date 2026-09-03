@@ -86,6 +86,11 @@ td{padding:7px 10px 7px 0;border-bottom:1px solid var(--rule-2);white-space:nowr
 tr:hover td{background:#F6F6F1}
 td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%);display:inline-block;padding-left:2px;padding-right:2px}
 
+.approval{margin-top:16px;font-family:var(--mono);font-size:12px;min-height:20px}
+.approval .done{color:var(--ok)}
+.settings{margin-top:26px;padding-top:20px;border-top:1px solid var(--rule)}
+.settings label{margin-top:0}
+.settings .hint{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:5px;text-transform:none;letter-spacing:0;line-height:1.4}
 .hist{margin-top:44px}
 .hist summary{cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);padding:4px 0}
 .hist table td.ok{color:var(--ok);font-weight:600}
@@ -170,7 +175,16 @@ td.act button.danger{color:var(--stamp);border-color:var(--stamp)}
           <button class="btn ghost" id="csvBtn" disabled>Download CSV</button>
           <button class="btn stamp" id="submitBtn" disabled>Submit to Reynolds</button>
         </div>
+        <div class="approval" id="approvalBox"></div>
         <div class="msg" id="appMsg"></div>
+
+        <div class="settings">
+          <label for="reviewEmails">Review notifications</label>
+          <input id="reviewEmails" type="text" placeholder="ap@dealer.com, gm@dealer.com" autocomplete="off" spellcheck="false">
+          <div class="hint">Comma-separated. Emailed on the 5th to review the month before it submits.</div>
+          <div style="margin-top:10px"><button class="btn ghost" id="emailsBtn">Save</button></div>
+          <div class="msg" id="emailsMsg"></div>
+        </div>
       </aside>
 
       <div>
@@ -259,6 +273,8 @@ function render(){
     histLoaded = false;
     if ($("histBox").open) loadHistory();
     loadUsers();
+    loadReviewEmails();
+    loadApproval();
   }
 }
 
@@ -544,6 +560,87 @@ $("submitBtn").onclick = async () => {
   } catch(e){ $("appMsg").className="msg err"; $("appMsg").textContent=e.message; $("sheet").querySelector(".stamp-mark")?.classList.replace("preview","error"); }
   busy($("submitBtn"),false);
 };
+
+// ---------- review notifications (rr_report_settings, single id=1 row) ----------
+
+// Deliberately permissive: catch obvious typos without rejecting addresses a
+// real mail server would accept. The server is the authority on deliverability.
+const EMAIL_RE = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/;
+
+async function loadReviewEmails(){
+  const { data, error } = await sb.from("rr_report_settings").select("review_emails").eq("id", 1).maybeSingle();
+  if (error){ $("emailsMsg").className="msg err"; $("emailsMsg").textContent=error.message; return; }
+  $("reviewEmails").value = (data?.review_emails ?? []).join(", ");
+}
+
+$("emailsBtn").dataset.label = "Save";
+$("emailsBtn").onclick = async () => {
+  $("emailsMsg").className="msg"; $("emailsMsg").textContent="";
+  const raw = $("reviewEmails").value.split(",").map(s => s.trim()).filter(Boolean);
+  const bad = raw.filter(e => !EMAIL_RE.test(e));
+  if (bad.length){
+    $("emailsMsg").className="msg err";
+    $("emailsMsg").textContent = `Not an email address: ${bad.join(", ")}`;
+    return;
+  }
+  // De-duplicate so the cron cannot mail the same person twice.
+  const emails = [...new Set(raw)];
+  busy($("emailsBtn"),true);
+  // text[] column — supabase-js sends the JS array as a Postgres array.
+  const { error } = await sb.from("rr_report_settings").update({ review_emails: emails }).eq("id", 1);
+  busy($("emailsBtn"),false);
+  if (error){ $("emailsMsg").className="msg err"; $("emailsMsg").textContent=error.message; return; }
+  $("reviewEmails").value = emails.join(", ");
+  $("emailsMsg").className="msg ok";
+  $("emailsMsg").textContent = emails.length
+    ? `Saved ${emails.length} recipient${emails.length===1?"":"s"}.`
+    : "Saved — no recipients, so the review email will be skipped.";
+};
+
+// ---------- approval for submission (rr_report_approvals, one row per period) ----------
+
+async function loadApproval(){
+  const box = $("approvalBox"); clr(box);
+  const period = yyyymm();
+  if (!period) return;                       // no month picked yet
+
+  const { data, error } = await sb.from("rr_report_approvals")
+    .select("period, approved_by, approved_at").eq("period", period).maybeSingle();
+  if (error){ box.appendChild(mk("span","err",error.message)); return; }
+
+  if (data){
+    const when = data.approved_at ? new Date(data.approved_at).toLocaleString("en-US") : "";
+    box.appendChild(mk("span","done", `Approved by ${data.approved_by}${when ? ` on ${when}` : ""}`));
+    return;
+  }
+
+  const btn = mk("button","btn ghost","Approve for submission");
+  btn.dataset.label = btn.textContent;
+  btn.onclick = () => approvePeriod(period, btn);
+  box.appendChild(btn);
+}
+
+async function approvePeriod(period, btn){
+  $("appMsg").className="msg"; $("appMsg").textContent="";
+  busy(btn,true);
+  const { error } = await sb.from("rr_report_approvals")
+    .insert({ period, approved_by: session.user.email });
+  busy(btn,false);
+  // period is UNIQUE. A duplicate means someone else approved it between the
+  // read and this insert, which is the outcome we wanted — not an error.
+  if (error && error.code !== "23505"){
+    $("appMsg").className="msg err"; $("appMsg").textContent=error.message;
+    return;
+  }
+  if (!error){
+    $("appMsg").className="msg ok";
+    $("appMsg").textContent=`Approved ${label(period)} for submission.`;
+  }
+  loadApproval();
+}
+
+// The approval is per reporting period, so switching months must re-check.
+$("month").addEventListener("change", loadApproval);
 
 let histLoaded = false;
 $("histBox").addEventListener("toggle", () => {
