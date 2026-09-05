@@ -16,7 +16,7 @@ export const PRICES = [
 ];
 
 /** A chainable stand-in for supabase-js's PostgrestFilterBuilder. */
-function stubClient(calls){
+function stubClient(calls, ctl){
   const from = (table) => {
     const rec = { table, ops: [], patch: null, row: null, eq: {} };
     calls.push(rec);
@@ -29,7 +29,7 @@ function stubClient(calls){
       delete(){ rec.ops.push("delete"); return b; },
       maybeSingle(){ rec.ops.push("maybeSingle"); return b; },
       limit(){ rec.ops.push("limit"); return b; },
-      then(res, rej){ return Promise.resolve(reply(rec)).then(res, rej); },
+      then(res, rej){ return Promise.resolve(reply(rec, ctl)).then(res, rej); },
     };
     return b;
   };
@@ -46,8 +46,12 @@ function stubClient(calls){
   };
 }
 
-function reply(rec){
-  if (rec.ops.some(o => o === "update" || o === "insert" || o === "delete")) return { data: null, error: null };
+function reply(rec, ctl){
+  if (rec.ops.some(o => o === "update" || o === "insert" || o === "delete")){
+    // ctl.failNext lets a test make one write fail the way RLS would.
+    if (ctl.failNext){ ctl.failNext = false; return { data: null, error: { message: "permission denied for table rr_form_prices" } }; }
+    return { data: null, error: null };
+  }
   switch (rec.table){
     case "rr_report_settings":
       return { data: /minimum/.test(rec.select ?? "") ? { minimum_monthly_fee: "375.00" } : { review_emails: [] }, error: null };
@@ -65,12 +69,13 @@ export const flush = async (n = 6) => { for (let i = 0; i < n; i++) await new Pr
 
 export async function loadAdmin(){
   const calls = [];
+  const ctl = { failNext: false };
   const dom = new JSDOM(HTML, {
     url: "https://docuride.test/admin",
     runScripts: "dangerously",
     pretendToBeVisual: true,
     beforeParse(w){
-      w.supabase = { createClient: () => stubClient(calls) };
+      w.supabase = { createClient: () => stubClient(calls, ctl) };
       // admin-users is the only fetch the page makes on boot.
       w.fetch = async () => ({ ok: true, status: 200, statusText: "OK",
         json: async () => ({ users: [], tenants: [], stores: [] }) });
@@ -78,5 +83,5 @@ export async function loadAdmin(){
     },
   });
   await flush();
-  return { dom, w: dom.window, calls };
+  return { dom, w: dom.window, calls, ctl };
 }

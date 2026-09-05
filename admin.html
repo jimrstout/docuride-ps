@@ -124,7 +124,12 @@ td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%)
 .pricing td.desc{white-space:normal}
 .pricing th.fee,.pricing td.fee{text-align:right;padding-right:18px}
 .pricing td.fee{cursor:pointer;font-weight:600}
-.pricing td.fee input{width:88px;padding:2px 4px;font:inherit;text-align:right;border:1px solid var(--ink);border-radius:3px;background:var(--paper-2)}
+.pricing td.fee.editing{cursor:default;padding-right:10px}
+.pricing .feeedit{display:flex;gap:6px;align-items:center;justify-content:flex-end}
+.pricing .feeedit input{width:82px;padding:2px 4px;font:inherit;text-align:right;border:1px solid var(--ink);border-radius:3px;background:var(--paper-2)}
+.pricing .feeedit button{background:none;border:1px solid var(--rule);border-radius:4px;padding:3px 9px;font-family:var(--mono);font-size:11px;color:var(--ink-2)}
+.pricing .feeedit button:disabled{opacity:.45;cursor:not-allowed}
+.pricing .feeerr{font-family:var(--mono);font-size:11px;color:var(--stamp);text-align:right;margin-top:4px;white-space:normal}
 #priceFilter{max-width:340px}
 .users{margin-top:44px}
 .invite{display:flex;gap:10px;align-items:flex-end;margin:14px 0 6px;flex-wrap:wrap}
@@ -959,6 +964,7 @@ async function loadHistory(){
 
 let pricesLoaded = false;
 let priceRows = [];
+let feeEdit = null;   // the one row currently being edited, or null
 
 const userEmail = () => (session && session.user && session.user.email) || null;
 const setMsg = (id, kind, text) => { const n = $(id); n.className = "msg" + (kind ? " " + kind : ""); n.textContent = text; };
@@ -994,6 +1000,7 @@ function sortPrices(){ priceRows.sort((x,y) => cmp(x.section,y.section) || cmp(x
 
 function renderPrices(){
   const wrap = $("priceList"); clr(wrap);
+  feeEdit = null;   // the table is being rebuilt; any open editor goes with it
   if (!priceRows.length){ wrap.appendChild(mk("div","empty","No form prices on file.")); return; }
 
   const q = $("priceFilter").value.trim().toLowerCase();
@@ -1004,7 +1011,7 @@ function renderPrices(){
   if (!list.length){ wrap.appendChild(mk("div","empty",`Nothing matches “${q}”.`)); return; }
 
   const table = mk("table"), thead = mk("thead"), htr = mk("tr");
-  for (const h of ["Form ID","Description","Fee","Section","Updated",""]){
+  for (const h of ["Form ID","Description","Fee","Section","Updated"]){
     htr.appendChild(mk("th", h === "Fee" ? "fee" : null, h));
   }
   thead.appendChild(htr); table.appendChild(thead);
@@ -1014,17 +1021,10 @@ function renderPrices(){
     const tr = mk("tr");
     tr.appendChild(mk("td",null,r.form_id));
     tr.appendChild(mk("td","desc",r.description ?? "—"));
-    const fee = mk("td","fee"); setFeeText(fee,r); tr.appendChild(fee);
+    tr.appendChild(mk("td","fee"));
     tr.appendChild(mk("td",null,r.section ?? "—"));
-    const up = mk("td",null,fmtDay(r.updated_at));
-    if (r.updated_by) up.title = r.updated_by;
-    tr.appendChild(up);
-    const act = mk("td","act");
-    const rm = mk("button","danger","✕");
-    rm.title = `Delete the price for ${r.form_id}`;
-    rm.onclick = () => deletePrice(r);
-    act.appendChild(rm);
-    tr.appendChild(act);
+    tr.appendChild(mk("td","upd"));
+    paintRow(tr,r);
     tbody.appendChild(tr);
   }
   table.appendChild(tbody); wrap.appendChild(table);
@@ -1033,60 +1033,78 @@ function renderPrices(){
 
 $("priceFilter").addEventListener("input", () => { if (pricesLoaded) renderPrices(); });
 
-function setFeeText(td,row){
-  clr(td);
-  td.textContent = money(row.transaction_fee);
-  td.onclick = () => editFee(td,row);
+// The two cells an edit can change. Rendering one row rather than the whole
+// table keeps a save from scrolling the filter result out from under the admin.
+function paintRow(tr,row){
+  const fee = tr.children[2];
+  clr(fee);
+  fee.classList.remove("editing");
+  fee.textContent = money(row.transaction_fee);
+  fee.onclick = () => editFee(tr,row);
+
+  const upd = tr.children[4];
+  clr(upd);
+  upd.textContent = fmtDay(row.updated_at);
+  upd.title = row.updated_by || "";
 }
 
-// Click-to-edit: Enter or blur saves, Escape puts the old figure back. The
-// first of those to fire wins — settled keeps the blur that follows an Enter
-// (or an Escape) from saving a second time.
-function editFee(td,row){
-  if (td.querySelector("input")) return;
+// Click-to-edit, saved explicitly. Losing focus does NOT save and does not
+// close the editor — a fee is money, so it changes only when someone presses
+// Save. Enter is a shortcut for Save, Escape for Cancel. One row edits at a
+// time: opening a second editor cancels the first, discarding it unsaved.
+function editFee(tr,row){
+  if (feeEdit && feeEdit.row === row) return;
+  if (feeEdit) feeEdit.close();
+
+  const td = tr.children[2];
   const before = Number(row.transaction_fee);
+
   const inp = document.createElement("input");
   inp.type = "text"; inp.inputMode = "decimal"; inp.value = before.toFixed(2);
-  let settled = false;
+  inp.setAttribute("aria-label", `Fee for ${row.form_id}`);
+  const save = mk("button",null,"Save");
+  const cancel = mk("button",null,"Cancel");
+  const err = mk("div","feeerr");
 
-  const cancel = () => { if (settled) return; settled = true; setFeeText(td,row); };
-  const commit = async () => {
-    if (settled) return;
-    settled = true;
+  const close = () => { feeEdit = null; paintRow(tr,row); };
+
+  // stopPropagation matters: closing the editor re-arms the cell's own click
+  // handler, and without this the very click that closed it would bubble on
+  // and reopen the editor.
+  save.onclick = async (e) => {
+    e.stopPropagation();
     const v = parseMoney(inp.value);
     if (v === null){
-      setMsg("pfMsg","err",`Not a fee: ${inp.value}. Use a number with at most two decimals.`);
-      setFeeText(td,row); return;
+      err.textContent = "Use a number with at most two decimals.";
+      inp.focus(); inp.select(); return;         // stays in edit state
     }
-    if (v === before){ setFeeText(td,row); return; }
-    clr(td); td.textContent = "…";
+    if (v === before){ close(); return; }        // nothing to write
+    err.textContent = "";
+    save.disabled = cancel.disabled = inp.disabled = true;
     // The DB trigger owns updated_at; we only claim the author.
     const { error } = await sb.from("rr_form_prices")
       .update({ transaction_fee: v, updated_by: userEmail() })
       .eq("form_id", row.form_id);
-    if (error){ setMsg("pfMsg","err",error.message); setFeeText(td,row); return; }
+    save.disabled = cancel.disabled = inp.disabled = false;
+    if (error){ err.textContent = error.message; return; }   // stays in edit state
     row.transaction_fee = v; row.updated_at = new Date().toISOString(); row.updated_by = userEmail();
+    close();
     setMsg("pfMsg","ok",`${row.form_id} is now ${money(v)}.`);
-    renderPrices();
   };
+  cancel.onclick = (e) => { e.stopPropagation(); close(); };
 
   inp.onkeydown = (e) => {
-    if (e.key === "Enter"){ e.preventDefault(); commit(); }
-    else if (e.key === "Escape"){ e.preventDefault(); cancel(); }
+    if (e.key === "Enter"){ e.preventDefault(); save.click(); }
+    else if (e.key === "Escape"){ e.preventDefault(); cancel.click(); }
   };
-  inp.onblur = () => commit();
 
-  clr(td); td.onclick = null; td.appendChild(inp);
+  const box = mk("div","feeedit");
+  box.appendChild(inp); box.appendChild(save); box.appendChild(cancel);
+  clr(td); td.onclick = null; td.classList.add("editing");
+  td.appendChild(box); td.appendChild(err);
   inp.focus(); inp.select();
-}
 
-async function deletePrice(row){
-  if (!confirm(`Delete the price for ${row.form_id}? It will report as unpriced until one is added back.`)) return;
-  const { error } = await sb.from("rr_form_prices").delete().eq("form_id", row.form_id);
-  if (error){ setMsg("pfMsg","err",error.message); return; }
-  priceRows = priceRows.filter(r => r.form_id !== row.form_id);
-  renderPrices();
-  setMsg("pfMsg","ok",`Deleted ${row.form_id}. The form still submits; it will show as unpriced.`);
+  feeEdit = { row, close };
 }
 
 $("minBtn").dataset.label = $("minBtn").textContent;

@@ -50,54 +50,143 @@ test("filter matches form_id or description, case-insensitively", async () => {
   assert.equal(ids().length, 3);
 });
 
-test("clicking a fee, editing it and pressing Enter fires the right update", async () => {
-  const { w, calls } = await openPricing();
-  const fee = w.document.querySelectorAll("#priceList tbody tr")[1].querySelector("td.fee");
-  assert.equal(fee.textContent, "$0.41");
-
+// Fee editing is explicit: the editor is an input plus Save and Cancel, and
+// nothing writes until Save is pressed.
+const openEditor = (w, i = 0) => {
+  const fee = [...w.document.querySelectorAll("#priceList tbody tr")][i].querySelector("td.fee");
   fee.click();
-  const input = fee.querySelector("input");
-  assert.ok(input, "fee cell did not become an input");
-  assert.equal(input.value, "0.41");
+  const box = fee.querySelector(".feeedit");
+  const [save, cancel] = box.querySelectorAll("button");
+  return { fee, input: box.querySelector("input"), save, cancel };
+};
+const updates = (calls) => calls.filter(c => c.table === "rr_form_prices" && c.ops.includes("update"));
+const feeText = (w, i = 0) =>
+  [...w.document.querySelectorAll("#priceList tbody tr")][i].querySelector("td.fee").textContent;
 
-  input.value = "1.25";
-  input.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+test("clicking a fee opens an editor with Save and Cancel, and writes nothing yet", async () => {
+  const { w, calls } = await openPricing();
+  assert.equal(feeText(w, 1), "$0.41");
+
+  const { fee, input, save, cancel } = openEditor(w, 1);
+  assert.equal(input.value, "0.41");
+  assert.equal(save.textContent, "Save");
+  assert.equal(cancel.textContent, "Cancel");
+  assert.ok(fee.classList.contains("editing"));
+  assert.equal(updates(calls).length, 0);
+});
+
+test("losing focus never saves, and leaves the row in edit state", async () => {
+  const { w, calls } = await openPricing();
+  const { fee, input } = openEditor(w, 1);
+
+  input.value = "9.99";
+  input.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+  input.dispatchEvent(new w.FocusEvent("blur", { bubbles: false }));
+  input.blur();
   await flush();
 
-  const write = calls.filter(c => c.table === "rr_form_prices" && c.ops.includes("update"));
+  assert.equal(updates(calls).length, 0, "blur wrote a fee");
+  assert.ok(fee.querySelector(".feeedit input"), "blur closed the editor");
+  assert.equal(fee.querySelector(".feeedit input").value, "9.99", "blur discarded the typed value");
+});
+
+test("Save fires exactly one update and re-renders the row", async () => {
+  const { w, calls } = await openPricing();
+  const { input, save } = openEditor(w, 1);
+
+  input.value = "1.25";
+  save.click();
+  await flush();
+
+  const write = updates(calls);
   assert.equal(write.length, 1);
   assert.deepEqual(plain(write[0].patch), { transaction_fee: 1.25, updated_by: EMAIL });
   assert.deepEqual(plain(write[0].eq), { form_id: "8721" });
 
-  const after = [...w.document.querySelectorAll("#priceList tbody tr")][1].querySelector("td.fee");
-  assert.equal(after.textContent, "$1.25");
+  assert.equal(feeText(w, 1), "$1.25");
+  // updated_at is stamped by the trigger; the row shows today until the next load.
+  const updated = [...w.document.querySelectorAll("#priceList tbody tr")][1].children[4];
+  assert.equal(updated.textContent, new Date().toLocaleDateString("en-US"));
+  assert.equal(updated.title, EMAIL);
 });
 
-test("Escape cancels a fee edit and writes nothing", async () => {
+test("Enter is a shortcut for Save", async () => {
   const { w, calls } = await openPricing();
-  const fee = w.document.querySelector("#priceList tbody tr td.fee");
-  fee.click();
-  const input = fee.querySelector("input");
+  const { input } = openEditor(w, 1);
+  input.value = "2.00";
+  input.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  await flush();
+
+  assert.equal(updates(calls).length, 1);
+  assert.equal(feeText(w, 1), "$2.00");
+});
+
+test("Cancel restores the original fee and writes nothing", async () => {
+  const { w, calls } = await openPricing();
+  const { input, cancel } = openEditor(w, 0);
+  input.value = "99.99";
+  cancel.click();
+  await flush();
+
+  assert.equal(updates(calls).length, 0);
+  assert.equal(feeText(w, 0), "$3.22");
+});
+
+test("Escape cancels the edit", async () => {
+  const { w, calls } = await openPricing();
+  const { input } = openEditor(w, 0);
   input.value = "99.99";
   input.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   await flush();
 
-  assert.equal(calls.filter(c => c.ops.includes("update") && c.table === "rr_form_prices").length, 0);
-  assert.equal(w.document.querySelector("#priceList tbody tr td.fee").textContent, "$3.22");
+  assert.equal(updates(calls).length, 0);
+  assert.equal(feeText(w, 0), "$3.22");
 });
 
-test("a fee with three decimals is rejected without a write", async () => {
+test("a fee with three decimals errors inline and stays in edit state", async () => {
   const { w, calls } = await openPricing();
-  const fee = w.document.querySelector("#priceList tbody tr td.fee");
-  fee.click();
-  const input = fee.querySelector("input");
+  const { fee, input, save } = openEditor(w, 0);
   input.value = "3.225";
-  input.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  save.click();
   await flush();
 
-  assert.equal(calls.filter(c => c.ops.includes("update") && c.table === "rr_form_prices").length, 0);
-  assert.match(w.document.getElementById("pfMsg").textContent, /Not a fee: 3\.225/);
-  assert.equal(w.document.querySelector("#priceList tbody tr td.fee").textContent, "$3.22");
+  assert.equal(updates(calls).length, 0);
+  assert.match(fee.querySelector(".feeerr").textContent, /at most two decimals/);
+  assert.ok(fee.querySelector(".feeedit input"), "the editor closed on a bad value");
+  assert.equal(fee.querySelector(".feeedit input").value, "3.225");
+});
+
+test("a failed save keeps the editor open with the error", async () => {
+  const { w, calls, ctl } = await openPricing();
+  ctl.failNext = true;   // the next write fails the way RLS would
+  const { fee, input, save } = openEditor(w, 0);
+  input.value = "4.00";
+  save.click();
+  await flush();
+
+  assert.equal(updates(calls).length, 1);
+  assert.match(fee.querySelector(".feeerr").textContent, /permission denied/);
+  assert.equal(fee.querySelector(".feeedit input").value, "4.00");
+  assert.ok(fee.classList.contains("editing"), "the editor closed on a failed save");
+});
+
+test("only one row edits at a time", async () => {
+  const { w } = await openPricing();
+  const first = openEditor(w, 0);
+  first.input.value = "50.00";
+  const second = openEditor(w, 1);
+
+  assert.ok(second.input, "the second row did not open an editor");
+  assert.equal(w.document.querySelectorAll("#priceList .feeedit").length, 1);
+  assert.equal(feeText(w, 0), "$3.22", "the abandoned edit leaked into the row");
+});
+
+test("the price table has no delete column", async () => {
+  const { w } = await openPricing();
+  const heads = [...w.document.querySelectorAll("#priceList thead th")].map(th => th.textContent);
+  assert.deepEqual(heads, ["Form ID", "Description", "Fee", "Section", "Updated"]);
+  assert.equal(w.document.querySelector("#priceList td.act"), null);
+  assert.equal([...w.document.querySelectorAll("#priceList tbody button")].length, 0);
 });
 
 test("adding a form inserts it and re-sorts into place", async () => {
@@ -150,17 +239,4 @@ test("saving the monthly minimum validates and updates id=1", async () => {
   assert.deepEqual(plain(write[0].patch), { minimum_monthly_fee: 400 });
   assert.deepEqual(plain(write[0].eq), { id: 1 });
   assert.equal(min.value, "400.00");
-});
-
-test("deleting a price row confirms, deletes by form_id and drops the row", async () => {
-  const { w, calls } = await openPricing();
-  const rm = w.document.querySelector("#priceList tbody tr td.act button");
-  assert.equal(rm.textContent, "✕");
-  rm.click();
-  await flush();
-
-  const del = calls.find(c => c.ops.includes("delete"));
-  assert.equal(del.table, "rr_form_prices");
-  assert.deepEqual(plain(del.eq), { form_id: "0122" });
-  assert.equal(w.document.querySelectorAll("#priceList tbody tr").length, 2);
 });
