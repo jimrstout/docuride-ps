@@ -112,6 +112,20 @@ td.formid{background:linear-gradient(to top,var(--canary) 0 38%,transparent 38%)
 .hist table td.ok{color:var(--ok);font-weight:600}
 .hist table td.error{color:var(--stamp);font-weight:600}
 .hist .err{color:var(--stamp)}
+.pricing{margin-top:44px}
+.pricing summary{cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);padding:4px 0}
+.pricing .row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:14px 0 2px}
+.pricing .row div{flex:0 1 190px}
+.pricing .row div.wide{flex:1 1 280px}
+.pricing .row label{margin-top:0}
+.pricing .sep{margin-top:22px;padding-top:16px;border-top:1px solid var(--rule-2)}
+.pricing .note{font-family:var(--mono);font-size:11px;color:var(--ink-3);line-height:1.45;margin-top:14px;max-width:660px}
+.pricing .hint{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin:12px 0 0}
+.pricing td.desc{white-space:normal}
+.pricing th.fee,.pricing td.fee{text-align:right;padding-right:18px}
+.pricing td.fee{cursor:pointer;font-weight:600}
+.pricing td.fee input{width:88px;padding:2px 4px;font:inherit;text-align:right;border:1px solid var(--ink);border-radius:3px;background:var(--paper-2)}
+#priceFilter{max-width:340px}
 .users{margin-top:44px}
 .invite{display:flex;gap:10px;align-items:flex-end;margin:14px 0 6px;flex-wrap:wrap}
 .invite div{flex:1;min-width:240px}
@@ -210,6 +224,34 @@ td.act button.danger{color:var(--stamp);border-color:var(--stamp)}
       </div>
     </div>
 
+    <section class="pricing">
+      <details id="priceBox">
+        <summary>R&amp;R Pricing</summary>
+
+        <div class="row">
+          <div><label for="minFee">Monthly minimum</label><input id="minFee" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="375.00"></div>
+          <button class="btn ghost" id="minBtn">Save</button>
+        </div>
+        <div class="msg" id="minMsg"></div>
+
+        <div class="row sep">
+          <div><label for="pfId">Form ID</label><input id="pfId" type="text" autocomplete="off" spellcheck="false"></div>
+          <div class="wide"><label for="pfDesc">Description</label><input id="pfDesc" type="text" autocomplete="off"></div>
+          <div><label for="pfFee">Fee</label><input id="pfFee" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"></div>
+          <div><label for="pfSection">Section</label><input id="pfSection" type="text" autocomplete="off"></div>
+          <button class="btn ghost" id="pfAdd">Add form</button>
+        </div>
+        <div class="msg" id="pfMsg"></div>
+
+        <div class="sep">
+          <label for="priceFilter">Filter</label>
+          <input id="priceFilter" type="text" placeholder="Form ID or description" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="tablewrap" id="priceList"></div>
+        <div class="note">Prices match reported Form IDs by longest prefix (revision suffixes ignored). Estimates only &mdash; R&amp;R bills actuals.</div>
+      </details>
+    </section>
+
     <section class="users">
       <div class="eyebrow">Users</div>
       <div class="uform">
@@ -266,6 +308,12 @@ function yyyymm(){ return $("month").value.replace("-",""); }
 function label(p){ const y=p.slice(0,4), m=Number(p.slice(4)); return new Date(y,m-1,1).toLocaleString("en-US",{month:"long",year:"numeric"}); }
 function esc(s){ return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function money(n){ return Number(n).toLocaleString("en-US",{style:"currency",currency:"USD",minimumFractionDigits:2,maximumFractionDigits:2}); }
+// Accepts "43.4", "$43.40", "1,234.00". Rejects anything with more than two
+// decimals — a third digit is a fee nobody can be billed, not a rounding job.
+function parseMoney(raw){
+  const s = String(raw ?? "").trim().replace(/^\$/,"").replace(/,/g,"");
+  return /^\d+(\.\d{1,2})?$/.test(s) ? Number(s) : null;
+}
 function busy(btn,on){ btn.disabled=on; btn.innerHTML = on ? '<span class="spin"></span> Working' : btn.dataset.label; }
 
 async function boot(){
@@ -289,6 +337,10 @@ function render(){
     // has already been opened, so signing in does not fetch a collapsed panel.
     histLoaded = false;
     if ($("histBox").open) loadHistory();
+    // Same lazy contract for the pricing panel: nothing is fetched until it is
+    // opened, and re-signing in re-reads only if it is already open.
+    pricesLoaded = false;
+    if ($("priceBox").open) loadPricing();
     loadUsers();
     loadReviewEmails();
     loadApproval();
@@ -899,6 +951,185 @@ async function loadHistory(){
       <td class="${r.status}">${r.status==="ok" ? (r.ftp_response ? esc(r.ftp_response) : "ok") : esc(r.error)}</td>
     </tr>`).join("")}</tbody></table>`;
 }
+
+
+// ---------- R&R pricing (rr_report_settings.minimum_monthly_fee, rr_form_prices) ----------
+// Lazy like the run history: nothing is fetched until the panel is opened.
+// All ~256 price rows come down once and are filtered in the browser.
+
+let pricesLoaded = false;
+let priceRows = [];
+
+const userEmail = () => (session && session.user && session.user.email) || null;
+const setMsg = (id, kind, text) => { const n = $(id); n.className = "msg" + (kind ? " " + kind : ""); n.textContent = text; };
+
+$("priceBox").addEventListener("toggle", () => {
+  if ($("priceBox").open && !pricesLoaded) loadPricing();
+});
+
+async function loadPricing(){
+  pricesLoaded = true;   // set first, so a second toggle cannot race a second fetch
+  clr($("priceList")); $("priceList").appendChild(mk("div","empty","Loading…"));
+
+  const s = await sb.from("rr_report_settings").select("minimum_monthly_fee").eq("id",1).maybeSingle();
+  if (s.error) setMsg("minMsg","err",s.error.message);
+  else if (s.data && s.data.minimum_monthly_fee != null) $("minFee").value = Number(s.data.minimum_monthly_fee).toFixed(2);
+
+  const p = await sb.from("rr_form_prices")
+    .select("form_id, description, transaction_fee, section, updated_at, updated_by")
+    .order("section",{ascending:true}).order("form_id",{ascending:true});
+  if (p.error){
+    clr($("priceList")); $("priceList").appendChild(mk("div","msg err",p.error.message));
+    pricesLoaded = false;   // let the next open retry
+    return;
+  }
+  priceRows = p.data || [];
+  renderPrices();
+}
+
+// Postgres sorts NULLs last on ASC; match that so an added row lands where a
+// refetch would have put it.
+const cmp = (a,b) => a === b ? 0 : (a == null ? 1 : b == null ? -1 : (a < b ? -1 : 1));
+function sortPrices(){ priceRows.sort((x,y) => cmp(x.section,y.section) || cmp(x.form_id,y.form_id)); }
+
+function renderPrices(){
+  const wrap = $("priceList"); clr(wrap);
+  if (!priceRows.length){ wrap.appendChild(mk("div","empty","No form prices on file.")); return; }
+
+  const q = $("priceFilter").value.trim().toLowerCase();
+  const list = q
+    ? priceRows.filter(r => String(r.form_id ?? "").toLowerCase().includes(q) ||
+                            String(r.description ?? "").toLowerCase().includes(q))
+    : priceRows;
+  if (!list.length){ wrap.appendChild(mk("div","empty",`Nothing matches “${q}”.`)); return; }
+
+  const table = mk("table"), thead = mk("thead"), htr = mk("tr");
+  for (const h of ["Form ID","Description","Fee","Section","Updated",""]){
+    htr.appendChild(mk("th", h === "Fee" ? "fee" : null, h));
+  }
+  thead.appendChild(htr); table.appendChild(thead);
+
+  const tbody = mk("tbody");
+  for (const r of list){
+    const tr = mk("tr");
+    tr.appendChild(mk("td",null,r.form_id));
+    tr.appendChild(mk("td","desc",r.description ?? "—"));
+    const fee = mk("td","fee"); setFeeText(fee,r); tr.appendChild(fee);
+    tr.appendChild(mk("td",null,r.section ?? "—"));
+    const up = mk("td",null,fmtDay(r.updated_at));
+    if (r.updated_by) up.title = r.updated_by;
+    tr.appendChild(up);
+    const act = mk("td","act");
+    const rm = mk("button","danger","✕");
+    rm.title = `Delete the price for ${r.form_id}`;
+    rm.onclick = () => deletePrice(r);
+    act.appendChild(rm);
+    tr.appendChild(act);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody); wrap.appendChild(table);
+  wrap.appendChild(mk("div","hint", q ? `${list.length} of ${priceRows.length} forms` : `${priceRows.length} forms`));
+}
+
+$("priceFilter").addEventListener("input", () => { if (pricesLoaded) renderPrices(); });
+
+function setFeeText(td,row){
+  clr(td);
+  td.textContent = money(row.transaction_fee);
+  td.onclick = () => editFee(td,row);
+}
+
+// Click-to-edit: Enter or blur saves, Escape puts the old figure back. The
+// first of those to fire wins — settled keeps the blur that follows an Enter
+// (or an Escape) from saving a second time.
+function editFee(td,row){
+  if (td.querySelector("input")) return;
+  const before = Number(row.transaction_fee);
+  const inp = document.createElement("input");
+  inp.type = "text"; inp.inputMode = "decimal"; inp.value = before.toFixed(2);
+  let settled = false;
+
+  const cancel = () => { if (settled) return; settled = true; setFeeText(td,row); };
+  const commit = async () => {
+    if (settled) return;
+    settled = true;
+    const v = parseMoney(inp.value);
+    if (v === null){
+      setMsg("pfMsg","err",`Not a fee: ${inp.value}. Use a number with at most two decimals.`);
+      setFeeText(td,row); return;
+    }
+    if (v === before){ setFeeText(td,row); return; }
+    clr(td); td.textContent = "…";
+    // The DB trigger owns updated_at; we only claim the author.
+    const { error } = await sb.from("rr_form_prices")
+      .update({ transaction_fee: v, updated_by: userEmail() })
+      .eq("form_id", row.form_id);
+    if (error){ setMsg("pfMsg","err",error.message); setFeeText(td,row); return; }
+    row.transaction_fee = v; row.updated_at = new Date().toISOString(); row.updated_by = userEmail();
+    setMsg("pfMsg","ok",`${row.form_id} is now ${money(v)}.`);
+    renderPrices();
+  };
+
+  inp.onkeydown = (e) => {
+    if (e.key === "Enter"){ e.preventDefault(); commit(); }
+    else if (e.key === "Escape"){ e.preventDefault(); cancel(); }
+  };
+  inp.onblur = () => commit();
+
+  clr(td); td.onclick = null; td.appendChild(inp);
+  inp.focus(); inp.select();
+}
+
+async function deletePrice(row){
+  if (!confirm(`Delete the price for ${row.form_id}? It will report as unpriced until one is added back.`)) return;
+  const { error } = await sb.from("rr_form_prices").delete().eq("form_id", row.form_id);
+  if (error){ setMsg("pfMsg","err",error.message); return; }
+  priceRows = priceRows.filter(r => r.form_id !== row.form_id);
+  renderPrices();
+  setMsg("pfMsg","ok",`Deleted ${row.form_id}. The form still submits; it will show as unpriced.`);
+}
+
+$("minBtn").dataset.label = $("minBtn").textContent;
+$("minBtn").onclick = async () => {
+  setMsg("minMsg","","");
+  const v = parseMoney($("minFee").value);
+  if (v === null || v <= 0){ setMsg("minMsg","err","Enter a positive amount with at most two decimals."); return; }
+  busy($("minBtn"),true);
+  const { error } = await sb.from("rr_report_settings").update({ minimum_monthly_fee: v }).eq("id",1);
+  busy($("minBtn"),false);
+  if (error){ setMsg("minMsg","err",error.message); return; }
+  $("minFee").value = v.toFixed(2);
+  setMsg("minMsg","ok",`Monthly minimum saved as ${money(v)}.`);
+};
+
+$("pfAdd").dataset.label = $("pfAdd").textContent;
+$("pfAdd").onclick = async () => {
+  setMsg("pfMsg","","");
+  const form_id = $("pfId").value.trim();
+  const fee = parseMoney($("pfFee").value);
+  if (!form_id){ setMsg("pfMsg","err","Form ID is required."); return; }
+  if (fee === null){ setMsg("pfMsg","err","Fee must be a number with at most two decimals."); return; }
+  const row = {
+    form_id,
+    description: $("pfDesc").value.trim() || null,
+    transaction_fee: fee,
+    section: $("pfSection").value.trim() || null,
+    updated_by: userEmail(),
+  };
+  busy($("pfAdd"),true);
+  const { error } = await sb.from("rr_form_prices").insert(row);
+  busy($("pfAdd"),false);
+  if (error){
+    const dup = error.code === "23505" || /duplicate key/i.test(error.message || "");
+    setMsg("pfMsg","err", dup ? `${form_id}: form ID already exists.` : error.message);
+    return;
+  }
+  priceRows.push({ ...row, updated_at: new Date().toISOString() });
+  sortPrices();
+  for (const id of ["pfId","pfDesc","pfFee","pfSection"]) $(id).value = "";
+  renderPrices();
+  setMsg("pfMsg","ok",`Added ${form_id} at ${money(fee)}.`);
+};
 
 boot();
 </script>
