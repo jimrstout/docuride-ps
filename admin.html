@@ -68,6 +68,12 @@ input[type=email],input[type=password],input[type=month],input[type=text]{width:
 .tally-store td.n{text-align:right;font-weight:600}
 .tally-store th.n{text-align:right}
 .tally-store button{background:none;border:0;font-family:var(--mono);font-size:11px;color:var(--ink-3);text-decoration:underline;padding:6px 0 0}
+/* cost estimate — sits under the tally, above the per-store breakdown */
+.cost{margin:16px 0 2px;padding-top:12px;border-top:1px solid var(--rule-2);max-width:560px}
+.cost .main{font-family:var(--mono);font-size:13px;color:var(--ink)}
+.cost .main b{font-family:var(--display);font-weight:800;font-size:17px;letter-spacing:-.01em}
+.cost .sub{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-top:4px;line-height:1.45;white-space:normal}
+.cost .warn{font-family:var(--mono);font-size:11.5px;color:var(--stamp);margin-top:6px;line-height:1.45;white-space:normal}
 .deal-forms{display:block;line-height:1.5}
 .deal-forms .formid{display:inline-block;margin:1px 0}
 .dealer{color:var(--ink-3);font-size:10.5px;line-height:1.3;white-space:normal}
@@ -259,6 +265,7 @@ function defaultMonth(){
 function yyyymm(){ return $("month").value.replace("-",""); }
 function label(p){ const y=p.slice(0,4), m=Number(p.slice(4)); return new Date(y,m-1,1).toLocaleString("en-US",{month:"long",year:"numeric"}); }
 function esc(s){ return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function money(n){ return Number(n).toLocaleString("en-US",{style:"currency",currency:"USD",minimumFractionDigits:2,maximumFractionDigits:2}); }
 function busy(btn,on){ btn.disabled=on; btn.innerHTML = on ? '<span class="spin"></span> Working' : btn.dataset.label; }
 
 async function boot(){
@@ -483,6 +490,22 @@ async function callReport(mode, period){
   return j;
 }
 
+// Pricing is advisory: rr-report answers cost:null when it could not price the
+// month, and then the sheet says nothing about money at all.
+function costHtml(c){
+  if (!c) return "";
+  const sub = c.minimum_applies
+    ? `Form fees ${money(c.form_fees)} \u2014 below the ${money(c.minimum)} monthly minimum, which applies`
+    : `Form fees ${money(c.form_fees)} across ${c.priced_rows} forms (above the ${money(c.minimum)} monthly minimum)`;
+  const un = c.unpriced || [];
+  const n = un.reduce((t,u) => t + (Number(u.count) || 0), 0);
+  return `<div class="cost">
+      <div class="main">Estimated R&amp;R invoice: <b>${esc(money(c.estimated))}</b></div>
+      <div class="sub">${esc(sub)}</div>
+      ${un.length ? `<div class="warn">${n} form row${n===1?"":"s"} have no price on file and are excluded: ${esc(un.map(u=>u.form_id).join(", "))}</div>` : ""}
+    </div>`;
+}
+
 function drawSheet(j, stamp){
   // group CSV rows by deal for a readable preview; CSV download stays one-row-per-form
   const deals = new Map();
@@ -516,6 +539,7 @@ function drawSheet(j, stamp){
       <div><b>${j.deals}</b>deals</div>
       ${j.range ? `<div><b>${j.range.start} → ${j.range.end}</b>sale dates</div>` : ""}
     </div>
+    ${costHtml(j.cost)}
     ${storeRows.length ? `<div class="tally-store" id="tallyStore">${tallyHtml(false)}</div>` : ""}
     <div class="tablewrap"><table class="compact"><thead><tr><th>Date</th><th>Deal</th><th>Form ID</th><th>Dealer</th></tr></thead><tbody>${rows}</tbody></table></div>
     ${j.ftp ? `<div class="msg">FTPS: ${esc(j.ftp)}</div>` : ""}`;
