@@ -51,7 +51,7 @@ values
    'https://docuride.com/terms/vsc', array['distance','weekend','work'], 10),
 
   ('881190a5-9bf5-49ae-91fd-752e546c8484', '7428435c-e47c-49f1-86c7-f42558a2ce23',
-   'GAP', 'Guaranteed Asset Protection', 'Keep the asset valuable',
+   'GAP', 'Guaranteed Asset Protection', 'Keep ownership manageable',
    'If the machine is totaled or stolen, this covers the gap between what your insurance pays and what you still owe the lender.',
    'The difference between your insurance settlement and your remaining loan balance, up to the limit in your contract.',
    'The life of your loan, up to 60 months',
