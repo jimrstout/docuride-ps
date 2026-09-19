@@ -94,9 +94,14 @@ curl -sS "https://fovccigwlcmmzfubpfny.supabase.co/functions/v1/fni-session-get?
 ```
 
 Expected on the seeded demo session: four presentable products (VSC $2,225,
-TW $890, GAP $695, KEY $275), `catalog` with four entries, PPM present in
-`offer.products` but absent from `catalog` so the planner withholds it, and
+TW $890, GAP $695, KEY $275), `catalog` with five entries, and
 `financials.term_months` of 60 with `rate_label` "Annual percentage rate".
+
+`catalog_coverage` should read `matched: 5`, `unmatched: []`, and one entry in
+`copy_pending` for PPM — the product registered in the catalog with its copy
+unwritten. A non-empty `unmatched` means a rated product found no catalog row
+at all, which is a join failure rather than a decision; the function also logs
+it at error level as `CATALOG JOIN FAILED`.
 
 To check the acknowledgment without writing to Zoho:
 
@@ -114,9 +119,14 @@ deliberately — it writes to a live deal.
 ## Demo data
 
 `supabase/seed/planner_demo_seed.sql` is applied to the live project: three
-pricing bands and four catalog entries for the All Seasons store, plus a mock
+pricing bands and five catalog entries for the All Seasons store, plus a mock
 `rated_offers` row on session `44e41c35` so the planner renders end to end
 without TecAssured credentials.
+
+Four of those five carry finished copy. PPM is registered with its copy
+unwritten on purpose, so the seed exercises both withhold paths: a product held
+back by decision, and — if you delete that row — one held back by a failed
+join.
 
 **The catalog copy in it is a draft and has not been reviewed.** Writing that
 copy is a content task and it needs checking against TecAssured's approved

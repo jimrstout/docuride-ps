@@ -87,26 +87,36 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     return m;
   }, [initial.catalog]);
 
-  const { presentable, withheld } = useMemo(() => {
+  const { presentable, withheld, unmatched } = useMemo(() => {
     const ok: Presentable[] = [];
     const bad: { name: string; why: string }[] = [];
+    const missing: { name: string; code: string }[] = [];
 
     for (const offer of initial.offer?.products ?? []) {
       const copy = copyByCode.get(offer.product_code);
       const price = offer.retail_price;
 
       // Filtering by genuine eligibility is correct. Filtering for relevance is
-      // steering, and is not done anywhere here. These two exclusions are
+      // steering, and is not done anywhere here. The exclusions below are
       // neither: a product with no price or no plain-language copy cannot be
       // presented honestly, which is exactly what the catalog exists to enforce.
+      //
+      // The order matters. A product with no catalog row at all is not a
+      // withheld product, it is one we failed to recognise, and that is the
+      // most fundamental of the three -- so it is checked first and reported
+      // separately rather than being folded in with the deliberate cases.
+      if (!copy) {
+        missing.push({ name: offer.product_name, code: offer.product_code });
+        continue;
+      }
       if (price === null || price === undefined) {
         bad.push({ name: offer.product_name, why: offer.unpriced_reason ?? "No price available" });
         continue;
       }
-      if (!copy || !copy.is_presentable) {
+      if (!copy.is_presentable) {
         bad.push({
-          name: offer.product_name,
-          why: "No approved plain-language description on file",
+          name: copy.display_name || offer.product_name,
+          why: "No approved plain-language description on file yet",
         });
         continue;
       }
@@ -123,7 +133,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
       return d !== 0 ? d : a.copy.display_order - b.copy.display_order;
     });
 
-    return { presentable: ok, withheld: bad };
+    return { presentable: ok, withheld: bad, unmatched: missing };
   }, [initial.offer, copyByCode, answers]);
 
   // ── Payment basis ───────────────────────────────────────────────────────
@@ -435,6 +445,22 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                       because {withheld.length === 1 ? "it does" : "they do"} not yet have
                       approved pricing and plain-language terms on file. Your dealership
                       can tell you more.
+                    </p>
+                  )}
+
+                  {/* A different thing entirely, and not a decision anybody
+                      made: these were rated but matched nothing in the
+                      catalog. Saying so is how it gets noticed at all -- in a
+                      self-guided session there is no member of staff watching
+                      the screen, and the alternative is a store quietly not
+                      offering a plan for a month. */}
+                  {unmatched.length > 0 && (
+                    <p className="all-options warn">
+                      <b>Please check with your dealership before you finish.</b>{" "}
+                      {unmatched.length === 1 ? "An option" : `${unmatched.length} options`}{" "}
+                      offered for your machine could not be displayed here, so this list
+                      may be incomplete. This is a problem on our end, not a decision
+                      about what you qualify for.
                     </p>
                   )}
                 </>

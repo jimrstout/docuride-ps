@@ -18,9 +18,16 @@
 -- any state caps on GAP still need setting by the business.
 -- ─────────────────────────────────────────────────────────────────────────
 
--- Prepaid Maintenance is deliberately left out of the catalog. The rated offer
--- below includes it, so the planner has to withhold it and say why -- which is
--- the behaviour that stops a product being sold off a blank description.
+-- Prepaid Maintenance is in the catalog with its copy unwritten, not left out
+-- of it. The rated offer includes PPM, so the planner still withholds it -- the
+-- behaviour that stops a product being sold off a blank description -- but the
+-- withholding is now a recorded decision rather than an absence.
+--
+-- That distinction is the whole point. A product missing from the catalog and a
+-- product whose copy is not finished used to look identical from the outside:
+-- both silently vanished from the customer's list. Registering PPM means an
+-- absent row can only mean one thing, and that thing is a join failure worth
+-- shouting about.
 
 insert into fni.pricing_rules
   (tenant_id, store_id, product_code, cost_floor, cost_ceiling,
@@ -87,7 +94,14 @@ values
    true,
    'Transfers with the machine to a private buyer at no cost.',
    null,
-   'https://docuride.com/terms/key', array['local','weekend'], 40)
+   'https://docuride.com/terms/key', array['local','weekend'], 40),
+
+  -- Known product, copy not written yet. display_name and goal are NOT NULL so
+  -- they are filled; everything the presentable view checks is left empty, so
+  -- is_presentable computes false and the planner withholds it. Deliberately.
+  ('881190a5-9bf5-49ae-91fd-752e546c8484', '7428435c-e47c-49f1-86c7-f42558a2ce23',
+   'PPM', 'Planned Maintenance', 'Keep ownership manageable',
+   null, null, null, null, null, null, null, null, null, null, array[]::text[], 50)
 on conflict do nothing;
 
 

@@ -286,3 +286,95 @@ Two consequences worth knowing:
   here. The pure logic is covered by the test suite and the pricing pipeline was
   verified in SQL against the real session, but one authenticated
   `fni-session-get` call is still the thing that confirms the whole path.
+
+
+---
+
+## 10. Database audit, 19 September 2026
+
+The build spec gained an audit section after the first build pass. Four of its
+six items are done; two wait on a decision.
+
+### 10a. GAP was filed under the wrong ownership goal (fixed)
+
+GAP sat under "Keep the asset valuable". It covers the difference between an
+insurance settlement and the remaining loan balance — the borrower's finances,
+not the machine's condition or resale value — so it belongs under "Keep
+ownership manageable". The words *Asset Protection* in the product name most
+likely drove the original filing.
+
+Changed in the live row and in `supabase/seed/planner_demo_seed.sql`, since
+fixing only the live row lets the next re-seed put it back.
+
+### 10b. The only real test session was about to expire (fixed)
+
+Session `44e41c35` carried `expires_at` of 2026-09-20, and `fni-session-get`
+returns 410 Gone the moment it passes. Pushed out thirty days, to 2026-10-20.
+The seed carries a matching top-up scoped to that one session id — expiry is a
+privacy control everywhere else and nothing should blunt it.
+
+### 10c. `sessions.mode` broke the table's naming convention (fixed)
+
+Now `Self-Guided | Collaborative | Staff-Presented`, matching every other
+constrained column on `fni.sessions`. Migration `0007` plus every writer in one
+commit; `mode` was NULL on every row so there was no data to migrate, and the
+mapping is carried in the migration for environments where that is not true.
+
+Fixing it surfaced a second bug. The acknowledgment's label was a two-way check
+on `staff-presented`, so a **Collaborative session printed "Self-guided"** on
+the signed document. All three modes name themselves now, the vocabulary lives
+in `_shared/session-mode.ts`, and `fni-session-get` returns a rendered
+`mode_label` so the page and the document cannot drift.
+
+### 10d. A failed catalog join was indistinguishable from a deliberate withhold (fixed)
+
+Item 6's signal half. A rated product that never reached the customer used to
+be one of two very different things, reported identically as an absence:
+
+- its copy is deliberately unwritten, so it is withheld — correct;
+- it matched nothing in `fni.product_catalog` — a join failure.
+
+The second is how a store stops offering GAP for a month with nobody noticing,
+and it is the likely shape of trouble on credential day: the join runs on
+`productUnique`, and the seeded mock matches only because one person authored
+both sides of it.
+
+**Telling them apart requires the deliberate case to be a row that exists with
+its copy unwritten.** Leaving a known-but-unwritten product out of the catalog
+makes it identical to one we failed to recognise. So PPM, which the seed used
+to omit, is now registered with `display_name` and `goal` set and every copy
+field empty: `is_presentable` computes false, the planner still withholds it,
+and an absent row now means exactly one thing.
+
+`fni-session-get` returns `catalog_coverage` with `copy_pending` and
+`unmatched` separated, logs `CATALOG JOIN FAILED` at error level with the
+offending codes, and the planner shows the two cases differently — the join
+failure asks the buyer to check with the dealership before finishing, which is
+how it gets noticed at all in a session with no staff present.
+
+Classification lives in `_shared/planner-catalog.ts` and is covered by
+`test/planner-catalog.test.mjs`, including the credential-day case where every
+provider code is numeric.
+
+### 10e. Still open, both needing Jim
+
+**Item 4 — nothing prevents a session with no payment inputs.**
+`tila_amount_financed`, `finance_term_total`, `interest_rate`, `apr` and
+`amount_financed` are all nullable with no CHECK. The self-heal recovers them
+from `raw_snapshot` when TILA was calculated; when it never was, there is
+nothing to recover and the planner opens with no principal and no term. The
+audit's options are to refuse to open, or to fall back to
+`DC_Sold_1_Balance_Due` and label everything an estimate. Its recommendation is
+to refuse, and I agree — a quietly wrong payment is the exact failure §1 exists
+to eliminate. Related and also open: `finance_type` of `Cash` has no defined
+planner behaviour.
+
+Today the planner already declines to invent a payment (it says the terms are
+not finalized), so the customer-facing half is safe. What is undecided is
+whether the session should open at all.
+
+**Item 5 — `fni-contract-documents` reads four columns that do not exist.** Now
+confirmed against `information_schema`: two have near-equivalents
+(`provider_product_id`, `rate_unique_id`) but `document_retrieved_at` and
+`filename` have no counterpart in any form, so it is not a rename. Either add
+the two columns or track retrieval state another way. See §7.

@@ -109,6 +109,21 @@ export interface DiscoveryAnswers {
   [k: string]: unknown;
 }
 
+/**
+ * Whether each rated product found its copy.
+ *
+ * `copy_pending` is a decision: a catalog row exists and its plain-language
+ * copy is not written yet, so the product is withheld. `unmatched` is a
+ * defect: the product was rated and nothing in fni.product_catalog matches it.
+ * Before these were separated, both ended as a silent absence.
+ */
+export interface CatalogCoverage {
+  offered: number;
+  matched: number;
+  copy_pending: { product_code: string; display_name: string }[];
+  unmatched: { product_code: string; product_name: string }[];
+}
+
 export interface SessionPayload {
   session: PlannerSession;
   offer: {
@@ -117,6 +132,7 @@ export interface SessionPayload {
     products: OfferProduct[];
   } | null;
   catalog: CatalogEntry[];
+  catalog_coverage: CatalogCoverage;
   selections: Selection[];
   photos: string[] | null;
   photos_cached_at: string | null;

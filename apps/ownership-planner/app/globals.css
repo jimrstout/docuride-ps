@@ -309,3 +309,12 @@ button { cursor: pointer; }
   .content footer .status { grid-column: 1 / 3; order: 3; }
   .brand-footer { display: none; }
 }
+
+/* A product that was rated but matched no catalog row. Not the same as one
+   deliberately withheld for unwritten copy, and not styled the same either --
+   this one is a fault the buyer is being asked to help catch. */
+.all-options.warn {
+  border-left: 3px solid var(--orange);
+  padding: 10px 0 10px 12px;
+  color: #4f5c64;
+}

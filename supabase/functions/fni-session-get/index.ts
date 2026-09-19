@@ -28,6 +28,12 @@ import { normalizeOffer, NormalizedProduct } from "../_shared/planner-offers.ts"
 import { priceProduct, PricingRule } from "../_shared/planner-pricing.ts";
 import { selectRate } from "../_shared/money.ts";
 import { modeLabel } from "../_shared/session-mode.ts";
+import {
+  CatalogRow,
+  classifyCoverage,
+  indexCatalog,
+  joinFailureReport,
+} from "../_shared/planner-catalog.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -194,6 +200,8 @@ serve(async (req: Request) => {
     const codes = pricedProducts.map((p) => p.product_code).filter((c) => c !== "");
 
     let catalog: Record<string, unknown>[] = [];
+    let byCode = new Map<string, CatalogRow>();
+
     if (codes.length > 0) {
       const { data: catRows } = await supabase
         .schema("fni")
@@ -203,16 +211,31 @@ serve(async (req: Request) => {
         .in("product_code", codes)
         .or(`store_id.eq.${s.store_id},store_id.is.null`);
 
-      const byCode = new Map<string, Record<string, unknown>>();
-      for (const row of (catRows ?? []) as Record<string, unknown>[]) {
-        const code = row.product_code as string;
-        const existing = byCode.get(code);
-        // A store row beats a tenant-wide row.
-        if (!existing || (existing.store_id === null && row.store_id !== null)) {
-          byCode.set(code, row);
-        }
-      }
-      catalog = [...byCode.values()];
+      byCode = indexCatalog((catRows ?? []) as unknown as CatalogRow[]);
+      catalog = [...byCode.values()] as unknown as Record<string, unknown>[];
+    }
+
+    // Did every rated product find its copy? A product withheld for unwritten
+    // copy is a decision; one that matched nothing is a defect. They used to be
+    // the same silent absence. See _shared/planner-catalog.ts.
+    const coverage = classifyCoverage(
+      pricedProducts.map((p) => ({
+        product_code: p.product_code,
+        product_name: p.product_name,
+      })),
+      byCode
+    );
+
+    if (coverage.unmatched.length > 0) {
+      console.error(
+        "fni-session-get CATALOG JOIN FAILED:",
+        joinFailureReport(
+          sessionId,
+          (s.store_id as string) ?? null,
+          coverage,
+          pricedProducts.map((p) => p.product_code)
+        )
+      );
     }
 
     // ── Selections so far ───────────────────────────────────────────────
@@ -294,6 +317,11 @@ serve(async (req: Request) => {
         : null,
 
       catalog,
+
+      // Whether each rated product found its copy. The UI needs the two
+      // failures apart: one is a decision, the other is a defect.
+      catalog_coverage: coverage,
+
       selections: selections ?? [],
       photos: s.dx1_photos ?? null,
       photos_cached_at: s.dx1_photos_cached_at ?? null,
