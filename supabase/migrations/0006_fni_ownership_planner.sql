@@ -49,6 +49,11 @@ create table if not exists fni.product_catalog (
   future_value_note     text,
   full_terms_url        text,
 
+  -- Discovery answers this product is most relevant to. Reorders the
+  -- presentation only; never used to hide a product. Filtering for relevance is
+  -- steering, and genuine eligibility is already decided upstream at rating.
+  relevance_tags        text[] not null default '{}',
+
   display_order         integer not null default 100,
   active                boolean not null default true,
 
@@ -76,9 +81,15 @@ create unique index if not exists product_catalog_tenant_product_key
 -- A product is presentable only when the copy that answers the customer's
 -- questions is actually written. Selling off a marketing tagline is the exact
 -- behaviour the planner exists to eliminate, so this is computed, not trusted.
+-- Explicit column list, not select *: a view defined with select * makes every
+-- future ALTER TABLE on the base table fail on column reordering.
 create or replace view fni.product_catalog_presentable
   with (security_invoker = true) as
-  select *,
+  select id, tenant_id, store_id, product_code, display_name, goal,
+         what_it_accomplishes, what_it_covers, coverage_duration,
+         what_it_excludes, deductible_note, how_to_use, transferable,
+         transfer_note, future_value_note, full_terms_url, relevance_tags,
+         display_order, active, created_at, updated_at,
          (
            active
            and coalesce(btrim(what_it_accomplishes), '') <> ''

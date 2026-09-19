@@ -99,18 +99,28 @@ export function planTotals(
   annualRatePercent: number,
   months: number
 ): PlanTotals {
-  const productTotal = includedPrices.reduce((a, p) => a + p, 0);
-  const vehiclePayment = monthlyPayment(principal, annualRatePercent, months);
-  const totalPayment = monthlyPayment(
-    principal + productTotal,
-    annualRatePercent,
-    months
+  // Rounded before it is financed, not after. Each product's price is a money
+  // amount and the contract will carry it rounded, so the principal has to be
+  // built from rounded prices -- otherwise float drift in the sum can move the
+  // payment a cent away from what gets signed.
+  const productTotal = toCents(includedPrices.reduce((a, p) => a + p, 0));
+
+  // The two anchors: what the customer pays in total, and what the vehicle
+  // alone costs. Both are rounded first, and the plan line is then their
+  // difference -- so the breakdown on screen always adds up to the total on
+  // screen. Rounding each line independently lets 285.93 + 44.37 print beside a
+  // total of 330.29, which is a penny out on the one screen the customer takes
+  // home, and "close enough" is not a thing money does.
+  const vehiclePayment = toCents(monthlyPayment(principal, annualRatePercent, months));
+  const totalPayment = toCents(
+    monthlyPayment(principal + productTotal, annualRatePercent, months)
   );
+
   return {
-    vehiclePayment: toCents(vehiclePayment),
+    vehiclePayment,
     planPayment: toCents(totalPayment - vehiclePayment),
-    totalPayment: toCents(totalPayment),
-    productTotal: toCents(productTotal),
+    totalPayment,
+    productTotal,
   };
 }
 
