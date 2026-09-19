@@ -89,3 +89,22 @@ values
    null,
    'https://docuride.com/terms/key', array['local','weekend'], 40)
 on conflict do nothing;
+
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- Keep the demo session testable.
+--
+-- Session 44e41c35 is the only real session anchoring the verified payment
+-- math, and fni-session-get returns 410 Gone once expires_at passes. It is not
+-- created here -- fni-session-start made it from the live Zoho record -- so
+-- this only pushes its expiry out when it is close to lapsing.
+--
+-- Scoped to that one id on purpose. Expiry is a privacy control on every other
+-- session and nothing here should blunt it.
+-- ─────────────────────────────────────────────────────────────────────────
+
+update fni.sessions
+set expires_at = greatest(expires_at, now() + interval '30 days'),
+    updated_at = now()
+where id = '44e41c35-c501-4ee8-84ed-8858b6b9101f'
+  and expires_at < now() + interval '7 days';
