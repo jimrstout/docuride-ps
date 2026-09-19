@@ -103,6 +103,9 @@ export const edge = {
   sessionSave: <T>(body: unknown) =>
     call<T>("fni-session-save", { method: "POST", body }),
 
+  acknowledgment: <T>(body: unknown) =>
+    call<T>("fni-acknowledgment", { method: "POST", body }),
+
   rate: <T>(body: unknown) => call<T>("fni-rate-vehicle", { method: "POST", body }),
 
   submit: <T>(body: unknown) =>

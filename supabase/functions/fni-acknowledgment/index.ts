@@ -38,7 +38,9 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import { secretsMatch } from "../_shared/supabase.ts";
-import { SIGNATURE_MAP_LIMIT } from "../_shared/signature-map.ts";
+import { SIGNATURE_MAP_LIMIT, appendSignatureMap } from "../_shared/signature-map.ts";
+import { getRecord } from "../_shared/zoho.ts";
+import { fileUploadValue, updateRecordFields, uploadFile } from "../_shared/zoho-files.ts";
 import {
   AckDecision,
   renderAcknowledgment,
@@ -46,6 +48,11 @@ import {
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// "External F-I Form Upload 2" -- the F&I-specific one of the three
+// External_Form_Upload fields on the DocuRide module.
+const UPLOAD_FIELD = "External_Form_Upload_2";
+const SIGNATURE_MAP_FIELD = "FNI_Signature_Map";
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -79,7 +86,7 @@ serve(async (req: Request) => {
     return json(401, { error: "Unauthorized" });
   }
 
-  let body: { session_id?: string };
+  let body: { session_id?: string; deliver?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -151,6 +158,51 @@ serve(async (req: Request) => {
       }
     );
 
+    // ── Delivery ────────────────────────────────────────────────────────
+    const delivery: Record<string, unknown> = { attempted: false, delivered: false };
+
+    if (body.deliver !== false && s.zoho_deal_id) {
+      delivery.attempted = true;
+      const zohoId = String(s.zoho_deal_id);
+      try {
+        const record = await getRecord("DocuRide", zohoId);
+        if (!record) throw new Error(`Zoho deal ${zohoId} not found`);
+
+        const existingMap = (record[SIGNATURE_MAP_FIELD] as string | null) ?? null;
+        const appended = appendSignatureMap(existingMap, out.signatureMapLine);
+
+        if (!appended.ok) {
+          // Abandoned, not truncated. The PDF still comes back in the response,
+          // so nothing is lost while somebody sorts the field out.
+          delivery.delivered = false;
+          delivery.reason = appended.reason;
+        } else if (appended.reason) {
+          // The line was already there, so this document was already delivered.
+          // Uploading again would put a second copy on the record.
+          delivery.delivered = true;
+          delivery.skipped = true;
+          delivery.reason = appended.reason;
+        } else {
+          const { file_id } = await uploadFile(out.filename, out.bytes);
+          await updateRecordFields("DocuRide", zohoId, {
+            id: zohoId,
+            [UPLOAD_FIELD]: fileUploadValue(file_id),
+            [SIGNATURE_MAP_FIELD]: appended.value,
+          });
+          delivery.delivered = true;
+          delivery.file_id = file_id;
+          delivery.upload_field = UPLOAD_FIELD;
+          delivery.signature_map_length = appended.value.length;
+        }
+      } catch (err) {
+        // A failed delivery must not lose the document. The caller still gets
+        // the PDF and can retry, which the dedupe above makes safe.
+        delivery.delivered = false;
+        delivery.reason = err instanceof Error ? err.message : String(err);
+        console.error("fni-acknowledgment delivery failed:", delivery.reason);
+      }
+    }
+
     return json(200, {
       session_id: sessionId,
       filename: out.filename,
@@ -163,10 +215,10 @@ serve(async (req: Request) => {
       totals: out.totals,
       rate_label: out.rateLabel,
       zoho: {
-        signature_map_field: "FNI_Signature_Map",
+        signature_map_field: SIGNATURE_MAP_FIELD,
         signature_map_limit: SIGNATURE_MAP_LIMIT,
-        upload_field: null,
-        note: "Choose the External_Form_Upload_* field before wiring the upload.",
+        upload_field: UPLOAD_FIELD,
+        ...delivery,
       },
     });
   } catch (err) {

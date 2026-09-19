@@ -74,6 +74,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   );
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [ackState, setAckState] = useState<"idle" | "working" | "done" | "error">("idle");
   const [photos, setPhotos] = useState<string[]>(initial.photos ?? []);
 
   const profile = profileFor(session.vehicle.tecassured_code);
@@ -213,6 +214,23 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.id]);
+
+  // Generated when the customer completes the plan, before contract submit, so
+  // a failed submit still leaves a record of what was presented and agreed --
+  // and generated even when nothing was included, because that is the session
+  // most worth having a record of.
+  const finish = useCallback(async () => {
+    setAckState("working");
+    try {
+      await save(true);
+      const res = await fetch(`/api/session/${session.id}/acknowledgment`, {
+        method: "POST",
+      });
+      setAckState(res.ok ? "done" : "error");
+    } catch {
+      setAckState("error");
+    }
+  }, [save, session.id]);
 
   const decided = presentable.filter((p) => decisions[p.offer.product_code]).length;
   const allDecided = presentable.length > 0 && decided === presentable.length;
@@ -556,6 +574,11 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                   by this system rather than negotiated.
                 </p>
                 <p className="meta">
+                  {ackState === "working" && "Preparing your record…"}
+                  {ackState === "done" && "Saved and ready for signing."}
+                  {ackState === "error" &&
+                    "We saved your plan, but couldn't prepare the signing copy. Your dealership can finish this for you."}
+                  <br />
                   Session {session.id}
                   <br />
                   {session.mode === "staff-presented"
@@ -588,7 +611,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
               className="dark"
               disabled={step === 1 && presentable.length > 0 && !allDecided}
               onClick={() => {
-                if (step === 3) void save(true);
+                if (step === 3) void finish();
                 setStep((s) => Math.min(STEPS.length - 1, s + 1));
               }}
             >

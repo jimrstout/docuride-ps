@@ -247,7 +247,7 @@ misplaces a signature field on a document somebody then signs.
 The same check also makes a retry idempotent: appending a line already present
 would otherwise stack two signature fields in the same place.
 
-### 9c. Which upload field receives the acknowledgment is undecided
+### 9c. Which upload field receives the acknowledgment (resolved)
 
 The spec says to upload the PDF "to the file upload field on the DocuRide DC
 record the same way other external documents arrive". There are three:
@@ -256,9 +256,10 @@ record the same way other external documents arrive". There are three:
     External_Form_Upload_2   "External F-I Form Upload 2"
     External_Form_Upload_3   "External Form Upload 3"
 
-`External_Form_Upload_2` looks right on its label, but writing to the wrong one
-overwrites a document somebody else put there. `fni-acknowledgment` returns the
-PDF and the signature line and does not write to Zoho, pending that choice.
+`External_Form_Upload_2` is the one, confirmed by Jim on 2026-09-19.
+`fni-acknowledgment` now uploads there and appends to `FNI_Signature_Map` in the
+same PATCH, so a half-written record is not possible. Pass `deliver: false` to
+generate without writing to Zoho.
 
 ---
 

@@ -1,0 +1,124 @@
+# Ownership Planner — deployment
+
+## Vercel project
+
+**Not created.** The Vercel token available to this session can read
+`Jim Stout's projects` and list its projects, but `POST /projects` comes back
+`403 forbidden: You don't have permission to create the project`. The settings
+below are what the project needs; everything else is ready to point at it.
+
+Create a **second** project against `jimrstout/docuride`. Do not deploy the
+planner through the existing `docuride` project — that would put a buyer-facing
+application carrying PII onto the same deployment as the main site, with shared
+environment variables and a shared rollback surface.
+
+| Setting | Value |
+| --- | --- |
+| Team | `team_9dw1TAb1QeCxKd2TA2mlgudX` (Jim Stout's projects) |
+| Repository | `jimrstout/docuride` |
+| Root directory | `apps/ownership-planner` |
+| Framework preset | Next.js |
+| Node version | 22.x |
+| Affected-projects deployments | **On** — so a push touching only the main site does not rebuild the planner, and vice versa |
+| SSO / Vercel Authentication | **Off** (decided 2026-09-19) |
+
+### Why SSO is off
+
+The production security model is the session UUID plus its 24-hour expiry,
+whether or not SSO is on. Inheriting the `docuride` project's
+`all_except_custom_domains` setting would mainly mean a buyer or an F&I manager
+without a Vercel account cannot open a preview URL — so every round of testing
+would have to happen on the live domain, which is a bad way to test something
+that writes to live sessions.
+
+### Environment variables
+
+```
+SUPABASE_URL          https://fovccigwlcmmzfubpfny.supabase.co
+FNI_WEBHOOK_SECRET    the Supabase Edge Function secret — server-side only
+FNI_FUNCTIONS_BASE    functions/v1
+NEXT_PUBLIC_SITE_URL  https://<planner domain>
+```
+
+Nothing here takes a `NEXT_PUBLIC_` prefix except the site URL. If a variable
+holding a secret ever needs to be read in the browser, the design is wrong.
+
+`DX1_API_KEY` is deliberately absent — see SPEC_CORRECTIONS.md §9a. DX1
+credentials belong per-store in `stores.dms_config`, not in a project-wide
+variable.
+
+### After the project exists
+
+Point `fni-session-start` at it, so the button on the DocuRide record opens the
+right URL. It builds `${FNI_MENU_BASE_URL}/${session_id}` and currently defaults
+to `https://docuride.app/fni`:
+
+```
+FNI_MENU_BASE_URL = https://<planner domain>/plan
+```
+
+That is a Supabase Edge Function secret, not a Vercel variable. No code change
+and no change to the Zoho button, which only opens whatever URL the function
+returns.
+
+## Edge Functions
+
+Three new ones are deployed and active: `fni-session-get`, `fni-session-save`
+and `fni-acknowledgment`. All three were deployed by pasting sources through the
+Supabase MCP, because the Supabase CLI is not available in the environment this
+work was done in.
+
+Run this once from a machine with the CLI, so every deployed bundle is
+byte-identical to the repository:
+
+```sh
+supabase functions deploy fni-session-get
+supabase functions deploy fni-session-save
+supabase functions deploy fni-acknowledgment
+```
+
+## The one unverified path
+
+Every function was confirmed to boot and to reject a bad secret with 401, which
+also proves each import graph resolves — including `pdf-lib` from esm.sh under
+the Deno edge runtime. No **authenticated** call was made, because
+`FNI_WEBHOOK_SECRET` is an Edge Function secret that is not readable from this
+environment, and outbound HTTPS to `supabase.co` is blocked by its network
+policy besides.
+
+One command closes that gap:
+
+```sh
+curl -sS "https://fovccigwlcmmzfubpfny.supabase.co/functions/v1/fni-session-get?session_id=44e41c35-c501-4ee8-84ed-8858b6b9101f" \
+  -H "x-webhook-secret: $FNI_WEBHOOK_SECRET" | jq
+```
+
+Expected on the seeded demo session: four presentable products (VSC $2,225,
+TW $890, GAP $695, KEY $275), `catalog` with four entries, PPM present in
+`offer.products` but absent from `catalog` so the planner withholds it, and
+`financials.term_months` of 60 with `rate_label` "Annual percentage rate".
+
+To check the acknowledgment without writing to Zoho:
+
+```sh
+curl -sS -X POST "https://fovccigwlcmmzfubpfny.supabase.co/functions/v1/fni-acknowledgment" \
+  -H "x-webhook-secret: $FNI_WEBHOOK_SECRET" -H "Content-Type: application/json" \
+  -d '{"session_id":"44e41c35-c501-4ee8-84ed-8858b6b9101f","deliver":false}' \
+  | jq '{filename, signature_map_line, presented_count, included_count, totals}'
+```
+
+Drop `"deliver":false` and it uploads to `External_Form_Upload_2` and appends to
+`FNI_Signature_Map` on the real DocuRide record. That was left unfired here
+deliberately — it writes to a live deal.
+
+## Demo data
+
+`supabase/seed/planner_demo_seed.sql` is applied to the live project: three
+pricing bands and four catalog entries for the All Seasons store, plus a mock
+`rated_offers` row on session `44e41c35` so the planner renders end to end
+without TecAssured credentials.
+
+**The catalog copy in it is a draft and has not been reviewed.** Writing that
+copy is a content task and it needs checking against TecAssured's approved
+language before anything goes live. The pricing bands are placeholders with the
+right shape and invented numbers.
