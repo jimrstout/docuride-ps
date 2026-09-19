@@ -15,7 +15,7 @@
 //                     rate_unique_id, term_months, term_miles, deductible,
 //                     selected_options, rate_snapshot }]
 //   discovery    - answers to the ownership questions (optional)
-//   mode         - self-guided | collaborative | staff-presented (optional)
+//   mode         - Self-Guided | Collaborative | Staff-Presented (optional)
 //   presented_at - ISO timestamp the products were put in front of the customer
 //   dx1_photos   - cached VIN photo lookup result (optional; written by the
 //                  Next.js photo route, which holds the DX1 key)
@@ -26,6 +26,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { SESSION_MODES, isSessionMode } from "../_shared/session-mode.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -36,8 +37,6 @@ const UUID_RE =
 // as a failure to act.
 const DISPOSITIONS = ["Included", "Managed by Customer"] as const;
 type Disposition = (typeof DISPOSITIONS)[number];
-
-const MODES = ["self-guided", "collaborative", "staff-presented"] as const;
 
 // fni.sessions.status admits a fixed vocabulary. "In Progress" is not in it and
 // would fail the CHECK constraint outright; "Presenting" is the existing term
@@ -118,8 +117,8 @@ serve(async (req: Request) => {
     return json(400, { error: "A well-formed session_id is required" });
   }
 
-  if (body.mode !== undefined && !MODES.includes(body.mode as typeof MODES[number])) {
-    return json(400, { error: `mode must be one of ${MODES.join(", ")}` });
+  if (body.mode !== undefined && !isSessionMode(body.mode)) {
+    return json(400, { error: `mode must be one of ${SESSION_MODES.join(", ")}` });
   }
 
   const supabase = createClient(

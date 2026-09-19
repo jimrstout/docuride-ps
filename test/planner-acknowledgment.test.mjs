@@ -20,7 +20,7 @@ const BASE = {
   buyer_display_name: "Test Buyer",
   vehicle: "2020 Can-Am Spyder RT",
   vin: "2BXNBDD24LV001706",
-  mode: "self-guided",
+  mode: "Self-Guided",
   principal: 13930.94,
   apr: 8.5165,
   interest_rate: 7.84,
@@ -82,6 +82,22 @@ test("names the rate it actually used", async () => {
   const { raw } = await textOf(withoutApr.bytes);
   assert.ok(raw.includes("Interest rate"));
   assert.ok(!raw.includes("Annual percentage rate"));
+});
+
+test("the document says which mode the session actually ran in", async () => {
+  const staff = await renderAcknowledgment(DEPS, { ...BASE, mode: "Staff-Presented" });
+  assert.ok((await textOf(staff.bytes)).raw.includes("Presented by dealership staff"));
+
+  // A Collaborative session used to print "Self-guided" here, because the label
+  // was a two-way check on Staff-Presented -- a false statement on a document
+  // somebody signs.
+  const together = await renderAcknowledgment(DEPS, { ...BASE, mode: "Collaborative" });
+  const togetherText = (await textOf(together.bytes)).raw;
+  assert.ok(togetherText.includes("Presented with dealership staff"));
+  assert.ok(!togetherText.includes("Self-guided"));
+
+  const alone = await renderAcknowledgment(DEPS, { ...BASE, mode: null });
+  assert.ok((await textOf(alone.bytes)).raw.includes("Self-guided"));
 });
 
 test("the signature line points at the page the signature box is drawn on", async () => {

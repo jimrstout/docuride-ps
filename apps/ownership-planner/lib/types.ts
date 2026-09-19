@@ -2,6 +2,9 @@
 
 export type Disposition = "Included" | "Managed by Customer";
 
+/** Title case, matching every other constrained column on fni.sessions. */
+export type SessionMode = "Self-Guided" | "Collaborative" | "Staff-Presented";
+
 export interface SurchargeOption {
   code: string;
   label: string;
@@ -59,7 +62,9 @@ export interface Selection {
 export interface PlannerSession {
   id: string;
   status: string;
-  mode: string | null;
+  mode: SessionMode | null;
+  /** How the mode reads to a buyer. Derived by fni-session-get. */
+  mode_label: string;
   store_id: string;
   deal_id: string | null;
   deal_number: string | null;

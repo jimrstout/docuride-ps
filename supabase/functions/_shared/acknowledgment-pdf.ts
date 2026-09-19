@@ -9,6 +9,7 @@
 
 import { planTotals, selectRate, toCents, monthlyPayment } from "./money.ts";
 import { signatureLine, toTopLeft } from "./signature-map.ts";
+import { modeLabel } from "./session-mode.ts";
 
 // Structural types, so this file needs no pdf-lib import of its own.
 export interface PdfDeps {
@@ -222,7 +223,7 @@ export async function renderAcknowledgment(
   });
   page.drawText("Buyer signature", { x: MARGIN, y: sigBottom - 12, size: 8, font: regular, color: grey });
   page.drawText(
-    `Session ${input.session_id}   ${input.mode === "staff-presented" ? "Presented by dealership staff" : "Self-guided"}   ${now.toISOString()}`,
+    `Session ${input.session_id}   ${modeLabel(input.mode)}   ${now.toISOString()}`,
     { x: MARGIN, y: sigBottom - 26, size: 7, font: regular, color: grey }
   );
 

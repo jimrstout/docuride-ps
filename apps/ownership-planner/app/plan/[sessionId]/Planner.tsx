@@ -581,10 +581,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                   <br />
                   Session {session.id}
                   <br />
-                  {session.mode === "staff-presented"
-                    ? "Presented by dealership staff"
-                    : "Self-guided"}{" "}
-                  • Prepared {new Date(presentedAt.current).toLocaleString("en-US")}
+                  {session.mode_label} • Prepared {new Date(presentedAt.current).toLocaleString("en-US")}
                 </p>
               </div>
             </div>

@@ -27,6 +27,7 @@ import { secretsMatch } from "../_shared/supabase.ts";
 import { normalizeOffer, NormalizedProduct } from "../_shared/planner-offers.ts";
 import { priceProduct, PricingRule } from "../_shared/planner-pricing.ts";
 import { selectRate } from "../_shared/money.ts";
+import { modeLabel } from "../_shared/session-mode.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -236,6 +237,9 @@ serve(async (req: Request) => {
         id: s.id,
         status: s.status,
         mode: s.mode,
+        // Derived server-side so the browser and the acknowledgment document
+        // cannot disagree about what to call the same session.
+        mode_label: modeLabel(s.mode as string | null),
         store_id: s.store_id,
         deal_id: s.deal_id,
         deal_number: s.deal_number,
