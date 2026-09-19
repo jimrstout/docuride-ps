@@ -117,9 +117,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     // applicable option was shown; that is steering, and it is gone.
     ok.sort((a, b) => {
       const score = (p: Presentable) =>
-        answers.filter((ans) =>
-          ((p.copy as unknown as { relevance_tags?: string[] }).relevance_tags ?? []).includes(ans)
-        ).length;
+        answers.filter((ans) => (p.copy.relevance_tags ?? []).includes(ans)).length;
       const d = score(b) - score(a);
       return d !== 0 ? d : a.copy.display_order - b.copy.display_order;
     });

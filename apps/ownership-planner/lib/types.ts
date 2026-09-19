@@ -40,6 +40,8 @@ export interface CatalogEntry {
   transfer_note: string | null;
   future_value_note: string | null;
   full_terms_url: string | null;
+  /** Discovery answers this product is most relevant to. Reorders only. */
+  relevance_tags: string[];
   display_order: number;
   store_id: string | null;
   is_presentable: boolean;

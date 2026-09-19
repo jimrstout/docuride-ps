@@ -218,3 +218,70 @@ function only *returns* the string — it does not write `FNI_Signature_Map` in 
 The spec flags this and it is genuinely open. `fni-rate-vehicle` sends
 `vehiclePrice: sess.sale_price`, and the deployed source already carries a comment
 raising the same GAP concern. Still needs confirming with TecAssured. No change made.
+
+---
+
+## 9. Two more, found while building
+
+### 9a. `DX1_API_KEY` is not how this platform holds DX1 credentials
+
+The spec's environment list has a single `DX1_API_KEY` for the planner project.
+`MIGRATION_PATH.md` §102 puts DX1 credentials per-store in `stores.dms_config`,
+encrypted via Supabase Vault, and no DX1 client exists in this repository yet —
+`_shared/dms/dx1.ts` is still listed as work to be done. The extraction method
+the spec says to reuse lives in iRideStoreFront, which is not this repo.
+
+`lib/dx1.ts` is therefore a seam with the real call unimplemented, rather than a
+guess at DX1's response shape. The caching, the empty-state handling and the
+route around it are real; only the lookup is missing. The environment variable
+is left out of the list below until the credential shape is settled.
+
+### 9b. `FNI_Signature_Map` is capped at 2000 characters
+
+The spec describes appending a line to `FNI_Signature_Map` but not that the Zoho
+field is a `textarea` with `length: 2000`. An append that crosses the cap fails
+the whole Zoho write. `appendSignatureMap` in `_shared/signature-map.ts` does the
+arithmetic and refuses rather than truncating — a truncated map silently
+misplaces a signature field on a document somebody then signs.
+
+The same check also makes a retry idempotent: appending a line already present
+would otherwise stack two signature fields in the same place.
+
+### 9c. Which upload field receives the acknowledgment is undecided
+
+The spec says to upload the PDF "to the file upload field on the DocuRide DC
+record the same way other external documents arrive". There are three:
+
+    External_Form_Upload_1   "External Bill of Sale Form Upload 1"
+    External_Form_Upload_2   "External F-I Form Upload 2"
+    External_Form_Upload_3   "External Form Upload 3"
+
+`External_Form_Upload_2` looks right on its label, but writing to the wrong one
+overwrites a document somebody else put there. `fni-acknowledgment` returns the
+PDF and the signature line and does not write to Zoho, pending that choice.
+
+---
+
+## Deployment state as of this work
+
+`fni-session-get`, `fni-session-save` and `fni-acknowledgment` were deployed by
+pasting sources through the Supabase MCP, because the Supabase CLI is not
+available in the environment this work was done in and outbound HTTPS to
+`supabase.co` is blocked by its network policy.
+
+All three were verified to boot and to reject a bad secret with 401, which also
+proves every import resolves — including `pdf-lib` from esm.sh under the Deno
+edge runtime.
+
+Two consequences worth knowing:
+
+- `fni-session-get`'s deployed bundle carries an abridged `_shared/money.ts`
+  containing only the three functions it imports. Their implementations are
+  identical to the repository's; the file simply omits `planTotals`,
+  `productPayment` and `money`. Running `supabase functions deploy` for all
+  three from the repository once makes every bundle byte-identical to the tree.
+- No authenticated round trip was made against any of them, because
+  `FNI_WEBHOOK_SECRET` is an Edge Function secret and is not readable from
+  here. The pure logic is covered by the test suite and the pricing pipeline was
+  verified in SQL against the real session, but one authenticated
+  `fni-session-get` call is still the thing that confirms the whole path.
