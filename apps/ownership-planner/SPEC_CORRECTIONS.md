@@ -356,25 +356,65 @@ Classification lives in `_shared/planner-catalog.ts` and is covered by
 `test/planner-catalog.test.mjs`, including the credential-day case where every
 provider code is numeric.
 
-### 10e. Still open, both needing Jim
+### 10e. A deal with no payment inputs (decided, done)
 
-**Item 4 — nothing prevents a session with no payment inputs.**
-`tila_amount_financed`, `finance_term_total`, `interest_rate`, `apr` and
-`amount_financed` are all nullable with no CHECK. The self-heal recovers them
-from `raw_snapshot` when TILA was calculated; when it never was, there is
-nothing to recover and the planner opens with no principal and no term. The
-audit's options are to refuse to open, or to fall back to
-`DC_Sold_1_Balance_Due` and label everything an estimate. Its recommendation is
-to refuse, and I agree — a quietly wrong payment is the exact failure §1 exists
-to eliminate. Related and also open: `finance_type` of `Cash` has no defined
-planner behaviour.
+The planner never refuses to open. Which figures it shows depends on the deal,
+resolved once in `resolvePaymentBasis` rather than assumed screen by screen:
 
-Today the planner already declines to invent a payment (it says the terms are
-not finalized), so the customer-facing half is safe. What is undecided is
-whether the session should open at all.
+| Tier | When | Principal | Rate | Term |
+| --- | --- | --- | --- | --- |
+| `tila` | TILA calculated | `TILA_Amount_Financed` | APR, else Interest Rate | `Term_Months` |
+| `lienholder` | No TILA, lienholder present | `DC_Sold_1_Balance_Due` | Interest Rate | `Term_Months` |
+| `cash` | Lienholder blank | — | — | — |
 
-**Item 5 — `fni-contract-documents` reads four columns that do not exist.** Now
-confirmed against `information_schema`: two have near-equivalents
-(`provider_product_id`, `rate_unique_id`) but `document_retrieved_at` and
-`filename` have no counterpart in any form, so it is not a rename. Either add
-the two columns or track retrieval state another way. See §7.
+TILA only runs when a lienholder needs it, so its absence on a financed deal is
+normal rather than an error. Lienholder Name is the cash test, which is the
+condition the DocuRide record already uses when it hides the remaining
+lienholder fields.
+
+The cash check runs **first** and settles the question outright. A cash deal can
+still carry leftovers in the financing columns, and amortizing those would put a
+monthly payment on a purchase that has none.
+
+A fourth kind, `unavailable`, is kept separate on purpose: a financed deal
+missing something it needs is never folded into `cash`, because telling a buyer
+with a lienholder that theirs is a cash purchase misstates the sale.
+
+No schema change was needed — all three fallback values were already on
+`fni.sessions`. The work was in the UI, where every screen assumed a monthly
+figure existed. On the cash path the product cards drop their per-month line,
+the payment screen drops the amount financed, term and rate headings rather than
+printing them with dashes, and the plan summary and the signed document both
+present the plan as an amount added to the purchase. The standing statement
+about credit approval goes too: there is none on a cash sale.
+
+`test/planner-payment-basis.test.mjs` pins all three paths, including that the
+same products cost the same money on each and only the framing differs.
+
+### 10f. `fni-contract-documents` column fix (decided, done)
+
+`document_retrieved_at` and `filename` added by migration `0008`. The other two
+references were a rename against columns already on the table: `product_id` is
+`provider_product_id`, `product_unique` is `rate_unique_id`.
+
+The function had only ever been deployed out of band, so it lands in the
+repository here — it could not be fixed without bringing it in, and the
+migration could not land alone without putting the columns ahead of their code.
+`_shared/tecassured.ts` came in with it for the same reason: the import existed
+nowhere in the tree.
+
+One consequence: the filename now carries the rate unique id rather than a
+short product code, and the filename is the first field of the contract's
+`FNI_Signature_Map` line, which is capped at 2000 characters. Longer
+identifiers spend that budget faster — still comfortably within it for any
+realistic number of contracts on one deal.
+
+### 10g. Still open
+
+`fni-rate-vehicle`, `fni-contract-submit`, `fni-session-start`,
+`fni-health-check` and `fni-refresh-vehicle-types` are still deployed-only and
+absent from the repository, so they cannot be reviewed, tested or redeployed
+from a clean checkout.
+
+Also unchanged: the `vehiclePrice` question in §8, and confirming TecAssured's
+real `productUnique` format before go-live (§10d).

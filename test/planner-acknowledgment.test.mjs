@@ -101,6 +101,7 @@ test("a cash purchase is described as a purchase, not as a loan", async () => {
   assert.ok(raw.includes("cash purchase"));
 
   assert.ok(!raw.includes("/month"), "no monthly figure belongs on a cash deal");
+  assert.ok(!raw.includes("credit approval"), "there is no credit approval on a cash sale");
   assert.ok(!raw.includes("Total monthly payment"));
   assert.ok(!raw.includes("Vehicle payment"));
   assert.ok(!raw.includes("Annual percentage rate"));
@@ -112,6 +113,7 @@ test("a financed deal without TILA still states a payment", async () => {
 
   assert.equal(out.paymentBasis, "lienholder");
   assert.equal(out.rateLabel, "Interest rate");
+  assert.ok(raw.includes("credit approval"), "a financed buyer does have one");
   // Balance due of 13,800.94 at 7.84% over 60, plus the 3,115 of plans.
   assert.equal(out.totals.vehiclePayment, 278.78);
   assert.ok(raw.includes("Total monthly payment"));

@@ -63,10 +63,15 @@ returns.
 
 ## Edge Functions
 
-Three new ones are deployed and active: `fni-session-get`, `fni-session-save`
-and `fni-acknowledgment`. All three were deployed by pasting sources through the
-Supabase MCP, because the Supabase CLI is not available in the environment this
-work was done in.
+Four are deployed from this repository: `fni-session-get`, `fni-session-save`,
+`fni-acknowledgment` and `fni-contract-documents`. All were deployed by pasting
+sources through the Supabase MCP, because the Supabase CLI is not available in
+the environment this work was done in.
+
+`fni-rate-vehicle`, `fni-contract-submit`, `fni-session-start`,
+`fni-health-check` and `fni-refresh-vehicle-types` are deployed but are **not
+in the repository**, so they cannot be reviewed, tested or redeployed from a
+clean checkout. Worth closing before go-live.
 
 Run this once from a machine with the CLI, so every deployed bundle is
 byte-identical to the repository:
@@ -75,6 +80,7 @@ byte-identical to the repository:
 supabase functions deploy fni-session-get
 supabase functions deploy fni-session-save
 supabase functions deploy fni-acknowledgment
+supabase functions deploy fni-contract-documents
 ```
 
 ## The one unverified path
@@ -96,6 +102,11 @@ curl -sS "https://fovccigwlcmmzfubpfny.supabase.co/functions/v1/fni-session-get?
 Expected on the seeded demo session: four presentable products (VSC $2,225,
 TW $890, GAP $695, KEY $275), `catalog` with five entries, and
 `financials.term_months` of 60 with `rate_label` "Annual percentage rate".
+
+`financials.payment_basis` should read `tila` with `has_payment: true` — the
+session has a lienholder and TILA was calculated. A deal with no Lienholder Name
+resolves to `cash`, where `has_payment` is false and every monthly figure is
+suppressed in favour of totals.
 
 `catalog_coverage` should read `matched: 5`, `unmatched: []`, and one entry in
 `copy_pending` for PPM — the product registered in the catalog with its copy

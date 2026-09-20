@@ -246,7 +246,13 @@ export async function renderAcknowledgment(
   y -= 4;
   line("WHAT THIS MEANS", { size: 8, font: bold, gap: 8 });
   rule();
-  paragraph("These protection plans are optional. Declining any of them does not affect your credit approval or the terms of your sale.");
+  // There is no credit approval on a cash sale, so the sentence does not claim
+  // one. The screen makes the same distinction.
+  paragraph(
+    basis.kind === "cash"
+      ? "These protection plans are optional. Declining any of them does not affect the terms of your sale."
+      : "These protection plans are optional. Declining any of them does not affect your credit approval or the terms of your sale."
+  );
   paragraph("Pricing was presented by the system rather than negotiated. The prices above are the prices offered to every customer for this machine at this store.");
   paragraph("Your signature confirms that these plans were presented to you and that the decisions recorded above are the ones you made. It is not a purchase of anything marked Managed by Customer.");
 
