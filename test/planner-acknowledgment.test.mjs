@@ -21,10 +21,12 @@ const BASE = {
   vehicle: "2020 Can-Am Spyder RT",
   vin: "2BXNBDD24LV001706",
   mode: "Self-Guided",
-  principal: 13930.94,
+  tila_amount_financed: 13930.94,
+  amount_financed: 13800.94,
   apr: 8.5165,
   interest_rate: 7.84,
   term_months: 60,
+  lienholder_name: "Peoples Bank",
   generated_at: new Date("2026-09-19T20:00:00.000Z"),
   decisions: [
     { product_code: "VSC", product_name: "Vehicle Service Contract", disposition: "Included",
@@ -82,6 +84,49 @@ test("names the rate it actually used", async () => {
   const { raw } = await textOf(withoutApr.bytes);
   assert.ok(raw.includes("Interest rate"));
   assert.ok(!raw.includes("Annual percentage rate"));
+});
+
+test("a cash purchase is described as a purchase, not as a loan", async () => {
+  // No lienholder. The plans still have a price; there is simply no payment to
+  // state, and stating one would describe a loan this buyer does not have.
+  const out = await renderAcknowledgment(DEPS, { ...BASE, lienholder_name: null });
+  const { raw } = await textOf(out.bytes);
+
+  assert.equal(out.paymentBasis, "cash");
+  assert.equal(out.totals, null);
+  assert.equal(out.planTotal, 3115);
+
+  assert.ok(raw.includes("Plans added to your purchase"));
+  assert.ok(raw.includes("$3,115.00"));
+  assert.ok(raw.includes("cash purchase"));
+
+  assert.ok(!raw.includes("/month"), "no monthly figure belongs on a cash deal");
+  assert.ok(!raw.includes("Total monthly payment"));
+  assert.ok(!raw.includes("Vehicle payment"));
+  assert.ok(!raw.includes("Annual percentage rate"));
+});
+
+test("a financed deal without TILA still states a payment", async () => {
+  const out = await renderAcknowledgment(DEPS, { ...BASE, tila_amount_financed: null });
+  const { raw } = await textOf(out.bytes);
+
+  assert.equal(out.paymentBasis, "lienholder");
+  assert.equal(out.rateLabel, "Interest rate");
+  // Balance due of 13,800.94 at 7.84% over 60, plus the 3,115 of plans.
+  assert.equal(out.totals.vehiclePayment, 278.78);
+  assert.ok(raw.includes("Total monthly payment"));
+  assert.ok(raw.includes("Interest rate"));
+});
+
+test("a financed deal missing its inputs is not dressed up as a cash sale", async () => {
+  const out = await renderAcknowledgment(DEPS, {
+    ...BASE, tila_amount_financed: null, amount_financed: null, term_months: null,
+  });
+  const { raw } = await textOf(out.bytes);
+
+  assert.equal(out.paymentBasis, "unavailable");
+  assert.ok(raw.includes("not finalized"));
+  assert.ok(!raw.includes("cash purchase"), "this buyer has a lienholder");
 });
 
 test("the document says which mode the session actually ran in", async () => {
@@ -142,7 +187,8 @@ test("handles a unit with no offers at all", async () => {
 
 test("says so rather than inventing a payment when terms are not final", async () => {
   const out = await renderAcknowledgment(DEPS, {
-    ...BASE, principal: null, apr: null, interest_rate: null, term_months: null,
+    ...BASE, tila_amount_financed: null, amount_financed: null,
+    apr: null, interest_rate: null, term_months: null,
   });
   assert.equal(out.totals, null);
   const { raw } = await textOf(out.bytes);

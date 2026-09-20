@@ -7,7 +7,12 @@
 // document whose layout nobody has asserted on is a document nobody should
 // rely on, and this is what makes asserting on it possible.
 
-import { planTotals, selectRate, toCents, monthlyPayment } from "./money.ts";
+import {
+  monthlyPayment,
+  planTotals,
+  resolvePaymentBasis,
+  toCents,
+} from "./money.ts";
 import { signatureLine, toTopLeft } from "./signature-map.ts";
 import { modeLabel } from "./session-mode.ts";
 
@@ -45,11 +50,21 @@ export interface AckInput {
   vehicle: string;
   vin: string | null;
   mode: string | null;
-  /** The lender's principal, not the balance due on the unit. */
-  principal: number | null;
+
+  // The payment inputs are handed over raw and resolved here, by the same
+  // function the planner screen uses. Passing a pre-chosen principal would let
+  // the signed document and the screen disagree about which tier the deal fell
+  // into -- including disagreeing about whether it has a payment at all.
+  /** Zoho TILA_Amount_Financed. Present only when TILA was calculated. */
+  tila_amount_financed: number | null;
+  /** Zoho DC_Sold_1_Balance_Due. */
+  amount_financed: number | null;
   apr: number | null;
   interest_rate: number | null;
   term_months: number | null;
+  /** Blank means cash, which means there is no payment to state. */
+  lienholder_name: string | null;
+
   decisions: AckDecision[];
   /** Injected so the document is reproducible in tests. */
   generated_at?: Date;
@@ -62,6 +77,10 @@ export interface AckOutput {
   page: number;
   totals: ReturnType<typeof planTotals> | null;
   rateLabel: string | null;
+  /** tila | lienholder | cash | unavailable. */
+  paymentBasis: ReturnType<typeof resolvePaymentBasis>["kind"];
+  /** What the included plans come to, on every path including cash. */
+  planTotal: number;
 }
 
 const PAGE_W = 612; // US Letter, points
@@ -149,14 +168,23 @@ export async function renderAcknowledgment(
   line(input.vehicle + (input.vin ? `   VIN ${input.vin}` : ""), { size: 9, color: grey, gap: 3 });
   line(`Prepared for ${input.buyer_display_name ?? "the buyer"}`, { size: 9, color: grey, gap: 16 });
 
-  const rate = selectRate(input.apr, input.interest_rate);
-  const term = input.term_months;
-  const included = input.decisions.filter((d) => d.disposition === "Included");
+  const basis = resolvePaymentBasis({
+    tilaAmountFinanced: input.tila_amount_financed,
+    amountFinanced: input.amount_financed,
+    apr: input.apr,
+    interestRate: input.interest_rate,
+    termMonths: input.term_months,
+    lienholderName: input.lienholder_name,
+  });
 
-  const totals =
-    input.principal !== null && rate !== null && term !== null && term > 0
-      ? planTotals(input.principal, included.map((d) => d.customer_price ?? 0), rate.ratePercent, term)
-      : null;
+  const term = basis.termMonths;
+  const included = input.decisions.filter((d) => d.disposition === "Included");
+  const includedPrices = included.map((d) => d.customer_price ?? 0);
+  const planTotal = toCents(includedPrices.reduce((a, p) => a + p, 0));
+
+  const totals = basis.hasPayment
+    ? planTotals(basis.principal!, includedPrices, basis.ratePercent!, term!)
+    : null;
 
   // Every product presented, not only the ones included.
   line("PLANS PRESENTED", { size: 8, font: bold, gap: 8 });
@@ -176,8 +204,9 @@ export async function renderAcknowledgment(
     if (duration) bits.push(duration);
     if (isIncluded && d.customer_price !== null) {
       bits.push(usd(d.customer_price));
-      if (rate !== null && term !== null && term > 0) {
-        bits.push(`${usd(toCents(monthlyPayment(d.customer_price, rate.ratePercent, term)))}/month`);
+      // No monthly figure on a deal that has no monthly payment.
+      if (basis.hasPayment) {
+        bits.push(`${usd(toCents(monthlyPayment(d.customer_price, basis.ratePercent!, term!)))}/month`);
       }
     }
     if (bits.length > 0) line(bits.join("   -   "), { size: 9, color: grey, gap: 2 });
@@ -190,16 +219,28 @@ export async function renderAcknowledgment(
   line("PAYMENT", { size: 8, font: bold, gap: 8 });
   rule();
 
-  if (totals && rate) {
+  if (totals) {
     pair("Vehicle payment", usd(totals.vehiclePayment));
     pair("Plan payment", usd(totals.planPayment));
     pair("Total monthly payment", usd(totals.totalPayment), true);
     y -= 2;
     // Whichever rate was used names itself. Never one label over the other's value.
-    line(`${rate.label}: ${rate.ratePercent}%     Term: ${term} months`, { size: 9, color: grey, gap: 14 });
+    line(`${basis.rateLabel}: ${basis.ratePercent}%     Term: ${term} months`, {
+      size: 9, color: grey, gap: 14,
+    });
+  } else if (basis.kind === "cash") {
+    // A cash purchase has no payment to reconcile. The plans are an amount
+    // added to the purchase, and stating it any other way would describe a loan
+    // this buyer does not have.
+    pair("Plans added to your purchase", usd(planTotal), true);
+    y -= 2;
+    paragraph("This was a cash purchase, so there is no monthly payment and no finance charge on these plans.");
+    y -= 8;
   } else {
+    pair("Plans added to your purchase", usd(planTotal), true);
+    y -= 2;
     paragraph("Financing terms were not finalized when this plan was prepared, so no payment is shown.");
-    y -= 10;
+    y -= 8;
   }
 
   y -= 4;
@@ -244,6 +285,8 @@ export async function renderAcknowledgment(
       bottom,
     }),
     totals,
-    rateLabel: rate?.label ?? null,
+    rateLabel: basis.rateLabel,
+    paymentBasis: basis.kind,
+    planTotal,
   };
 }

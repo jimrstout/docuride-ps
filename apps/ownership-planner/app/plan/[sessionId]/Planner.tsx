@@ -16,7 +16,7 @@ import type {
   SessionPayload,
 } from "@/lib/types";
 import { num } from "@/lib/types";
-import { money, planTotals, productPayment } from "@/lib/money";
+import { money, planTotals, productPayment, toCents } from "@/lib/money";
 import { profileFor } from "@/lib/profiles";
 
 const STEPS = [
@@ -137,16 +137,25 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   }, [initial.offer, copyByCode, answers]);
 
   // ── Payment basis ───────────────────────────────────────────────────────
+  //
+  // Resolved server-side, because whether this deal has a payment at all is not
+  // something the browser should be deciding. A cash deal -- no lienholder --
+  // has none, and every monthly figure below is gated on that rather than on
+  // whether the financing columns happen to hold usable numbers.
   const principal = num(session.financials.amortized_principal);
   const rate = session.financials.rate_used;
   const term = session.financials.term_months;
-  const canPrice = principal !== null && rate !== null && term !== null && term > 0;
+  const hasPayment = session.financials.has_payment === true;
+  const isCash = session.financials.payment_basis === "cash";
 
   const includedPrices = presentable
     .filter((p) => decisions[p.offer.product_code] === "Included")
     .map((p) => p.price + surchargeCost(p, options[p.offer.product_code] ?? []));
 
-  const totals = canPrice
+  /** What the plan costs, on every path. A cash deal has this and nothing else. */
+  const planTotal = toCents(includedPrices.reduce((a, p) => a + p, 0));
+
+  const totals = hasPayment
     ? planTotals(principal!, includedPrices, rate!, term!)
     : null;
 
@@ -407,6 +416,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                         open={!!open[p.offer.product_code]}
                         rate={rate}
                         term={term}
+                        hasPayment={hasPayment}
                         onToggleOpen={() =>
                           setOpen((o) => ({
                             ...o,
@@ -471,25 +481,32 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
             <div className={`screen ${step === 2 ? "active" : ""}`}>
               <h1>What it comes to.</h1>
               <p className="intro">
-                Your deal is already structured. This shows what your choices add to it.
+                {isCash
+                  ? "You're paying for this outright, so there's no monthly payment. Here's what your choices add to the purchase."
+                  : "Your deal is already structured. This shows what your choices add to it."}
               </p>
 
               <div className="finance-box">
-                <div className="terms-readonly">
-                  <div>
-                    <span>AMOUNT FINANCED</span>
-                    <b>{principal !== null ? money(principal) : "—"}</b>
+                {/* A cash purchase has no amount financed, no term and no rate.
+                    Printing those headings with dashes under them would imply
+                    a loan that does not exist. */}
+                {!isCash && (
+                  <div className="terms-readonly">
+                    <div>
+                      <span>AMOUNT FINANCED</span>
+                      <b>{principal !== null ? money(principal) : "—"}</b>
+                    </div>
+                    <div>
+                      <span>TERM</span>
+                      <b>{term !== null ? `${term} months` : "—"}</b>
+                    </div>
+                    <div>
+                      {/* Label honestly: whichever value is used names itself. */}
+                      <span>{(session.financials.rate_label ?? "RATE").toUpperCase()}</span>
+                      <b>{rate !== null ? `${rate}%` : "—"}</b>
+                    </div>
                   </div>
-                  <div>
-                    <span>TERM</span>
-                    <b>{term !== null ? `${term} months` : "—"}</b>
-                  </div>
-                  <div>
-                    {/* Label honestly: whichever value is used names itself. */}
-                    <span>{(session.financials.rate_label ?? "RATE").toUpperCase()}</span>
-                    <b>{rate !== null ? `${rate}%` : "—"}</b>
-                  </div>
-                </div>
+                )}
 
                 {totals ? (
                   <>
@@ -514,12 +531,56 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                       each plan separately, so it matches your contract.
                     </p>
                   </>
+                ) : isCash ? (
+                  <>
+                    {/* The plan is an amount added to the purchase, not to a
+                        payment. That is the only honest framing here. */}
+                    <div className="estimate">
+                      <div>
+                        <small>ADDED TO YOUR PURCHASE</small>
+                        <strong>{money(planTotal)}</strong>
+                      </div>
+                      <div className="breakdown">
+                        {includedPrices.length === 0 ? (
+                          <div><span>Nothing included yet</span><b>{money(0)}</b></div>
+                        ) : (
+                          presentable
+                            .filter((p) => decisions[p.offer.product_code] === "Included")
+                            .map((p) => (
+                              <div key={p.offer.product_code}>
+                                <span>{p.copy.display_name}</span>
+                                <b>
+                                  {money(
+                                    p.price +
+                                      surchargeCost(p, options[p.offer.product_code] ?? [])
+                                  )}
+                                </b>
+                              </div>
+                            ))
+                        )}
+                        <div className="rule"><span>Total</span><b>{money(planTotal)}</b></div>
+                      </div>
+                    </div>
+                    <p className="fine">
+                      You&apos;re paying for this machine outright, so there&apos;s no monthly
+                      payment and no finance charge on anything you include. These are
+                      one-time amounts added to what you&apos;re already paying.
+                    </p>
+                  </>
                 ) : (
-                  <p className="fine">
-                    We can&apos;t show a payment for this deal yet — the financing terms
-                    haven&apos;t been finalized. Your dealership can walk you through the
-                    numbers.
-                  </p>
+                  <>
+                    <div className="estimate">
+                      <div>
+                        <small>ADDED TO YOUR PURCHASE</small>
+                        <strong>{money(planTotal)}</strong>
+                      </div>
+                    </div>
+                    <p className="fine">
+                      We can&apos;t show a monthly payment for this deal yet — the financing
+                      terms haven&apos;t been finalized. The totals above are correct; your
+                      dealership can walk you through what they come to each month.
+                    </p>
+                  </>
                 )}
               </div>
             </div>
@@ -561,7 +622,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                 })}
               </div>
 
-              {totals && (
+              {totals ? (
                 <div className="summary-card">
                   <div className="summary-title">PAYMENT</div>
                   <div className="summary-row"><span>Vehicle</span><b>{money(totals.vehiclePayment)}</b></div>
@@ -570,6 +631,24 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                   <div className="summary-row">
                     <span>{session.financials.rate_label} and term</span>
                     <b>{rate}% • {term} months</b>
+                  </div>
+                </div>
+              ) : (
+                /* No payment to summarise. The plan is still a real amount --
+                   it is added to the purchase rather than to a payment, and on
+                   the one screen the customer takes home it says so. */
+                <div className="summary-card">
+                  <div className="summary-title">YOUR PLAN</div>
+                  <div className="summary-row">
+                    <span>Added to your purchase</span>
+                    <b>{money(planTotal)}</b>
+                  </div>
+                  <div className="summary-row">
+                    <span>
+                      {isCash
+                        ? "Paid outright, so there is no monthly payment and no finance charge."
+                        : "Financing terms are not finalized, so no monthly payment is shown."}
+                    </span>
                   </div>
                 </div>
               )}
@@ -596,8 +675,8 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                 </p>
                 <p>
                   Protection plans are optional. Declining any of them does not affect
-                  your credit approval or the terms of your sale. Pricing was presented
-                  by this system rather than negotiated.
+                  {isCash ? " the terms of your sale" : " your credit approval or the terms of your sale"}.
+                  Pricing was presented by this system rather than negotiated.
                 </p>
                 <p className="meta">
                   {ackState === "working" && "Preparing your record…"}
@@ -672,6 +751,7 @@ function ProductCard({
   open,
   rate,
   term,
+  hasPayment,
   onToggleOpen,
   onDecide,
   onOption,
@@ -682,13 +762,16 @@ function ProductCard({
   open: boolean;
   rate: number | null;
   term: number | null;
+  hasPayment: boolean;
   onToggleOpen: () => void;
   onDecide: (d: Disposition) => void;
   onOption: (code: string, on: boolean) => void;
 }) {
   const { copy, offer } = item;
   const price = item.price + surchargeCost(item, chosenOptions);
-  const perMonth = rate !== null && term !== null ? productPayment(price, rate, term) : null;
+  // A cash buyer has no monthly payment, so there is no monthly figure to show.
+  const perMonth =
+    hasPayment && rate !== null && term !== null ? productPayment(price, rate, term) : null;
 
   return (
     <div className="product">

@@ -149,4 +149,136 @@ export function money(n: number): string {
   });
 }
 
+/**
+ * Where a payment comes from on this deal, if one exists at all.
+ *
+ *   tila         TILA was calculated. The lender's own figures.
+ *   lienholder   No TILA, but a lienholder is attached. TILA only runs when a
+ *                lienholder needs it, so its absence on a financed deal is
+ *                normal rather than an error.
+ *   cash         No lienholder. There is no payment, and there is no honest
+ *                way to invent one.
+ *   unavailable  Financed, but something needed is missing. Deliberately NOT
+ *                folded into `cash`: telling a financed buyer their deal is a
+ *                cash purchase misrepresents the sale.
+ */
+export type PaymentBasisKind = "tila" | "lienholder" | "cash" | "unavailable";
+
+export interface PaymentSource {
+  /** Zoho TILA_Amount_Financed. Present only when TILA was calculated. */
+  tilaAmountFinanced: number | null | undefined;
+  /** Zoho DC_Sold_1_Balance_Due. The fallback principal on a financed deal. */
+  amountFinanced: number | null | undefined;
+  apr: number | null | undefined;
+  interestRate: number | null | undefined;
+  /** Zoho Term_Months. */
+  termMonths: number | null | undefined;
+  /**
+   * Blank means cash. This is the test the DocuRide record itself uses -- it
+   * hides the remaining lienholder fields on the same condition -- so the
+   * planner reads the deal the way the record already reads it.
+   */
+  lienholderName: string | null | undefined;
+}
+
+export interface PaymentBasis {
+  kind: PaymentBasisKind;
+  principal: number | null;
+  ratePercent: number | null;
+  rateSource: "apr" | "interest_rate" | null;
+  rateLabel: string | null;
+  termMonths: number | null;
+  /**
+   * True only when a monthly payment can honestly be shown. Every surface that
+   * prints a monthly figure is gated on this, because a cash buyer shown a
+   * payment is being told something untrue about their own purchase.
+   */
+  hasPayment: boolean;
+}
+
+function finite(v: number | null | undefined): v is number {
+  return typeof v === "number" && Number.isFinite(v);
+}
+
+/** A principal or term of zero is not a usable one. A rate of zero is. */
+function positive(v: number | null | undefined): v is number {
+  return finite(v) && v > 0;
+}
+
+function filled(v: string | null | undefined): boolean {
+  return typeof v === "string" && v.trim() !== "";
+}
+
+/**
+ * Resolve the payment inputs, in the order the deal itself decides.
+ *
+ * The planner never refuses to open. A deal that cannot produce a payment still
+ * has products worth presenting and a decision worth recording -- it just
+ * presents totals instead of monthly figures.
+ */
+export function resolvePaymentBasis(src: PaymentSource): PaymentBasis {
+  const none: PaymentBasis = {
+    kind: "cash",
+    principal: null,
+    ratePercent: null,
+    rateSource: null,
+    rateLabel: null,
+    termMonths: null,
+    hasPayment: false,
+  };
+
+  // No lienholder, no loan. Checked first because it settles the question
+  // outright: on a cash deal the financing columns may still carry leftovers,
+  // and amortizing them would put a payment on a purchase that has none.
+  if (!filled(src.lienholderName)) return none;
+
+  const term = positive(src.termMonths) ? Math.round(src.termMonths) : null;
+
+  // 1. TILA calculated: the lender's own figures, APR where present.
+  if (positive(src.tilaAmountFinanced) && term !== null) {
+    const rate = selectRate(src.apr, src.interestRate);
+    if (rate) {
+      return {
+        kind: "tila",
+        principal: src.tilaAmountFinanced,
+        ratePercent: rate.ratePercent,
+        rateSource: rate.source,
+        rateLabel: rate.label,
+        termMonths: term,
+        hasPayment: true,
+      };
+    }
+  }
+
+  // 2. No TILA, but financed. The balance due at the deal's own interest rate.
+  if (positive(src.amountFinanced) && finite(src.interestRate) && term !== null) {
+    return {
+      kind: "lienholder",
+      principal: src.amountFinanced,
+      ratePercent: src.interestRate,
+      rateSource: "interest_rate",
+      rateLabel: "Interest rate",
+      termMonths: term,
+      hasPayment: true,
+    };
+  }
+
+  // Financed, but incomplete. Report what is known so the interface can say
+  // which figures it has, and show no payment rather than a guessed one.
+  const rate = selectRate(src.apr, src.interestRate);
+  return {
+    kind: "unavailable",
+    principal: positive(src.tilaAmountFinanced)
+      ? src.tilaAmountFinanced
+      : positive(src.amountFinanced)
+        ? src.amountFinanced
+        : null,
+    ratePercent: rate?.ratePercent ?? null,
+    rateSource: rate?.source ?? null,
+    rateLabel: rate?.label ?? null,
+    termMonths: term,
+    hasPayment: false,
+  };
+}
+
 // ─── SHARED BLOCK END ────────────────────────────────────────────────────

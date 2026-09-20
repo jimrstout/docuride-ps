@@ -26,7 +26,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { normalizeOffer, NormalizedProduct } from "../_shared/planner-offers.ts";
 import { priceProduct, PricingRule } from "../_shared/planner-pricing.ts";
-import { selectRate } from "../_shared/money.ts";
+import { resolvePaymentBasis } from "../_shared/money.ts";
 import { modeLabel } from "../_shared/session-mode.ts";
 import {
   CatalogRow,
@@ -59,6 +59,13 @@ function zohoNumber(v: unknown): number | null {
     return Number.isFinite(n) ? n : null;
   }
   return null;
+}
+
+/** Postgres numerics arrive as strings over PostgREST. */
+function num(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  return Number.isFinite(n) ? n : null;
 }
 
 /**
@@ -246,10 +253,17 @@ serve(async (req: Request) => {
       .eq("session_id", sessionId);
 
     // ── Rate basis ──────────────────────────────────────────────────────
-    const rate = selectRate(
-      s.apr as number | null,
-      s.interest_rate as number | null
-    );
+    // Where this deal's payment comes from, if it has one. A cash deal -- no
+    // lienholder -- has no payment, and the planner must not invent one from
+    // whatever the financing columns happen to still hold.
+    const basis = resolvePaymentBasis({
+      tilaAmountFinanced: num(s.tila_amount_financed),
+      amountFinanced: num(s.amount_financed),
+      apr: num(s.apr),
+      interestRate: num(s.interest_rate),
+      termMonths: num(s.finance_term_total),
+      lienholderName: (s.lienholder_name as string | null) ?? null,
+    });
 
     // ── Shape the response ──────────────────────────────────────────────
     // Field names here follow the build spec's vocabulary; the renaming from
@@ -287,20 +301,26 @@ serve(async (req: Request) => {
 
         financials: {
           sale_price: s.sale_price,
-          // The balance due on the unit. NOT the amortization principal.
+          // The balance due on the unit. The fallback principal, not the
+          // TILA one.
           amount_financed: s.amount_financed,
-          // The lender's principal. This is what the payment is computed from.
-          amortized_principal: s.tila_amount_financed,
+          // The principal actually used, whichever tier supplied it.
+          amortized_principal: basis.principal,
           interest_rate: s.interest_rate,
           apr: s.apr,
-          rate_used: rate?.ratePercent ?? null,
-          rate_source: rate?.source ?? null,
-          rate_label: rate?.label ?? null,
+          rate_used: basis.ratePercent,
+          rate_source: basis.rateSource,
+          rate_label: basis.rateLabel,
           // finance_term is TILA_Pmt1_Count and is not the term; see §1b.
-          term_months: s.finance_term_total,
+          term_months: basis.termMonths,
           contract_payment: s.payment,
           finance_type: s.finance_type,
           lienholder_name: s.lienholder_name,
+          // tila | lienholder | cash | unavailable. `cash` is a deal with no
+          // lienholder: it has no payment, and every monthly figure in the
+          // interface is gated on has_payment because of it.
+          payment_basis: basis.kind,
+          has_payment: basis.hasPayment,
         },
 
         discovery: s.discovery,

@@ -149,11 +149,16 @@ serve(async (req: Request) => {
         vehicle: [s.unit_year, s.unit_make, s.unit_model].filter(Boolean).join(" "),
         vin: (s.vin as string) ?? null,
         mode: (s.mode as string) ?? null,
-        // The lender's principal, not the balance due on the unit.
-        principal: numOr(s.tila_amount_financed) ?? numOr(s.amount_financed),
+        // Handed over raw. The renderer resolves which tier this deal falls
+        // into with the same function the planner screen uses, so the signed
+        // document and the screen cannot disagree -- including about whether
+        // the deal has a payment at all.
+        tila_amount_financed: numOr(s.tila_amount_financed),
+        amount_financed: numOr(s.amount_financed),
         apr: numOr(s.apr),
         interest_rate: numOr(s.interest_rate),
-        term_months: (s.finance_term_total as number | null) ?? null,
+        term_months: numOr(s.finance_term_total),
+        lienholder_name: (s.lienholder_name as string | null) ?? null,
         decisions,
       }
     );
@@ -214,6 +219,8 @@ serve(async (req: Request) => {
       included_count: decisions.filter((d) => d.disposition === "Included").length,
       totals: out.totals,
       rate_label: out.rateLabel,
+      payment_basis: out.paymentBasis,
+      plan_total: out.planTotal,
       zoho: {
         signature_map_field: SIGNATURE_MAP_FIELD,
         signature_map_limit: SIGNATURE_MAP_LIMIT,

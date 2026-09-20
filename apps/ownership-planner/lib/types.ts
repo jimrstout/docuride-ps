@@ -99,6 +99,13 @@ export interface PlannerSession {
     contract_payment: string | number | null;
     finance_type: string | null;
     lienholder_name: string | null;
+    /**
+     * Which tier supplied the payment inputs. `cash` is a deal with no
+     * lienholder: it has no payment at all, and every monthly figure in the
+     * interface is gated on `has_payment` because of it.
+     */
+    payment_basis: "tila" | "lienholder" | "cash" | "unavailable";
+    has_payment: boolean;
   };
   discovery: DiscoveryAnswers | null;
   expires_at: string | null;
