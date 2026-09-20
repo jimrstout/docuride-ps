@@ -1,0 +1,420 @@
+# Ownership Planner — spec corrections
+
+Step zero of the build spec says its function signatures were inferred from project
+notes rather than read from source, and to correct the document where it is wrong.
+This is that correction, made against the deployed Edge Functions in
+`fovccigwlcmmzfubpfny` and the live `fni` schema on 2026-09-19.
+
+Everything below is a place the spec and reality disagree. Where the spec is right,
+it is not repeated here.
+
+---
+
+## 1. Payment math is wrong in three places
+
+This is the most consequential correction, so it goes first. The spec's amortization
+*function* is correct; all three of its **inputs** are wrong.
+
+Verified against the one real session in `fni.sessions`
+(`44e41c35-c501-4ee8-84ed-8858b6b9101f`, a 2020 Can-Am Spyder RT), whose Zoho
+snapshot carries:
+
+| Zoho field              | Value      |
+| ----------------------- | ---------- |
+| `Sold_1_Vehicle_DSP`    | 16,023.79  |
+| `DC_Sold_1_Balance_Due` | 13,800.94  |
+| `TILA_Amount_Financed`  | 13,930.94  |
+| `Interest_Rate`         | 7.84       |
+| `TILA_APR`              | 8.5165     |
+| `Term_Months`           | 60         |
+| `TILA_Pmt1_Count`       | 59         |
+| `TILA_Pmt1_Amount`      | 285.93     |
+| `TILA_Pmt2_Count`       | 1          |
+| `TILA_Pmt2_Amount`      | 285.60     |
+| `TILA_Finance_Charge`   | 3,224.53   |
+
+Running the spec's own amortization formula over the candidate inputs:
+
+| Principal | Rate           | Term | Payment  | vs. actual 285.93 |
+| --------- | -------------- | ---- | -------- | ----------------- |
+| 13,930.94 | 8.5165 (APR)   | 60   | 285.9254 | **exact**         |
+| 13,930.94 | 8.5165 (APR)   | 59   | 289.8169 | +3.89             |
+| 13,800.94 | 8.5165 (APR)   | 60   | 283.2572 | −2.67             |
+| 13,800.94 | 7.84 (Int.)    | 60   | 278.7777 | −7.15             |
+| 13,930.94 | 7.84 (Int.)    | 60   | 281.4037 | −4.53             |
+
+Only one combination reproduces the contract. It also reconciles both ways to the
+penny: `59 × 285.93 + 285.60 = 17,155.47`, and
+`TILA_Amount_Financed + TILA_Finance_Charge = 13,930.94 + 3,224.53 = 17,155.47`.
+
+### 1a. Principal is `TILA_Amount_Financed`, not `amount_financed`
+
+The spec says "base payment uses `amount_financed`, which maps from
+`DC_Sold_1_Balance_Due`". That value is the balance due on the unit, not the
+amount the lender amortizes — the two differ by $130.00 on this deal (a finance
+or documentary fee financed on top). Using it puts every payment on the screen
+$2.67/month light.
+
+`TILA_Amount_Financed` is not stored on `fni.sessions` at all. Added as
+`tila_amount_financed` (see §2).
+
+### 1b. Term is 60, not `finance_term`
+
+`fni-session-start` maps `finance_term` from `TILA_Pmt1_Count`. On a deal with an
+odd final payment that is the count of the *first* payment stream, not the loan
+term — here 59, with a 60th payment of 285.60 carried in `TILA_Pmt2_*`.
+Amortizing over 59 is $3.89/month wrong, and the error only appears on deals with
+an irregular final payment, which is most of them.
+
+The true term is `Term_Months` (60), equal to `TILA_Pmt1_Count + TILA_Pmt2_Count`.
+Added as `finance_term_total`. `finance_term` is left as-is so nothing downstream
+that already reads it changes meaning.
+
+### 1c. `deal.interest_rate` does not exist
+
+The spec's `const rate = deal.apr ?? deal.interest_rate;` cannot run — `fni.sessions`
+has an `apr` column and no interest rate column. Zoho does carry `Interest_Rate`
+(7.84 here, distinct from the 8.5165 APR), so the spec's intent is sound and the
+column was simply missing. Added as `interest_rate`.
+
+The precedence in the spec is correct and confirmed by the data: APR is the value
+that reproduces the contract, so APR wins when present. The honest-labelling rule
+stands — when the planner amortizes with APR the field must read "Annual
+percentage rate".
+
+---
+
+## 2. Schema additions, corrected
+
+The spec's three additions are right and are implemented. Three more are required
+by §1, and two of its details would have failed against live constraints.
+
+Implemented in `0006_fni_ownership_planner.sql`:
+
+- `fni.product_catalog` — as specced.
+- `fni.pricing_rules` — as specced.
+- `fni.sessions.expires_at` — as specced, default 24h.
+- `fni.selected_products.disposition` — as specced.
+- `fni.sessions.interest_rate`, `.tila_amount_financed`, `.finance_term_total` — **new**, per §1.
+
+### 2a. `sessions.status` cannot be set to "In Progress"
+
+The spec says `fni-session-save` should "update `sessions.status` to In Progress on
+the first save". `fni.sessions.status` carries a CHECK constraint admitting only:
+
+    Initiated | Rated | Presenting | Products Selected | Agreement Created
+    Finalized | Written Back | Cancelled
+
+Writing "In Progress" would fail the insert outright. `fni-session-save` writes
+**`Presenting`** on first save instead, which is the existing vocabulary for the
+same state, and `Products Selected` once the customer completes the plan.
+
+### 2b. `selected_products` has no product code, and no upsert key
+
+The spec's "upsert into `selected_products` keyed on session plus product code"
+has two problems. There is no `product_code` column — the provider identifiers are
+`product_type`, `provider_product_id` and `rate_unique_id` — and there is no unique
+constraint to upsert against, so a repeated save would have inserted duplicates
+rather than updating.
+
+Resolved by adding a unique index on `(session_id, provider_product_id)` and
+treating `provider_product_id` as the product code the spec means. The Next.js and
+Edge layers call it `product_code` in their payloads and map it at the boundary.
+
+### 2c. Decline rows need the NOT NULL columns relaxed
+
+`selected_products` declares `product_name`, `provider_product_id`, `rate_unique_id`,
+`dealer_cost`, `retail_price`, `customer_price` and `rate_snapshot` NOT NULL. That is
+correct for a selection but impossible for a decline, which the spec now requires a
+row for. `dealer_cost`, `retail_price`, `customer_price` and `rate_snapshot` are made
+nullable; the identity columns stay NOT NULL because a decline still names a product.
+
+---
+
+## 3. `rated_offers` is one row per session, not many
+
+The spec's `fni-session-get` response has `offers: [ ...rated_offers rows, or [] ]`.
+`fni.rated_offers` has a **unique constraint on `session_id`** and stores the entire
+TecAssured Offer Format in a single `response_payload` JSONB column, with
+`request_payload`, `product_count` and `rated_at` alongside. `fni-rate-vehicle`
+upserts it on conflict.
+
+`fni-session-get` therefore returns a single `offer` object — the row, with its
+payload — and `offer: null` when the session has not been rated. The UI unpacks
+products out of `response_payload`.
+
+---
+
+## 4. Session field names
+
+The spec's proposed response nests vehicle and financial fields under invented
+names. Actual column names on `fni.sessions`:
+
+| Spec name          | Actual column        |
+| ------------------ | -------------------- |
+| `year`             | `unit_year`          |
+| `make`             | `unit_make`          |
+| `model`            | `unit_model`         |
+| —                  | `unit_submodel`      |
+| `body_type`        | `condition` is separate; body type is not stored — only the mapped code |
+| `tecassured_code`  | `vehicle_type_code`  |
+| `mileage_or_hours` | `odometer`           |
+| `term_months`      | `finance_term` (and `finance_term_total`, §1b) |
+| `interest_rate`    | added, §1c           |
+
+`fni-session-get` keeps the spec's nested `vehicle` / `financials` shape for the
+client, and does the renaming server-side, so the UI reads the spec's vocabulary
+while the database keeps its own.
+
+---
+
+## 5. Auth accepts a query parameter as well as a header
+
+The spec says `FNI_WEBHOOK_SECRET` header. Every deployed function accepts
+**either** `?secret=` on the query string **or** the `x-webhook-secret` header, and
+compares with the constant-time `secretsMatch` in `_shared/supabase.ts`.
+
+The new functions match that behaviour. The Next.js edge wrapper uses the header,
+so the secret stays out of request URLs and therefore out of logs.
+
+---
+
+## 6. `menu_url` points at the wrong path
+
+`fni-session-start` returns `` `${FNI_MENU_BASE_URL}/${session_id}` ``, defaulting to
+`https://docuride.app/fni`. The planner serves `/plan/[sessionId]`. Set
+`FNI_MENU_BASE_URL` to `https://<planner-domain>/plan` when the Vercel project is
+created — no code change needed, and no change to the Zoho button, which only opens
+whatever URL the function returns.
+
+---
+
+## 7. Pre-existing bug in `fni-contract-documents` (not fixed here)
+
+Flagging rather than fixing, because it sits in the credentials-blocked bucket and
+correcting it needs the real TecAssured `/contract/document` response shape.
+
+The function reads four columns off `fni.agreement_products` that do not exist:
+
+    product.product_id          product.product_unique
+    document_retrieved_at       filename            (both written in an UPDATE)
+
+The table has `provider_product_id`, `product_type`, `contract_number`, `document_id`
+and `pdf_link`. The reads yield `undefined` and the UPDATE will error. This will
+throw the first time it is called with live credentials.
+
+The signature-map format it produces is confirmed correct and is what the
+acknowledgment document appends to:
+
+    filename|page|left|top|right|bottom|signer_type
+
+one line per contract, newline-joined, returned as `signature_map`. Note the
+function only *returns* the string — it does not write `FNI_Signature_Map` in Zoho.
+
+---
+
+## 8. Unchanged open question: `vehiclePrice` on the rate call
+
+The spec flags this and it is genuinely open. `fni-rate-vehicle` sends
+`vehiclePrice: sess.sale_price`, and the deployed source already carries a comment
+raising the same GAP concern. Still needs confirming with TecAssured. No change made.
+
+---
+
+## 9. Two more, found while building
+
+### 9a. `DX1_API_KEY` is not how this platform holds DX1 credentials
+
+The spec's environment list has a single `DX1_API_KEY` for the planner project.
+`MIGRATION_PATH.md` §102 puts DX1 credentials per-store in `stores.dms_config`,
+encrypted via Supabase Vault, and no DX1 client exists in this repository yet —
+`_shared/dms/dx1.ts` is still listed as work to be done. The extraction method
+the spec says to reuse lives in iRideStoreFront, which is not this repo.
+
+`lib/dx1.ts` is therefore a seam with the real call unimplemented, rather than a
+guess at DX1's response shape. The caching, the empty-state handling and the
+route around it are real; only the lookup is missing. The environment variable
+is left out of the list below until the credential shape is settled.
+
+### 9b. `FNI_Signature_Map` is capped at 2000 characters
+
+The spec describes appending a line to `FNI_Signature_Map` but not that the Zoho
+field is a `textarea` with `length: 2000`. An append that crosses the cap fails
+the whole Zoho write. `appendSignatureMap` in `_shared/signature-map.ts` does the
+arithmetic and refuses rather than truncating — a truncated map silently
+misplaces a signature field on a document somebody then signs.
+
+The same check also makes a retry idempotent: appending a line already present
+would otherwise stack two signature fields in the same place.
+
+### 9c. Which upload field receives the acknowledgment (resolved)
+
+The spec says to upload the PDF "to the file upload field on the DocuRide DC
+record the same way other external documents arrive". There are three:
+
+    External_Form_Upload_1   "External Bill of Sale Form Upload 1"
+    External_Form_Upload_2   "External F-I Form Upload 2"
+    External_Form_Upload_3   "External Form Upload 3"
+
+`External_Form_Upload_2` is the one, confirmed by Jim on 2026-09-19.
+`fni-acknowledgment` now uploads there and appends to `FNI_Signature_Map` in the
+same PATCH, so a half-written record is not possible. Pass `deliver: false` to
+generate without writing to Zoho.
+
+---
+
+## Deployment state as of this work
+
+`fni-session-get`, `fni-session-save` and `fni-acknowledgment` were deployed by
+pasting sources through the Supabase MCP, because the Supabase CLI is not
+available in the environment this work was done in and outbound HTTPS to
+`supabase.co` is blocked by its network policy.
+
+All three were verified to boot and to reject a bad secret with 401, which also
+proves every import resolves — including `pdf-lib` from esm.sh under the Deno
+edge runtime.
+
+Two consequences worth knowing:
+
+- `fni-session-get`'s deployed bundle carries an abridged `_shared/money.ts`
+  containing only the three functions it imports. Their implementations are
+  identical to the repository's; the file simply omits `planTotals`,
+  `productPayment` and `money`. Running `supabase functions deploy` for all
+  three from the repository once makes every bundle byte-identical to the tree.
+- No authenticated round trip was made against any of them, because
+  `FNI_WEBHOOK_SECRET` is an Edge Function secret and is not readable from
+  here. The pure logic is covered by the test suite and the pricing pipeline was
+  verified in SQL against the real session, but one authenticated
+  `fni-session-get` call is still the thing that confirms the whole path.
+
+
+---
+
+## 10. Database audit, 19 September 2026
+
+The build spec gained an audit section after the first build pass. Four of its
+six items are done; two wait on a decision.
+
+### 10a. GAP was filed under the wrong ownership goal (fixed)
+
+GAP sat under "Keep the asset valuable". It covers the difference between an
+insurance settlement and the remaining loan balance — the borrower's finances,
+not the machine's condition or resale value — so it belongs under "Keep
+ownership manageable". The words *Asset Protection* in the product name most
+likely drove the original filing.
+
+Changed in the live row and in `supabase/seed/planner_demo_seed.sql`, since
+fixing only the live row lets the next re-seed put it back.
+
+### 10b. The only real test session was about to expire (fixed)
+
+Session `44e41c35` carried `expires_at` of 2026-09-20, and `fni-session-get`
+returns 410 Gone the moment it passes. Pushed out thirty days, to 2026-10-20.
+The seed carries a matching top-up scoped to that one session id — expiry is a
+privacy control everywhere else and nothing should blunt it.
+
+### 10c. `sessions.mode` broke the table's naming convention (fixed)
+
+Now `Self-Guided | Collaborative | Staff-Presented`, matching every other
+constrained column on `fni.sessions`. Migration `0007` plus every writer in one
+commit; `mode` was NULL on every row so there was no data to migrate, and the
+mapping is carried in the migration for environments where that is not true.
+
+Fixing it surfaced a second bug. The acknowledgment's label was a two-way check
+on `staff-presented`, so a **Collaborative session printed "Self-guided"** on
+the signed document. All three modes name themselves now, the vocabulary lives
+in `_shared/session-mode.ts`, and `fni-session-get` returns a rendered
+`mode_label` so the page and the document cannot drift.
+
+### 10d. A failed catalog join was indistinguishable from a deliberate withhold (fixed)
+
+Item 6's signal half. A rated product that never reached the customer used to
+be one of two very different things, reported identically as an absence:
+
+- its copy is deliberately unwritten, so it is withheld — correct;
+- it matched nothing in `fni.product_catalog` — a join failure.
+
+The second is how a store stops offering GAP for a month with nobody noticing,
+and it is the likely shape of trouble on credential day: the join runs on
+`productUnique`, and the seeded mock matches only because one person authored
+both sides of it.
+
+**Telling them apart requires the deliberate case to be a row that exists with
+its copy unwritten.** Leaving a known-but-unwritten product out of the catalog
+makes it identical to one we failed to recognise. So PPM, which the seed used
+to omit, is now registered with `display_name` and `goal` set and every copy
+field empty: `is_presentable` computes false, the planner still withholds it,
+and an absent row now means exactly one thing.
+
+`fni-session-get` returns `catalog_coverage` with `copy_pending` and
+`unmatched` separated, logs `CATALOG JOIN FAILED` at error level with the
+offending codes, and the planner shows the two cases differently — the join
+failure asks the buyer to check with the dealership before finishing, which is
+how it gets noticed at all in a session with no staff present.
+
+Classification lives in `_shared/planner-catalog.ts` and is covered by
+`test/planner-catalog.test.mjs`, including the credential-day case where every
+provider code is numeric.
+
+### 10e. A deal with no payment inputs (decided, done)
+
+The planner never refuses to open. Which figures it shows depends on the deal,
+resolved once in `resolvePaymentBasis` rather than assumed screen by screen:
+
+| Tier | When | Principal | Rate | Term |
+| --- | --- | --- | --- | --- |
+| `tila` | TILA calculated | `TILA_Amount_Financed` | APR, else Interest Rate | `Term_Months` |
+| `lienholder` | No TILA, lienholder present | `DC_Sold_1_Balance_Due` | Interest Rate | `Term_Months` |
+| `cash` | Lienholder blank | — | — | — |
+
+TILA only runs when a lienholder needs it, so its absence on a financed deal is
+normal rather than an error. Lienholder Name is the cash test, which is the
+condition the DocuRide record already uses when it hides the remaining
+lienholder fields.
+
+The cash check runs **first** and settles the question outright. A cash deal can
+still carry leftovers in the financing columns, and amortizing those would put a
+monthly payment on a purchase that has none.
+
+A fourth kind, `unavailable`, is kept separate on purpose: a financed deal
+missing something it needs is never folded into `cash`, because telling a buyer
+with a lienholder that theirs is a cash purchase misstates the sale.
+
+No schema change was needed — all three fallback values were already on
+`fni.sessions`. The work was in the UI, where every screen assumed a monthly
+figure existed. On the cash path the product cards drop their per-month line,
+the payment screen drops the amount financed, term and rate headings rather than
+printing them with dashes, and the plan summary and the signed document both
+present the plan as an amount added to the purchase. The standing statement
+about credit approval goes too: there is none on a cash sale.
+
+`test/planner-payment-basis.test.mjs` pins all three paths, including that the
+same products cost the same money on each and only the framing differs.
+
+### 10f. `fni-contract-documents` column fix (decided, done)
+
+`document_retrieved_at` and `filename` added by migration `0008`. The other two
+references were a rename against columns already on the table: `product_id` is
+`provider_product_id`, `product_unique` is `rate_unique_id`.
+
+The function had only ever been deployed out of band, so it lands in the
+repository here — it could not be fixed without bringing it in, and the
+migration could not land alone without putting the columns ahead of their code.
+`_shared/tecassured.ts` came in with it for the same reason: the import existed
+nowhere in the tree.
+
+One consequence: the filename now carries the rate unique id rather than a
+short product code, and the filename is the first field of the contract's
+`FNI_Signature_Map` line, which is capped at 2000 characters. Longer
+identifiers spend that budget faster — still comfortably within it for any
+realistic number of contracts on one deal.
+
+### 10g. Still open
+
+`fni-rate-vehicle`, `fni-contract-submit`, `fni-session-start`,
+`fni-health-check` and `fni-refresh-vehicle-types` are still deployed-only and
+absent from the repository, so they cannot be reviewed, tested or redeployed
+from a clean checkout.
+
+Also unchanged: the `vehiclePrice` question in §8, and confirming TecAssured's
+real `productUnique` format before go-live (§10d).

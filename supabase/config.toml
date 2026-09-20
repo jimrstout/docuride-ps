@@ -10,3 +10,15 @@ verify_jwt = false
 
 [functions.zoho-backfill]
 verify_jwt = false
+
+[functions.fni-session-get]
+verify_jwt = false
+
+[functions.fni-session-save]
+verify_jwt = false
+
+[functions.fni-acknowledgment]
+verify_jwt = false
+
+[functions.fni-contract-documents]
+verify_jwt = false
