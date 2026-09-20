@@ -18,6 +18,7 @@ import type {
 import { num } from "@/lib/types";
 import { money, planTotals, productPayment, toCents } from "@/lib/money";
 import { profileFor } from "@/lib/profiles";
+import { apiPath } from "@/lib/paths";
 
 const STEPS = [
   "Your Ownership",
@@ -192,7 +193,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
           complete,
         };
 
-        const res = await fetch(`/api/session/${session.id}/save`, {
+        const res = await fetch(apiPath(`/api/session/${session.id}/save`), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -219,7 +220,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch(`/api/session/${session.id}/photos`, { method: "POST" });
+        const res = await fetch(apiPath(`/api/session/${session.id}/photos`), { method: "POST" });
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as { photos?: string[] };
         if (!cancelled && Array.isArray(data.photos)) setPhotos(data.photos);
@@ -242,7 +243,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     setAckState("working");
     try {
       await save(true);
-      const res = await fetch(`/api/session/${session.id}/acknowledgment`, {
+      const res = await fetch(apiPath(`/api/session/${session.id}/acknowledgment`), {
         method: "POST",
       });
       setAckState(res.ok ? "done" : "error");

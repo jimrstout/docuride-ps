@@ -19,6 +19,7 @@ environment variables and a shared rollback surface.
 | Root directory | `apps/ownership-planner` |
 | Framework preset | Next.js |
 | Node version | 22.x |
+| Base path | `/ps` (set in `next.config.mjs`, not in Vercel) |
 | Affected-projects deployments | **On** — so a push touching only the main site does not rebuild the planner, and vice versa |
 | SSO / Vercel Authentication | **Off** (decided 2026-09-19) |
 
@@ -47,6 +48,33 @@ holding a secret ever needs to be read in the browser, the design is wrong.
 credentials belong per-store in `stores.dms_config`, not in a project-wide
 variable.
 
+### Served under /ps on the main site
+
+The planner is reached at `docuride.com/ps/...` through a rewrite rather than on
+its own hostname, so `next.config.mjs` sets `basePath: "/ps"`. Without it every
+asset request resolves against the root site and 404s.
+
+Two things follow from that.
+
+**The rewrite has to cover the whole subtree, not just the pages.** A rewrite of
+`/ps/plan/*` alone leaves `/ps/_next/*` pointing at the root site and the page
+loads unstyled. Send everything under `/ps`:
+
+```
+/ps/:path*  ->  <planner deployment>/ps/:path*
+```
+
+The path is kept on both sides because the app already serves itself under
+`/ps` — stripping the prefix on the way through would miss every asset.
+
+**Client fetches are prefixed in code, not by Next.** Next prefixes what it
+routes — pages, `next/link`, the router, and the sources in `headers()`. A plain
+`fetch("/api/...")` from a client component is a raw browser request Next never
+sees, so it is not prefixed. `lib/paths.ts` does it explicitly and the three
+client calls in `Planner.tsx` go through it. The failure mode if that is ever
+bypassed is quiet: the autosave 404s and nothing the customer decided is
+recorded.
+
 ### After the project exists
 
 Point `fni-session-start` at it, so the button on the DocuRide record opens the
@@ -54,7 +82,7 @@ right URL. It builds `${FNI_MENU_BASE_URL}/${session_id}` and currently defaults
 to `https://docuride.app/fni`:
 
 ```
-FNI_MENU_BASE_URL = https://<planner domain>/plan
+FNI_MENU_BASE_URL = https://docuride.com/ps/plan
 ```
 
 That is a Supabase Edge Function secret, not a Vercel variable. No code change
