@@ -1,40 +1,22 @@
-// Shared treatment for the states where there is no plan to show. Expiry and
-// a bad link are ordinary events, not errors, so they read like it.
+// The states where there is no plan to show.
+//
+// An expired link and a mistyped one are ordinary events rather than faults, so
+// they read like it: no error colour, no apology, and a next step the customer
+// can actually take. They sit in the same shell as the planner so a bad link
+// still lands somewhere that plainly belongs to the same application.
+
+import AppShell from "@/components/AppShell";
 
 export default function Gate({ title, body }: { title: string; body: string }) {
   return (
-    <div className="app">
-      <header className="header">
-        <div className="logo">
-          <span className="mountains">⌃⌃</span>
-          <div>
-            <b>ALL SEASONS</b>
-            <small>POWERSPORTS &amp; EQUIPMENT</small>
-          </div>
-        </div>
-        <div className="tag">
-          PEOPLE.
-          <br />
-          PLACES.
-          <br />
-          POSSIBILITIES.
-        </div>
-        <nav />
-        <div className="experience">
-          A BETTER
-          <br />
-          OWNERSHIP
-          <br />
-          EXPERIENCE
-          <i />
-        </div>
-      </header>
+    <AppShell>
       <div className="gate">
         <div className="gate-card">
-          <h1>{title}</h1>
-          <p>{body}</p>
+          <p className="eyebrow eyebrow--rule">Ownership planner</p>
+          <h1 className="display display--sm">{title}</h1>
+          <p className="lede">{body}</p>
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

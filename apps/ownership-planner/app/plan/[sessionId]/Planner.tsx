@@ -1,12 +1,30 @@
 "use client";
 
-// The Ownership Planner.
+// The DocuRide PS ownership planner.
 //
-// Ported from the approved All Seasons prototype. The visual system, the
-// photography-led layout, the vehicle-aware discovery copy and the neutral
-// Include / I'll manage this pair are kept. The prototype's application logic is
-// not: several of its behaviours were compliance problems, and each replacement
-// is marked below.
+// The customer has already chosen the machine. Nothing here re-sells it. The
+// job of these screens is to help them decide how they want to OWN it, and the
+// shape of the flow follows from that:
+//
+//   choose the machine  →  plan the ownership  →  enjoy the ownership
+//
+// Presentation lives in components/. This file holds the state, the arithmetic
+// and the rules that were decided for compliance reasons and must not drift:
+//
+//   Nothing starts selected. The prototype opened with the service contract
+//   and GAP already marked Include, which is the practice regulators pursue
+//   most directly and contradicts the premise that neither choice is correct.
+//
+//   Discovery reorders. It never removes. A product the customer is eligible
+//   for is presented whatever they answered.
+//
+//   Every presented product is recorded, including the ones the customer is
+//   managing themselves. A record of a presentation that lists only what was
+//   bought is not a record of the presentation.
+//
+//   Monthly figures appear only where a payment honestly exists, and the total
+//   is computed from the combined financed amount rather than by summing
+//   rounded per-product payments.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -17,41 +35,44 @@ import type {
 } from "@/lib/types";
 import { num } from "@/lib/types";
 import { money, planTotals, productPayment, toCents } from "@/lib/money";
-import { profileFor } from "@/lib/profiles";
+import { profileFor, relevanceScore } from "@/lib/profiles";
 import { apiPath } from "@/lib/paths";
 
+import AppShell from "@/components/AppShell";
+import ProgressStepper from "@/components/ProgressStepper";
+import VehicleContext from "@/components/VehicleContext";
+import OwnershipQuestion from "@/components/OwnershipQuestion";
+import ProductRow, { type Presentable } from "@/components/ProductRow";
+import ActionFooter, { type SaveState } from "@/components/ActionFooter";
+import PlanSummary, { type PlanLine } from "@/components/PlanSummary";
+import CompletionState from "@/components/CompletionState";
+import {
+  DealTerms,
+  PaymentBreakdown,
+  PlanCostOnly,
+} from "@/components/PaymentSummary";
+
 const STEPS = [
-  "Your Ownership",
-  "Care & Protection",
-  "Payment Plan",
-  "Your Plan",
-  "Acknowledgment",
+  { n: 1, label: "Your Ownership" },
+  { n: 2, label: "Care & Protection" },
+  { n: 3, label: "Payment Plan" },
+  { n: 4, label: "Your Plan" },
+  { n: 5, label: "Acknowledgment" },
 ];
 
-const LABELS = [
-  "OWNERSHIP PLANNER",
-  "CARE & PROTECTION",
-  "PAYMENT PLAN",
-  "YOUR OWNERSHIP PLAN",
-  "WHAT YOU DECIDED",
+const EYEBROWS = [
+  "Ownership planner",
+  "Care & protection",
+  "Payment plan",
+  "Your ownership plan",
+  "What you decided",
 ];
-
-/** A product is presentable only when it has a price and the copy to explain it. */
-interface Presentable {
-  offer: OfferProduct;
-  copy: CatalogEntry;
-  price: number;
-}
 
 export default function Planner({ initial }: { initial: SessionPayload }) {
   const { session } = initial;
   const [step, setStep] = useState(0);
+  const [furthest, setFurthest] = useState(0);
 
-  // REPLACED: the prototype opened with state.selected = {vsc:true, gap:true},
-  // so the Extended Service Plan and GAP began the session already marked
-  // Include. Pre-checked F&I products is the practice regulators pursue most
-  // directly, and it contradicts the premise that neither choice is the correct
-  // one. Nothing starts selected.
   const [decisions, setDecisions] = useState<Record<string, Disposition>>(() => {
     const resumed: Record<string, Disposition> = {};
     for (const s of initial.selections ?? []) {
@@ -70,30 +91,38 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     return resumed;
   });
 
-  const [answers, setAnswers] = useState<string[]>(
-    () => (initial.session.discovery?.use_context as string[]) ?? []
-  );
+  // Discovery answers, keyed by question. `use_context` is the key the session
+  // already stores and every earlier session carries, so it keeps its name.
+  const [answers, setAnswers] = useState<Record<string, string[]>>(() => {
+    const d = initial.session.discovery ?? {};
+    return {
+      use_context: (d.use_context as string[]) ?? [],
+      priorities: (d.priorities as string[]) ?? [],
+    };
+  });
 
-  // The opening screen frames what the following screens are for. It is part of
-  // step 1 rather than a step of its own: "Your Ownership" is exactly what it
-  // is about, and numbering it separately would tell the buyer the process is
-  // longer than it is for a screen that asks them nothing.
-  //
-  // A session being resumed skips it. Someone who already answered a question
-  // or decided a product is not arriving for the first time, and re-framing
-  // the exercise at them would read as having lost their place.
+  // The opening screen frames what follows. It sits inside step 1 rather than
+  // being a step of its own: "Your Ownership" is what it is about, and
+  // numbering it separately would tell the buyer the process is longer than it
+  // is for a screen that asks them nothing. A resumed session skips it.
   const [intro, setIntro] = useState(
     () =>
       (initial.selections?.length ?? 0) === 0 &&
-      (((initial.session.discovery?.use_context as string[]) ?? []).length === 0)
+      ((initial.session.discovery?.use_context as string[]) ?? []).length === 0
   );
+
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveState, setSaveState] = useState<SaveState>("idle");
   const [ackState, setAckState] = useState<"idle" | "working" | "done" | "error">("idle");
   const [photos, setPhotos] = useState<string[]>(initial.photos ?? []);
 
   const profile = profileFor(session.vehicle.tecassured_code);
   const presentedAt = useRef(new Date().toISOString());
+
+  const allAnswers = useMemo(
+    () => Object.values(answers).flat(),
+    [answers]
+  );
 
   // ── What can actually be shown ──────────────────────────────────────────
   const copyByCode = useMemo(() => {
@@ -116,10 +145,9 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
       // neither: a product with no price or no plain-language copy cannot be
       // presented honestly, which is exactly what the catalog exists to enforce.
       //
-      // The order matters. A product with no catalog row at all is not a
-      // withheld product, it is one we failed to recognise, and that is the
-      // most fundamental of the three -- so it is checked first and reported
-      // separately rather than being folded in with the deliberate cases.
+      // Order matters. A product with no catalog row at all is not a withheld
+      // product, it is one we failed to recognise, so it is checked first and
+      // reported separately rather than folded in with the deliberate cases.
       if (!copy) {
         missing.push({ name: offer.product_name, code: offer.product_code });
         continue;
@@ -138,18 +166,33 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
       ok.push({ offer, copy, price });
     }
 
-    // Discovery reorders. It never removes. The prototype's applicable() filtered
-    // the product list by vehicle profile while the interface claimed every
-    // applicable option was shown; that is steering, and it is gone.
+    // Discovery reorders. It never removes.
     ok.sort((a, b) => {
-      const score = (p: Presentable) =>
-        answers.filter((ans) => (p.copy.relevance_tags ?? []).includes(ans)).length;
-      const d = score(b) - score(a);
+      const d =
+        relevanceScore(b.copy.relevance_tags, b.copy.goal, allAnswers) -
+        relevanceScore(a.copy.relevance_tags, a.copy.goal, allAnswers);
       return d !== 0 ? d : a.copy.display_order - b.copy.display_order;
     });
 
     return { presentable: ok, withheld: bad, unmatched: missing };
-  }, [initial.offer, copyByCode, answers]);
+  }, [initial.offer, copyByCode, allAnswers]);
+
+  // Grouped under the goal each product serves, in the order relevance put
+  // them. One objective at a time reads as a plan; one long list reads as a
+  // menu, which is the thing this is not.
+  const groups = useMemo(() => {
+    const out: { goal: string; id: string; items: Presentable[] }[] = [];
+    for (const p of presentable) {
+      const goal = p.copy.goal || "Your options";
+      let g = out.find((x) => x.goal.toLowerCase() === goal.toLowerCase());
+      if (!g) {
+        g = { goal, id: `goal-${out.length + 1}`, items: [] };
+        out.push(g);
+      }
+      g.items.push(p);
+    }
+    return out;
+  }, [presentable]);
 
   // ── Payment basis ───────────────────────────────────────────────────────
   //
@@ -163,20 +206,23 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   const hasPayment = session.financials.has_payment === true;
   const isCash = session.financials.payment_basis === "cash";
 
+  const priceOf = useCallback(
+    (p: Presentable) => p.price + surchargeCost(p, options[p.offer.product_code] ?? []),
+    [options]
+  );
+
   const includedPrices = presentable
     .filter((p) => decisions[p.offer.product_code] === "Included")
-    .map((p) => p.price + surchargeCost(p, options[p.offer.product_code] ?? []));
+    .map(priceOf);
 
   /** What the plan costs, on every path. A cash deal has this and nothing else. */
   const planTotal = toCents(includedPrices.reduce((a, p) => a + p, 0));
 
-  const totals = hasPayment
-    ? planTotals(principal!, includedPrices, rate!, term!)
-    : null;
+  const totals = hasPayment ? planTotals(principal!, includedPrices, rate!, term!) : null;
 
   // ── Persistence ─────────────────────────────────────────────────────────
-  // Saved on every decision, not just at the end. This is what makes the session
-  // resumable and what creates the record of what was presented.
+  // Saved on every decision, not just at the end. This is what makes the
+  // session resumable and what creates the record of what was presented.
   const save = useCallback(
     async (complete = false) => {
       setSaveState("saving");
@@ -202,7 +248,10 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
               rate_snapshot: p.offer.raw,
             };
           }),
-          discovery: { use_context: answers },
+          discovery: {
+            use_context: answers.use_context ?? [],
+            priorities: answers.priorities ?? [],
+          },
           presented_at: presentedAt.current,
           complete,
         };
@@ -223,10 +272,10 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   // Debounced autosave. Only once the customer has actually decided something --
   // an untouched session should not be recorded as a presentation.
   useEffect(() => {
-    if (Object.keys(decisions).length === 0 && answers.length === 0) return;
+    if (Object.keys(decisions).length === 0 && allAnswers.length === 0) return;
     const t = setTimeout(() => void save(false), 700);
     return () => clearTimeout(t);
-  }, [decisions, options, answers, save]);
+  }, [decisions, options, answers, allAnswers.length, save]);
 
   // Photos of the customer's actual machine, looked up server-side by VIN.
   useEffect(() => {
@@ -239,8 +288,8 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
         const data = (await res.json()) as { photos?: string[] };
         if (!cancelled && Array.isArray(data.photos)) setPhotos(data.photos);
       } catch {
-        // An empty vehicle panel is a designed state, so a failed lookup is not
-        // worth interrupting the customer for.
+        // A vehicle panel with no photograph is a designed state, so a failed
+        // lookup is not worth interrupting the customer for.
       }
     })();
     return () => {
@@ -278,239 +327,199 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     .filter(Boolean)
     .join(" ");
 
-  return (
-    <div className="app">
-      <header className="header">
-        <div className="logo">
-          <span className="mountains">⌃⌃</span>
-          <div>
-            <b>ALL SEASONS</b>
-            <small>POWERSPORTS &amp; EQUIPMENT</small>
-          </div>
-        </div>
-        <div className="tag">PEOPLE.<br />PLACES.<br />POSSIBILITIES.</div>
-        <nav>
-          {STEPS.map((n, i) => (
-            <div key={n} className={`prog ${i <= step ? "active" : ""}`}>
-              <b>{i + 1}</b>
-              <span>{n}</span>
-            </div>
-          ))}
+  const goTo = useCallback((next: number) => {
+    setStep(next);
+    setFurthest((f) => Math.max(f, next));
+    setIntro(false);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
+
+  const planLines: PlanLine[] = presentable.map((p) => ({
+    code: p.offer.product_code,
+    name: p.copy.display_name,
+    duration: p.copy.coverage_duration,
+    price: priceOf(p),
+    disposition: decisions[p.offer.product_code],
+  }));
+
+  // ── Footer wiring ───────────────────────────────────────────────────────
+  const onBack = () => {
+    if (step === 0) setIntro(true);
+    else goTo(step - 1);
+  };
+  const onNext = () => {
+    if (step === 0 && intro) {
+      setIntro(false);
+      return;
+    }
+    if (step === 3) void finish();
+    if (step < STEPS.length - 1) goTo(step + 1);
+  };
+  const nextLabel =
+    step === 0 && intro ? "Begin" : step === 3 ? "Finish & save plan" : "Continue";
+
+  const status =
+    saveState === "saving" ? "Saving…"
+    : saveState === "error" ? "We couldn't save that. We'll keep trying."
+    : saveState === "saved" ? "Saved — you can come back to this later"
+    : step === 1 && presentable.length > 0 ? `${decided} of ${presentable.length} decided`
+    : null;
+
+  const rail = (
+    <VehicleContext
+      session={session}
+      profile={profile}
+      photo={photos[0] ?? null}
+      vehicleName={vehicleName}
+    >
+      {step === 1 && groups.length > 1 && (
+        <nav className="railnav" aria-label="Sections on this screen">
+          <p className="eyebrow">On this screen</p>
+          <ul>
+            {groups.map((g) => (
+              <li key={g.id}><a href={`#${g.id}`}>{g.goal}</a></li>
+            ))}
+          </ul>
         </nav>
-        <div className="experience">
-          A BETTER<br />OWNERSHIP<br />EXPERIENCE<i />
-        </div>
-      </header>
+      )}
+    </VehicleContext>
+  );
 
-      <main className="planner">
-        <aside className="vehicle-panel">
-          <div className="overline">YOUR VEHICLE</div>
+  return (
+    <AppShell
+      stepper={
+        <ProgressStepper steps={STEPS} current={step} furthest={furthest} onGo={goTo} />
+      }
+      rail={rail}
+      footer={
+        <ActionFooter
+          onBack={onBack}
+          showBack={!(step === 0 && intro)}
+          onNext={onNext}
+          nextLabel={nextLabel}
+          showNext={step < STEPS.length - 1}
+          nextDisabled={step === 1 && presentable.length > 0 && !allDecided}
+          status={status}
+        />
+      }
+    >
+      <p className="eyebrow eyebrow--rule">{EYEBROWS[step]}</p>
 
-          {photos.length > 0 ? (
-            <div
-              className="vehicle-photo"
-              style={{ backgroundImage: `url(${photos[0]})` }}
-              role="img"
-              aria-label={vehicleName}
-            />
-          ) : (
-            // The designed empty state. Never a stock photo of a different
-            // machine -- that is worse than no photo.
-            <div className="vehicle-plate">
-              <div className="yr">{session.vehicle.year ?? ""}</div>
-              <div className="mk">
-                {session.vehicle.make}
-                <br />
-                {session.vehicle.model}
-              </div>
-              {session.vehicle.vin && <div className="vin">VIN {session.vehicle.vin}</div>}
-            </div>
-          )}
-
-          <h2>{vehicleName || "Your vehicle"}</h2>
-          <p>
-            {[session.vehicle.condition, session.vehicle.stock_number && `Stock ${session.vehicle.stock_number}`]
-              .filter(Boolean)
-              .join(" • ")}
+      {/* ── 1a. Opening ──────────────────────────────────────────────────
+          Sets the frame before anything is asked. No warnings, and nothing
+          about the machine failing: the premise is that they bought something
+          worth owning. */}
+      {step === 0 && intro && (
+        <section className="screen">
+          <p className="kicker">{vehicleName || "Your vehicle"}</p>
+          <h1 className="display">Your vehicle. Your ownership. Your plan.</h1>
+          <p className="lede">
+            You&apos;ve chosen the vehicle that&apos;s right for you. Now let&apos;s
+            shape an ownership plan around how you want to own it.
           </p>
-          <i />
+          <p className="body">
+            Owning anything valuable comes with ongoing costs. Some are
+            predictable, some aren&apos;t. The options that follow are tools for
+            deciding which of those costs you&apos;d rather plan for now, spread
+            into smaller amounts, or handle yourself later.
+          </p>
 
-          {/* REPLACED: the prototype offered term, down payment and trade-in as
-              segmented controls the buyer could change. By the time a session
-              opens the deal is structured and, on a financed deal, a lienholder
-              has approved a specific amount at a specific rate over a specific
-              term. These are shown, not offered. */}
-          <div className="deal-facts">
-            {session.financials.finance_type && (
-              <div><span>Type</span><b>{session.financials.finance_type}</b></div>
-            )}
-            {term !== null && (
-              <div><span>Term</span><b>{term} months</b></div>
-            )}
-            {rate !== null && (
-              <div><span>{session.financials.rate_label}</span><b>{rate}%</b></div>
-            )}
-            {session.financials.lienholder_name && (
-              <div><span>Lender</span><b>{session.financials.lienholder_name}</b></div>
-            )}
-            <span className="note">
-              These terms come from your finalized deal. If anything needs to change,
-              your dealership updates the deal and this plan is refreshed.
-            </span>
-          </div>
-        </aside>
+          <ul className="goals">
+            <li>
+              <b>Keep ownership manageable.</b>
+              <span>Structure payments and costs to fit your budget.</span>
+            </li>
+            <li>
+              <b>Keep ownership enjoyable.</b>
+              <span>Smooth out the peaks, so one expense doesn&apos;t interrupt a ride.</span>
+            </li>
+            <li>
+              <b>Keep it valuable.</b>
+              <span>Care for it now to preserve its condition and value.</span>
+            </li>
+          </ul>
 
-        <section className="content">
-          <div className="content-inner">
-            <div className="overline section-label">{LABELS[step]}</div>
+          <p className="body body--close">
+            Nothing is preselected, and nothing here is expected of you. Any of
+            it can be something you take care of yourself instead — that is a
+            real choice, not a lesser one. It takes a few minutes.
+          </p>
+        </section>
+      )}
 
-            {/* ── 0a. Opening ──────────────────────────────────────────── */}
-            {/* Sets the frame before anything is asked. No warnings and nothing
-                about the machine failing: the premise is that the customer
-                bought something worth owning, and these are the tools for
-                deciding which ongoing costs they would rather plan for. */}
-            <div className={`screen ${step === 0 && intro ? "active" : ""}`}>
-              <div className="welcome">
-                {photos.length > 0 ? (
-                  <div
-                    className="welcome-photo"
-                    style={{ backgroundImage: `url(${photos[0]})` }}
-                    role="img"
-                    aria-label={vehicleName}
-                  />
-                ) : null}
+      {/* ── 1b. Your Ownership ───────────────────────────────────────────── */}
+      {step === 0 && !intro && (
+        <section className="screen">
+          <h1 className="display display--sm">Your plan starts with you.</h1>
+          <p className="lede">
+            Two questions, then we&apos;ll show you the options. All available
+            options are presented either way — your answers only change what
+            comes first.
+          </p>
 
-                <p className="welcome-vehicle">{vehicleName || "Your vehicle"}</p>
-                <h1>Your vehicle. Your ownership. Your plan.</h1>
-                <p className="intro">
-                  You&apos;ve chosen the vehicle that&apos;s right for you. Now let&apos;s
-                  shape an ownership plan around how you want to own it.
-                </p>
+          {profile.questions.map((q) => (
+            <OwnershipQuestion
+              key={q.id}
+              question={q}
+              chosen={answers[q.id] ?? []}
+              onToggle={(value) =>
+                setAnswers((a) => {
+                  const cur = a[q.id] ?? [];
+                  return {
+                    ...a,
+                    [q.id]: cur.includes(value)
+                      ? cur.filter((x) => x !== value)
+                      : [...cur, value],
+                  };
+                })
+              }
+            />
+          ))}
+        </section>
+      )}
 
-                <p className="welcome-body">
-                  Owning anything valuable comes with ongoing costs. Some are
-                  predictable, some aren&apos;t. The options that follow are tools for
-                  deciding which of those costs you&apos;d rather plan for now, spread
-                  into smaller amounts, or handle yourself later.
-                </p>
+      {/* ── 2. Care & Protection ─────────────────────────────────────────── */}
+      {step === 1 && (
+        <section className="screen">
+          <h1 className="display display--sm">Confidence for what&apos;s ahead.</h1>
+          <p className="lede">
+            Neither answer is the right one. Take what fits how you&apos;ll
+            actually own it, and leave the rest.
+          </p>
 
-                <ul className="goals">
-                  <li>
-                    <b>Keep ownership manageable.</b>
-                    <span>Structure payments and costs to fit your budget.</span>
-                  </li>
-                  <li>
-                    <b>Keep ownership enjoyable.</b>
-                    <span>Smooth out the peaks, so one expense doesn&apos;t interrupt a ride.</span>
-                  </li>
-                  <li>
-                    <b>Keep it valuable.</b>
-                    <span>Care for it now to preserve its condition and value.</span>
-                  </li>
-                </ul>
-
-                {/* The arc. The middle is where the customer is and where the
-                    decisions live, so it carries the weight; the outer two are
-                    context. */}
-                <ol className="arc">
-                  <li>
-                    <span className="arc-when">Today</span>
-                    <span className="arc-what">{vehicleName || "Your vehicle"} is yours.</span>
-                  </li>
-                  <li className="arc-now" aria-current="step">
-                    <span className="arc-when">Your Ownership</span>
-                    <span className="arc-what">
-                      {term !== null
-                        ? `The next ${term} months of using it`
-                        : "The years you'll spend using it"}
-                      , and which of its costs you&apos;d rather settle now.
-                    </span>
-                  </li>
-                  <li>
-                    <span className="arc-when">What&apos;s Next</span>
-                    <span className="arc-what">
-                      Its condition and its value, whenever you&apos;re ready for
-                      what comes after it.
-                    </span>
-                  </li>
-                </ol>
-
-                <p className="welcome-close">
-                  Nothing is preselected, and nothing here is expected of you. Any
-                  of it can be something you take care of yourself instead — that
-                  is a real choice, not a lesser one. It takes a few minutes.
-                </p>
-              </div>
-            </div>
-
-            {/* ── 0b. Discovery ────────────────────────────────────────── */}
-            <div className={`screen ${step === 0 && !intro ? "active" : ""}`}>
-              <h1>{profile.question}</h1>
-              <p className="intro">{profile.intro}</p>
-              <div className="visual-options">
-                {profile.options.map((o) => {
-                  const on = answers.includes(o.value);
-                  return (
-                    <button
-                      key={o.value}
-                      type="button"
-                      aria-pressed={on}
-                      className={`visual-option ${on ? "selected" : ""}`}
-                      onClick={() =>
-                        setAnswers((a) =>
-                          a.includes(o.value) ? a.filter((x) => x !== o.value) : [...a, o.value]
-                        )
-                      }
-                    >
-                      <div className="pic" style={{ backgroundImage: `url('${o.image}')` }} />
-                      <div className="body">
-                        <span className="box" />
-                        <div>
-                          <b>{o.label}</b>
-                          <small>{o.hint}</small>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* ── 1. Care & Protection ─────────────────────────────────── */}
-            <div className={`screen ${step === 1 ? "active" : ""}`}>
-              <h1>Protection for the road ahead.</h1>
-              <p className="intro">
-                Neither answer is the right one. Take what fits how you'll actually
-                own it, and leave the rest.
+          {presentable.length === 0 ? (
+            // A session can legitimately open with no offers: trailers,
+            // electric bicycles, excavators, zero turns and tractors are not
+            // ratable. An empty list under a heading promising options would be
+            // worse than saying so.
+            <div className="note note--panel">
+              <h2>There are no ownership plans for this machine.</h2>
+              <p>
+                Coverage isn&apos;t offered on this type of machine. Nothing is
+                missing from your deal and there&apos;s nothing for you to decide
+                here.
               </p>
-
-              {presentable.length === 0 ? (
-                // A session can legitimately open with no offers: trailers,
-                // electric bicycles, excavators, zero turns and tractors are not
-                // ratable. An empty list under a heading promising options would
-                // be worse than saying so.
-                <div className="notice">
-                  <h2>There are no protection plans for this unit.</h2>
-                  <p>
-                    Coverage isn&apos;t offered on this type of machine. Nothing is
-                    missing from your deal and there&apos;s nothing for you to decide
-                    here.
-                  </p>
-                  <p>Your dealership can still answer any question about owning it.</p>
-                </div>
-              ) : (
-                <>
+              <p>Your dealership can still answer any question about owning it.</p>
+            </div>
+          ) : (
+            <>
+              {groups.map((g) => (
+                <section className="goal-section" id={g.id} key={g.id}>
+                  <h2 className="goal-head">{g.goal}</h2>
                   <div className="products">
-                    {presentable.map((p) => (
-                      <ProductCard
+                    {g.items.map((p) => (
+                      <ProductRow
                         key={p.offer.product_code}
                         item={p}
-                        chosenOptions={options[p.offer.product_code] ?? []}
+                        price={priceOf(p)}
+                        perMonth={
+                          hasPayment && rate !== null && term !== null
+                            ? productPayment(priceOf(p), rate, term)
+                            : null
+                        }
                         disposition={decisions[p.offer.product_code]}
+                        chosenOptions={options[p.offer.product_code] ?? []}
                         open={!!open[p.offer.product_code]}
-                        rate={rate}
-                        term={term}
-                        hasPayment={hasPayment}
                         onToggleOpen={() =>
                           setOpen((o) => ({
                             ...o,
@@ -534,316 +543,207 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                       />
                     ))}
                   </div>
+                </section>
+              ))}
 
-                  {/* The prototype claimed every applicable option was shown while
-                      filtering the list. This says what actually happens. */}
-                  <p className="all-options">
-                    Every plan you&apos;re eligible for is listed here. Your earlier
-                    answers change the order they appear in, never which ones appear.
-                  </p>
-
-                  {withheld.length > 0 && (
-                    <p className="all-options">
-                      {withheld.length} plan{withheld.length === 1 ? "" : "s"} offered by
-                      the provider {withheld.length === 1 ? "is" : "are"} not shown
-                      because {withheld.length === 1 ? "it does" : "they do"} not yet have
-                      approved pricing and plain-language terms on file. Your dealership
-                      can tell you more.
-                    </p>
-                  )}
-
-                  {/* A different thing entirely, and not a decision anybody
-                      made: these were rated but matched nothing in the
-                      catalog. Saying so is how it gets noticed at all -- in a
-                      self-guided session there is no member of staff watching
-                      the screen, and the alternative is a store quietly not
-                      offering a plan for a month. */}
-                  {unmatched.length > 0 && (
-                    <p className="all-options warn">
-                      <b>Please check with your dealership before you finish.</b>{" "}
-                      {unmatched.length === 1 ? "An option" : `${unmatched.length} options`}{" "}
-                      offered for your machine could not be displayed here, so this list
-                      may be incomplete. This is a problem on our end, not a decision
-                      about what you qualify for.
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* ── 2. Payment Plan ──────────────────────────────────────── */}
-            <div className={`screen ${step === 2 ? "active" : ""}`}>
-              <h1>What it comes to.</h1>
-              <p className="intro">
-                {isCash
-                  ? "You're paying for this outright, so there's no monthly payment. Here's what your choices add to the purchase."
-                  : "Your deal is already structured. This shows what your choices add to it."}
+              <p className="note">
+                Every plan you&apos;re eligible for is listed here. Your earlier
+                answers change the order they appear in, never which ones appear.
               </p>
 
-              <div className="finance-box">
-                {/* A cash purchase has no amount financed, no term and no rate.
-                    Printing those headings with dashes under them would imply
-                    a loan that does not exist. */}
-                {!isCash && (
-                  <div className="terms-readonly">
-                    <div>
-                      <span>AMOUNT FINANCED</span>
-                      <b>{principal !== null ? money(principal) : "—"}</b>
-                    </div>
-                    <div>
-                      <span>TERM</span>
-                      <b>{term !== null ? `${term} months` : "—"}</b>
-                    </div>
-                    <div>
-                      {/* Label honestly: whichever value is used names itself. */}
-                      <span>{(session.financials.rate_label ?? "RATE").toUpperCase()}</span>
-                      <b>{rate !== null ? `${rate}%` : "—"}</b>
-                    </div>
-                  </div>
-                )}
-
-                {totals ? (
-                  <>
-                    <div className="estimate">
-                      <div>
-                        <small>MONTHLY PAYMENT</small>
-                        <strong>{money(totals.totalPayment)}</strong>
-                      </div>
-                      <div className="breakdown">
-                        <div><span>Vehicle</span><b>{money(totals.vehiclePayment)}</b></div>
-                        <div><span>Your plan</span><b>{money(totals.planPayment)}</b></div>
-                        <div className="rule"><span>Total</span><b>{money(totals.totalPayment)}</b></div>
-                      </div>
-                    </div>
-                    <p className="fine">
-                      Calculated from your financed amount of {money(principal!)} over{" "}
-                      {term} months at {rate}%
-                      {session.financials.rate_source === "apr"
-                        ? " annual percentage rate"
-                        : " interest"}
-                      . The total is figured on the combined amount, not by adding up
-                      each plan separately, so it matches your contract.
-                    </p>
-                  </>
-                ) : isCash ? (
-                  <>
-                    {/* The plan is an amount added to the purchase, not to a
-                        payment. That is the only honest framing here. */}
-                    <div className="estimate">
-                      <div>
-                        <small>ADDED TO YOUR PURCHASE</small>
-                        <strong>{money(planTotal)}</strong>
-                      </div>
-                      <div className="breakdown">
-                        {includedPrices.length === 0 ? (
-                          <div><span>Nothing included yet</span><b>{money(0)}</b></div>
-                        ) : (
-                          presentable
-                            .filter((p) => decisions[p.offer.product_code] === "Included")
-                            .map((p) => (
-                              <div key={p.offer.product_code}>
-                                <span>{p.copy.display_name}</span>
-                                <b>
-                                  {money(
-                                    p.price +
-                                      surchargeCost(p, options[p.offer.product_code] ?? [])
-                                  )}
-                                </b>
-                              </div>
-                            ))
-                        )}
-                        <div className="rule"><span>Total</span><b>{money(planTotal)}</b></div>
-                      </div>
-                    </div>
-                    <p className="fine">
-                      You&apos;re paying for this machine outright, so there&apos;s no monthly
-                      payment and no finance charge on anything you include. These are
-                      one-time amounts added to what you&apos;re already paying.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <div className="estimate">
-                      <div>
-                        <small>ADDED TO YOUR PURCHASE</small>
-                        <strong>{money(planTotal)}</strong>
-                      </div>
-                    </div>
-                    <p className="fine">
-                      We can&apos;t show a monthly payment for this deal yet — the financing
-                      terms haven&apos;t been finalized. The totals above are correct; your
-                      dealership can walk you through what they come to each month.
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* ── 3. Your Plan ─────────────────────────────────────────── */}
-            <div className={`screen ${step === 3 ? "active" : ""}`}>
-              <h1>Here&apos;s your plan.</h1>
-              <p className="intro">
-                Everything you were shown, and what you decided about each. Change
-                anything you like.
-              </p>
-
-              <div className="summary-card">
-                <div className="summary-title">WHAT YOU WERE SHOWN</div>
-                {presentable.length === 0 && (
-                  <div className="summary-row"><span>No plans are offered for this unit.</span></div>
-                )}
-                {presentable.map((p) => {
-                  const d = decisions[p.offer.product_code];
-                  const price = p.price + surchargeCost(p, options[p.offer.product_code] ?? []);
-                  return (
-                    <div className="summary-row" key={p.offer.product_code}>
-                      <span className="what">
-                        <b>{p.copy.display_name}</b>
-                        <span>
-                          {p.copy.coverage_duration}
-                          {d === "Included" ? ` • ${money(price)}` : ""}
-                        </span>
-                      </span>
-                      {/* REPLACED: the prototype's buttons said "I'll manage this"
-                          and the summary then printed "Not Selected" -- framing the
-                          customer's decision as a failure to act on the one screen
-                          they take home. The language is the same in both places. */}
-                      <span className={`decision ${d === "Included" ? "" : "managed"}`}>
-                        {d ?? "Not yet decided"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {totals ? (
-                <div className="summary-card">
-                  <div className="summary-title">PAYMENT</div>
-                  <div className="summary-row"><span>Vehicle</span><b>{money(totals.vehiclePayment)}</b></div>
-                  <div className="summary-row"><span>Your plan</span><b>{money(totals.planPayment)}</b></div>
-                  <div className="summary-row total"><span>Total monthly payment</span><b>{money(totals.totalPayment)}</b></div>
-                  <div className="summary-row">
-                    <span>{session.financials.rate_label} and term</span>
-                    <b>{rate}% • {term} months</b>
-                  </div>
-                </div>
-              ) : (
-                /* No payment to summarise. The plan is still a real amount --
-                   it is added to the purchase rather than to a payment, and on
-                   the one screen the customer takes home it says so. */
-                <div className="summary-card">
-                  <div className="summary-title">YOUR PLAN</div>
-                  <div className="summary-row total">
-                    <span>Added to your purchase</span>
-                    <b>{money(planTotal)}</b>
-                  </div>
-                  <div className="summary-row">
-                    <span>
-                      {isCash
-                        ? "Paid outright, so there is no monthly payment and no finance charge."
-                        : "Financing terms are not finalized, so no monthly payment is shown."}
-                    </span>
-                  </div>
-                </div>
+              {withheld.length > 0 && (
+                <p className="note">
+                  {withheld.length} plan{withheld.length === 1 ? "" : "s"} offered by
+                  the provider {withheld.length === 1 ? "is" : "are"} not shown
+                  because {withheld.length === 1 ? "it does" : "they do"} not yet
+                  have approved pricing and plain-language terms on file. Your
+                  dealership can tell you more.
+                </p>
               )}
-            </div>
 
-            {/* ── 4. Acknowledgment ────────────────────────────────────── */}
-            <div className={`screen ${step === 4 ? "active" : ""}`}>
-              <div className="finish">
-                <div className="finish-mark">AS</div>
-                <h1>You bought something worth owning.</h1>
-                <p>Let&apos;s help you own it well.</p>
-              </div>
+              {/* A different thing entirely, and not a decision anybody made:
+                  these were rated but matched nothing in the catalog. Saying so
+                  is how it gets noticed at all -- in a self-guided session
+                  there is no member of staff watching the screen. */}
+              {unmatched.length > 0 && (
+                <p className="note note--flag">
+                  <b>Please check with your dealership before you finish.</b>{" "}
+                  {unmatched.length === 1 ? "An option" : `${unmatched.length} options`}{" "}
+                  offered for your machine could not be displayed here, so this
+                  list may be incomplete. This is a problem on our end, not a
+                  decision about what you qualify for.
+                </p>
+              )}
+            </>
+          )}
+        </section>
+      )}
 
-              {/* REPLACED: the prototype ended in an alert(). This is the record of
-                  what was presented and what was decided -- the document that makes
-                  a self-guided session defensible. It is generated even when nothing
-                  was included, because that is the session most worth a record. */}
-              <div className="ack">
-                <h2>What you were shown, and what you decided</h2>
-                <p>
-                  Your plan has been saved and prepared for signing. It lists every
-                  plan you were shown, what you decided about each, and the payment
-                  those decisions produce.
+      {/* ── 3. Payment Plan ──────────────────────────────────────────────── */}
+      {step === 2 && (
+        <section className="screen">
+          <h1 className="display display--sm">What it comes to.</h1>
+          <p className="lede">
+            {isCash
+              ? "You're paying for this outright, so there's no monthly payment. Here's what your choices add to the purchase."
+              : "Your deal is already structured. This shows what your choices add to it."}
+          </p>
+
+          <div className="panel">
+            {/* A cash purchase has no amount financed, no term and no rate.
+                Printing those headings with dashes under them would imply a
+                loan that does not exist. */}
+            {!isCash && (
+              <DealTerms
+                principal={principal}
+                term={term}
+                rateLabel={session.financials.rate_label ?? "Rate"}
+                rate={rate}
+              />
+            )}
+
+            {totals ? (
+              <>
+                <PaymentBreakdown totals={totals} />
+                <p className="fine">
+                  Calculated from your financed amount of {money(principal!)} over{" "}
+                  {term} months at {rate}%
+                  {session.financials.rate_source === "apr"
+                    ? " annual percentage rate"
+                    : " interest"}
+                  . The total is figured on the combined amount, not by adding up
+                  each plan separately, so it matches your contract.
                 </p>
-                <p>
-                  Protection plans are optional. Declining any of them does not affect
-                  {isCash ? " the terms of your sale" : " your credit approval or the terms of your sale"}.
-                  Pricing was presented by this system rather than negotiated.
+                <p className="fine">
+                  Your ownership plan comes to {money(totals.productTotal)} in
+                  total across the plans you included.
                 </p>
-                <p className="meta">
-                  {ackState === "working" && "Preparing your record…"}
-                  {ackState === "done" && "Saved and ready for signing."}
-                  {ackState === "error" &&
-                    "We saved your plan, but couldn't prepare the signing copy. Your dealership can finish this for you."}
-                  <br />
-                  Session {session.id}
-                  <br />
-                  {session.mode_label} • Prepared {new Date(presentedAt.current).toLocaleString("en-US")}
+              </>
+            ) : isCash ? (
+              <>
+                {/* The plan is an amount added to the purchase, not to a
+                    payment. That is the only honest framing here. */}
+                <PlanCostOnly
+                  label="Added to your purchase"
+                  total={planTotal}
+                  lines={presentable
+                    .filter((p) => decisions[p.offer.product_code] === "Included")
+                    .map((p) => ({ name: p.copy.display_name, amount: priceOf(p) }))}
+                />
+                <p className="fine">
+                  You&apos;re paying for this machine outright, so there&apos;s no
+                  monthly payment and no finance charge on anything you include.
+                  These are one-time amounts added to what you&apos;re already
+                  paying.
                 </p>
-              </div>
-            </div>
+              </>
+            ) : (
+              <>
+                <PlanCostOnly label="Added to your purchase" total={planTotal} lines={[]} />
+                <p className="fine">
+                  We can&apos;t show a monthly payment for this deal yet — the
+                  financing terms haven&apos;t been finalized. The totals above are
+                  correct; your dealership can walk you through what they come to
+                  each month.
+                </p>
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ── 4. Your Plan ─────────────────────────────────────────────────── */}
+      {step === 3 && (
+        <section className="screen">
+          <h1 className="display display--sm">Here&apos;s your plan.</h1>
+          <p className="lede">
+            Everything you were shown, and what you decided about each. Change
+            anything you like — your answers are saved as you go.
+          </p>
+
+          <div className="panel">
+            <h2 className="panel-head">What you were shown</h2>
+            <PlanSummary lines={planLines} />
+            {presentable.length > 0 && (
+              <p className="panel-foot">
+                <button type="button" className="linkish" onClick={() => goTo(1)}>
+                  Change these decisions
+                </button>
+              </p>
+            )}
           </div>
 
-          <footer>
-            <button
-              className="back"
-              onClick={() => {
-                // Discovery goes back to the opening, not off the front of the flow.
-                if (step === 0) setIntro(true);
-                else setStep((s) => Math.max(0, s - 1));
-              }}
-              style={{ visibility: step === 0 && intro ? "hidden" : "visible" }}
-            >
-              ← BACK
-            </button>
-
-            <div className="status">
-              {saveState === "saving" && "Saving…"}
-              {saveState === "saved" && "Saved — you can come back to this later"}
-              {saveState === "error" && "We couldn't save that. We'll keep trying."}
-              {saveState === "idle" && step === 1 && presentable.length > 0 &&
-                `${decided} of ${presentable.length} decided`}
-            </div>
-
-            <button
-              className="dark"
-              disabled={step === 1 && presentable.length > 0 && !allDecided}
-              onClick={() => {
-                // The opening is inside step 1, so leaving it advances the
-                // screen without advancing the step.
-                if (step === 0 && intro) {
-                  setIntro(false);
-                  return;
-                }
-                if (step === 3) void finish();
-                setStep((s) => Math.min(STEPS.length - 1, s + 1));
-              }}
-            >
-              {step === 0 && intro
-                ? "BEGIN"
-                : step === 3
-                  ? "FINISH & SAVE PLAN"
-                  : step === 4
-                    ? "DONE"
-                    : "CONTINUE"}
-              <span>→</span>
-            </button>
-          </footer>
+          <div className="panel">
+            <h2 className="panel-head">{totals ? "Payment" : "Your plan"}</h2>
+            {totals ? (
+              <>
+                <PaymentBreakdown totals={totals} />
+                <dl className="terms terms--inline">
+                  <div>
+                    <dt>{session.financials.rate_label ?? "Rate"} and term</dt>
+                    <dd>{rate}% · {term} months</dd>
+                  </div>
+                </dl>
+              </>
+            ) : (
+              <>
+                <PlanCostOnly label="Added to your purchase" total={planTotal} lines={[]} />
+                <p className="fine">
+                  {isCash
+                    ? "Paid outright, so there is no monthly payment and no finance charge."
+                    : "Financing terms are not finalized, so no monthly payment is shown."}
+                </p>
+              </>
+            )}
+          </div>
         </section>
-      </main>
+      )}
 
-      <div className="brand-footer">
-        <div className="logo">
-          <span className="mountains">⌃⌃</span>
-          <div><b>ALL SEASONS</b><small>POWERSPORTS &amp; EQUIPMENT</small></div>
-        </div>
-        <div><b>LOCAL EXPERTISE</b><span>People who ride, work and live here.</span></div>
-        <div><b>LONG-TERM SUPPORT</b><span>Service, parts and expertise.</span></div>
-        <div><b>STRONGER COMMUNITIES</b><span>Riders, workers and neighbors just like you.</span></div>
-      </div>
-    </div>
+      {/* ── 5. Acknowledgment ────────────────────────────────────────────── */}
+      {step === 4 && (
+        <section className="screen">
+          <CompletionState vehicleName={vehicleName} term={term}>
+            <div className="panel panel--ack">
+              <h2 className="panel-head">What you were shown, and what you decided</h2>
+              <p>
+                Your plan has been saved and prepared for signing. It lists every
+                plan you were shown, what you decided about each, and the payment
+                those decisions produce.
+              </p>
+              <p>
+                Protection plans are optional. Declining any of them does not
+                affect
+                {isCash
+                  ? " the terms of your sale"
+                  : " your credit approval or the terms of your sale"}
+                . Pricing was presented by this system rather than negotiated.
+              </p>
+              <p className="ack-meta">
+                {ackState === "working" && "Preparing your record…"}
+                {ackState === "done" && "Saved and ready for signing."}
+                {ackState === "error" &&
+                  "We saved your plan, but couldn't prepare the signing copy. Your dealership can finish this for you."}
+                <br />
+                Session {session.id}
+                <br />
+                {session.mode_label} · Prepared{" "}
+                {new Date(presentedAt.current).toLocaleString("en-US")}
+              </p>
+              <p className="panel-foot">
+                Your dealership takes it from here — your plan is on your deal
+                and joins the rest of your paperwork for signing. Nothing else
+                is needed from you on this screen.
+              </p>
+              <p className="panel-foot panel-foot--plain">
+                <button type="button" className="linkish" onClick={() => goTo(3)}>
+                  Review your plan again
+                </button>
+              </p>
+            </div>
+          </CompletionState>
+        </section>
+      )}
+    </AppShell>
   );
 }
 
@@ -852,142 +752,4 @@ function surchargeCost(p: Presentable, chosen: string[]): number {
   return p.offer.surcharge_options
     .filter((o) => chosen.includes(o.code))
     .reduce((a, o) => a + o.cost_delta, 0);
-}
-
-function ProductCard({
-  item,
-  disposition,
-  chosenOptions,
-  open,
-  rate,
-  term,
-  hasPayment,
-  onToggleOpen,
-  onDecide,
-  onOption,
-}: {
-  item: Presentable;
-  disposition: Disposition | undefined;
-  chosenOptions: string[];
-  open: boolean;
-  rate: number | null;
-  term: number | null;
-  hasPayment: boolean;
-  onToggleOpen: () => void;
-  onDecide: (d: Disposition) => void;
-  onOption: (code: string, on: boolean) => void;
-}) {
-  const { copy, offer } = item;
-  const price = item.price + surchargeCost(item, chosenOptions);
-  // A cash buyer has no monthly payment, so there is no monthly figure to show.
-  const perMonth =
-    hasPayment && rate !== null && term !== null ? productPayment(price, rate, term) : null;
-
-  return (
-    <div className="product">
-      <div className="product-head">
-        <div>
-          <div className="goal">{copy.goal}</div>
-          {/* REMOVED: the prototype badged whichever product happened to sit
-              first in the filtered array as RECOMMENDED. That is not a
-              recommendation, it is an array index wearing a badge. */}
-          <h3>{copy.display_name}</h3>
-          {/* REPLACED: taglines. Tire & Wheel read, in full, "Because the road or
-              trail isn't always smooth" -- no coverage, term, deductible,
-              exclusions, claim process or transferability anywhere. */}
-          <p className="accomplishes">{copy.what_it_accomplishes}</p>
-        </div>
-
-        <div className="price-block">
-          <span className="total">{money(price)}</span>
-          {perMonth !== null && (
-            // Never a bare monthly figure. The total and the duration sit with it.
-            <span className="per-month">or about {money(perMonth)}/mo</span>
-          )}
-          <span className="duration">{copy.coverage_duration}</span>
-        </div>
-      </div>
-
-      {offer.surcharge_options.length > 0 && (
-        <div className="surcharges">
-          <b>Does any of this apply to your machine?</b>
-          {offer.surcharge_options.map((o) => (
-            <label key={o.code}>
-              <input
-                type="checkbox"
-                checked={chosenOptions.includes(o.code)}
-                onChange={(e) => onOption(o.code, e.target.checked)}
-              />{" "}
-              {o.label}
-              {o.cost_delta > 0 ? ` (+${money(o.cost_delta)})` : ""}
-            </label>
-          ))}
-        </div>
-      )}
-
-      <button className="disclose" onClick={onToggleOpen} aria-expanded={open}>
-        {open ? "Hide the details" : "What's covered, what isn't"}
-      </button>
-
-      {open && (
-        <div className="detail">
-          <dl>
-            <dt>What it covers</dt>
-            <dd>{copy.what_it_covers}</dd>
-
-            <dt>How long</dt>
-            <dd>{copy.coverage_duration}</dd>
-
-            <dt>What it doesn&apos;t cover</dt>
-            <dd>{copy.what_it_excludes}</dd>
-
-            {copy.deductible_note && (<><dt>Deductible</dt><dd>{copy.deductible_note}</dd></>)}
-
-            <dt>How to use it</dt>
-            <dd>{copy.how_to_use}</dd>
-
-            <dt>If you sell it</dt>
-            <dd>
-              {copy.transferable ? "Transferable to the next owner." : "Not transferable."}
-              {copy.transfer_note ? ` ${copy.transfer_note}` : ""}
-            </dd>
-
-            {copy.future_value_note && (<><dt>Down the road</dt><dd>{copy.future_value_note}</dd></>)}
-
-            {offer.deductible !== null && (
-              <><dt>Your deductible</dt><dd>{money(offer.deductible)}</dd></>
-            )}
-
-            <dt>Full terms</dt>
-            <dd>
-              <a href={copy.full_terms_url ?? "#"} target="_blank" rel="noreferrer noopener">
-                Read the complete contract
-              </a>
-            </dd>
-          </dl>
-        </div>
-      )}
-
-      {/* The neutral pair, kept from the prototype. Neither is styled as the
-          default and neither is pre-selected. */}
-      <div className="choice-actions">
-        <button
-          className={disposition === "Included" ? "selected" : ""}
-          aria-pressed={disposition === "Included"}
-          onClick={() => onDecide("Included")}
-        >
-          <span className="check" />
-          Include
-        </button>
-        <button
-          className={disposition === "Managed by Customer" ? "selected" : ""}
-          aria-pressed={disposition === "Managed by Customer"}
-          onClick={() => onDecide("Managed by Customer")}
-        >
-          <span className="check" />
-          I&apos;ll manage this
-        </button>
-      </div>
-    </div>
-  );
 }

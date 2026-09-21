@@ -1,526 +1,587 @@
-/* Ported from the approved All Seasons prototype. The visual system is kept
-   intact: navy #102630, burnt orange #bd5b2b, cream #f7f4ed, Georgia serif
-   headings, photography-led layout.
+/* app/globals.css — DocuRide PS component styles.
+ *
+ * Every value here comes from app/tokens.css. Nothing in this file hard-codes
+ * a colour, a size or a space, so the system retunes from one place.
+ *
+ * The reference is editorial print rather than a dashboard: square corners,
+ * hairline rules, generous margin, a serif that does the talking and a sans
+ * that does the work. Copper marks where you are and what you chose, and is
+ * never a surface.
+ */
 
-   One fix carried over from the review: the prototype declared Inter and never
-   loaded it, so it rendered in Segoe UI or Arial on most machines. It is loaded
-   in app/layout.tsx now.
-
-   ── Type scale ──────────────────────────────────────────────────────────
-   The prototype was drawn for a designer's monitor: body copy at 11px, product
-   explanations at 11px, legal text at 8px. This is read by buyers who are often
-   older, at arm's length, on a showroom tablet. Every size below is a rem, and
-   the root is 112.5% rather than 18px, so it is 18px against a default browser
-   setting and larger for anyone who has raised theirs -- a px root would
-   silently discard that preference.
-
-   1rem = 18px. Nothing a customer reads is below --fs-xs (16px), body copy and
-   product explanations are --fs-base (20px) or larger, and the payment figures
-   are the largest numbers on the screen by a clear margin. */
-
-:root {
-  --ink: #0d202b;
-  --navy: #102630;
-  --orange: #bd5b2b;
-  --cream: #f7f4ed;
-  --paper: #fff;
-  --line: #d9dcdd;
-  --muted: #5a666e;
-
-  /* Type. Every value is a rem off the 112.5% root, so the px comment is what
-     it computes to at a default browser setting and it scales up from there.
-     The names say what each one is for, because the sizes were specified per
-     element rather than derived from a ratio. */
-  --fs-goal: 0.778rem;  /* 14px -- the goal label above a product name */
-  --fs-note: 0.833rem;  /* 15px -- notes under the product list, header/footer */
-  --fs-xs: 0.889rem;    /* 16px -- monthly amount, coverage term, disclosure link */
-  --fs-ui: 0.944rem;    /* 17px -- every button and checkbox label */
-  --fs-sm: 1rem;        /* 18px -- secondary copy */
-  --fs-base: 1.056rem;  /* 19px -- product descriptions and body copy */
-  --fs-md: 1.222rem;    /* 22px -- card headings */
-  --fs-lg: 1.556rem;    /* 28px -- product names */
-  --fs-xl: 1.889rem;    /* 34px -- product price */
-  --fs-2xl: 2.444rem;   /* 44px -- h1 */
-  --fs-pay: 3.778rem;   /* 68px -- the payment. The largest number anywhere. */
-
-  /* Space. One scale, so "generous" is consistent rather than per-rule. */
-  --s1: 0.444rem;   /* 8px  */
-  --s2: 0.667rem;   /* 12px */
-  --s3: 0.889rem;   /* 16px */
-  --s4: 1.333rem;   /* 24px */
-  --s5: 1.778rem;   /* 32px */
-  --s6: 2.444rem;   /* 44px */
-  --s7: 3.556rem;   /* 64px */
-
-  /* Every interactive element clears this. */
-  --tap: 3.333rem;  /* 60px */
-
-  /* The reading column on a wide screen. The cards were drawn at 820px, which
-     left a third of a desk monitor empty and forced the price under the
-     description sooner than it needed to go. */
-  --content: 61.111rem; /* 1100px */
-
-  --lh-tight: 1.25;
-  --lh-body: 1.65;
-  --lh-roomy: 1.8;
-}
-
-/* The root, and ONLY the root, carries the base size. It must not appear in a
+/* ── Root ────────────────────────────────────────────────────────────────
+   The root, and ONLY the root, carries the base size. It must not appear in a
    later selector list that also matches html: `html, body { font-size: 1rem }`
-   wins on source order at equal specificity, and 1rem on the root element
-   resolves against the *initial* 16px rather than against this rule -- so the
-   root silently pins itself back to 16px and every rem in the file lands 11%
-   short of its comment. That is what happened the first time. */
+   wins on source order at equal specificity, and 1rem on the root resolves
+   against the initial 16px, so the root silently pins itself back to 16px and
+   every rem in the file lands 11% short of its comment. */
 html { font-size: 112.5%; }  /* 18px at a default browser setting */
 
 * { box-sizing: border-box; }
 
-html, body {
-  margin: 0;
-  min-height: 100%;
-  background: #e8ecec;
-}
+html, body { margin: 0; min-height: 100%; background: var(--shell); }
 
 body {
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-family: var(--font-sans);
   font-size: var(--fs-sm);
   line-height: var(--lh-body);
   color: var(--ink);
   -webkit-text-size-adjust: 100%;
 }
 
-button, select, input { font: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 
-/* Anything focusable has to be visible when focused. A tablet in a showroom is
-   often driven by keyboard or switch access as well as touch. */
+/* A showroom tablet is driven by keyboard and switch access as well as touch. */
 :where(button, a, input, [tabindex]):focus-visible {
-  outline: 3px solid var(--orange);
-  outline-offset: 2px;
+  outline: var(--bw-control) solid var(--copper);
+  outline-offset: 3px;
 }
 
-.app { min-height: 100vh; background: #fff; }
-
-/* ── Header ───────────────────────────────────────────────────────────── */
-.header {
-  min-height: 5.778rem; /* 104px */
-  display: grid;
-  grid-template-columns: 17rem 9rem 1fr 10rem;
-  align-items: stretch;
-  background: #fff;
-  border-bottom: 1px solid #d8dcde;
-  position: relative;
-  z-index: 5;
-}
-.logo {
-  background: var(--navy);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  padding: var(--s3) var(--s4);
-  gap: var(--s2);
-}
-.logo b { display: block; letter-spacing: .1em; font-size: var(--fs-md); line-height: 1.1; }
-.logo small { display: block; font-size: var(--fs-xs); letter-spacing: .08em; margin-top: 0.222rem; color: #c8d3d8; }
-.mountains {
-  color: #dc7441;
-  font-size: 2.667rem;
-  letter-spacing: -0.889rem;
-  transform: rotate(180deg);
-  display: inline-block;
-}
-.tag {
-  background: var(--navy);
-  color: #d8dee1;
-  border-left: 1px solid #58707b;
-  display: flex;
-  align-items: center;
-  padding: var(--s3) var(--s3) var(--s3) var(--s4);
-  font-size: var(--fs-xs);
-  letter-spacing: .12em;
-  line-height: 1.5;
-}
-.experience {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  font-size: var(--fs-xs);
-  letter-spacing: .1em;
-  line-height: 1.35;
-  text-align: center;
-  padding: var(--s3) var(--s2);
-  border-left: 1px solid #ccd1d3;
-}
-.experience i { display: block; background: var(--orange); height: 3px; width: 2.5rem; margin: var(--s2) auto 0; }
-
-/* The progress rail. Labels are part of how a buyer knows how much is left, so
-   they stay legible rather than being shrunk to fit beside the brand panels --
-   the panels give way first, at the breakpoints below. */
-.header nav { display: flex; justify-content: center; align-items: center; gap: 0; padding: var(--s2) var(--s3); }
-.prog {
-  width: 7.5rem; text-align: center; font-size: var(--fs-xs);
-  line-height: 1.3; color: #626f77; position: relative;
-}
-.prog:not(:last-child):after {
-  content: ""; position: absolute; height: 1px; background: #d5d9da;
-  top: 1.25rem; left: 4.6rem; width: 5.8rem;
-}
-.prog b {
-  position: relative; z-index: 2; width: 2.5rem; height: 2.5rem; border-radius: 50%;
-  background: #edf0f0; border: 1px solid #d6dada; display: grid; place-items: center;
-  margin: auto; font-size: var(--fs-sm); font-weight: 700;
-}
-.prog span { display: block; margin-top: var(--s1); }
-.prog.active { color: var(--ink); }
-.prog.active b { background: var(--ink); color: #fff; border-color: var(--ink); }
-.prog.active b:after {
-  content: ""; width: 0.389rem; height: 0.389rem; background: var(--orange);
-  border-radius: 50%; position: absolute; bottom: 0.28rem;
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-/* ── Planner shell ────────────────────────────────────────────────────── */
-.hidden { display: none !important; }
-.planner { min-height: 40rem; display: grid; grid-template-columns: 21rem 1fr; }
-
-.vehicle-panel {
-  background: #f7f8f7;
-  border-right: 1px solid #d8dcde;
-  padding: var(--s5) var(--s4);
-  position: relative;
+/* ── Shared type roles ───────────────────────────────────────────────────── */
+.eyebrow {
+  font-size: var(--fs-note); letter-spacing: var(--track-wide);
+  text-transform: uppercase; font-weight: 700; color: var(--ink-55);
+  margin: 0 0 var(--s3);
 }
-.overline { font-size: var(--fs-xs); letter-spacing: .1em; font-weight: 800; }
-.vehicle-photo {
-  height: 11rem; margin: var(--s3) 0 var(--s2);
-  background-size: cover; background-position: center;
-  background-color: #edf0ef;
+.eyebrow--rule { color: var(--ink); display: flex; align-items: center; gap: var(--s2); }
+.eyebrow--rule::before {
+  content: ""; width: 1.5rem; height: 3px; background: var(--copper); flex: 0 0 auto;
 }
 
-/* The designed empty state. A unit sold the day it arrived may have no photos,
-   and a trade unit may never get them. A clean typographic treatment is honest
-   and looks intentional; a stock photo of a different machine is worse than
-   no photo. */
-.vehicle-plate {
-  margin: var(--s3) 0 var(--s2);
-  padding: var(--s4) var(--s4);
-  background: linear-gradient(150deg, var(--navy), #1b3947);
-  color: #fff;
-}
-.vehicle-plate .yr { font-size: var(--fs-xs); letter-spacing: .2em; color: #a9bdc5; }
-.vehicle-plate .mk { font-family: Georgia, serif; font-size: var(--fs-lg); line-height: 1.15; margin-top: var(--s1); }
-.vehicle-plate .vin { font-size: var(--fs-xs); letter-spacing: .08em; color: #a0b5bf; margin-top: var(--s3); word-break: break-all; }
-
-.vehicle-panel h2 { font-family: Georgia, serif; font-size: var(--fs-lg); line-height: var(--lh-tight); margin: var(--s4) 0 var(--s1); }
-.vehicle-panel > p { font-size: var(--fs-sm); color: var(--muted); margin: 0; }
-.vehicle-panel > i { display: block; width: 2.2rem; height: 3px; background: var(--orange); margin: var(--s4) 0; }
-
-.deal-facts { font-size: var(--fs-sm); line-height: var(--lh-roomy); color: #3f4c54; }
-.deal-facts div { display: flex; justify-content: space-between; gap: var(--s3); }
-.deal-facts b { font-weight: 700; color: var(--ink); }
-.deal-facts .note {
-  display: block; font-size: var(--fs-xs); color: var(--muted);
-  line-height: var(--lh-body); margin-top: var(--s4);
-  border-top: 1px solid #e2e5e6; padding-top: var(--s3);
+.kicker {
+  font-family: var(--font-sans); font-size: var(--fs-note);
+  letter-spacing: var(--track-wide); text-transform: uppercase;
+  font-weight: 800; color: var(--copper-deep); margin: 0 0 var(--s2);
 }
 
-/* ── Content ──────────────────────────────────────────────────────────── */
-.content { display: flex; flex-direction: column; background: #fbfbfa; min-width: 0; }
-.content-inner { flex: 1; padding: var(--s6) 5vw var(--s5); background: linear-gradient(90deg, #fff 0 70%, #f7f5ef 100%); }
-.section-label { color: var(--ink); margin-bottom: var(--s3); }
-.section-label:before {
-  content: ""; display: inline-block; width: 1.5rem; height: 3px;
-  background: var(--orange); vertical-align: middle; margin-right: var(--s2);
+.display {
+  font-family: var(--font-serif); font-weight: 400;
+  font-size: var(--fs-3xl); line-height: var(--lh-tight);
+  letter-spacing: -0.02em; margin: 0 0 var(--s4); max-width: 18ch;
 }
-.content h1 {
-  font-family: Georgia, serif; font-weight: 500; letter-spacing: -.025em;
-  font-size: var(--fs-2xl); line-height: var(--lh-tight); margin: 0 0 var(--s3);
-  max-width: 20ch;
-}
-.intro { font-size: var(--fs-base); color: #4b5760; line-height: var(--lh-body); margin: 0 0 var(--s5); max-width: 62ch; }
-.screen { display: none; }
-.screen.active { display: block; animation: enter .3s ease; }
-@keyframes enter { from { opacity: .2; transform: translateY(6px); } }
-@media (prefers-reduced-motion: reduce) { .screen.active { animation: none; } }
+.display--sm { font-size: var(--fs-2xl); max-width: 26ch; }
 
-/* ── Opening screen ───────────────────────────────────────────────────── */
-/* Sets the frame before anything is asked. Read once, at arm's length, so it
-   runs wider and looser than the working screens that follow. */
-.welcome { max-width: 52rem; }
-.welcome-photo {
-  height: 15rem; margin-bottom: var(--s4);
-  background-size: cover; background-position: center;
-  background-color: #edf0ef;
+.lede {
+  font-size: var(--fs-md); line-height: var(--lh-body);
+  color: var(--ink-70); margin: 0 0 var(--s5); max-width: var(--measure-tight);
 }
-.welcome-vehicle {
-  font-size: var(--fs-xs); letter-spacing: .12em; text-transform: uppercase;
-  font-weight: 800; color: var(--orange); margin: 0 0 var(--s2);
+.body {
+  font-size: var(--fs-base); line-height: var(--lh-roomy);
+  color: var(--ink-70); margin: 0 0 var(--s6); max-width: var(--measure);
 }
-.welcome h1 { font-size: var(--fs-2xl); max-width: 18ch; margin-bottom: var(--s4); }
-.welcome .intro { font-size: var(--fs-md); line-height: var(--lh-body); color: #33424a; margin-bottom: var(--s4); max-width: 46ch; }
-.welcome-body { font-size: var(--fs-base); line-height: var(--lh-roomy); color: #3f4c54; margin: 0 0 var(--s6); max-width: 62ch; }
-
-/* The three goals. One line each, and they are the same three the product
-   catalog files everything under, so the language matches what follows. */
-.goals { list-style: none; margin: 0 0 var(--s6); padding: 0; max-width: 46rem; }
-.goals li {
-  padding: var(--s3) 0 var(--s3) var(--s4);
-  border-left: 4px solid var(--orange);
-  margin-bottom: var(--s3);
+.body--close {
+  margin: 0; border-top: var(--bw) solid var(--line-soft); padding-top: var(--s4);
 }
-.goals b { display: block; font-family: Georgia, serif; font-size: var(--fs-md); font-weight: 500; line-height: var(--lh-tight); }
-.goals span { display: block; font-size: var(--fs-base); color: #3f4c54; line-height: var(--lh-body); margin-top: var(--s1); }
-
-/* The ownership arc. The middle is where the customer is standing and where
-   every decision on the following screens lives, so it carries the weight --
-   the outer two are context and are deliberately quieter. */
-.arc {
-  list-style: none; margin: 0 0 var(--s6); padding: 0;
-  display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: var(--s4);
-  align-items: stretch; max-width: 46rem;
-}
-.arc li {
-  border-top: 3px solid #d8dcde; padding-top: var(--s3);
-  display: flex; flex-direction: column; gap: var(--s1);
-}
-.arc .arc-when {
-  font-size: var(--fs-xs); letter-spacing: .12em; text-transform: uppercase;
-  font-weight: 800; color: var(--muted);
-}
-.arc .arc-what { font-size: var(--fs-sm); color: #4b5760; line-height: var(--lh-body); }
-.arc .arc-now { border-top-color: var(--orange); border-top-width: 6px; }
-.arc .arc-now .arc-when { color: var(--ink); font-size: var(--fs-sm); }
-.arc .arc-now .arc-what {
-  font-family: Georgia, serif; font-size: var(--fs-md);
-  color: var(--ink); line-height: var(--lh-tight);
+.fine {
+  font-size: var(--fs-xs); line-height: var(--lh-body);
+  color: var(--ink-55); margin: var(--s4) 0 0; max-width: var(--measure);
 }
 
-.welcome-close {
-  font-size: var(--fs-base); line-height: var(--lh-roomy); color: #3f4c54;
-  margin: 0; max-width: 62ch; border-top: 1px solid #e2e5e6; padding-top: var(--s4);
+.linkish {
+  background: none; border: 0; padding: var(--s1) 0;
+  font-size: var(--fs-xs); color: var(--copper-deep);
+  text-decoration: underline; text-underline-offset: 3px;
 }
 
-/* ── Discovery ────────────────────────────────────────────────────────── */
-.visual-options { display: grid; grid-template-columns: repeat(2, minmax(17rem, 1fr)); gap: var(--s4); max-width: 48rem; }
-.visual-option {
-  background: #fff; border: 2px solid #d7dcdd; box-shadow: 0 2px 7px #10263010;
-  cursor: pointer; text-align: left; padding: 0; width: 100%; font: inherit; color: inherit;
-  min-height: var(--tap);
-}
-.visual-option .pic { height: 8.5rem; background-size: cover; background-position: center; }
-.visual-option .body { padding: var(--s4); display: flex; gap: var(--s2); align-items: flex-start; min-height: var(--tap); }
-.box {
-  width: 1.5rem; height: 1.5rem; border: 2px solid #8b969b; border-radius: 2px;
-  flex: 0 0 auto; display: grid; place-items: center; margin-top: 0.1rem;
-}
-.visual-option.selected { border-color: var(--orange); }
-.visual-option.selected .box { background: var(--orange); border-color: var(--orange); color: #fff; }
-.visual-option.selected .box:after { content: "✓"; font-size: var(--fs-sm); }
-.visual-option b { font-family: Georgia, serif; font-size: var(--fs-md); line-height: var(--lh-tight); }
-.visual-option small { display: block; color: var(--muted); font-size: var(--fs-sm); margin-top: var(--s1); line-height: var(--lh-body); }
+/* ── Shell ───────────────────────────────────────────────────────────────── */
+.app { min-height: 100vh; background: var(--paper); display: flex; flex-direction: column; }
 
-/* ── Products ─────────────────────────────────────────────────────────── */
-.products { max-width: var(--content); }
-.product { background: #fff; border: 1px solid #d8dcde; margin-bottom: var(--s6); }
-.product-head { display: grid; grid-template-columns: 1fr auto; gap: var(--s4); padding: var(--s4) var(--s4) var(--s3); align-items: start; }
-.product h3 { font-family: Georgia, serif; font-size: var(--fs-lg); line-height: var(--lh-tight); margin: var(--s1) 0 0; }
-.product .goal { font-size: var(--fs-goal); letter-spacing: .02em; color: #a04f24; font-weight: 700; }
-.product .accomplishes { font-size: var(--fs-base); color: #3f4c54; line-height: var(--lh-body); margin: var(--s2) 0 0; max-width: 58ch; }
-
-/* Total price and coverage duration sit alongside any monthly figure, always.
-   A customer shown "$12/month" with no term cannot see that it is $720. */
-.price-block { text-align: right; white-space: nowrap; min-width: 13rem; }
-.price-block .total { font-family: Georgia, serif; font-size: var(--fs-xl); display: block; line-height: 1.1; }
-.price-block .per-month { font-size: var(--fs-xs); color: #3f4c54; display: block; margin-top: var(--s1); }
-.price-block .duration { font-size: var(--fs-xs); color: var(--muted); display: block; margin-top: var(--s2); white-space: normal; max-width: 22ch; }
-.price-block .unpriced { font-size: var(--fs-sm); color: #8a5a2b; max-width: 22ch; white-space: normal; }
-
-.disclose {
-  border: 0; background: none; margin: 0 var(--s4) var(--s2); padding: var(--s2) 0;
-  min-height: var(--tap); font-size: var(--fs-xs);
-  text-decoration: underline; text-underline-offset: 3px; color: #2f4049;
+.masthead {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: stretch;
+  background: var(--navy-900); color: var(--paper);
 }
-.detail { border-top: 1px solid #e6e9ea; padding: var(--s4); background: #fcfcfb; }
-.detail dl { margin: 0; display: grid; grid-template-columns: 13rem 1fr; gap: var(--s3) var(--s4); font-size: var(--fs-base); line-height: var(--lh-body); }
-.detail dt { font-weight: 700; color: #33424a; }
-.detail dd { margin: 0; color: #3f4c54; }
-.detail a { color: #9c4a22; }
-
-/* The neutral pair. Both are full-size targets; neither is styled as the
-   default, because neither is. */
-.choice-actions { display: flex; flex-wrap: wrap; gap: var(--s4); padding: 0 var(--s4) var(--s4); font-size: var(--fs-ui); }
-.choice-actions button {
-  background: none; border: 2px solid #b9c2c6; padding: var(--s2) var(--s5);
-  min-height: var(--tap); min-width: 13rem; white-space: nowrap;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.choice-actions .selected { border-color: var(--orange); background: #fdf6f2; }
-.check {
-  display: inline-grid; width: 1.667rem; height: 1.667rem; border: 2px solid #8b969b;
-  place-items: center; margin-right: var(--s2); flex: 0 0 auto;
-}
-.choice-actions .selected .check { background: var(--orange); border-color: var(--orange); color: #fff; }
-.choice-actions .selected .check:after { content: "✓"; font-size: var(--fs-ui); }
-
-.surcharges { padding: 0 var(--s4) var(--s3); font-size: var(--fs-ui); color: #3f4c54; }
-.surcharges b { display: block; margin-bottom: var(--s1); }
-.surcharges label {
+.brand {
   display: flex; align-items: center; gap: var(--s2);
-  min-height: var(--tap); line-height: var(--lh-body); cursor: pointer;
+  padding: var(--s3) var(--s5) var(--s3) var(--s4);
+  border-right: var(--bw) solid var(--line-dark);
 }
-.surcharges input { width: 1.778rem; height: 1.778rem; flex: 0 0 auto; accent-color: var(--orange); }
-
-.all-options { font-size: var(--fs-note); color: #4b5760; margin-top: var(--s4); max-width: 62ch; line-height: var(--lh-body); }
-
-.notice {
-  max-width: var(--content); background: #fff; border: 1px solid #d8dcde;
-  border-left: 4px solid var(--orange); padding: var(--s5);
+.brand-mark {
+  color: var(--copper); font-size: 2rem; letter-spacing: -0.7rem;
+  transform: rotate(180deg); display: inline-block; padding-right: 0.7rem;
 }
-.notice h2 { font-family: Georgia, serif; font-size: var(--fs-lg); line-height: var(--lh-tight); margin: 0 0 var(--s3); }
-.notice p { font-size: var(--fs-base); color: #3f4c54; line-height: var(--lh-body); margin: 0 0 var(--s3); }
-
-/* ── Payment ──────────────────────────────────────────────────────────── */
-.finance-box { max-width: var(--content); background: #fff; border: 1px solid #d8dcde; padding: var(--s5); }
-.terms-readonly { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--s4); margin-bottom: var(--s5); }
-/* A label that wraps ("ANNUAL PERCENTAGE RATE") must not drop its own value
-   below the other two. Each cell fills the row and pins its value to the
-   bottom, so the three figures share a baseline whatever the labels do. */
-.terms-readonly > div { display: flex; flex-direction: column; justify-content: space-between; gap: var(--s1); }
-.terms-readonly div span { display: block; font-size: var(--fs-xs); letter-spacing: .08em; color: var(--muted); font-weight: 700; }
-.terms-readonly div b { font-family: Georgia, serif; font-size: var(--fs-lg); font-weight: 500; line-height: var(--lh-tight); }
-
-/* The payment is what the customer came to this screen for, so it is the
-   largest thing on it -- larger than the heading above it. */
-.estimate { display: flex; justify-content: space-between; border-top: 1px solid #d8dcde; padding-top: var(--s5); gap: var(--s5); flex-wrap: wrap; }
-.estimate small { font-size: var(--fs-xs); letter-spacing: .08em; font-weight: 700; color: var(--muted); }
-.estimate strong { font-family: Georgia, serif; font-size: var(--fs-pay); display: block; font-weight: 500; line-height: 1.05; letter-spacing: -.02em; }
-.breakdown { font-size: var(--fs-base); line-height: var(--lh-roomy); min-width: 17rem; }
-.breakdown div { display: flex; justify-content: space-between; gap: var(--s4); }
-.breakdown .rule { border-top: 1px solid #d3d8da; margin-top: var(--s1); padding-top: var(--s1); font-weight: 700; }
-.fine { font-size: var(--fs-xs); color: #4b5760; line-height: var(--lh-body); margin-top: var(--s4); max-width: 62ch; }
-
-/* ── Summary ──────────────────────────────────────────────────────────── */
-.summary-card { max-width: var(--content); background: #fff; border: 1px solid #d8dcde; margin-bottom: var(--s4); }
-.summary-title { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .1em; padding: var(--s3) var(--s4); border-bottom: 1px solid #e0e3e4; }
-.summary-row { display: flex; justify-content: space-between; gap: var(--s4); padding: var(--s3) var(--s4); border-bottom: 1px solid #eef0f0; font-size: var(--fs-base); align-items: baseline; }
-.summary-row:last-child { border: 0; }
-.summary-row .what b { display: block; font-size: var(--fs-base); }
-.summary-row .what span { color: var(--muted); font-size: var(--fs-sm); }
-.summary-row .decision { white-space: nowrap; font-weight: 700; }
-.summary-row .decision.managed { color: #4b5760; font-weight: 500; }
-
-/* The one figure the customer takes home. It matches the payment screen rather
-   than being demoted to a table row. */
-.summary-row.total { padding: var(--s4); background: #fbfaf7; }
-.summary-row.total span { font-size: var(--fs-base); font-weight: 700; }
-.summary-row.total b { font-family: Georgia, serif; font-size: var(--fs-xl); font-weight: 500; line-height: 1.1; }
-
-.ack { max-width: var(--content); background: #fff; border: 1px solid #d8dcde; padding: var(--s5); }
-.ack h2 { font-family: Georgia, serif; font-size: var(--fs-lg); line-height: var(--lh-tight); margin: 0 0 var(--s4); }
-.ack p { font-size: var(--fs-base); line-height: var(--lh-body); color: #3f4c54; }
-.ack .meta { font-size: var(--fs-sm); color: #4b5760; margin-top: var(--s5); border-top: 1px solid #e6e9ea; padding-top: var(--s4); }
-
-.finish { text-align: center; padding-top: var(--s6); }
-.finish-mark { width: 5rem; height: 5rem; border: 3px solid var(--orange); display: grid; place-items: center; margin: auto; font-family: Georgia, serif; font-size: var(--fs-lg); }
-.finish h1 { margin: var(--s5) auto var(--s3); max-width: 24ch; }
-.finish > p { font-family: Georgia, serif; font-style: italic; font-size: var(--fs-md); margin: 0 0 var(--s6); }
-.finish h3 { font-family: Georgia, serif; font-size: var(--fs-lg); }
-.finish .small { font-size: var(--fs-sm); color: #4b5760; }
-
-/* ── Footer nav ───────────────────────────────────────────────────────── */
-.content footer {
-  border-top: 1px solid #d8dcde; background: #fff;
-  display: grid; grid-template-columns: auto 1fr auto; align-items: center;
-  padding: var(--s4) var(--s5); gap: var(--s4);
+.brand-name b {
+  display: block; font-family: var(--font-serif); font-size: var(--fs-md);
+  font-weight: 600; line-height: 1.1; letter-spacing: 0.01em;
 }
-.content footer .status { text-align: center; font-size: var(--fs-sm); color: #4b5760; line-height: var(--lh-body); }
-.dark {
-  background: var(--ink); color: #fff; border: 0;
-  padding: var(--s2) var(--s5); min-height: var(--tap);
-  font-size: var(--fs-ui); letter-spacing: .1em; font-weight: 700; justify-self: end;
-  display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
-}
-.dark[disabled] { opacity: .45; cursor: not-allowed; }
-.dark span { margin-left: var(--s4); }
-.back {
-  background: #fff; border: 2px solid #b9c2c6;
-  padding: var(--s2) var(--s4); min-height: var(--tap);
-  font-size: var(--fs-ui); letter-spacing: .08em; justify-self: start;
-  display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
+.brand-name small {
+  display: block; font-size: var(--fs-note); letter-spacing: var(--track-wide);
+  text-transform: uppercase; color: var(--ink-40); margin-top: 0.15rem;
 }
 
-.brand-footer { min-height: 8rem; background: var(--navy); color: #fff; display: grid; grid-template-columns: 17rem repeat(3, 1fr); align-items: center; }
-.brand-footer > div:not(.logo) { padding: var(--s4) var(--s5); border-left: 1px solid #647681; }
-.brand-footer b { font-size: var(--fs-xs); letter-spacing: .1em; }
-.brand-footer span:not(.mountains) { display: block; font-size: var(--fs-sm); color: #cbd4d8; margin-top: var(--s1); line-height: var(--lh-body); }
+.strapline {
+  margin: 0; align-self: center; padding: var(--s3) var(--s4);
+  border-left: var(--bw) solid var(--line-dark);
+  font-size: var(--fs-note); letter-spacing: var(--track-wide);
+  text-transform: uppercase; line-height: 1.4; text-align: right;
+  color: var(--ink-40);
+}
+.strapline i {
+  display: block; margin-top: var(--s1); margin-left: auto;
+  width: 2.2rem; height: 3px; background: var(--copper);
+}
 
-/* ── Gate screens ─────────────────────────────────────────────────────── */
-.gate { min-height: 70vh; display: grid; place-items: center; padding: var(--s6) var(--s4); }
-.gate-card { max-width: 34rem; background: #fff; border: 1px solid #d8dcde; padding: var(--s6); text-align: center; }
-.gate-card h1 { font-family: Georgia, serif; font-size: var(--fs-lg); margin: 0 0 var(--s3); font-weight: 500; line-height: var(--lh-tight); }
-.gate-card p { font-size: var(--fs-base); color: #3f4c54; line-height: var(--lh-body); margin: 0; }
+/* ── Progress ────────────────────────────────────────────────────────────── */
+.stepper { display: flex; align-items: center; justify-content: center; padding: var(--s2) var(--s3); }
+.stepper ol { display: flex; list-style: none; margin: 0; padding: 0; }
+.step { position: relative; }
+.step > button, .step > span {
+  display: flex; flex-direction: column; align-items: center; gap: var(--s1);
+  width: 8rem; padding: var(--s1) var(--s1); background: none; border: 0;
+  font-size: var(--fs-note); line-height: 1.3; text-align: center;
+  color: var(--ink-40);
+}
+.step > button { cursor: pointer; }
+.step:not(:last-child)::after {
+  content: ""; position: absolute; top: 1.4rem; left: 5.1rem; width: 5.8rem;
+  height: 1px; background: var(--line-dark);
+}
+.step-n {
+  width: 2.3rem; height: 2.3rem; border-radius: 50%;
+  display: grid; place-items: center; font-size: var(--fs-xs); font-weight: 700;
+  background: transparent; border: var(--bw) solid var(--line-dark);
+  color: var(--ink-40); position: relative; z-index: 2;
+}
+.step--done > button { color: var(--paper); }
+.step--done .step-n { background: var(--navy-700); border-color: var(--navy-700); color: var(--paper); }
+/* Completed reads completed without relying on colour alone. */
+.step--done .step-n::after { content: "✓"; font-size: var(--fs-note); }
+.step--done .step-n { font-size: 0; }
+.step--current > span { color: var(--paper); }
+.step--current .step-n { background: var(--paper); border-color: var(--paper); color: var(--navy-900); }
+.step--current .step-n::before {
+  content: ""; position: absolute; bottom: -0.55rem; width: 0.4rem; height: 0.4rem;
+  border-radius: 50%; background: var(--copper);
+}
 
-/* ── Narrower than a desk monitor ─────────────────────────────────────── */
-/* The brand panels give way before the type does. At 1024 the rail still
-   carries its labels; the tagline and the strapline are the first to go. */
+/* ── Frame: rail + stage ─────────────────────────────────────────────────── */
+.frame { display: grid; grid-template-columns: var(--rail) 1fr; flex: 1; }
+.frame--full { grid-template-columns: 1fr; }
+
+.rail {
+  background: var(--cream); border-right: var(--bw) solid var(--line);
+  padding: var(--s5) var(--s4) var(--s6);
+}
+.rail-photo, .plate { display: block; width: 100%; margin: var(--s3) 0 var(--s4); }
+.rail-photo { height: 11rem; object-fit: cover; background: var(--line-soft); }
+.plate {
+  padding: var(--s4); background: linear-gradient(150deg, var(--navy-800), var(--navy-700));
+  color: var(--paper);
+}
+.plate-year {
+  display: block; font-size: var(--fs-xs); letter-spacing: 0.2em; color: var(--ink-40);
+}
+.plate-name {
+  display: block; font-family: var(--font-serif); font-size: var(--fs-lg);
+  line-height: 1.15; margin-top: var(--s1);
+}
+.plate-vin {
+  display: block; font-size: var(--fs-xs); letter-spacing: 0.06em;
+  color: var(--ink-40); margin-top: var(--s3); word-break: break-all;
+}
+
+.rail-name {
+  font-family: var(--font-serif); font-size: var(--fs-lg); font-weight: 500;
+  line-height: var(--lh-heading); margin: 0 0 var(--s1);
+}
+.rail-facts { font-size: var(--fs-xs); color: var(--ink-55); margin: 0 0 var(--s4); }
+
+.rail-deal {
+  margin: 0; padding: var(--s4) 0; border-top: var(--bw) solid var(--line);
+  display: grid; grid-template-columns: auto 1fr; gap: var(--s2) var(--s3);
+  font-size: var(--fs-xs);
+}
+.rail-deal dt { color: var(--ink-55); }
+.rail-deal dd { margin: 0; text-align: right; font-weight: 700; }
+
+.rail-note {
+  font-size: var(--fs-note); color: var(--ink-55); line-height: var(--lh-body);
+  margin: 0; padding-top: var(--s3); border-top: var(--bw) solid var(--line);
+}
+
+.railnav { margin-top: var(--s5); padding-top: var(--s4); border-top: var(--bw) solid var(--line); }
+.railnav ul { list-style: none; margin: 0; padding: 0; }
+.railnav li + li { margin-top: var(--s1); }
+.railnav a {
+  display: block; min-height: var(--tap); display: flex; align-items: center;
+  padding: var(--s1) var(--s2); font-size: var(--fs-xs); color: var(--ink-70);
+  text-decoration: none; border-left: var(--bw-accent) solid var(--line);
+}
+.railnav a:hover, .railnav a:focus-visible { border-left-color: var(--copper); color: var(--ink); }
+
+.rail-mood {
+  margin: var(--s6) 0 0; padding-top: var(--s4);
+  border-top: var(--bw-accent) solid var(--copper);
+}
+.rail-mood img { display: block; width: 100%; height: 9rem; object-fit: cover; margin-bottom: var(--s2); }
+.rail-mood figcaption {
+  font-family: var(--font-serif); font-size: var(--fs-md); font-style: italic;
+  color: var(--ink-70); line-height: var(--lh-heading);
+}
+
+.stage { display: flex; flex-direction: column; min-width: 0; background: var(--paper); }
+.stage-inner {
+  flex: 1; padding: var(--s6) var(--s7) var(--s7);
+  background: linear-gradient(100deg, var(--paper) 0 62%, var(--cream) 100%);
+}
+.screen { max-width: var(--content); }
+
+/* ── Ownership questions ─────────────────────────────────────────────────── */
+.question { border: 0; margin: 0 0 var(--s6); padding: 0; }
+.question-legend { padding: 0; margin-bottom: var(--s4); }
+.question-title {
+  display: block; font-family: var(--font-serif); font-size: var(--fs-lg);
+  line-height: var(--lh-heading); margin-bottom: var(--s1);
+}
+.question-help {
+  display: block; font-size: var(--fs-xs); color: var(--ink-55);
+  max-width: var(--measure); line-height: var(--lh-body);
+}
+
+.choices {
+  display: grid; grid-template-columns: repeat(2, minmax(16rem, 1fr));
+  gap: var(--s3); max-width: 58rem;
+}
+.choice {
+  display: block; text-align: left; padding: 0; width: 100%;
+  background: var(--paper); color: inherit;
+  border: var(--bw-control) solid var(--line);
+  border-radius: var(--r-md); box-shadow: var(--shadow-card);
+  min-height: var(--tap); overflow: hidden;
+  transition: border-color var(--dur) var(--ease);
+}
+.choice-pic { display: block; width: 100%; height: 6.5rem; object-fit: cover; }
+.choice--plain .choice-body { padding: var(--s4); }
+.choice-body {
+  display: flex; gap: var(--s2); align-items: flex-start;
+  padding: var(--s3); min-height: var(--tap);
+}
+.choice-box {
+  width: 1.5rem; height: 1.5rem; flex: 0 0 auto; margin-top: 0.15rem;
+  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
+  display: grid; place-items: center;
+}
+.choice b { display: block; font-family: var(--font-serif); font-size: var(--fs-md); line-height: var(--lh-heading); }
+.choice small { display: block; font-size: var(--fs-xs); color: var(--ink-55); margin-top: 0.15rem; line-height: var(--lh-body); }
+.choice.is-chosen { border-color: var(--copper); }
+.choice.is-chosen .choice-box { background: var(--copper); border-color: var(--copper); }
+.choice.is-chosen .choice-box::after { content: "✓"; color: var(--paper); font-size: var(--fs-xs); }
+
+/* ── Products ────────────────────────────────────────────────────────────── */
+.goal-section { margin-bottom: var(--s6); scroll-margin-top: var(--s4); }
+.goal-head {
+  font-family: var(--font-serif); font-size: var(--fs-md); font-weight: 600;
+  margin: 0 0 var(--s3); padding-bottom: var(--s2);
+  border-bottom: var(--bw) solid var(--line);
+  display: flex; align-items: baseline; gap: var(--s2);
+}
+.goal-head::before {
+  content: ""; width: 1.2rem; height: 3px; background: var(--copper); flex: 0 0 auto;
+}
+
+.products { display: flex; flex-direction: column; gap: var(--s4); }
+.product {
+  background: var(--paper); border: var(--bw) solid var(--line);
+  border-left: var(--bw-accent) solid var(--line);
+  border-radius: var(--r-md); box-shadow: var(--shadow-card);
+  transition: border-color var(--dur) var(--ease);
+}
+.product.is-decided { border-left-color: var(--copper); }
+
+.product-main {
+  display: grid; grid-template-columns: 1fr auto; gap: var(--s4);
+  padding: var(--s4) var(--s4) var(--s3); align-items: start;
+}
+.product-text { min-width: 0; }
+.product-name {
+  font-family: var(--font-serif); font-size: var(--fs-lg); font-weight: 500;
+  line-height: var(--lh-heading); margin: 0;
+}
+.product-purpose {
+  font-size: var(--fs-base); color: var(--ink-70); line-height: var(--lh-body);
+  margin: var(--s2) 0 0; max-width: 58ch;
+}
+
+.product-price { margin: 0; text-align: right; min-width: 13rem; }
+.price-total {
+  display: block; font-family: var(--font-serif); font-size: var(--fs-xl);
+  line-height: 1.1;
+}
+.price-month { display: block; font-size: var(--fs-xs); color: var(--ink-70); margin-top: var(--s1); }
+.price-term { display: block; font-size: var(--fs-xs); color: var(--ink-55); margin-top: var(--s2); max-width: 22ch; margin-left: auto; }
+
+.config { border: 0; margin: 0 var(--s4) var(--s3); padding: var(--s3) 0 0; border-top: var(--bw) solid var(--line-soft); }
+.config legend { padding: 0; font-size: var(--fs-ui); font-weight: 700; }
+.config-row { display: flex; align-items: center; gap: var(--s2); min-height: var(--tap); }
+.config-row input { width: 1.778rem; height: 1.778rem; flex: 0 0 auto; accent-color: var(--copper); }
+.config-row label { font-size: var(--fs-ui); line-height: var(--lh-body); cursor: pointer; }
+.config-cost { color: var(--ink-55); }
+
+.product-actions {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--s3); padding: 0 var(--s4) var(--s4);
+}
+.decision { display: flex; flex-wrap: wrap; gap: var(--s3); }
+.decision-option {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: var(--tap); min-width: 13rem; padding: var(--s2) var(--s4);
+  font-size: var(--fs-ui); background: var(--paper); color: inherit;
+  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-md);
+  transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.decision-mark {
+  width: 1.4rem; height: 1.4rem; flex: 0 0 auto; margin-right: var(--s2);
+  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
+  display: inline-grid; place-items: center;
+}
+/* Both decisions get the same treatment. Neither is the default and neither is
+   styled as the better answer. */
+.decision-option.is-chosen { border-color: var(--copper); background: var(--copper-tint); }
+.decision-option.is-chosen .decision-mark { background: var(--copper); border-color: var(--copper); }
+.decision-option.is-chosen .decision-mark::after { content: "✓"; color: var(--paper); font-size: var(--fs-xs); }
+
+.expander {
+  border: 0; background: none; min-height: var(--tap); padding: var(--s2) 0;
+  font-size: var(--fs-xs); color: var(--ink-70);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+
+.product-detail {
+  border-top: var(--bw) solid var(--line-soft); padding: var(--s4);
+  background: var(--cream-2);
+}
+.product-detail dl {
+  margin: 0; display: grid; grid-template-columns: 13rem 1fr;
+  gap: var(--s3) var(--s4); font-size: var(--fs-base); line-height: var(--lh-body);
+}
+.product-detail dt { font-weight: 700; color: var(--ink); }
+.product-detail dd { margin: 0; color: var(--ink-70); }
+.product-detail a { color: var(--copper-deep); }
+
+/* ── Notes ───────────────────────────────────────────────────────────────── */
+.note {
+  font-size: var(--fs-note); color: var(--ink-70); line-height: var(--lh-body);
+  margin: var(--s4) 0 0; max-width: var(--measure);
+}
+/* A data problem the customer is being asked to help catch. Marked, not
+   alarming: copper rule, no red, no warning iconography. */
+.note--flag { border-left: var(--bw-accent) solid var(--copper); padding: var(--s2) 0 var(--s2) var(--s3); }
+.note--panel {
+  max-width: var(--content); background: var(--paper);
+  border: var(--bw) solid var(--line); border-left: var(--bw-accent) solid var(--copper);
+  border-radius: var(--r-md); padding: var(--s5); font-size: var(--fs-base);
+}
+.note--panel h2 { font-family: var(--font-serif); font-size: var(--fs-lg); font-weight: 500; margin: 0 0 var(--s3); }
+.note--panel p { margin: 0 0 var(--s3); color: var(--ink-70); }
+.note--panel p:last-child { margin: 0; }
+
+/* ── Panels, figures, terms ──────────────────────────────────────────────── */
+.panel {
+  max-width: var(--content); background: var(--paper);
+  border: var(--bw) solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--shadow-card); padding: var(--s5); margin-bottom: var(--s4);
+}
+.panel-head {
+  font-size: var(--fs-note); letter-spacing: var(--track-wide);
+  text-transform: uppercase; font-weight: 800; color: var(--ink-55);
+  margin: 0 0 var(--s4); padding-bottom: var(--s2);
+  border-bottom: var(--bw) solid var(--line-soft);
+}
+.panel-foot {
+  margin: var(--s4) 0 0; padding-top: var(--s3);
+  border-top: var(--bw) solid var(--line-soft);
+  font-size: var(--fs-base); color: var(--ink-70); line-height: var(--lh-body);
+}
+.panel-foot--plain { border-top: 0; padding-top: 0; margin-top: var(--s2); }
+.panel--ack { text-align: left; margin-top: var(--s6); }
+.panel--ack p { font-size: var(--fs-base); color: var(--ink-70); line-height: var(--lh-body); margin: 0 0 var(--s3); }
+.ack-meta { font-size: var(--fs-xs); color: var(--ink-55); border-top: var(--bw) solid var(--line-soft); padding-top: var(--s3); }
+
+.terms {
+  margin: 0 0 var(--s5); display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--s4);
+}
+/* A label that wraps ("Annual percentage rate") must not drop its own value
+   below the other two, so each cell fills the row and pins its value down. */
+.terms > div { display: flex; flex-direction: column; justify-content: space-between; gap: var(--s1); }
+.terms dt { font-size: var(--fs-note); letter-spacing: var(--track-ui); text-transform: uppercase; font-weight: 700; color: var(--ink-55); }
+.terms dd { margin: 0; font-family: var(--font-serif); font-size: var(--fs-lg); line-height: var(--lh-heading); }
+.terms--inline { margin: var(--s4) 0 0; padding-top: var(--s3); border-top: var(--bw) solid var(--line-soft); }
+.terms--inline dd { font-size: var(--fs-md); }
+
+.figures { border-top: var(--bw) solid var(--line); padding-top: var(--s5); display: flex; flex-wrap: wrap; gap: var(--s6); justify-content: space-between; }
+.panel > .figures:first-child { border-top: 0; padding-top: 0; }
+.figure { margin: 0; }
+.figure-label { display: block; font-size: var(--fs-note); letter-spacing: var(--track-ui); text-transform: uppercase; font-weight: 700; color: var(--ink-55); }
+/* The payment is what the customer came for, so it is the largest thing on the
+   screen -- larger than the heading above it. */
+.figure-value { display: block; font-family: var(--font-serif); font-size: var(--fs-pay); font-weight: 500; line-height: 1.05; letter-spacing: -0.02em; }
+
+.figure-split { margin: 0; min-width: 18rem; font-size: var(--fs-base); }
+.figure-split > div { display: flex; justify-content: space-between; gap: var(--s4); padding: var(--s1) 0; }
+.figure-split dt { color: var(--ink-70); }
+.figure-split dd { margin: 0; font-weight: 600; }
+.figure-split .is-total { border-top: var(--bw) solid var(--line); margin-top: var(--s1); padding-top: var(--s2); font-weight: 700; }
+.figure-split .is-total dt { color: var(--ink); font-weight: 700; }
+
+/* ── Plan summary ────────────────────────────────────────────────────────── */
+.summary { list-style: none; margin: 0; padding: 0; }
+.summary-line {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: var(--s4); padding: var(--s3) 0; border-bottom: var(--bw) solid var(--line-soft);
+}
+.summary-line:last-child { border-bottom: 0; }
+.summary-what b { display: block; font-size: var(--fs-base); }
+.summary-what small { display: block; font-size: var(--fs-xs); color: var(--ink-55); }
+.summary-empty { font-size: var(--fs-base); color: var(--ink-70); margin: 0; }
+
+/* Both outcomes are legitimate, so both are stated plainly. Neither is red and
+   neither is called declined. */
+.tag { white-space: nowrap; font-size: var(--fs-xs); font-weight: 700; padding: var(--s1) var(--s2); border-radius: var(--r-sm); }
+.tag--in { background: var(--copper-tint); color: var(--copper-deep); border: var(--bw) solid var(--copper); }
+.tag--own { background: var(--cream); color: var(--ink-70); border: var(--bw) solid var(--line); }
+
+/* ── Opening screen goals ────────────────────────────────────────────────── */
+.goals { list-style: none; margin: 0 0 var(--s6); padding: 0; max-width: 46rem; }
+.goals li { padding: var(--s3) 0 var(--s3) var(--s4); border-left: var(--bw-accent) solid var(--copper); margin-bottom: var(--s3); }
+.goals b { display: block; font-family: var(--font-serif); font-size: var(--fs-md); font-weight: 500; line-height: var(--lh-heading); }
+.goals span { display: block; font-size: var(--fs-base); color: var(--ink-70); margin-top: var(--s1); line-height: var(--lh-body); }
+
+/* ── Completion ──────────────────────────────────────────────────────────── */
+.done { max-width: var(--content); }
+.done-mark { color: var(--copper); font-size: 2.6rem; letter-spacing: -0.9rem; transform: rotate(180deg); display: inline-block; margin: 0 0 var(--s4); }
+.done-head { font-family: var(--font-serif); font-size: var(--fs-2xl); font-weight: 400; line-height: var(--lh-tight); margin: 0 0 var(--s2); max-width: 20ch; }
+.done-sub { font-family: var(--font-serif); font-style: italic; font-size: var(--fs-md); color: var(--ink-70); margin: 0 0 var(--s6); }
+
+.arc { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: var(--s4); max-width: 46rem; }
+.arc li { border-top: 3px solid var(--line); padding-top: var(--s3); display: flex; flex-direction: column; gap: var(--s1); }
+.arc-when { font-size: var(--fs-note); letter-spacing: var(--track-wide); text-transform: uppercase; font-weight: 800; color: var(--ink-55); }
+.arc-what { font-size: var(--fs-xs); color: var(--ink-70); line-height: var(--lh-body); }
+.arc-now { border-top-color: var(--copper); border-top-width: 6px; }
+.arc-now .arc-when { color: var(--ink); }
+.arc-now .arc-what { font-family: var(--font-serif); font-size: var(--fs-md); color: var(--ink); line-height: var(--lh-heading); }
+
+/* ── Actions ─────────────────────────────────────────────────────────────── */
+.actions {
+  position: sticky; bottom: 0; z-index: 4;
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--s4);
+  padding: var(--s4) var(--s7); background: var(--paper);
+  border-top: var(--bw) solid var(--line); box-shadow: var(--shadow-sticky);
+}
+.actions-status { margin: 0; text-align: center; font-size: var(--fs-note); color: var(--ink-55); line-height: var(--lh-body); }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+  min-height: var(--tap); padding: var(--s2) var(--s5);
+  font-size: var(--fs-ui); letter-spacing: var(--track-ui); font-weight: 700;
+  border-radius: var(--r-md); white-space: nowrap;
+  transition: background-color var(--dur) var(--ease);
+}
+.btn--go { background: var(--navy-900); color: var(--paper); border: var(--bw-control) solid var(--navy-900); }
+.btn--go:hover:not([disabled]) { background: var(--navy-800); }
+.btn--go[disabled] { opacity: 0.4; cursor: not-allowed; }
+.btn--quiet { background: var(--paper); color: var(--ink); border: var(--bw-control) solid var(--line-strong); font-weight: 500; }
+
+/* ── Gate ────────────────────────────────────────────────────────────────── */
+.gate { display: grid; place-items: center; min-height: 50vh; padding: var(--s7) 0; }
+.gate-card { max-width: 34rem; text-align: left; }
+.gate-card .lede { margin: 0; }
+
+/* ── Colophon ────────────────────────────────────────────────────────────── */
+.colophon {
+  background: var(--navy-900); color: var(--paper);
+  display: grid; grid-template-columns: auto repeat(3, 1fr); align-items: center;
+  gap: var(--s5); padding: var(--s5) var(--s5);
+}
+.colophon p { margin: 0; }
+.colophon b { display: block; font-size: var(--fs-note); letter-spacing: var(--track-wide); text-transform: uppercase; }
+.colophon span, .colophon small { display: block; font-size: var(--fs-note); color: var(--ink-40); margin-top: var(--s1); line-height: var(--lh-body); }
+.colophon-brand b { font-family: var(--font-serif); font-size: var(--fs-md); text-transform: none; letter-spacing: 0; }
+
+/* ── Narrower than a desk monitor ────────────────────────────────────────
+   The brand panels give way before the type does, so the progress rail keeps
+   its labels at 1024 instead of shrinking them to fit beside decoration. */
 @media (max-width: 1280px) {
-  .header { grid-template-columns: 17rem 1fr 10rem; }
-  .tag { display: none; }
+  .strapline { display: none; }
+  .masthead { grid-template-columns: auto 1fr; }
 }
-
 @media (max-width: 1100px) {
-  .header { grid-template-columns: 17rem 1fr; }
-  .experience { display: none; }
+  .stage-inner { padding: var(--s5) var(--s5) var(--s6); }
+  .actions { padding: var(--s4) var(--s5); }
 }
-
 @media (max-width: 1024px) {
-  .planner { grid-template-columns: 19rem 1fr; }
-  .content-inner { padding: var(--s5) var(--s4); }
-  .visual-options { grid-template-columns: 1fr; max-width: 34rem; }
+  .frame { grid-template-columns: var(--rail-narrow) 1fr; }
+  .step > button, .step > span { width: 6.2rem; }
+  .step:not(:last-child)::after { left: 4.2rem; width: 4rem; }
+  .product-main { grid-template-columns: 1fr; gap: var(--s3); }
+  .product-price { text-align: left; min-width: 0; }
+  .price-term { margin-left: 0; max-width: none; }
 }
 
+/* Tablet: the rail stops being a column and becomes a card above the work,
+   because a 340px column beside a 380px stage helps nobody. */
 @media (max-width: 900px) {
-  /* Stacked, the arc reads as a sequence down the page; the middle keeps its
-     weight through type and rule rather than through width. */
+  .frame { display: block; }
+  .rail {
+    border-right: 0; border-bottom: var(--bw) solid var(--line);
+    padding: var(--s4) var(--s5);
+    display: grid; grid-template-columns: 14rem 1fr; gap: var(--s3) var(--s5); align-items: start;
+  }
+  .rail > .eyebrow { grid-column: 1 / -1; margin: 0; }
+  .rail-photo, .plate { grid-row: span 4; margin: 0; }
+  .rail-name, .rail-facts, .rail-deal, .rail-note { grid-column: 2; }
+  .rail-deal { border-top: 0; padding: 0; }
+  .rail-note { border-top: 0; padding-top: 0; }
+  .railnav { grid-column: 1 / -1; margin-top: var(--s3); }
+  .railnav ul { display: flex; flex-wrap: wrap; gap: var(--s2); }
+  .railnav li + li { margin: 0; }
+  /* The mood photograph is the first thing to go when space is short. */
+  .rail-mood { display: none; }
   .arc { grid-template-columns: 1fr; gap: var(--s3); }
-  .product-head { grid-template-columns: 1fr; gap: var(--s3); }
-  .price-block { text-align: left; }
-  .price-block .duration { max-width: none; }
+  .product-detail dl { grid-template-columns: 1fr; gap: var(--s1) 0; }
+  .product-detail dd { margin-bottom: var(--s3); }
+  .colophon { grid-template-columns: 1fr; gap: var(--s4); }
 }
 
-@media (max-width: 860px) {
-  .header { grid-template-columns: 1fr; min-height: 0; }
-  .logo { justify-content: flex-start; }
-  .header nav { border-top: 1px solid #e2e5e6; padding: var(--s3) var(--s2); }
-  .prog { width: 4.2rem; }
-  .prog span { display: none; }
-  .prog:not(:last-child):after { left: 3rem; width: 2.5rem; }
-  .planner { display: block; }
-  .vehicle-panel { padding: var(--s4); border-right: 0; border-bottom: 1px solid #d8dcde; }
-  .detail dl { grid-template-columns: 1fr; gap: var(--s1) 0; }
-  .detail dd { margin-bottom: var(--s3); }
-  .brand-footer { grid-template-columns: 1fr; }
-  .brand-footer > div:not(.logo) { border-left: 0; border-top: 1px solid #647681; }
-}
-
+/* Phone: only what the current decision needs. */
 @media (max-width: 650px) {
-  .content-inner { padding: var(--s4) var(--s3); }
-  .content h1 { font-size: var(--fs-lg); }
-  .estimate { display: block; }
-  .estimate strong { font-size: 3rem; }
-  .breakdown { margin-top: var(--s4); min-width: 0; }
-  .finance-box, .notice, .ack, .gate-card { padding: var(--s4); }
-  /* Two full-width targets stacked beat two half-width ones side by side. */
-  .choice-actions { flex-direction: column; align-items: stretch; }
-  .choice-actions button { justify-content: center; }
-  .content footer { grid-template-columns: 1fr 1fr; padding: var(--s3) var(--s3); }
-  .content footer .status { grid-column: 1 / 3; order: 3; }
-  .brand-footer { display: none; }
-}
-
-/* A product that was rated but matched no catalog row. Not the same as one
-   deliberately withheld for unwritten copy, and not styled the same either --
-   this one is a fault the buyer is being asked to help catch. */
-.all-options.warn {
-  border-left: 4px solid var(--orange);
-  padding: var(--s2) 0 var(--s2) var(--s3);
-  color: #3f4c54;
+  .masthead { grid-template-columns: 1fr; }
+  .brand { border-right: 0; border-bottom: var(--bw) solid var(--line-dark); }
+  .stepper { padding: var(--s2) var(--s2); overflow-x: auto; }
+  .step > button, .step > span { width: 4.4rem; }
+  .step-label { display: none; }
+  .step:not(:last-child)::after { left: 3.2rem; width: 1.6rem; }
+  .rail { display: block; padding: var(--s4) var(--s3); }
+  .rail-photo { height: 8rem; margin: var(--s3) 0; }
+  .plate { margin: var(--s3) 0; padding: var(--s3); }
+  .plate-name { font-size: var(--fs-md); }
+  .rail-note { display: none; }
+  .rail-deal { grid-template-columns: 1fr auto; padding: var(--s3) 0 0; }
+  .railnav { margin-top: var(--s3); padding-top: var(--s3); }
+  .railnav ul { display: flex; flex-wrap: wrap; gap: var(--s2); }
+  .railnav li + li { margin: 0; }
+  .railnav a {
+    min-height: 2.6rem; border-left: 0; border-bottom: var(--bw-control) solid var(--line);
+    padding: var(--s1) var(--s2);
+  }
+  .railnav a:hover, .railnav a:focus-visible { border-bottom-color: var(--copper); }
+  .stage-inner { padding: var(--s4) var(--s3) var(--s5); }
+  .display { font-size: var(--fs-2xl); }
+  .display--sm { font-size: var(--fs-lg); }
+  .figures { display: block; }
+  .figure-value { font-size: 3rem; }
+  .figure-split { margin-top: var(--s4); min-width: 0; }
+  .panel, .note--panel { padding: var(--s4); }
+  .choices { grid-template-columns: 1fr; }
+  .decision { flex-direction: column; align-items: stretch; }
+  .decision-option { min-width: 0; }
+  .product-actions { flex-direction: column; align-items: stretch; }
+  .expander { text-align: left; }
+  .actions { grid-template-columns: 1fr 1fr; padding: var(--s3); }
+  .actions-status { grid-column: 1 / 3; order: 3; }
+  .terms { grid-template-columns: 1fr; gap: var(--s3); }
 }

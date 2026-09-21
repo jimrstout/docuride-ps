@@ -1,0 +1,139 @@
+/* app/tokens.css — the DocuRide PS design token layer.
+ *
+ * Every colour, size, space, rule, radius, shadow, content width and
+ * breakpoint the interface uses is declared here and nowhere else. Component
+ * rules in globals.css reference these and never hard-code a value, so the
+ * system can be retuned in one place.
+ *
+ * ── On the type scale ───────────────────────────────────────────────────
+ * Sizes are rem against a 112.5% root, so 1rem is 18px at a default browser
+ * setting and larger for anyone who has raised theirs. The px in each comment
+ * is what it computes to at that default.
+ *
+ * The root carries the base size and must never appear in a later selector
+ * list that also matches html: `html, body { font-size: 1rem }` wins on source
+ * order at equal specificity, and 1rem on the root resolves against the
+ * initial 16px, so the root silently pins itself back and every rem in the
+ * file lands 11% short. See the rule in globals.css.
+ *
+ * The per-element sizes below are a measured specification, not a ratio, and
+ * they are the floor: this is read by buyers who are often older, standing, at
+ * arm's length, on a showroom tablet.
+ */
+
+:root {
+  /* ── Colour ───────────────────────────────────────────────────────────
+     Dark navy and warm white carry the interface. Copper is an accent and is
+     never a surface: it marks the current step, a selected decision, a rule
+     under a heading. Nothing here is a warning colour -- a customer choosing
+     to manage something themselves is not an error state. */
+  --navy-900: #0b1a24;   /* deepest, for the shell header and footer */
+  --navy-800: #102630;   /* panels on dark */
+  --navy-700: #1b3947;   /* raised on dark */
+  --ink:      #0d202b;   /* body text */
+  --ink-70:   #3f4c54;   /* secondary text */
+  --ink-55:   #5a666e;   /* muted text, labels */
+  --ink-40:   #8a959c;   /* quiet text on dark */
+
+  --paper:    #ffffff;
+  --cream:    #f7f4ed;   /* warm white, the editorial ground */
+  --cream-2:  #fbfaf6;   /* a shade up from cream, for inset rows */
+  --shell:    #eef1f1;   /* outside the application frame */
+
+  --copper:      #bd5b2b;
+  --copper-deep: #a04f24; /* copper that has to pass contrast on white */
+  --copper-tint: #fdf6f2; /* the wash behind a chosen decision */
+
+  --line:        #d9dcdd; /* standard rule */
+  --line-soft:   #e6e9ea; /* rule inside a card */
+  --line-strong: #b9c2c6; /* control border */
+  --line-dark:   #2c4653; /* rule on navy */
+
+  /* ── Type ─────────────────────────────────────────────────────────────
+     Two roles, kept strictly apart. The serif carries headings, vehicle
+     names, emotional statements and money. The sans carries navigation,
+     labels, body copy, controls and anything technical. */
+  --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-sans: Inter, "Segoe UI", Arial, sans-serif;
+
+  --fs-note: 0.833rem;  /* 15px -- notes, header and footer chrome */
+  --fs-xs:   0.889rem;  /* 16px -- monthly amount, duration, disclosure link */
+  --fs-ui:   0.944rem;  /* 17px -- every button and checkbox label */
+  --fs-sm:   1rem;      /* 18px -- secondary copy */
+  --fs-base: 1.056rem;  /* 19px -- product descriptions and body copy */
+  --fs-md:   1.222rem;  /* 22px -- card headings, lede */
+  --fs-lg:   1.556rem;  /* 28px -- product names */
+  --fs-xl:   1.889rem;  /* 34px -- product price */
+  --fs-2xl:  2.444rem;  /* 44px -- screen headings */
+  --fs-3xl:  3.111rem;  /* 56px -- the welcome statement */
+  --fs-pay:  3.778rem;  /* 68px -- the payment. The largest number anywhere. */
+
+  --lh-tight: 1.2;
+  --lh-heading: 1.25;
+  --lh-body: 1.65;
+  --lh-roomy: 1.8;
+
+  --track-wide: 0.12em;  /* overlines and eyebrows */
+  --track-ui: 0.08em;    /* buttons */
+
+  /* ── Space ────────────────────────────────────────────────────────────
+     One scale. "Generous" is then consistent rather than decided per rule. */
+  --s1: 0.444rem;   /*  8px */
+  --s2: 0.667rem;   /* 12px */
+  --s3: 0.889rem;   /* 16px */
+  --s4: 1.333rem;   /* 24px */
+  --s5: 1.778rem;   /* 32px */
+  --s6: 2.444rem;   /* 44px */
+  --s7: 3.556rem;   /* 64px */
+  --s8: 5rem;       /* 90px */
+
+  /* ── Controls ─────────────────────────────────────────────────────────
+     Every interactive element clears --tap. A showroom tablet is driven with
+     a thumb, often by someone who is standing. */
+  --tap: 3.333rem;  /* 60px */
+
+  /* ── Borders, radii, shadows ──────────────────────────────────────────
+     Restrained by intent. The reference is editorial print, not a dashboard:
+     square corners, hairline rules, and shadow only where an element genuinely
+     sits above the page. */
+  --bw: 1px;
+  --bw-control: 2px;
+  --bw-accent: 4px;
+
+  --r-none: 0;
+  --r-sm: 2px;      /* checkbox */
+  --r-md: 3px;      /* card, panel */
+
+  --shadow-card: 0 1px 2px rgb(13 32 43 / 4%);
+  --shadow-raised: 0 2px 10px rgb(13 32 43 / 8%);
+  --shadow-sticky: 0 -1px 0 var(--line), 0 -8px 20px rgb(13 32 43 / 4%);
+
+  /* ── Layout ───────────────────────────────────────────────────────────
+     --measure is a reading width in characters; --content is the working
+     column. The cards were drawn at 820px, which left a third of a desk
+     monitor empty. */
+  --content: 61.111rem;  /* 1100px */
+  --measure: 62ch;
+  --measure-tight: 46ch;
+  --rail: 21rem;         /* 378px */
+  --rail-narrow: 19rem;  /* 342px */
+
+  /* ── Motion ───────────────────────────────────────────────────────────── */
+  --ease: cubic-bezier(0.2, 0, 0.1, 1);
+  --dur: 180ms;
+}
+
+/* Breakpoints cannot be custom properties in a media query, so they live here
+   as the single written record of what the numbers mean. Keep these in step
+   with the @media rules in globals.css.
+
+     1280px  the tagline panel leaves the header
+     1100px  the strapline panel leaves the header
+     1024px  the context rail narrows
+      900px  the rail becomes a card above the content; cards go single column
+      650px  phone: controls go full width, the brand footer leaves
+*/
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur: 0ms; }
+}
