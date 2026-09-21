@@ -1,22 +1,28 @@
 /**
- * The planner is served under a path on the main site (docuride.com/ps/...)
- * via a rewrite, not on its own hostname. Without basePath every asset request
- * resolves against the root site and 404s.
+ * The planner is served on its own hostname, ps.docuride.com, so it sits at the
+ * root of that origin and needs no path prefix. BASE_PATH is empty.
  *
- * Defined once here and handed to the client as NEXT_PUBLIC_BASE_PATH, because
- * Next only prefixes what it routes itself -- pages, next/link, the router,
- * headers, redirects and rewrites. A plain fetch("/api/...") in a client
- * component is not routed by Next and is NOT prefixed, so lib/paths.ts does
- * that explicitly. See the note there.
+ * It is kept as a named constant, and still handed to the client as
+ * NEXT_PUBLIC_BASE_PATH, because the prefix has to be applied in two places
+ * that cannot see each other: Next prefixes what it routes itself -- pages,
+ * next/link, the router, headers, redirects and rewrites -- while a plain
+ * fetch("/api/...") in a client component is never routed by Next and is not
+ * prefixed. lib/paths.ts does that half explicitly.
+ *
+ * Setting BASE_PATH back to a path (e.g. "/ps", to serve the app under a path
+ * on the main site again) is therefore the only edit needed: both halves read
+ * from here. Setting NEXT_PUBLIC_BASE_PATH in the hosting environment instead
+ * would move only the client half and silently break the other.
  */
-const BASE_PATH = "/ps";
+const BASE_PATH = "";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  basePath: BASE_PATH,
 
-  // assetPrefix defaults to basePath, so _next/* already resolves under /ps.
+  // Omitted entirely when empty: Next's default is no prefix, and assetPrefix
+  // follows basePath, so _next/* resolves at the root of the hostname.
+  ...(BASE_PATH ? { basePath: BASE_PATH } : {}),
 
   env: {
     // Inlined at build time, so client code can prefix the paths Next does not.
@@ -28,7 +34,8 @@ const nextConfig = {
   // planner never sends one.
   //
   // These sources are relative to basePath -- Next applies it for us, so
-  // "/plan/:path*" matches /ps/plan/... in production.
+  // "/plan/:path*" matches /plan/... on ps.docuride.com today, and would match
+  // /ps/plan/... unchanged if BASE_PATH were set again.
   async headers() {
     return [
       {

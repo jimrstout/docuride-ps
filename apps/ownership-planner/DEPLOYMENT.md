@@ -19,7 +19,8 @@ environment variables and a shared rollback surface.
 | Root directory | `apps/ownership-planner` |
 | Framework preset | Next.js |
 | Node version | 22.x |
-| Base path | `/ps` (set in `next.config.mjs`, not in Vercel) |
+| Domain | `ps.docuride.com` |
+| Base path | none — the app is at the root of its own hostname, so `next.config.mjs` sets `BASE_PATH` to `""` |
 | Affected-projects deployments | **On** — so a push touching only the main site does not rebuild the planner, and vice versa |
 | SSO / Vercel Authentication | **Off** (decided 2026-09-19) |
 
@@ -48,31 +49,33 @@ holding a secret ever needs to be read in the browser, the design is wrong.
 credentials belong per-store in `stores.dms_config`, not in a project-wide
 variable.
 
-### Served under /ps on the main site
+### Served at ps.docuride.com
 
-The planner is reached at `docuride.com/ps/...` through a rewrite rather than on
-its own hostname, so `next.config.mjs` sets `basePath: "/ps"`. Without it every
-asset request resolves against the root site and 404s.
+The planner has its own hostname, so it sits at the root of that origin and
+carries no path prefix. `next.config.mjs` sets `BASE_PATH` to `""` and omits
+`basePath` entirely; a plan is at `https://ps.docuride.com/plan/<session_id>`.
 
-Two things follow from that.
+It was previously reached at `docuride.com/ps/...` through a rewrite from the
+main site, which is why `basePath` existed: without it every asset request
+resolved against the root site and 404d. On its own hostname there is nothing
+to resolve against and nothing to rewrite, so both the rewrite and the prefix
+are gone.
 
-**The rewrite has to cover the whole subtree, not just the pages.** A rewrite of
-`/ps/plan/*` alone leaves `/ps/_next/*` pointing at the root site and the page
-loads unstyled. Send everything under `/ps`:
+**Moving it back under a path is one edit, in `next.config.mjs`.** Set
+`BASE_PATH` to the prefix and both halves follow: Next prefixes what it routes
+itself, and `lib/paths.ts` — which reads the same value through
+`NEXT_PUBLIC_BASE_PATH` — prefixes the rest. Do not set
+`NEXT_PUBLIC_BASE_PATH` in the hosting environment instead; that moves only the
+client half. A rewrite would then also have to cover the whole subtree, not just
+the pages, or `_next/*` points at the root site and the page loads unstyled.
 
-```
-/ps/:path*  ->  <planner deployment>/ps/:path*
-```
-
-The path is kept on both sides because the app already serves itself under
-`/ps` — stripping the prefix on the way through would miss every asset.
-
-**Client fetches are prefixed in code, not by Next.** Next prefixes what it
-routes — pages, `next/link`, the router, and the sources in `headers()`. A plain
-`fetch("/api/...")` from a client component is a raw browser request Next never
-sees, so it is not prefixed. `lib/paths.ts` does it explicitly and the three
-client calls in `Planner.tsx` go through it. The failure mode if that is ever
-bypassed is quiet: the autosave 404s and nothing the customer decided is
+**Client fetches are prefixed in code, not by Next.** That is why the seam
+survives the move even though it currently prefixes nothing. Next prefixes what
+it routes — pages, `next/link`, the router, and the sources in `headers()`. A
+plain `fetch("/api/...")` from a client component is a raw browser request Next
+never sees, so it is not prefixed. `lib/paths.ts` does it explicitly and the
+three client calls in `Planner.tsx` go through it. The failure mode if that is
+ever bypassed is quiet: the autosave 404s and nothing the customer decided is
 recorded.
 
 ### After the project exists
@@ -82,7 +85,7 @@ right URL. It builds `${FNI_MENU_BASE_URL}/${session_id}` and currently defaults
 to `https://docuride.app/fni`:
 
 ```
-FNI_MENU_BASE_URL = https://docuride.com/ps/plan
+FNI_MENU_BASE_URL = https://ps.docuride.com/plan
 ```
 
 That is a Supabase Edge Function secret, not a Vercel variable. No code change
