@@ -20,7 +20,16 @@
  * they are the floor: this is read by buyers who are often older, standing, at
  * arm's length, on a showroom tablet.
  *
- * ── The 15% pass ────────────────────────────────────────────────────────
+ * ── One screen, one viewport ────────────────────────────────────────────
+ * Every screen from 1024x768 up has to fit inside the viewport with the
+ * Back/Continue bar visible and nothing scrolled. That is what sets this
+ * scale: the sizes below are the largest that let the longest screen -- a
+ * product with seven terms and two configurable options -- fit in the 640px
+ * left over at 768px tall once the masthead and the control bar are taken out.
+ *
+ * Phones are exempt and scroll normally.
+ *
+ * ── The earlier 15% pass ────────────────────────────────────────────────
  * Every type and space token was multiplied by 0.85 and then clamped up where
  * a stated minimum bound it. A single root change would have been tidier and
  * was not available: 19px of product description scales to 16.2px, under the
@@ -71,15 +80,13 @@
   --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
   --font-sans: Inter, "Segoe UI", Arial, sans-serif;
 
-  --fs-xs:   0.778rem;  /* 14px -- notes, chrome, monthly amount, duration */
-  --fs-ui:   0.889rem;  /* 16px -- every button and checkbox label */
-  --fs-base: 0.944rem;  /* 17px -- product descriptions and body copy */
-  --fs-md:   1.039rem;  /* 18.7px -- card headings, lede */
-  --fs-lg:   1.322rem;  /* 23.8px -- product names */
-  --fs-xl:   1.606rem;  /* 28.9px -- product price */
-  --fs-2xl:  2.078rem;  /* 37.4px -- screen headings */
-  --fs-3xl:  2.644rem;  /* 47.6px -- the welcome statement */
-  --fs-pay:  3.211rem;  /* 57.8px -- the payment. The largest number anywhere. */
+  --fs-xs:    0.778rem;  /* 14px -- meta, notes, chrome. The floor. */
+  --fs-base:  0.889rem;  /* 16px -- body, card descriptions, buttons, labels */
+  --fs-title: 1rem;      /* 18px -- card titles */
+  --fs-q:     1.222rem;  /* 22px -- section questions */
+  --fs-price: 1.556rem;  /* 28px -- a product's price */
+  --fs-head:  1.778rem;  /* 32px -- the screen headline */
+  --fs-pay:   2.444rem;  /* 44px -- the payment. The largest number anywhere. */
 
   --lh-tight: 1.2;
   --lh-heading: 1.25;
@@ -91,19 +98,25 @@
 
   /* ── Space ────────────────────────────────────────────────────────────
      One scale. "Generous" is then consistent rather than decided per rule. */
-  --s1: 0.378rem;   /*  6.8px */
-  --s2: 0.567rem;   /* 10.2px */
-  --s3: 0.756rem;   /* 13.6px */
-  --s4: 1.133rem;   /* 20.4px */
-  --s5: 1.511rem;   /* 27.2px */
-  --s6: 2.078rem;   /* 37.4px */
-  --s7: 3.022rem;   /* 54.4px */
-  --s8: 4.25rem;    /* 76.5px */
+  --s1: 0.333rem;   /*  6px */
+  --s2: 0.444rem;   /*  8px */
+  --s3: 0.667rem;   /* 12px */
+  --s4: 0.889rem;   /* 16px */
+  --s5: 1.222rem;   /* 22px */
+  --s6: 1.556rem;   /* 28px */
+  --s7: 2rem;       /* 36px */
+  --s8: 2.667rem;   /* 48px */
 
   /* ── Controls ─────────────────────────────────────────────────────────
      Every interactive element clears --tap. A showroom tablet is driven with
      a thumb, often by someone who is standing. */
-  --tap: 2.833rem;  /* 51px -- floored at 48, so it takes the full 15% */
+  --tap: 2.667rem;  /* 48px -- the stated minimum, and now exactly it */
+
+  /* The fixed chrome, subtracted from the viewport to size the work area. A
+     screen has to fit in what is left, so these are budgets rather than
+     observations. */
+  --masthead-h: 3.111rem;  /* 56px */
+  --actions-h:  4rem;      /* 72px -- a 48px control plus its padding */
 
   /* ── Borders, radii, shadows ──────────────────────────────────────────
      Restrained by intent. The reference is editorial print, not a dashboard:

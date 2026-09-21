@@ -47,7 +47,7 @@ button { cursor: pointer; }
 .eyebrow {
   font-size: var(--fs-xs); letter-spacing: var(--track-wide);
   text-transform: uppercase; font-weight: 700; color: var(--ink-55);
-  margin: 0 0 var(--s3);
+  margin: 0 0 var(--s2);
 }
 .eyebrow--rule { color: var(--ink); display: flex; align-items: center; gap: var(--s2); }
 .eyebrow--rule::before {
@@ -62,25 +62,26 @@ button { cursor: pointer; }
 
 .display {
   font-family: var(--font-serif); font-weight: 400;
-  font-size: var(--fs-3xl); line-height: var(--lh-tight);
-  letter-spacing: -0.02em; margin: 0 0 var(--s4); max-width: 18ch;
+  font-size: var(--fs-head); line-height: var(--lh-tight);
+  letter-spacing: -0.02em; margin: 0 0 var(--s3); max-width: 26ch;
 }
-.display--sm { font-size: var(--fs-2xl); max-width: 26ch; }
+.display--sm { font-size: var(--fs-head); max-width: 26ch; }
 
 .lede {
-  font-size: var(--fs-md); line-height: var(--lh-body);
-  color: var(--ink-70); margin: 0 0 var(--s5); max-width: var(--measure-tight);
+  font-size: var(--fs-base); line-height: var(--lh-body);
+  color: var(--ink-70); margin: 0 0 var(--s4); max-width: 60ch;
 }
 .body {
-  font-size: var(--fs-base); line-height: var(--lh-roomy);
-  color: var(--ink-70); margin: 0 0 var(--s6); max-width: var(--measure);
+  font-size: var(--fs-base); line-height: var(--lh-body);
+  color: var(--ink-70); margin: 0 0 var(--s4); max-width: 76ch;
 }
 .body--close {
-  margin: 0; border-top: var(--bw) solid var(--line-soft); padding-top: var(--s4);
+  margin: 0; border-top: var(--bw) solid var(--line-soft); padding-top: var(--s3);
+  max-width: 88ch;
 }
 .fine {
-  font-size: var(--fs-xs); line-height: var(--lh-body);
-  color: var(--ink-55); margin: var(--s4) 0 0; max-width: var(--measure);
+  font-size: var(--fs-xs); line-height: 1.4;
+  color: var(--ink-55); margin: var(--s3) 0 0; max-width: 88ch;
 }
 
 .linkish {
@@ -90,15 +91,18 @@ button { cursor: pointer; }
 }
 
 /* ── Shell ───────────────────────────────────────────────────────────────── */
-.app { min-height: 100vh; background: var(--paper); display: flex; flex-direction: column; }
+.app { background: var(--paper); display: flex; flex-direction: column; min-height: 100vh; }
+
+
 
 .masthead {
   display: grid; grid-template-columns: auto 1fr auto; align-items: stretch;
   background: var(--navy-900); color: var(--paper);
 }
+.brand-name b { font-size: var(--fs-base); }
 .brand {
   display: flex; align-items: center; gap: var(--s2);
-  padding: var(--s3) var(--s5) var(--s3) var(--s4);
+  padding: var(--s2) var(--s4);
   border-right: var(--bw) solid var(--line-dark);
 }
 .brand-mark {
@@ -106,7 +110,7 @@ button { cursor: pointer; }
   transform: rotate(180deg); display: inline-block; padding-right: 0.7rem;
 }
 .brand-name b {
-  display: block; font-family: var(--font-serif); font-size: var(--fs-md);
+  display: block; font-family: var(--font-serif); font-size: var(--fs-title);
   font-weight: 600; line-height: 1.1; letter-spacing: 0.01em;
 }
 .brand-name small {
@@ -127,22 +131,22 @@ button { cursor: pointer; }
 }
 
 /* ── Progress ────────────────────────────────────────────────────────────── */
-.stepper { display: flex; align-items: center; justify-content: center; padding: var(--s2) var(--s3); }
+.stepper { display: flex; align-items: center; justify-content: center; padding: var(--s1) var(--s3); }
 .stepper ol { display: flex; list-style: none; margin: 0; padding: 0; }
-.step { position: relative; }
+.step { position: relative; display: flex; align-items: center; }
 .step > button, .step > span {
-  display: flex; flex-direction: column; align-items: center; gap: var(--s1);
-  width: 8rem; padding: var(--s1) var(--s1); background: none; border: 0;
-  font-size: var(--fs-xs); line-height: 1.3; text-align: center;
+  display: flex; flex-direction: row; align-items: center; gap: var(--s2);
+  padding: 0 var(--s2); background: none; border: 0;
+  font-size: var(--fs-xs); line-height: 1.2; text-align: left;
   color: var(--ink-40);
 }
 .step > button { cursor: pointer; }
 .step:not(:last-child)::after {
-  content: ""; position: absolute; top: 1.19rem; left: 5.1rem; width: 5.8rem;
-  height: 1px; background: var(--line-dark);
+  content: ""; position: relative; display: block; align-self: center;
+  width: var(--s4); height: 1px; background: var(--line-dark);
 }
 .step-n {
-  width: 1.955rem; height: 1.955rem; border-radius: 50%;
+  flex: 0 0 auto; width: 1.556rem; height: 1.556rem; border-radius: 50%;
   display: grid; place-items: center; font-size: var(--fs-xs); font-weight: 700;
   background: transparent; border: var(--bw) solid var(--line-dark);
   color: var(--ink-40); position: relative; z-index: 2;
@@ -155,78 +159,85 @@ button { cursor: pointer; }
 .step--current > span { color: var(--paper); }
 .step--current .step-n { background: var(--paper); border-color: var(--paper); color: var(--navy-900); }
 .step--current .step-n::before {
-  content: ""; position: absolute; bottom: -0.47rem; width: 0.34rem; height: 0.34rem;
-  border-radius: 50%; background: var(--copper);
+  content: ""; position: absolute; bottom: -0.28rem; left: 50%; margin-left: -0.15rem;
+  width: 0.3rem; height: 0.3rem; border-radius: 50%; background: var(--copper);
 }
 
 /* ── Frame: rail + stage ─────────────────────────────────────────────────── */
 .frame { display: grid; grid-template-columns: var(--rail) 1fr; flex: 1; }
+/* Between a laptop and a desk monitor the rail gives width back to the work,
+   because a wrapped line of terms costs height and height is the budget. */
+@media (max-width: 1500px) { .frame { grid-template-columns: var(--rail-narrow) 1fr; } }
 .frame--full { grid-template-columns: 1fr; }
 
 .rail {
   background: var(--cream); border-right: var(--bw) solid var(--line);
-  padding: var(--s5) var(--s4) var(--s6);
+  padding: var(--s4) var(--s4) var(--s5);
 }
-.rail-photo, .plate { display: block; width: 100%; margin: var(--s3) 0 var(--s4); }
+.rail-photo, .plate { display: block; width: 100%; margin: var(--s2) 0 var(--s3); }
 .rail-photo { height: 9.35rem; object-fit: cover; background: var(--line-soft); }
 .plate {
-  padding: var(--s4); background: linear-gradient(150deg, var(--navy-800), var(--navy-700));
+  padding: var(--s3); background: linear-gradient(150deg, var(--navy-800), var(--navy-700));
   color: var(--paper);
 }
 .plate-year {
   display: block; font-size: var(--fs-xs); letter-spacing: 0.2em; color: var(--ink-40);
 }
 .plate-name {
-  display: block; font-family: var(--font-serif); font-size: var(--fs-lg);
-  line-height: 1.15; margin-top: var(--s1);
+  display: block; font-family: var(--font-serif); font-size: var(--fs-title);
+  line-height: 1.15; margin-top: 0;
 }
 .plate-vin {
   display: block; font-size: var(--fs-xs); letter-spacing: 0.06em;
-  color: var(--ink-40); margin-top: var(--s3); word-break: break-all;
+  color: var(--ink-40); margin-top: var(--s2); word-break: break-all;
 }
 
 .rail-name {
-  font-family: var(--font-serif); font-size: var(--fs-lg); font-weight: 500;
-  line-height: var(--lh-heading); margin: 0 0 var(--s1);
+  font-family: var(--font-serif); font-size: var(--fs-title); font-weight: 500;
+  line-height: 1.2; margin: 0;
 }
-.rail-facts { font-size: var(--fs-xs); color: var(--ink-55); margin: 0 0 var(--s4); }
+.rail-facts { font-size: var(--fs-xs); color: var(--ink-55); margin: 0 0 var(--s3); }
 
 .rail-deal {
-  margin: 0; padding: var(--s4) 0; border-top: var(--bw) solid var(--line);
-  display: grid; grid-template-columns: auto 1fr; gap: var(--s2) var(--s3);
-  font-size: var(--fs-xs);
+  margin: 0; padding: var(--s3) 0; border-top: var(--bw) solid var(--line);
+  display: grid; grid-template-columns: auto 1fr; gap: var(--s1) var(--s3);
+  font-size: var(--fs-xs); line-height: 1.35;
 }
 .rail-deal dt { color: var(--ink-55); }
 .rail-deal dd { margin: 0; text-align: right; font-weight: 700; }
 
 .rail-note {
-  font-size: var(--fs-xs); color: var(--ink-55); line-height: var(--lh-body);
-  margin: 0; padding-top: var(--s3); border-top: var(--bw) solid var(--line);
+  font-size: var(--fs-xs); color: var(--ink-55); line-height: 1.35;
+  margin: 0; padding-top: var(--s2); border-top: var(--bw) solid var(--line);
 }
 
-.railnav { margin-top: var(--s5); padding-top: var(--s4); border-top: var(--bw) solid var(--line); }
-.railnav ul { list-style: none; margin: 0; padding: 0; }
+.railnav { margin-top: var(--s3); padding-top: var(--s3); border-top: var(--bw) solid var(--line); }
+.railnav ol { list-style: none; margin: 0; padding: 0; counter-reset: opt; }
 .railnav li + li { margin-top: var(--s1); }
-.railnav a {
-  display: block; min-height: var(--tap); display: flex; align-items: center;
+.railnav button {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2);
+  width: 100%; text-align: left; background: none;
   padding: var(--s1) var(--s2); font-size: var(--fs-xs); color: var(--ink-70);
-  text-decoration: none; border-left: var(--bw-accent) solid var(--line);
+  line-height: 1.3; border: 0; border-left: var(--bw-accent) solid var(--line);
 }
-.railnav a:hover, .railnav a:focus-visible { border-left-color: var(--copper); color: var(--ink); }
+.railnav button:disabled { opacity: 0.55; cursor: default; }
+.railnav li.is-here button { border-left-color: var(--copper); color: var(--ink); font-weight: 700; }
+.railnav-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.railnav-state { flex: 0 0 auto; color: var(--ink-55); }
 
 .rail-mood {
-  margin: var(--s6) 0 0; padding-top: var(--s4);
+  margin: var(--s4) 0 0; padding-top: var(--s3);
   border-top: var(--bw-accent) solid var(--copper);
 }
 .rail-mood img { display: block; width: 100%; height: 7.65rem; object-fit: cover; margin-bottom: var(--s2); }
 .rail-mood figcaption {
-  font-family: var(--font-serif); font-size: var(--fs-md); font-style: italic;
+  font-family: var(--font-serif); font-size: var(--fs-title); font-style: italic;
   color: var(--ink-70); line-height: var(--lh-heading);
 }
 
 .stage { display: flex; flex-direction: column; min-width: 0; background: var(--paper); }
 .stage-inner {
-  flex: 1; padding: var(--s6) var(--s7) var(--s7);
+  flex: 1; padding: var(--s4) var(--s6) var(--s4);
   background: linear-gradient(100deg, var(--paper) 0 62%, var(--cream) 100%);
 }
 .screen { max-width: var(--content); }
@@ -235,7 +246,7 @@ button { cursor: pointer; }
 .question { border: 0; margin: 0 0 var(--s6); padding: 0; }
 .question-legend { padding: 0; margin-bottom: var(--s4); }
 .question-title {
-  display: block; font-family: var(--font-serif); font-size: var(--fs-lg);
+  display: block; font-family: var(--font-serif); font-size: var(--fs-q);
   line-height: var(--lh-heading); margin-bottom: var(--s1);
 }
 .question-help {
@@ -244,38 +255,123 @@ button { cursor: pointer; }
 }
 
 .choices {
-  display: grid; grid-template-columns: repeat(2, minmax(16rem, 1fr));
-  gap: var(--s3); max-width: 58rem;
+  display: grid; grid-template-columns: repeat(2, minmax(15rem, 1fr));
+  gap: var(--s3); max-width: 52rem;
 }
+/* Roughly 60px: a 48px target plus breathing room, with the hint on its own
+   line at the 14px floor. */
 .choice {
-  display: block; text-align: left; padding: 0; width: 100%;
+  display: flex; align-items: center; gap: var(--s3);
+  text-align: left; width: 100%; min-height: 3.333rem;
+  padding: var(--s2) var(--s3);
   background: var(--paper); color: inherit;
-  border: var(--bw-control) solid var(--line);
-  border-radius: var(--r-md); box-shadow: var(--shadow-card);
-  min-height: var(--tap); overflow: hidden;
+  border: var(--bw-control) solid var(--line); border-radius: var(--r-md);
   transition: border-color var(--dur) var(--ease);
 }
-.choice-pic { display: block; width: 100%; height: 5.525rem; object-fit: cover; }
-.choice--plain .choice-body { padding: var(--s4); }
-.choice-body {
-  display: flex; gap: var(--s2); align-items: flex-start;
-  padding: var(--s3); min-height: var(--tap);
-}
 .choice-box {
-  width: 1.275rem; height: 1.275rem; flex: 0 0 auto; margin-top: 0.15rem;
+  width: 1.222rem; height: 1.222rem; flex: 0 0 auto;
   border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
   display: grid; place-items: center;
 }
-.choice b { display: block; font-family: var(--font-serif); font-size: var(--fs-md); line-height: var(--lh-heading); }
-.choice small { display: block; font-size: var(--fs-xs); color: var(--ink-55); margin-top: 0.15rem; line-height: var(--lh-body); }
-.choice.is-chosen { border-color: var(--copper); }
+.choice-text { min-width: 0; }
+.choice b { display: block; font-size: var(--fs-base); line-height: 1.25; font-weight: 600; }
+.choice small { display: block; font-size: var(--fs-xs); color: var(--ink-55); line-height: 1.3; }
+.choice.is-chosen { border-color: var(--copper); background: var(--copper-tint); }
 .choice.is-chosen .choice-box { background: var(--copper); border-color: var(--copper); }
 .choice.is-chosen .choice-box::after { content: "✓"; color: var(--paper); font-size: var(--fs-xs); }
 
-/* ── Products ────────────────────────────────────────────────────────────── */
+/* ── One product, one screen ─────────────────────────────────────────────
+   Two columns so the terms can run full height beside a fixed side panel
+   that carries the price and the two answers. Everything is visible at once;
+   nothing is behind a disclosure. */
+.pscreen { display: grid; grid-template-columns: 1fr 16rem; gap: var(--s5); align-items: start; }
+.ps-main { min-width: 0; }
+.ps-count {
+  margin-left: auto; font-size: var(--fs-xs); letter-spacing: 0;
+  text-transform: none; font-weight: 600; color: var(--ink-55);
+}
+.pscreen .display { margin-bottom: var(--s1); max-width: 20ch; }
+.ps-goal { color: var(--copper-deep); }
+.ps-purpose {
+  font-size: var(--fs-base); line-height: 1.4; color: var(--ink-70);
+  margin: 0 0 var(--s3); max-width: 90ch;
+}
+.ps-terms { margin: 0; columns: 2; column-gap: var(--s6); }
+.ps-terms > div { break-inside: avoid; margin-bottom: var(--s2); }
+.ps-terms dt {
+  font-size: var(--fs-title); font-weight: 600; font-family: var(--font-serif);
+  line-height: 1.25;
+}
+.ps-terms dd {
+  margin: 0; font-size: var(--fs-base); line-height: 1.4; color: var(--ink-70);
+}
+.ps-full {
+  display: block; margin-top: var(--s2); font-size: var(--fs-xs);
+  color: var(--copper-deep); text-underline-offset: 3px;
+}
+
+.ps-side { display: flex; flex-direction: column; gap: var(--s3); }
+.ps-price {
+  background: var(--cream); border-left: var(--bw-accent) solid var(--copper);
+  padding: var(--s2) var(--s3);
+}
+.ps-price-label {
+  display: block; font-size: var(--fs-xs); letter-spacing: var(--track-ui);
+  text-transform: uppercase; font-weight: 700; color: var(--ink-55);
+}
+.ps-price-total {
+  display: block; font-family: var(--font-serif); font-size: var(--fs-price);
+  line-height: 1.1; margin-top: var(--s1);
+}
+.ps-price-month { display: block; font-size: var(--fs-base); color: var(--ink-70); margin-top: var(--s1); }
+.ps-price-term { display: block; font-size: var(--fs-xs); color: var(--ink-55); margin-top: var(--s2); }
+
+.ps-decide { border-top: var(--bw) solid var(--line); padding-top: var(--s2); }
+.ps-decide-ask { margin: 0 0 var(--s2); font-size: var(--fs-base); font-weight: 600; }
+.ps-side .decision { flex-direction: column; align-items: stretch; gap: var(--s3); }
+/* ── The neutral pair ─────────────────────────────────────────────────────
+   Include and I'll manage this are drawn with equal weight. Neither is
+   pre-selected, neither is styled as the default, and the one not taken is
+   never called declined anywhere in the interface. */
+.decision { display: flex; flex-wrap: wrap; gap: var(--s3); }
+.decision-option {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: var(--tap); min-width: 12rem; padding: var(--s2) var(--s4);
+  font-size: var(--fs-base); background: var(--paper); color: inherit;
+  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-md);
+  transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.decision-mark {
+  width: 1.1rem; height: 1.1rem; flex: 0 0 auto; margin-right: var(--s2);
+  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
+  display: inline-grid; place-items: center;
+}
+.decision-option.is-chosen { border-color: var(--copper); background: var(--copper-tint); }
+.decision-option.is-chosen .decision-mark { background: var(--copper); border-color: var(--copper); }
+.decision-option.is-chosen .decision-mark::after { content: "✓"; color: var(--paper); font-size: var(--fs-xs); }
+
+/* ── Product configuration ────────────────────────────────────────────────
+   The options that change what a product costs sit with it, and each states
+   its own cost: an option that silently adds to the total is the thing a
+   customer discovers at signing. */
+.config { border: 0; margin: 0; padding: 0; }
+.config legend { padding: 0; font-size: var(--fs-base); font-weight: 700; }
+.config-row { display: flex; align-items: center; gap: var(--s2); min-height: var(--tap); }
+.config-row input { width: 1.333rem; height: 1.333rem; flex: 0 0 auto; accent-color: var(--copper); }
+.config-row label {
+  font-size: var(--fs-base); line-height: 1.3; cursor: pointer;
+  flex: 1; display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s2); min-height: var(--tap);
+}
+.config-label { min-width: 0; }
+.config-cost { color: var(--ink-55); flex: 0 0 auto; text-align: right; }
+
+.ps-side .decision-option { min-width: 0; width: 100%; }
+.ps-side .config { margin: 0; padding: 0; border: 0; }
+
 .goal-section { margin-bottom: var(--s6); scroll-margin-top: var(--s4); }
 .goal-head {
-  font-family: var(--font-serif); font-size: var(--fs-md); font-weight: 600;
+  font-family: var(--font-serif); font-size: var(--fs-title); font-weight: 600;
   margin: 0 0 var(--s3); padding-bottom: var(--s2);
   border-bottom: var(--bw) solid var(--line);
   display: flex; align-items: baseline; gap: var(--s2);
@@ -283,88 +379,6 @@ button { cursor: pointer; }
 .goal-head::before {
   content: ""; width: 1.02rem; height: 3px; background: var(--copper); flex: 0 0 auto;
 }
-
-.products { display: flex; flex-direction: column; gap: var(--s4); }
-.product {
-  background: var(--paper); border: var(--bw) solid var(--line);
-  border-left: var(--bw-accent) solid var(--line);
-  border-radius: var(--r-md); box-shadow: var(--shadow-card);
-  transition: border-color var(--dur) var(--ease);
-}
-.product.is-decided { border-left-color: var(--copper); }
-
-.product-main {
-  display: grid; grid-template-columns: 1fr auto; gap: var(--s4);
-  padding: var(--s4) var(--s4) var(--s3); align-items: start;
-}
-.product-text { min-width: 0; }
-.product-name {
-  font-family: var(--font-serif); font-size: var(--fs-lg); font-weight: 500;
-  line-height: var(--lh-heading); margin: 0;
-}
-.product-purpose {
-  font-size: var(--fs-base); color: var(--ink-70); line-height: var(--lh-body);
-  margin: var(--s2) 0 0; max-width: 58ch;
-}
-
-.product-price { margin: 0; text-align: right; min-width: 13rem; }
-.price-total {
-  display: block; font-family: var(--font-serif); font-size: var(--fs-xl);
-  line-height: 1.1;
-}
-.price-month { display: block; font-size: var(--fs-xs); color: var(--ink-70); margin-top: var(--s1); }
-.price-term { display: block; font-size: var(--fs-xs); color: var(--ink-55); margin-top: var(--s2); max-width: 22ch; margin-left: auto; }
-
-.config { border: 0; margin: 0 var(--s4) var(--s3); padding: var(--s3) 0 0; border-top: var(--bw) solid var(--line-soft); }
-.config legend { padding: 0; font-size: var(--fs-ui); font-weight: 700; }
-.config-row { display: flex; align-items: center; gap: var(--s2); min-height: var(--tap); }
-.config-row input { width: 1.511rem; height: 1.511rem; flex: 0 0 auto; accent-color: var(--copper); }
-.config-row label {
-  font-size: var(--fs-ui); line-height: var(--lh-body); cursor: pointer;
-  flex: 1; display: flex; align-items: center; min-height: var(--tap);
-}
-.config-cost { color: var(--ink-55); }
-
-.product-actions {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-  gap: var(--s3); padding: 0 var(--s4) var(--s4);
-}
-.decision { display: flex; flex-wrap: wrap; gap: var(--s3); }
-.decision-option {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-height: var(--tap); min-width: 13rem; padding: var(--s2) var(--s4);
-  font-size: var(--fs-ui); background: var(--paper); color: inherit;
-  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-md);
-  transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
-}
-.decision-mark {
-  width: 1.19rem; height: 1.19rem; flex: 0 0 auto; margin-right: var(--s2);
-  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
-  display: inline-grid; place-items: center;
-}
-/* Both decisions get the same treatment. Neither is the default and neither is
-   styled as the better answer. */
-.decision-option.is-chosen { border-color: var(--copper); background: var(--copper-tint); }
-.decision-option.is-chosen .decision-mark { background: var(--copper); border-color: var(--copper); }
-.decision-option.is-chosen .decision-mark::after { content: "✓"; color: var(--paper); font-size: var(--fs-xs); }
-
-.expander {
-  border: 0; background: none; min-height: var(--tap); padding: var(--s2) 0;
-  font-size: var(--fs-xs); color: var(--ink-70);
-  text-decoration: underline; text-underline-offset: 3px;
-}
-
-.product-detail {
-  border-top: var(--bw) solid var(--line-soft); padding: var(--s4);
-  background: var(--cream-2);
-}
-.product-detail dl {
-  margin: 0; display: grid; grid-template-columns: 13rem 1fr;
-  gap: var(--s3) var(--s4); font-size: var(--fs-base); line-height: var(--lh-body);
-}
-.product-detail dt { font-weight: 700; color: var(--ink); }
-.product-detail dd { margin: 0; color: var(--ink-70); }
-.product-detail a { color: var(--copper-deep); }
 
 /* ── Notes ───────────────────────────────────────────────────────────────── */
 .note {
@@ -379,7 +393,7 @@ button { cursor: pointer; }
   border: var(--bw) solid var(--line); border-left: var(--bw-accent) solid var(--copper);
   border-radius: var(--r-md); padding: var(--s5); font-size: var(--fs-base);
 }
-.note--panel h2 { font-family: var(--font-serif); font-size: var(--fs-lg); font-weight: 500; margin: 0 0 var(--s3); }
+.note--panel h2 { font-family: var(--font-serif); font-size: var(--fs-title); font-weight: 500; margin: 0 0 var(--s3); }
 .note--panel p { margin: 0 0 var(--s3); color: var(--ink-70); }
 .note--panel p:last-child { margin: 0; }
 
@@ -387,37 +401,42 @@ button { cursor: pointer; }
 .panel {
   max-width: var(--content); background: var(--paper);
   border: var(--bw) solid var(--line); border-radius: var(--r-md);
-  box-shadow: var(--shadow-card); padding: var(--s5); margin-bottom: var(--s4);
+  box-shadow: var(--shadow-card); padding: var(--s3) var(--s4); margin-bottom: var(--s3);
 }
+/* Side by side: stacked, the plan summary and its payment together ran to
+   twice the height of a 768px viewport. */
+.review { display: grid; grid-template-columns: 1fr 21rem; gap: var(--s4); align-items: start; }
+.review .panel { margin: 0; max-width: none; }
+.done--split { display: grid; grid-template-columns: 21rem 1fr; gap: var(--s6); align-items: start; }
 .panel-head {
   font-size: var(--fs-xs); letter-spacing: var(--track-wide);
   text-transform: uppercase; font-weight: 800; color: var(--ink-55);
-  margin: 0 0 var(--s4); padding-bottom: var(--s2);
+  margin: 0 0 var(--s3); padding-bottom: var(--s1);
   border-bottom: var(--bw) solid var(--line-soft);
 }
 .panel-foot {
-  margin: var(--s4) 0 0; padding-top: var(--s3);
+  margin: var(--s3) 0 0; padding-top: var(--s2);
   border-top: var(--bw) solid var(--line-soft);
   font-size: var(--fs-base); color: var(--ink-70); line-height: var(--lh-body);
 }
 .panel-foot--plain { border-top: 0; padding-top: 0; margin-top: var(--s2); }
-.panel--ack { text-align: left; margin-top: var(--s6); }
-.panel--ack p { font-size: var(--fs-base); color: var(--ink-70); line-height: var(--lh-body); margin: 0 0 var(--s3); }
+.panel--ack { text-align: left; margin-top: 0; }
+.panel--ack p { font-size: var(--fs-base); color: var(--ink-70); line-height: 1.4; margin: 0 0 var(--s2); }
 .ack-meta { font-size: var(--fs-xs); color: var(--ink-55); border-top: var(--bw) solid var(--line-soft); padding-top: var(--s3); }
 
 .terms {
-  margin: 0 0 var(--s5); display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--s4);
+  margin: 0 0 var(--s4); display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--s3);
 }
 /* A label that wraps ("Annual percentage rate") must not drop its own value
    below the other two, so each cell fills the row and pins its value down. */
 .terms > div { display: flex; flex-direction: column; justify-content: space-between; gap: var(--s1); }
 .terms dt { font-size: var(--fs-xs); letter-spacing: var(--track-ui); text-transform: uppercase; font-weight: 700; color: var(--ink-55); }
-.terms dd { margin: 0; font-family: var(--font-serif); font-size: var(--fs-lg); line-height: var(--lh-heading); }
+.terms dd { margin: 0; font-family: var(--font-serif); font-size: var(--fs-title); line-height: var(--lh-heading); }
 .terms--inline { margin: var(--s4) 0 0; padding-top: var(--s3); border-top: var(--bw) solid var(--line-soft); }
-.terms--inline dd { font-size: var(--fs-md); }
+.terms--inline dd { font-size: var(--fs-title); }
 
-.figures { border-top: var(--bw) solid var(--line); padding-top: var(--s5); display: flex; flex-wrap: wrap; gap: var(--s6); justify-content: space-between; }
+.figures { border-top: var(--bw) solid var(--line); padding-top: var(--s4); display: flex; flex-wrap: wrap; gap: var(--s5); justify-content: space-between; }
 .panel > .figures:first-child { border-top: 0; padding-top: 0; }
 .figure { margin: 0; }
 .figure-label { display: block; font-size: var(--fs-xs); letter-spacing: var(--track-ui); text-transform: uppercase; font-weight: 700; color: var(--ink-55); }
@@ -436,7 +455,7 @@ button { cursor: pointer; }
 .summary { list-style: none; margin: 0; padding: 0; }
 .summary-line {
   display: flex; justify-content: space-between; align-items: baseline;
-  gap: var(--s4); padding: var(--s3) 0; border-bottom: var(--bw) solid var(--line-soft);
+  gap: var(--s3); padding: var(--s1) 0; border-bottom: var(--bw) solid var(--line-soft);
 }
 .summary-line:last-child { border-bottom: 0; }
 .summary-what b { display: block; font-size: var(--fs-base); }
@@ -450,37 +469,41 @@ button { cursor: pointer; }
 .tag--own { background: var(--cream); color: var(--ink-70); border: var(--bw) solid var(--line); }
 
 /* ── Opening screen goals ────────────────────────────────────────────────── */
-.goals { list-style: none; margin: 0 0 var(--s6); padding: 0; max-width: 46rem; }
-.goals li { padding: var(--s3) 0 var(--s3) var(--s4); border-left: var(--bw-accent) solid var(--copper); margin-bottom: var(--s3); }
-.goals b { display: block; font-family: var(--font-serif); font-size: var(--fs-md); font-weight: 500; line-height: var(--lh-heading); }
-.goals span { display: block; font-size: var(--fs-base); color: var(--ink-70); margin-top: var(--s1); line-height: var(--lh-body); }
+.goals {
+  list-style: none; margin: 0 0 var(--s4); padding: 0; max-width: 62rem;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s4);
+}
+.goals li { padding: 0 0 0 var(--s3); border-left: var(--bw-accent) solid var(--copper); margin: 0; }
+.goals b { display: block; font-family: var(--font-serif); font-size: var(--fs-title); font-weight: 500; line-height: 1.25; }
+.goals span { display: block; font-size: var(--fs-base); color: var(--ink-70); margin-top: var(--s1); line-height: 1.4; }
 
 /* ── Completion ──────────────────────────────────────────────────────────── */
 .done { max-width: var(--content); }
-.done-mark { color: var(--copper); font-size: 2.21rem; letter-spacing: -0.77rem; transform: rotate(180deg); display: inline-block; margin: 0 0 var(--s4); }
-.done-head { font-family: var(--font-serif); font-size: var(--fs-2xl); font-weight: 400; line-height: var(--lh-tight); margin: 0 0 var(--s2); max-width: 20ch; }
-.done-sub { font-family: var(--font-serif); font-style: italic; font-size: var(--fs-md); color: var(--ink-70); margin: 0 0 var(--s6); }
+.done-mark { color: var(--copper); font-size: 1.7rem; letter-spacing: -0.6rem; transform: rotate(180deg); display: inline-block; margin: 0 0 var(--s2); }
+.done-head { font-family: var(--font-serif); font-size: var(--fs-head); font-weight: 400; line-height: var(--lh-tight); margin: 0 0 var(--s2); max-width: 20ch; }
+.done-sub { font-family: var(--font-serif); font-style: italic; font-size: var(--fs-title); color: var(--ink-70); margin: 0 0 var(--s4); }
 
 .arc { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: var(--s4); max-width: 46rem; }
-.arc li { border-top: 3px solid var(--line); padding-top: var(--s3); display: flex; flex-direction: column; gap: var(--s1); }
+.arc li { border-top: 3px solid var(--line); padding-top: var(--s2); display: flex; flex-direction: column; gap: 0; }
 .arc-when { font-size: var(--fs-xs); letter-spacing: var(--track-wide); text-transform: uppercase; font-weight: 800; color: var(--ink-55); }
 .arc-what { font-size: var(--fs-xs); color: var(--ink-70); line-height: var(--lh-body); }
 .arc-now { border-top-color: var(--copper); border-top-width: 6px; }
 .arc-now .arc-when { color: var(--ink); }
-.arc-now .arc-what { font-family: var(--font-serif); font-size: var(--fs-md); color: var(--ink); line-height: var(--lh-heading); }
+.arc-now .arc-what { font-family: var(--font-serif); font-size: var(--fs-title); color: var(--ink); line-height: var(--lh-heading); }
 
 /* ── Actions ─────────────────────────────────────────────────────────────── */
 .actions {
   position: sticky; bottom: 0; z-index: 4;
   display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--s4);
-  padding: var(--s4) var(--s7); background: var(--paper);
+  min-height: var(--actions-h);
+  padding: var(--s3) var(--s7); background: var(--paper);
   border-top: var(--bw) solid var(--line); box-shadow: var(--shadow-sticky);
 }
 .actions-status { margin: 0; text-align: center; font-size: var(--fs-xs); color: var(--ink-55); line-height: var(--lh-body); }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
   min-height: var(--tap); padding: var(--s2) var(--s5);
-  font-size: var(--fs-ui); letter-spacing: var(--track-ui); font-weight: 700;
+  font-size: var(--fs-base); letter-spacing: var(--track-ui); font-weight: 700;
   border-radius: var(--r-md); white-space: nowrap;
   transition: background-color var(--dur) var(--ease);
 }
@@ -503,7 +526,7 @@ button { cursor: pointer; }
 .colophon p { margin: 0; }
 .colophon b { display: block; font-size: var(--fs-xs); letter-spacing: var(--track-wide); text-transform: uppercase; }
 .colophon span, .colophon small { display: block; font-size: var(--fs-xs); color: var(--ink-40); margin-top: var(--s1); line-height: var(--lh-body); }
-.colophon-brand b { font-family: var(--font-serif); font-size: var(--fs-md); text-transform: none; letter-spacing: 0; }
+.colophon-brand b { font-family: var(--font-serif); font-size: var(--fs-title); text-transform: none; letter-spacing: 0; }
 
 /* ── Narrower than a desk monitor ────────────────────────────────────────
    The brand panels give way before the type does, so the progress rail keeps
@@ -561,7 +584,7 @@ button { cursor: pointer; }
   .rail { display: block; padding: var(--s4) var(--s3); }
   .rail-photo { height: 6.8rem; margin: var(--s3) 0; }
   .plate { margin: var(--s3) 0; padding: var(--s3); }
-  .plate-name { font-size: var(--fs-md); }
+  .plate-name { font-size: var(--fs-title); }
   .rail-note { display: none; }
   .rail-deal { grid-template-columns: 1fr auto; padding: var(--s3) 0 0; }
   .railnav { margin-top: var(--s3); padding-top: var(--s3); }
@@ -573,8 +596,8 @@ button { cursor: pointer; }
   }
   .railnav a:hover, .railnav a:focus-visible { border-bottom-color: var(--copper); }
   .stage-inner { padding: var(--s4) var(--s3) var(--s5); }
-  .display { font-size: var(--fs-2xl); }
-  .display--sm { font-size: var(--fs-lg); }
+  .display { font-size: var(--fs-head); }
+  .display--sm { font-size: var(--fs-title); }
   .figures { display: block; }
   .figure-value { font-size: 2.55rem; }
   .figure-split { margin-top: var(--s4); min-width: 0; }
@@ -587,4 +610,108 @@ button { cursor: pointer; }
   .actions { grid-template-columns: 1fr 1fr; padding: var(--s3); }
   .actions-status { grid-column: 1 / 3; order: 3; }
   .terms { grid-template-columns: 1fr; gap: var(--s3); }
+}
+
+/* From a landscape tablet up, a screen is exactly one viewport: the masthead
+   and the control bar are fixed bands and the work fits between them. The
+   work area is `auto` rather than `hidden` on purpose -- a reader who has
+   raised their browser font past what the budget assumed gets a scrollbar on
+   that pane, which is recoverable. Clipping the Continue button is not. */
+@media (min-width: 1024px) {
+  html, body { height: 100%; overflow: hidden; }
+  .app { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+  .masthead { flex: 0 0 auto; min-height: var(--masthead-h); }
+  .frame { flex: 1 1 auto; min-height: 0; }
+  .rail { overflow: auto; }
+  .stage { min-height: 0; }
+  .stage-inner { flex: 1 1 auto; min-height: 0; overflow: auto; }
+  .actions { flex: 0 0 auto; position: static; box-shadow: none; }
+  /* Decorative, and there is no room for it inside one viewport. */
+  .colophon { display: none; }
+}
+
+/* ── Short viewports ─────────────────────────────────────────────────────
+   Last in the file on purpose. These override base rules at equal
+   specificity, so source order is what makes them win. */
+@media (max-height: 820px) {
+  .stage-inner { padding: var(--s2) var(--s6); }
+  .rail { padding-bottom: var(--s3); }
+  .railnav button { padding: 0.15rem var(--s2); }
+  .ps-terms > div { margin-bottom: var(--s1); }
+  .pscreen .display { line-height: 1.15; }
+  .review .panel, .panel--ack { padding: var(--s3); }
+  .eyebrow { margin-bottom: var(--s1); }
+  .display { margin-bottom: var(--s2); }
+  .lede { margin-bottom: var(--s3); }
+  .panel-head { margin-bottom: var(--s2); }
+  .summary-line { padding: 0.15rem 0; }
+  .panel-foot { margin-top: var(--s2); padding-top: var(--s1); }
+  .figures { padding-top: var(--s3); }
+  .done-sub { margin-bottom: var(--s3); }
+  .ps-purpose { margin-bottom: var(--s2); }
+  .ps-side { gap: var(--s2); }
+  .summary-what small { line-height: 1.3; }
+  .review { gap: var(--s3); }
+  .terms--inline { margin-top: var(--s2); padding-top: var(--s2); }
+}
+
+/* Landscape tablets. The rail keeps its job but gives most of its width back,
+   because below about 1200px every pixel the rail holds is a wrapped line of
+   terms somewhere else, and a wrapped line is height. */
+@media (max-width: 1200px) {
+  .frame { grid-template-columns: 13.5rem 1fr; }
+  .stage-inner { padding-left: var(--s4); padding-right: var(--s4); }
+  .actions { padding-left: var(--s4); padding-right: var(--s4); }
+  .pscreen { grid-template-columns: 1fr 14rem; gap: var(--s4); }
+  .review { grid-template-columns: 1fr 17rem; }
+  .done--split { grid-template-columns: 17rem 1fr; gap: var(--s4); }
+  .goals { gap: var(--s3); }
+  .rail-deal { grid-template-columns: 1fr auto; }
+  .plate-vin { display: none; }
+}
+
+/* The 4:3 tablet, where 768px of height meets 1024px of width. The rail is
+   down to what identifies the machine and what the deal already fixed. */
+@media (max-width: 1100px) {
+  .frame { grid-template-columns: 11.5rem 1fr; }
+  .rail { padding: var(--s3); }
+  .rail-note { display: none; }
+  .pscreen { grid-template-columns: 1fr 13rem; }
+  .ps-terms { column-gap: var(--s4); }
+  .done--split { grid-template-columns: 15rem 1fr; }
+  .review { grid-template-columns: 1fr 15rem; }
+  .goals { gap: var(--s2); }
+  .goals span { line-height: 1.3; }
+  .body, .body--close { margin-bottom: var(--s2); line-height: 1.45; }
+  .ps-terms > div { margin-bottom: 0; }
+  .ps-terms dd { line-height: 1.35; }
+  .panel { padding: var(--s3); }
+  .arc li { padding-top: var(--s1); }
+  .lede { margin-bottom: var(--s2); }
+  .display { margin-bottom: var(--s2); }
+  .panel--ack p { margin-bottom: var(--s1); line-height: 1.35; }
+  .summary-what small { line-height: 1.25; }
+  .figure-split > div { padding: 0; }
+  .ack-meta { line-height: 1.3; }
+  .done-sub { margin-bottom: var(--s2); }
+  .panel-head { margin-bottom: var(--s1); }
+  .arc-what { line-height: 1.35; }
+  .panel-foot { margin-top: var(--s1); }
+  .done-mark { margin-bottom: var(--s1); }
+  .ack-meta { padding-top: var(--s1); }
+  .arc { gap: var(--s2); }
+  .ps-side { gap: var(--s2); }
+  .ps-side .decision { gap: var(--s2); }
+  .ps-price-total { line-height: 1.05; }
+  .ps-full { margin-top: var(--s1); }
+}
+
+@media (max-height: 900px) {
+  /* Atmosphere is the first thing to go when the viewport is short; the deal
+     facts above it are not. */
+  .rail-mood { display: none; }
+  /* Three stacked lines of strapline cost 35px of masthead on every screen.
+     It is decoration; the budget is not. */
+  .strapline { display: none; }
+  .masthead { grid-template-columns: auto 1fr; }
 }

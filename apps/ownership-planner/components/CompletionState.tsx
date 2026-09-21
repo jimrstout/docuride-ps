@@ -19,29 +19,31 @@ export default function CompletionState({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="done">
-      <p className="done-mark" aria-hidden="true">⌃⌃</p>
-      <h1 className="done-head">You bought something worth owning.</h1>
-      <p className="done-sub">Let&apos;s help you own it well.</p>
+    <div className="done done--split">
+      <div>
+        <p className="done-mark" aria-hidden="true">⌃⌃</p>
+        <h1 className="done-head">You bought something worth owning.</h1>
+        <p className="done-sub">Let&apos;s help you own it well.</p>
 
-      <ol className="arc" aria-label="Where this plan sits">
-        <li>
-          <span className="arc-when">Today</span>
-          <span className="arc-what">{vehicleName || "Your machine"} is yours.</span>
-        </li>
-        <li className="arc-now" aria-current="step">
-          <span className="arc-when">Your ownership</span>
-          <span className="arc-what">
-            {term !== null ? `The next ${term} months of using it.` : "The years you'll spend using it."}
-          </span>
-        </li>
-        <li>
-          <span className="arc-when">What&apos;s next</span>
-          <span className="arc-what">More life ahead.</span>
-        </li>
-      </ol>
+        <ol className="arc" aria-label="Where this plan sits">
+          <li>
+            <span className="arc-when">Today</span>
+            <span className="arc-what">{vehicleName || "Your machine"} is yours.</span>
+          </li>
+          <li className="arc-now" aria-current="step">
+            <span className="arc-when">Your ownership</span>
+            <span className="arc-what">
+              {term !== null ? `The next ${term} months of using it.` : "The years you'll spend using it."}
+            </span>
+          </li>
+          <li>
+            <span className="arc-when">What&apos;s next</span>
+            <span className="arc-what">More life ahead.</span>
+          </li>
+        </ol>
+      </div>
 
-      {children}
+      <div>{children}</div>
     </div>
   );
 }

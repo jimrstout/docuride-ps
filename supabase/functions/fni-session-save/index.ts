@@ -13,10 +13,15 @@
 //   decisions    - [{ product_code, disposition, retail_price, dealer_cost,
 //                     customer_price, product_name, product_type,
 //                     rate_unique_id, term_months, term_miles, deductible,
-//                     selected_options, rate_snapshot }]
+//                     selected_options, rate_snapshot, presented_at }]
 //   discovery    - answers to the ownership questions (optional)
 //   mode         - Self-Guided | Collaborative | Staff-Presented (optional)
-//   presented_at - ISO timestamp the products were put in front of the customer
+//   presented_at - ISO timestamp the products were put in front of the customer.
+//                  A decision may carry its own presented_at, which wins: the
+//                  planner now shows one product per screen, so each was put in
+//                  front of the customer at a different moment, and a single
+//                  session-level stamp would flatten that. The session-level
+//                  value stays as the fallback for older clients.
 //   dx1_photos   - cached VIN photo lookup result (optional; written by the
 //                  Next.js photo route, which holds the DX1 key)
 //   complete     - true when the customer has finished the plan
@@ -59,6 +64,9 @@ interface Decision {
   customer_price?: number | null;
   selected_options?: unknown;
   rate_snapshot?: unknown;
+  /** When THIS product was put in front of the customer. Overrides the
+      session-level presented_at for this row. */
+  presented_at?: string | null;
 }
 
 interface SaveRequest {
@@ -91,6 +99,13 @@ function num(v: unknown): number | null {
 function int(v: unknown): number | null {
   const n = num(v);
   return n === null ? null : Math.round(n);
+}
+
+/** A usable ISO timestamp, or the fallback. Never an invalid date. */
+function isoOr(v: unknown, fallback: string): string {
+  if (typeof v !== "string" || v.trim() === "") return fallback;
+  const t = Date.parse(v);
+  return Number.isFinite(t) ? new Date(t).toISOString() : fallback;
 }
 
 serve(async (req: Request) => {
@@ -204,7 +219,9 @@ serve(async (req: Request) => {
           customer_price: included ? num(d.customer_price ?? d.retail_price) : null,
           selected_options: d.selected_options ?? null,
           rate_snapshot: d.rate_snapshot ?? null,
-          presented_at: presentedAt,
+          // Per product where the client knows it, session-level otherwise.
+          // Anything unparseable falls back rather than writing a bad stamp.
+          presented_at: isoOr(d.presented_at, presentedAt),
           selected_at: new Date().toISOString(),
         };
       });

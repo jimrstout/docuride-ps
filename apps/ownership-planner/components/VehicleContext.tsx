@@ -68,15 +68,16 @@ export default function VehicleContext({
       )}
 
       <p className="rail-note">
-        These terms come from your finalized deal. If anything needs to change,
-        your dealership updates the deal and this plan is refreshed.
+        From your finalized deal. Your dealership updates the deal if anything
+        needs to change.
       </p>
 
       {children}
 
       {/* Atmospheric, and of the right kind of country for what they bought.
           Never captioned as their machine. The quote stands on its own until
-          real photography exists -- see PHOTOGRAPHY_READY in lib/profiles. */}
+          real photography exists -- see PHOTOGRAPHY_READY in lib/profiles.
+          It is the first thing the stylesheet drops when height is short. */}
       <figure className="rail-mood">
         {PHOTOGRAPHY_READY && <img src={profile.railImage} alt={profile.railAlt} />}
         <figcaption>{profile.tagline}</figcaption>

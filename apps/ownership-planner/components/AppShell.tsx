@@ -43,6 +43,9 @@ export default function AppShell({
         </main>
       </div>
 
+      {/* Decorative, and it cannot share a 768px viewport with the work and
+          the control bar. The stylesheet shows it only where scrolling is
+          allowed, which is phones. */}
       <footer className="colophon">
         <p className="colophon-brand">
           <b>All Seasons</b>

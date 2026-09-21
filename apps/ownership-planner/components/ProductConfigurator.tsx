@@ -40,10 +40,10 @@ export default function ProductConfigurator({
               onChange={(e) => onToggle(o.code, e.target.checked)}
             />
             <label htmlFor={id}>
-              {o.label}
+              <span className="config-label">{o.label}</span>
               {o.cost_delta > 0 && (
                 <span className="config-cost">
-                  {" "}adds {money(o.cost_delta)}
+                  adds {money(o.cost_delta)}
                   <span className="sr-only"> to {productName}</span>
                 </span>
               )}

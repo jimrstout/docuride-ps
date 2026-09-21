@@ -42,7 +42,7 @@ import AppShell from "@/components/AppShell";
 import ProgressStepper from "@/components/ProgressStepper";
 import VehicleContext from "@/components/VehicleContext";
 import OwnershipQuestion from "@/components/OwnershipQuestion";
-import ProductRow, { type Presentable } from "@/components/ProductRow";
+import ProductScreen, { type Presentable } from "@/components/ProductScreen";
 import ActionFooter, { type SaveState } from "@/components/ActionFooter";
 import PlanSummary, { type PlanLine } from "@/components/PlanSummary";
 import CompletionState from "@/components/CompletionState";
@@ -68,9 +68,27 @@ const EYEBROWS = [
   "What you decided",
 ];
 
+/**
+ * A screen is what fits in one viewport, and the flow is a list of them.
+ *
+ * Steps and screens are no longer the same thing. A step is what the customer
+ * sees in the progress rail; several screens can belong to one. Discovery is
+ * two screens because two question groups do not fit in 768px with the control
+ * bar visible, and Care & Protection is one screen per product for the same
+ * reason -- and because a product deserves a screen to itself anyway.
+ */
+type ScreenSpec =
+  | { kind: "intro"; step: 0 }
+  | { kind: "question"; step: 0; qIndex: number }
+  | { kind: "product"; step: 1; pIndex: number }
+  | { kind: "empty"; step: 1 }
+  | { kind: "payment"; step: 2 }
+  | { kind: "plan"; step: 3 }
+  | { kind: "ack"; step: 4 };
+
 export default function Planner({ initial }: { initial: SessionPayload }) {
   const { session } = initial;
-  const [step, setStep] = useState(0);
+  const [at, setAt] = useState(0);
   const [furthest, setFurthest] = useState(0);
 
   const [decisions, setDecisions] = useState<Record<string, Disposition>>(() => {
@@ -101,17 +119,6 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     };
   });
 
-  // The opening screen frames what follows. It sits inside step 1 rather than
-  // being a step of its own: "Your Ownership" is what it is about, and
-  // numbering it separately would tell the buyer the process is longer than it
-  // is for a screen that asks them nothing. A resumed session skips it.
-  const [intro, setIntro] = useState(
-    () =>
-      (initial.selections?.length ?? 0) === 0 &&
-      ((initial.session.discovery?.use_context as string[]) ?? []).length === 0
-  );
-
-  const [open, setOpen] = useState<Record<string, boolean>>({});
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [ackState, setAckState] = useState<"idle" | "working" | "done" | "error">("idle");
   const [photos, setPhotos] = useState<string[]>(initial.photos ?? []);
@@ -177,22 +184,43 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     return { presentable: ok, withheld: bad, unmatched: missing };
   }, [initial.offer, copyByCode, allAnswers]);
 
-  // Grouped under the goal each product serves, in the order relevance put
-  // them. One objective at a time reads as a plan; one long list reads as a
-  // menu, which is the thing this is not.
-  const groups = useMemo(() => {
-    const out: { goal: string; id: string; items: Presentable[] }[] = [];
-    for (const p of presentable) {
-      const goal = p.copy.goal || "Your options";
-      let g = out.find((x) => x.goal.toLowerCase() === goal.toLowerCase());
-      if (!g) {
-        g = { goal, id: `goal-${out.length + 1}`, items: [] };
-        out.push(g);
-      }
-      g.items.push(p);
-    }
+  // The flow, as a list of screens. Rebuilt when the product list changes,
+  // which is why the customer's position is kept as an index into it rather
+  // than as a step number.
+  const screens: ScreenSpec[] = useMemo(() => {
+    const out: ScreenSpec[] = [{ kind: "intro", step: 0 }];
+    profile.questions.forEach((_, qIndex) => out.push({ kind: "question", step: 0, qIndex }));
+    if (presentable.length === 0) out.push({ kind: "empty", step: 1 });
+    else presentable.forEach((_, pIndex) => out.push({ kind: "product", step: 1, pIndex }));
+    out.push({ kind: "payment", step: 2 }, { kind: "plan", step: 3 }, { kind: "ack", step: 4 });
     return out;
-  }, [presentable]);
+  }, [profile.questions, presentable]);
+
+  const screen = screens[Math.min(at, screens.length - 1)];
+  const step = screen.step;
+
+  // When each product was actually put in front of this customer.
+  //
+  // One product to a screen means there is no single moment the set was
+  // presented, so each is stamped the first time its own screen is shown and
+  // the stamp rides with that product's decision. A resumed session keeps
+  // whatever was recorded the first time round -- the customer saw it then,
+  // and re-stamping it now would overwrite the fact with the retelling.
+  const shownAt = useRef<Record<string, string>>(
+    Object.fromEntries(
+      (initial.selections ?? [])
+        .filter((sel) => sel.presented_at)
+        .map((sel) => [sel.provider_product_id, sel.presented_at as string])
+    )
+  );
+
+  useEffect(() => {
+    if (screen.kind !== "product") return;
+    const code = presentable[screen.pIndex]?.offer.product_code;
+    if (code && !shownAt.current[code]) {
+      shownAt.current[code] = new Date().toISOString();
+    }
+  }, [screen, presentable]);
 
   // ── Payment basis ───────────────────────────────────────────────────────
   //
@@ -246,6 +274,10 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
               customer_price: price,
               selected_options: chosen,
               rate_snapshot: p.offer.raw,
+              // The moment this product's own screen was shown. Null until it
+              // has been, so a product the customer has not reached is not
+              // recorded as presented.
+              presented_at: shownAt.current[p.offer.product_code] ?? null,
             };
           }),
           discovery: {
@@ -316,7 +348,6 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   }, [save, session.id]);
 
   const decided = presentable.filter((p) => decisions[p.offer.product_code]).length;
-  const allDecided = presentable.length > 0 && decided === presentable.length;
 
   const vehicleName = [
     session.vehicle.year,
@@ -328,11 +359,27 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     .join(" ");
 
   const goTo = useCallback((next: number) => {
-    setStep(next);
+    setAt(next);
     setFurthest((f) => Math.max(f, next));
-    setIntro(false);
-    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "auto" });
   }, []);
+
+  /** The first screen belonging to a step, for the progress rail. */
+  const firstScreenOfStep = useCallback(
+    (target: number) => Math.max(0, screens.findIndex((sc) => sc.step === target)),
+    [screens]
+  );
+
+  // How far into the product run the customer has got. The rail lists every
+  // option so they can see what is coming, but only lets them jump back to one
+  // they have actually been shown -- skipping ahead would put a decision on a
+  // record beside a presented_at that never happened.
+  const furthestProduct = useMemo(() => {
+    let best = -1;
+    screens.slice(0, furthest + 1).forEach((sc) => {
+      if (sc.kind === "product") best = Math.max(best, sc.pIndex);
+    });
+    return best;
+  }, [screens, furthest]);
 
   const planLines: PlanLine[] = presentable.map((p) => ({
     code: p.offer.product_code,
@@ -343,23 +390,26 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   }));
 
   // ── Footer wiring ───────────────────────────────────────────────────────
-  const onBack = () => {
-    if (step === 0) setIntro(true);
-    else goTo(step - 1);
-  };
+  const onBack = () => goTo(Math.max(0, at - 1));
   const onNext = () => {
-    if (step === 0 && intro) {
-      setIntro(false);
-      return;
-    }
-    if (step === 3) void finish();
-    if (step < STEPS.length - 1) goTo(step + 1);
+    if (screen.kind === "plan") void finish();
+    if (at < screens.length - 1) goTo(at + 1);
   };
+
   const nextLabel =
-    step === 0 && intro ? "Begin" : step === 3 ? "Finish & save plan" : "Continue";
+    screen.kind === "intro" ? "Begin"
+    : screen.kind === "plan" ? "Finish & save plan"
+    : "Continue";
+
+  // A product screen will not let the customer past it undecided. Skipping
+  // would record a decision they never made.
+  const undecidedHere =
+    screen.kind === "product" &&
+    !decisions[presentable[screen.pIndex].offer.product_code];
 
   const status =
-    saveState === "saving" ? "Saving…"
+    undecidedHere ? "Choose one to continue"
+    : saveState === "saving" ? "Saving…"
     : saveState === "error" ? "We couldn't save that. We'll keep trying."
     : saveState === "saved" ? "Saved — you can come back to this later"
     : step === 1 && presentable.length > 0 ? `${decided} of ${presentable.length} decided`
@@ -372,14 +422,31 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
       photo={photos[0] ?? null}
       vehicleName={vehicleName}
     >
-      {step === 1 && groups.length > 1 && (
-        <nav className="railnav" aria-label="Sections on this screen">
-          <p className="eyebrow">On this screen</p>
-          <ul>
-            {groups.map((g) => (
-              <li key={g.id}><a href={`#${g.id}`}>{g.goal}</a></li>
-            ))}
-          </ul>
+      {step === 1 && presentable.length > 0 && (
+        <nav className="railnav" aria-label="Your options">
+          <p className="eyebrow">Your options</p>
+          <ol>
+            {presentable.map((p, i) => {
+              const d = decisions[p.offer.product_code];
+              const here = screen.kind === "product" && screen.pIndex === i;
+              const reached = i <= furthestProduct;
+              return (
+                <li key={p.offer.product_code} className={here ? "is-here" : ""}>
+                  <button
+                    type="button"
+                    disabled={!reached}
+                    aria-current={here ? "true" : undefined}
+                    onClick={() => goTo(firstScreenOfStep(1) + i)}
+                  >
+                    <span className="railnav-name">{p.copy.display_name}</span>
+                    <span className="railnav-state">
+                      {d === "Included" ? "Included" : d ? "Managing" : here ? "Deciding" : "—"}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
         </nav>
       )}
     </VehicleContext>
@@ -388,28 +455,35 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   return (
     <AppShell
       stepper={
-        <ProgressStepper steps={STEPS} current={step} furthest={furthest} onGo={goTo} />
+        <ProgressStepper
+          steps={STEPS}
+          current={step}
+          furthest={screens[Math.min(furthest, screens.length - 1)].step}
+          onGo={(target) => goTo(firstScreenOfStep(target))}
+        />
       }
       rail={rail}
       footer={
         <ActionFooter
           onBack={onBack}
-          showBack={!(step === 0 && intro)}
+          showBack={at > 0}
           onNext={onNext}
           nextLabel={nextLabel}
-          showNext={step < STEPS.length - 1}
-          nextDisabled={step === 1 && presentable.length > 0 && !allDecided}
+          showNext={at < screens.length - 1}
+          nextDisabled={undecidedHere}
           status={status}
         />
       }
     >
-      <p className="eyebrow eyebrow--rule">{EYEBROWS[step]}</p>
+      {screen.kind !== "product" && (
+        <p className="eyebrow eyebrow--rule">{EYEBROWS[step]}</p>
+      )}
 
       {/* ── 1a. Opening ──────────────────────────────────────────────────
           Sets the frame before anything is asked. No warnings, and nothing
           about the machine failing: the premise is that they bought something
           worth owning. */}
-      {step === 0 && intro && (
+      {screen.kind === "intro" && (
         <section className="screen">
           <p className="kicker">{vehicleName || "Your vehicle"}</p>
           <h1 className="display">Your vehicle. Your ownership. Your plan.</h1>
@@ -447,140 +521,88 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
         </section>
       )}
 
-      {/* ── 1b. Your Ownership ───────────────────────────────────────────── */}
-      {step === 0 && !intro && (
+      {/* ── 1b. Your Ownership, one question to a screen ───────────────── */}
+      {screen.kind === "question" && (
         <section className="screen">
-          <h1 className="display display--sm">Your plan starts with you.</h1>
+          <h1 className="display">
+            {screen.qIndex === 0 ? "Your plan starts with you." : "And what you want from it."}
+          </h1>
           <p className="lede">
-            Two questions, then we&apos;ll show you the options. All available
-            options are presented either way — your answers only change what
-            comes first.
+            {screen.qIndex === 0
+              ? "All available options are presented either way — your answers only change what comes first."
+              : "Last one. This orders what you see, and nothing else."}
           </p>
 
-          {profile.questions.map((q) => (
-            <OwnershipQuestion
-              key={q.id}
-              question={q}
-              chosen={answers[q.id] ?? []}
-              onToggle={(value) =>
-                setAnswers((a) => {
-                  const cur = a[q.id] ?? [];
-                  return {
-                    ...a,
-                    [q.id]: cur.includes(value)
-                      ? cur.filter((x) => x !== value)
-                      : [...cur, value],
-                  };
-                })
-              }
-            />
-          ))}
+          <OwnershipQuestion
+            question={profile.questions[screen.qIndex]}
+            chosen={answers[profile.questions[screen.qIndex].id] ?? []}
+            onToggle={(value) =>
+              setAnswers((a) => {
+                const id = profile.questions[screen.qIndex].id;
+                const cur = a[id] ?? [];
+                return {
+                  ...a,
+                  [id]: cur.includes(value)
+                    ? cur.filter((x) => x !== value)
+                    : [...cur, value],
+                };
+              })
+            }
+          />
         </section>
       )}
 
-      {/* ── 2. Care & Protection ─────────────────────────────────────────── */}
-      {step === 1 && (
+      {/* ── 2. Care & Protection, one product to a screen ──────────────── */}
+      {screen.kind === "empty" && (
         <section className="screen">
-          <h1 className="display display--sm">Confidence for what&apos;s ahead.</h1>
-          <p className="lede">
-            Neither answer is the right one. Take what fits how you&apos;ll
-            actually own it, and leave the rest.
-          </p>
+          <h1 className="display">Nothing to decide here.</h1>
+          {/* A session can legitimately open with no offers: trailers, electric
+              bicycles, excavators, zero turns and tractors are not ratable. An
+              empty list under a heading promising options would be worse than
+              saying so. */}
+          <div className="note note--panel">
+            <p>
+              Ownership plans aren&apos;t offered on this type of machine. Nothing
+              is missing from your deal and there&apos;s nothing for you to decide.
+            </p>
+            <p>Your dealership can still answer any question about owning it.</p>
+          </div>
+        </section>
+      )}
 
-          {presentable.length === 0 ? (
-            // A session can legitimately open with no offers: trailers,
-            // electric bicycles, excavators, zero turns and tractors are not
-            // ratable. An empty list under a heading promising options would be
-            // worse than saying so.
-            <div className="note note--panel">
-              <h2>There are no ownership plans for this machine.</h2>
-              <p>
-                Coverage isn&apos;t offered on this type of machine. Nothing is
-                missing from your deal and there&apos;s nothing for you to decide
-                here.
-              </p>
-              <p>Your dealership can still answer any question about owning it.</p>
-            </div>
-          ) : (
-            <>
-              {groups.map((g) => (
-                <section className="goal-section" id={g.id} key={g.id}>
-                  <h2 className="goal-head">{g.goal}</h2>
-                  <div className="products">
-                    {g.items.map((p) => (
-                      <ProductRow
-                        key={p.offer.product_code}
-                        item={p}
-                        price={priceOf(p)}
-                        perMonth={
-                          hasPayment && rate !== null && term !== null
-                            ? productPayment(priceOf(p), rate, term)
-                            : null
-                        }
-                        disposition={decisions[p.offer.product_code]}
-                        chosenOptions={options[p.offer.product_code] ?? []}
-                        open={!!open[p.offer.product_code]}
-                        onToggleOpen={() =>
-                          setOpen((o) => ({
-                            ...o,
-                            [p.offer.product_code]: !o[p.offer.product_code],
-                          }))
-                        }
-                        onDecide={(d) =>
-                          setDecisions((s) => ({ ...s, [p.offer.product_code]: d }))
-                        }
-                        onOption={(code, on) =>
-                          setOptions((s) => {
-                            const cur = s[p.offer.product_code] ?? [];
-                            return {
-                              ...s,
-                              [p.offer.product_code]: on
-                                ? [...cur, code]
-                                : cur.filter((c) => c !== code),
-                            };
-                          })
-                        }
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
-
-              <p className="note">
-                Every plan you&apos;re eligible for is listed here. Your earlier
-                answers change the order they appear in, never which ones appear.
-              </p>
-
-              {withheld.length > 0 && (
-                <p className="note">
-                  {withheld.length} plan{withheld.length === 1 ? "" : "s"} offered by
-                  the provider {withheld.length === 1 ? "is" : "are"} not shown
-                  because {withheld.length === 1 ? "it does" : "they do"} not yet
-                  have approved pricing and plain-language terms on file. Your
-                  dealership can tell you more.
-                </p>
-              )}
-
-              {/* A different thing entirely, and not a decision anybody made:
-                  these were rated but matched nothing in the catalog. Saying so
-                  is how it gets noticed at all -- in a self-guided session
-                  there is no member of staff watching the screen. */}
-              {unmatched.length > 0 && (
-                <p className="note note--flag">
-                  <b>Please check with your dealership before you finish.</b>{" "}
-                  {unmatched.length === 1 ? "An option" : `${unmatched.length} options`}{" "}
-                  offered for your machine could not be displayed here, so this
-                  list may be incomplete. This is a problem on our end, not a
-                  decision about what you qualify for.
-                </p>
-              )}
-            </>
-          )}
+      {screen.kind === "product" && (
+        <section className="screen screen--wide">
+          <ProductScreen
+            item={presentable[screen.pIndex]}
+            index={screen.pIndex + 1}
+            total={presentable.length}
+            price={priceOf(presentable[screen.pIndex])}
+            perMonth={
+              hasPayment && rate !== null && term !== null
+                ? productPayment(priceOf(presentable[screen.pIndex]), rate, term)
+                : null
+            }
+            disposition={decisions[presentable[screen.pIndex].offer.product_code]}
+            chosenOptions={options[presentable[screen.pIndex].offer.product_code] ?? []}
+            onDecide={(d) =>
+              setDecisions((st) => ({
+                ...st,
+                [presentable[screen.pIndex].offer.product_code]: d,
+              }))
+            }
+            onOption={(code, on) =>
+              setOptions((st) => {
+                const pc = presentable[screen.pIndex].offer.product_code;
+                const cur = st[pc] ?? [];
+                return { ...st, [pc]: on ? [...cur, code] : cur.filter((c) => c !== code) };
+              })
+            }
+          />
         </section>
       )}
 
       {/* ── 3. Payment Plan ──────────────────────────────────────────────── */}
-      {step === 2 && (
+      {screen.kind === "payment" && (
         <section className="screen">
           <h1 className="display display--sm">What it comes to.</h1>
           <p className="lede">
@@ -653,14 +675,14 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
       )}
 
       {/* ── 4. Your Plan ─────────────────────────────────────────────────── */}
-      {step === 3 && (
+      {screen.kind === "plan" && (
         <section className="screen">
           <h1 className="display display--sm">Here&apos;s your plan.</h1>
           <p className="lede">
-            Everything you were shown, and what you decided about each. Change
-            anything you like — your answers are saved as you go.
+            Everything you were shown, and what you decided. Saved as you go.
           </p>
 
+          <div className="review">
           <div className="panel">
             <h2 className="panel-head">What you were shown</h2>
             <PlanSummary lines={planLines} />
@@ -696,11 +718,12 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
               </>
             )}
           </div>
+          </div>
         </section>
       )}
 
       {/* ── 5. Acknowledgment ────────────────────────────────────────────── */}
-      {step === 4 && (
+      {screen.kind === "ack" && (
         <section className="screen">
           <CompletionState vehicleName={vehicleName} term={term}>
             <div className="panel panel--ack">
