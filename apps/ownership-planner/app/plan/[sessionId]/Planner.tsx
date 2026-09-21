@@ -887,7 +887,7 @@ function ProductCard({
     <div className="product">
       <div className="product-head">
         <div>
-          <div className="goal">{copy.goal.toUpperCase()}</div>
+          <div className="goal">{copy.goal}</div>
           {/* REMOVED: the prototype badged whichever product happened to sit
               first in the filtered array as RECOMMENDED. That is not a
               recommendation, it is an array index wearing a badge. */}

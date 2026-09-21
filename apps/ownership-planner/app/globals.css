@@ -27,13 +27,19 @@
   --line: #d9dcdd;
   --muted: #5a666e;
 
-  /* Type. The floor is --fs-xs; there is deliberately nothing below it. */
-  --fs-xs: 0.889rem;    /* 16px -- overlines, labels, legal */
+  /* Type. Every value is a rem off the 112.5% root, so the px comment is what
+     it computes to at a default browser setting and it scales up from there.
+     The names say what each one is for, because the sizes were specified per
+     element rather than derived from a ratio. */
+  --fs-goal: 0.778rem;  /* 14px -- the goal label above a product name */
+  --fs-note: 0.833rem;  /* 15px -- notes under the product list, header/footer */
+  --fs-xs: 0.889rem;    /* 16px -- monthly amount, coverage term, disclosure link */
+  --fs-ui: 0.944rem;    /* 17px -- every button and checkbox label */
   --fs-sm: 1rem;        /* 18px -- secondary copy */
-  --fs-base: 1.111rem;  /* 20px -- body copy, product explanations */
-  --fs-md: 1.333rem;    /* 24px -- card headings */
-  --fs-lg: 1.667rem;    /* 30px -- section headings */
-  --fs-xl: 2rem;        /* 36px -- product price */
+  --fs-base: 1.056rem;  /* 19px -- product descriptions and body copy */
+  --fs-md: 1.222rem;    /* 22px -- card headings */
+  --fs-lg: 1.556rem;    /* 28px -- product names */
+  --fs-xl: 1.889rem;    /* 34px -- product price */
   --fs-2xl: 2.444rem;   /* 44px -- h1 */
   --fs-pay: 3.778rem;   /* 68px -- the payment. The largest number anywhere. */
 
@@ -47,25 +53,39 @@
   --s7: 3.556rem;   /* 64px */
 
   /* Every interactive element clears this. */
-  --tap: 3rem;      /* 54px */
+  --tap: 3.333rem;  /* 60px */
+
+  /* The reading column on a wide screen. The cards were drawn at 820px, which
+     left a third of a desk monitor empty and forced the price under the
+     description sooner than it needed to go. */
+  --content: 61.111rem; /* 1100px */
 
   --lh-tight: 1.25;
   --lh-body: 1.65;
   --lh-roomy: 1.8;
 }
 
-html { font-size: 112.5%; }
+/* The root, and ONLY the root, carries the base size. It must not appear in a
+   later selector list that also matches html: `html, body { font-size: 1rem }`
+   wins on source order at equal specificity, and 1rem on the root element
+   resolves against the *initial* 16px rather than against this rule -- so the
+   root silently pins itself back to 16px and every rem in the file lands 11%
+   short of its comment. That is what happened the first time. */
+html { font-size: 112.5%; }  /* 18px at a default browser setting */
 
 * { box-sizing: border-box; }
 
 html, body {
   margin: 0;
   min-height: 100%;
+  background: #e8ecec;
+}
+
+body {
   font-family: Inter, "Segoe UI", Arial, sans-serif;
   font-size: var(--fs-sm);
   line-height: var(--lh-body);
   color: var(--ink);
-  background: #e8ecec;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -298,66 +318,67 @@ button { cursor: pointer; }
 .visual-option small { display: block; color: var(--muted); font-size: var(--fs-sm); margin-top: var(--s1); line-height: var(--lh-body); }
 
 /* ── Products ─────────────────────────────────────────────────────────── */
-.products { max-width: 54rem; }
-.product { background: #fff; border: 1px solid #d8dcde; margin-bottom: var(--s4); }
+.products { max-width: var(--content); }
+.product { background: #fff; border: 1px solid #d8dcde; margin-bottom: var(--s6); }
 .product-head { display: grid; grid-template-columns: 1fr auto; gap: var(--s4); padding: var(--s4) var(--s4) var(--s3); align-items: start; }
 .product h3 { font-family: Georgia, serif; font-size: var(--fs-lg); line-height: var(--lh-tight); margin: var(--s1) 0 0; }
-.product .goal { font-size: var(--fs-xs); letter-spacing: .1em; color: var(--orange); font-weight: 700; }
-.product .accomplishes { font-size: var(--fs-base); color: #3f4c54; line-height: var(--lh-body); margin: var(--s2) 0 0; max-width: 46ch; }
+.product .goal { font-size: var(--fs-goal); letter-spacing: .02em; color: #a04f24; font-weight: 700; }
+.product .accomplishes { font-size: var(--fs-base); color: #3f4c54; line-height: var(--lh-body); margin: var(--s2) 0 0; max-width: 58ch; }
 
 /* Total price and coverage duration sit alongside any monthly figure, always.
    A customer shown "$12/month" with no term cannot see that it is $720. */
-.price-block { text-align: right; white-space: nowrap; }
+.price-block { text-align: right; white-space: nowrap; min-width: 13rem; }
 .price-block .total { font-family: Georgia, serif; font-size: var(--fs-xl); display: block; line-height: 1.1; }
-.price-block .per-month { font-size: var(--fs-base); color: #3f4c54; display: block; margin-top: var(--s1); }
+.price-block .per-month { font-size: var(--fs-xs); color: #3f4c54; display: block; margin-top: var(--s1); }
 .price-block .duration { font-size: var(--fs-xs); color: var(--muted); display: block; margin-top: var(--s2); white-space: normal; max-width: 22ch; }
 .price-block .unpriced { font-size: var(--fs-sm); color: #8a5a2b; max-width: 22ch; white-space: normal; }
 
 .disclose {
   border: 0; background: none; margin: 0 var(--s4) var(--s2); padding: var(--s2) 0;
-  min-height: var(--tap); font-size: var(--fs-base);
+  min-height: var(--tap); font-size: var(--fs-xs);
   text-decoration: underline; text-underline-offset: 3px; color: #2f4049;
 }
 .detail { border-top: 1px solid #e6e9ea; padding: var(--s4); background: #fcfcfb; }
-.detail dl { margin: 0; display: grid; grid-template-columns: 13rem 1fr; gap: var(--s3) var(--s4); font-size: var(--fs-sm); line-height: var(--lh-body); }
+.detail dl { margin: 0; display: grid; grid-template-columns: 13rem 1fr; gap: var(--s3) var(--s4); font-size: var(--fs-base); line-height: var(--lh-body); }
 .detail dt { font-weight: 700; color: #33424a; }
 .detail dd { margin: 0; color: #3f4c54; }
 .detail a { color: #9c4a22; }
 
 /* The neutral pair. Both are full-size targets; neither is styled as the
    default, because neither is. */
-.choice-actions { display: flex; flex-wrap: wrap; gap: var(--s3); padding: 0 var(--s4) var(--s4); font-size: var(--fs-base); }
+.choice-actions { display: flex; flex-wrap: wrap; gap: var(--s4); padding: 0 var(--s4) var(--s4); font-size: var(--fs-ui); }
 .choice-actions button {
-  background: none; border: 2px solid #b9c2c6; padding: var(--s2) var(--s4);
-  min-height: var(--tap); white-space: nowrap; display: inline-flex; align-items: center;
+  background: none; border: 2px solid #b9c2c6; padding: var(--s2) var(--s5);
+  min-height: var(--tap); min-width: 13rem; white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .choice-actions .selected { border-color: var(--orange); background: #fdf6f2; }
 .check {
-  display: inline-grid; width: 1.333rem; height: 1.333rem; border: 2px solid #8b969b;
+  display: inline-grid; width: 1.667rem; height: 1.667rem; border: 2px solid #8b969b;
   place-items: center; margin-right: var(--s2); flex: 0 0 auto;
 }
 .choice-actions .selected .check { background: var(--orange); border-color: var(--orange); color: #fff; }
-.choice-actions .selected .check:after { content: "✓"; font-size: var(--fs-xs); }
+.choice-actions .selected .check:after { content: "✓"; font-size: var(--fs-ui); }
 
-.surcharges { padding: 0 var(--s4) var(--s3); font-size: var(--fs-base); color: #3f4c54; }
+.surcharges { padding: 0 var(--s4) var(--s3); font-size: var(--fs-ui); color: #3f4c54; }
 .surcharges b { display: block; margin-bottom: var(--s1); }
 .surcharges label {
   display: flex; align-items: center; gap: var(--s2);
   min-height: var(--tap); line-height: var(--lh-body); cursor: pointer;
 }
-.surcharges input { width: 1.333rem; height: 1.333rem; flex: 0 0 auto; accent-color: var(--orange); }
+.surcharges input { width: 1.778rem; height: 1.778rem; flex: 0 0 auto; accent-color: var(--orange); }
 
-.all-options { font-size: var(--fs-sm); color: #4b5760; margin-top: var(--s4); max-width: 62ch; line-height: var(--lh-body); }
+.all-options { font-size: var(--fs-note); color: #4b5760; margin-top: var(--s4); max-width: 62ch; line-height: var(--lh-body); }
 
 .notice {
-  max-width: 54rem; background: #fff; border: 1px solid #d8dcde;
+  max-width: var(--content); background: #fff; border: 1px solid #d8dcde;
   border-left: 4px solid var(--orange); padding: var(--s5);
 }
 .notice h2 { font-family: Georgia, serif; font-size: var(--fs-lg); line-height: var(--lh-tight); margin: 0 0 var(--s3); }
 .notice p { font-size: var(--fs-base); color: #3f4c54; line-height: var(--lh-body); margin: 0 0 var(--s3); }
 
 /* ── Payment ──────────────────────────────────────────────────────────── */
-.finance-box { max-width: 54rem; background: #fff; border: 1px solid #d8dcde; padding: var(--s5); }
+.finance-box { max-width: var(--content); background: #fff; border: 1px solid #d8dcde; padding: var(--s5); }
 .terms-readonly { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--s4); margin-bottom: var(--s5); }
 /* A label that wraps ("ANNUAL PERCENTAGE RATE") must not drop its own value
    below the other two. Each cell fills the row and pins its value to the
@@ -377,7 +398,7 @@ button { cursor: pointer; }
 .fine { font-size: var(--fs-xs); color: #4b5760; line-height: var(--lh-body); margin-top: var(--s4); max-width: 62ch; }
 
 /* ── Summary ──────────────────────────────────────────────────────────── */
-.summary-card { max-width: 54rem; background: #fff; border: 1px solid #d8dcde; margin-bottom: var(--s4); }
+.summary-card { max-width: var(--content); background: #fff; border: 1px solid #d8dcde; margin-bottom: var(--s4); }
 .summary-title { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .1em; padding: var(--s3) var(--s4); border-bottom: 1px solid #e0e3e4; }
 .summary-row { display: flex; justify-content: space-between; gap: var(--s4); padding: var(--s3) var(--s4); border-bottom: 1px solid #eef0f0; font-size: var(--fs-base); align-items: baseline; }
 .summary-row:last-child { border: 0; }
@@ -392,7 +413,7 @@ button { cursor: pointer; }
 .summary-row.total span { font-size: var(--fs-base); font-weight: 700; }
 .summary-row.total b { font-family: Georgia, serif; font-size: var(--fs-xl); font-weight: 500; line-height: 1.1; }
 
-.ack { max-width: 54rem; background: #fff; border: 1px solid #d8dcde; padding: var(--s5); }
+.ack { max-width: var(--content); background: #fff; border: 1px solid #d8dcde; padding: var(--s5); }
 .ack h2 { font-family: Georgia, serif; font-size: var(--fs-lg); line-height: var(--lh-tight); margin: 0 0 var(--s4); }
 .ack p { font-size: var(--fs-base); line-height: var(--lh-body); color: #3f4c54; }
 .ack .meta { font-size: var(--fs-sm); color: #4b5760; margin-top: var(--s5); border-top: 1px solid #e6e9ea; padding-top: var(--s4); }
@@ -414,16 +435,16 @@ button { cursor: pointer; }
 .dark {
   background: var(--ink); color: #fff; border: 0;
   padding: var(--s2) var(--s5); min-height: var(--tap);
-  font-size: var(--fs-sm); letter-spacing: .1em; font-weight: 700; justify-self: end;
-  display: inline-flex; align-items: center;
+  font-size: var(--fs-ui); letter-spacing: .1em; font-weight: 700; justify-self: end;
+  display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
 }
 .dark[disabled] { opacity: .45; cursor: not-allowed; }
 .dark span { margin-left: var(--s4); }
 .back {
   background: #fff; border: 2px solid #b9c2c6;
   padding: var(--s2) var(--s4); min-height: var(--tap);
-  font-size: var(--fs-sm); letter-spacing: .08em; justify-self: start;
-  display: inline-flex; align-items: center;
+  font-size: var(--fs-ui); letter-spacing: .08em; justify-self: start;
+  display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
 }
 
 .brand-footer { min-height: 8rem; background: var(--navy); color: #fff; display: grid; grid-template-columns: 17rem repeat(3, 1fr); align-items: center; }
