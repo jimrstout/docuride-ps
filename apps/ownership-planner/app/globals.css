@@ -4,7 +4,19 @@
 
    One fix carried over from the review: the prototype declared Inter and never
    loaded it, so it rendered in Segoe UI or Arial on most machines. It is loaded
-   in app/layout.tsx now. */
+   in app/layout.tsx now.
+
+   ── Type scale ──────────────────────────────────────────────────────────
+   The prototype was drawn for a designer's monitor: body copy at 11px, product
+   explanations at 11px, legal text at 8px. This is read by buyers who are often
+   older, at arm's length, on a showroom tablet. Every size below is a rem, and
+   the root is 112.5% rather than 18px, so it is 18px against a default browser
+   setting and larger for anyone who has raised theirs -- a px root would
+   silently discard that preference.
+
+   1rem = 18px. Nothing a customer reads is below --fs-xs (16px), body copy and
+   product explanations are --fs-base (20px) or larger, and the payment figures
+   are the largest numbers on the screen by a clear margin. */
 
 :root {
   --ink: #0d202b;
@@ -13,8 +25,36 @@
   --cream: #f7f4ed;
   --paper: #fff;
   --line: #d9dcdd;
-  --muted: #64717a;
+  --muted: #5a666e;
+
+  /* Type. The floor is --fs-xs; there is deliberately nothing below it. */
+  --fs-xs: 0.889rem;    /* 16px -- overlines, labels, legal */
+  --fs-sm: 1rem;        /* 18px -- secondary copy */
+  --fs-base: 1.111rem;  /* 20px -- body copy, product explanations */
+  --fs-md: 1.333rem;    /* 24px -- card headings */
+  --fs-lg: 1.667rem;    /* 30px -- section headings */
+  --fs-xl: 2rem;        /* 36px -- product price */
+  --fs-2xl: 2.444rem;   /* 44px -- h1 */
+  --fs-pay: 3.778rem;   /* 68px -- the payment. The largest number anywhere. */
+
+  /* Space. One scale, so "generous" is consistent rather than per-rule. */
+  --s1: 0.444rem;   /* 8px  */
+  --s2: 0.667rem;   /* 12px */
+  --s3: 0.889rem;   /* 16px */
+  --s4: 1.333rem;   /* 24px */
+  --s5: 1.778rem;   /* 32px */
+  --s6: 2.444rem;   /* 44px */
+  --s7: 3.556rem;   /* 64px */
+
+  /* Every interactive element clears this. */
+  --tap: 3rem;      /* 54px */
+
+  --lh-tight: 1.25;
+  --lh-body: 1.65;
+  --lh-roomy: 1.8;
 }
+
+html { font-size: 112.5%; }
 
 * { box-sizing: border-box; }
 
@@ -22,97 +62,115 @@ html, body {
   margin: 0;
   min-height: 100%;
   font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
   color: var(--ink);
   background: #e8ecec;
+  -webkit-text-size-adjust: 100%;
 }
 
-button, select { font: inherit; }
+button, select, input { font: inherit; }
 button { cursor: pointer; }
+
+/* Anything focusable has to be visible when focused. A tablet in a showroom is
+   often driven by keyboard or switch access as well as touch. */
+:where(button, a, input, [tabindex]):focus-visible {
+  outline: 3px solid var(--orange);
+  outline-offset: 2px;
+}
 
 .app { min-height: 100vh; background: #fff; }
 
 /* ── Header ───────────────────────────────────────────────────────────── */
 .header {
-  height: 82px;
+  min-height: 5.778rem; /* 104px */
   display: grid;
-  grid-template-columns: 240px 130px 1fr 140px;
-  align-items: center;
+  grid-template-columns: 17rem 9rem 1fr 10rem;
+  align-items: stretch;
   background: #fff;
   border-bottom: 1px solid #d8dcde;
   position: relative;
   z-index: 5;
 }
 .logo {
-  height: 100%;
   background: var(--navy);
   color: #fff;
   display: flex;
   align-items: center;
-  padding: 0 22px;
-  gap: 13px;
+  padding: var(--s3) var(--s4);
+  gap: var(--s2);
 }
-.logo b { display: block; letter-spacing: .12em; font-size: 14px; }
-.logo small { display: block; font-size: 7px; letter-spacing: .13em; margin-top: 3px; }
+.logo b { display: block; letter-spacing: .1em; font-size: var(--fs-md); line-height: 1.1; }
+.logo small { display: block; font-size: var(--fs-xs); letter-spacing: .08em; margin-top: 0.222rem; color: #c8d3d8; }
 .mountains {
   color: #dc7441;
-  font-size: 35px;
-  letter-spacing: -12px;
+  font-size: 2.667rem;
+  letter-spacing: -0.889rem;
   transform: rotate(180deg);
   display: inline-block;
 }
 .tag {
   background: var(--navy);
-  height: 100%;
   color: #d8dee1;
   border-left: 1px solid #58707b;
   display: flex;
   align-items: center;
-  padding-left: 25px;
-  font-size: 8px;
-  letter-spacing: .25em;
-  line-height: 1.6;
+  padding: var(--s3) var(--s3) var(--s3) var(--s4);
+  font-size: var(--fs-xs);
+  letter-spacing: .12em;
+  line-height: 1.5;
 }
 .experience {
-  font-size: 8px;
-  letter-spacing: .19em;
-  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  font-size: var(--fs-xs);
+  letter-spacing: .1em;
+  line-height: 1.35;
   text-align: center;
+  padding: var(--s3) var(--s2);
   border-left: 1px solid #ccd1d3;
 }
-.experience i { display: block; background: var(--orange); height: 3px; width: 45px; margin: 8px auto 0; }
+.experience i { display: block; background: var(--orange); height: 3px; width: 2.5rem; margin: var(--s2) auto 0; }
 
-.header nav { display: flex; justify-content: center; align-items: flex-start; gap: 0; }
-.prog { width: 90px; text-align: center; font-size: 8px; color: #7a858b; position: relative; }
+/* The progress rail. Labels are part of how a buyer knows how much is left, so
+   they stay legible rather than being shrunk to fit beside the brand panels --
+   the panels give way first, at the breakpoints below. */
+.header nav { display: flex; justify-content: center; align-items: center; gap: 0; padding: var(--s2) var(--s3); }
+.prog {
+  width: 7.5rem; text-align: center; font-size: var(--fs-xs);
+  line-height: 1.3; color: #626f77; position: relative;
+}
 .prog:not(:last-child):after {
   content: ""; position: absolute; height: 1px; background: #d5d9da;
-  top: 13px; left: 58px; width: 65px;
+  top: 1.25rem; left: 4.6rem; width: 5.8rem;
 }
 .prog b {
-  position: relative; z-index: 2; width: 26px; height: 26px; border-radius: 50%;
+  position: relative; z-index: 2; width: 2.5rem; height: 2.5rem; border-radius: 50%;
   background: #edf0f0; border: 1px solid #d6dada; display: grid; place-items: center;
-  margin: auto; font-size: 9px;
+  margin: auto; font-size: var(--fs-sm); font-weight: 700;
 }
-.prog span { display: block; margin-top: 5px; }
+.prog span { display: block; margin-top: var(--s1); }
 .prog.active { color: var(--ink); }
 .prog.active b { background: var(--ink); color: #fff; border-color: var(--ink); }
 .prog.active b:after {
-  content: ""; width: 5px; height: 5px; background: var(--orange);
-  border-radius: 50%; position: absolute;
+  content: ""; width: 0.389rem; height: 0.389rem; background: var(--orange);
+  border-radius: 50%; position: absolute; bottom: 0.28rem;
 }
 
 /* ── Planner shell ────────────────────────────────────────────────────── */
 .hidden { display: none !important; }
-.planner { min-height: 720px; display: grid; grid-template-columns: 300px 1fr; }
+.planner { min-height: 40rem; display: grid; grid-template-columns: 21rem 1fr; }
 
 .vehicle-panel {
   background: #f7f8f7;
   border-right: 1px solid #d8dcde;
-  padding: 28px 20px;
+  padding: var(--s5) var(--s4);
   position: relative;
 }
-.overline { font-size: 9px; letter-spacing: .13em; font-weight: 800; }
+.overline { font-size: var(--fs-xs); letter-spacing: .1em; font-weight: 800; }
 .vehicle-photo {
-  height: 170px; margin: 12px -2px 8px;
+  height: 11rem; margin: var(--s3) 0 var(--s2);
   background-size: cover; background-position: center;
   background-color: #edf0ef;
 }
@@ -122,190 +180,257 @@ button { cursor: pointer; }
    and looks intentional; a stock photo of a different machine is worse than
    no photo. */
 .vehicle-plate {
-  margin: 12px -2px 8px;
-  padding: 26px 18px;
+  margin: var(--s3) 0 var(--s2);
+  padding: var(--s4) var(--s4);
   background: linear-gradient(150deg, var(--navy), #1b3947);
   color: #fff;
 }
-.vehicle-plate .yr { font-size: 11px; letter-spacing: .22em; color: #9fb4bd; }
-.vehicle-plate .mk { font-family: Georgia, serif; font-size: 24px; line-height: 1.1; margin-top: 6px; }
-.vehicle-plate .vin { font-size: 8px; letter-spacing: .16em; color: #8fa6b0; margin-top: 14px; word-break: break-all; }
+.vehicle-plate .yr { font-size: var(--fs-xs); letter-spacing: .2em; color: #a9bdc5; }
+.vehicle-plate .mk { font-family: Georgia, serif; font-size: var(--fs-lg); line-height: 1.15; margin-top: var(--s1); }
+.vehicle-plate .vin { font-size: var(--fs-xs); letter-spacing: .08em; color: #a0b5bf; margin-top: var(--s3); word-break: break-all; }
 
-.vehicle-panel h2 { font-family: Georgia, serif; font-size: 22px; margin: 18px 0 4px; }
-.vehicle-panel > p { font-size: 10px; color: #657179; margin: 0; }
-.vehicle-panel > i { display: block; width: 30px; height: 2px; background: var(--orange); margin: 18px 0; }
+.vehicle-panel h2 { font-family: Georgia, serif; font-size: var(--fs-lg); line-height: var(--lh-tight); margin: var(--s4) 0 var(--s1); }
+.vehicle-panel > p { font-size: var(--fs-sm); color: var(--muted); margin: 0; }
+.vehicle-panel > i { display: block; width: 2.2rem; height: 3px; background: var(--orange); margin: var(--s4) 0; }
 
-.deal-facts { font-size: 10px; line-height: 1.9; color: #4c5a62; }
-.deal-facts div { display: flex; justify-content: space-between; gap: 12px; }
-.deal-facts b { font-weight: 600; color: var(--ink); }
-.deal-facts .note { display: block; font-size: 8px; color: #7d888e; line-height: 1.5; margin-top: 10px; }
+.deal-facts { font-size: var(--fs-sm); line-height: var(--lh-roomy); color: #3f4c54; }
+.deal-facts div { display: flex; justify-content: space-between; gap: var(--s3); }
+.deal-facts b { font-weight: 700; color: var(--ink); }
+.deal-facts .note {
+  display: block; font-size: var(--fs-xs); color: var(--muted);
+  line-height: var(--lh-body); margin-top: var(--s4);
+  border-top: 1px solid #e2e5e6; padding-top: var(--s3);
+}
 
 /* ── Content ──────────────────────────────────────────────────────────── */
 .content { display: flex; flex-direction: column; background: #fbfbfa; min-width: 0; }
-.content-inner { flex: 1; padding: 45px 7vw 30px; background: linear-gradient(90deg, #fff 0 70%, #f7f5ef 100%); }
-.section-label { color: var(--ink); margin-bottom: 12px; }
+.content-inner { flex: 1; padding: var(--s6) 5vw var(--s5); background: linear-gradient(90deg, #fff 0 70%, #f7f5ef 100%); }
+.section-label { color: var(--ink); margin-bottom: var(--s3); }
 .section-label:before {
-  content: ""; display: inline-block; width: 24px; height: 3px;
-  background: var(--orange); vertical-align: middle; margin-right: 10px;
+  content: ""; display: inline-block; width: 1.5rem; height: 3px;
+  background: var(--orange); vertical-align: middle; margin-right: var(--s2);
 }
-.content h1 { font-family: Georgia, serif; font-weight: 500; letter-spacing: -.035em; font-size: 42px; margin: 0 0 8px; }
-.intro { font-size: 12px; color: #657179; line-height: 1.45; margin: 0 0 25px; max-width: 720px; }
+.content h1 {
+  font-family: Georgia, serif; font-weight: 500; letter-spacing: -.025em;
+  font-size: var(--fs-2xl); line-height: var(--lh-tight); margin: 0 0 var(--s3);
+  max-width: 20ch;
+}
+.intro { font-size: var(--fs-base); color: #4b5760; line-height: var(--lh-body); margin: 0 0 var(--s5); max-width: 62ch; }
 .screen { display: none; }
 .screen.active { display: block; animation: enter .3s ease; }
 @keyframes enter { from { opacity: .2; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { .screen.active { animation: none; } }
 
 /* ── Discovery ────────────────────────────────────────────────────────── */
-.visual-options { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 14px; max-width: 760px; }
+.visual-options { display: grid; grid-template-columns: repeat(2, minmax(17rem, 1fr)); gap: var(--s4); max-width: 48rem; }
 .visual-option {
-  background: #fff; border: 1px solid #d7dcdd; box-shadow: 0 2px 7px #10263010;
+  background: #fff; border: 2px solid #d7dcdd; box-shadow: 0 2px 7px #10263010;
   cursor: pointer; text-align: left; padding: 0; width: 100%; font: inherit; color: inherit;
+  min-height: var(--tap);
 }
-.visual-option .pic { height: 112px; background-size: cover; background-position: center; }
-.visual-option .body { padding: 12px; display: flex; gap: 10px; align-items: flex-start; }
+.visual-option .pic { height: 8.5rem; background-size: cover; background-position: center; }
+.visual-option .body { padding: var(--s4); display: flex; gap: var(--s2); align-items: flex-start; min-height: var(--tap); }
 .box {
-  width: 17px; height: 17px; border: 1px solid #9fa8ac; border-radius: 2px;
-  flex: 0 0 auto; display: grid; place-items: center;
+  width: 1.5rem; height: 1.5rem; border: 2px solid #8b969b; border-radius: 2px;
+  flex: 0 0 auto; display: grid; place-items: center; margin-top: 0.1rem;
 }
 .visual-option.selected { border-color: var(--orange); }
 .visual-option.selected .box { background: var(--orange); border-color: var(--orange); color: #fff; }
-.visual-option.selected .box:after { content: "✓"; font-size: 11px; }
-.visual-option b { font-family: Georgia, serif; font-size: 13px; }
-.visual-option small { display: block; color: #778187; font-size: 9px; margin-top: 3px; }
+.visual-option.selected .box:after { content: "✓"; font-size: var(--fs-sm); }
+.visual-option b { font-family: Georgia, serif; font-size: var(--fs-md); line-height: var(--lh-tight); }
+.visual-option small { display: block; color: var(--muted); font-size: var(--fs-sm); margin-top: var(--s1); line-height: var(--lh-body); }
 
 /* ── Products ─────────────────────────────────────────────────────────── */
-.products { max-width: 820px; }
-.product { background: #fff; border: 1px solid #d8dcde; margin-bottom: 12px; }
-.product-head { display: grid; grid-template-columns: 1fr auto; gap: 16px; padding: 16px 18px; align-items: start; }
-.product h3 { font-family: Georgia, serif; font-size: 17px; margin: 0 0 3px; }
-.product .goal { font-size: 8px; letter-spacing: .14em; color: var(--orange); font-weight: 700; }
-.product .accomplishes { font-size: 11px; color: #56636a; line-height: 1.5; margin: 7px 0 0; max-width: 46ch; }
+.products { max-width: 54rem; }
+.product { background: #fff; border: 1px solid #d8dcde; margin-bottom: var(--s4); }
+.product-head { display: grid; grid-template-columns: 1fr auto; gap: var(--s4); padding: var(--s4) var(--s4) var(--s3); align-items: start; }
+.product h3 { font-family: Georgia, serif; font-size: var(--fs-lg); line-height: var(--lh-tight); margin: var(--s1) 0 0; }
+.product .goal { font-size: var(--fs-xs); letter-spacing: .1em; color: var(--orange); font-weight: 700; }
+.product .accomplishes { font-size: var(--fs-base); color: #3f4c54; line-height: var(--lh-body); margin: var(--s2) 0 0; max-width: 46ch; }
 
 /* Total price and coverage duration sit alongside any monthly figure, always.
    A customer shown "$12/month" with no term cannot see that it is $720. */
 .price-block { text-align: right; white-space: nowrap; }
-.price-block .total { font-family: Georgia, serif; font-size: 23px; display: block; }
-.price-block .per-month { font-size: 10px; color: #5d6a71; display: block; margin-top: 2px; }
-.price-block .duration { font-size: 9px; color: #7d888e; display: block; margin-top: 5px; }
-.price-block .unpriced { font-size: 10px; color: #8a5a2b; max-width: 22ch; white-space: normal; }
+.price-block .total { font-family: Georgia, serif; font-size: var(--fs-xl); display: block; line-height: 1.1; }
+.price-block .per-month { font-size: var(--fs-base); color: #3f4c54; display: block; margin-top: var(--s1); }
+.price-block .duration { font-size: var(--fs-xs); color: var(--muted); display: block; margin-top: var(--s2); white-space: normal; max-width: 22ch; }
+.price-block .unpriced { font-size: var(--fs-sm); color: #8a5a2b; max-width: 22ch; white-space: normal; }
 
 .disclose {
-  border: 0; background: none; padding: 0 18px 14px; font-size: 10px;
-  text-decoration: underline; color: #4a5a63;
+  border: 0; background: none; margin: 0 var(--s4) var(--s2); padding: var(--s2) 0;
+  min-height: var(--tap); font-size: var(--fs-base);
+  text-decoration: underline; text-underline-offset: 3px; color: #2f4049;
 }
-.detail { border-top: 1px solid #e6e9ea; padding: 16px 18px; background: #fcfcfb; }
-.detail dl { margin: 0; display: grid; grid-template-columns: 170px 1fr; gap: 9px 18px; font-size: 11px; line-height: 1.5; }
-.detail dt { font-weight: 700; color: #3e4c54; }
-.detail dd { margin: 0; color: #56636a; }
-.detail a { color: var(--orange); }
+.detail { border-top: 1px solid #e6e9ea; padding: var(--s4); background: #fcfcfb; }
+.detail dl { margin: 0; display: grid; grid-template-columns: 13rem 1fr; gap: var(--s3) var(--s4); font-size: var(--fs-sm); line-height: var(--lh-body); }
+.detail dt { font-weight: 700; color: #33424a; }
+.detail dd { margin: 0; color: #3f4c54; }
+.detail a { color: #9c4a22; }
 
-.choice-actions { display: flex; gap: 10px; padding: 0 18px 16px; font-size: 10px; }
-.choice-actions button { background: none; border: 1px solid #cdd4d7; padding: 9px 14px; white-space: nowrap; }
-.choice-actions .selected { border-color: var(--orange); }
-.check { display: inline-grid; width: 14px; height: 14px; border: 1px solid #aab1b4; place-items: center; margin-right: 6px; vertical-align: -2px; }
+/* The neutral pair. Both are full-size targets; neither is styled as the
+   default, because neither is. */
+.choice-actions { display: flex; flex-wrap: wrap; gap: var(--s3); padding: 0 var(--s4) var(--s4); font-size: var(--fs-base); }
+.choice-actions button {
+  background: none; border: 2px solid #b9c2c6; padding: var(--s2) var(--s4);
+  min-height: var(--tap); white-space: nowrap; display: inline-flex; align-items: center;
+}
+.choice-actions .selected { border-color: var(--orange); background: #fdf6f2; }
+.check {
+  display: inline-grid; width: 1.333rem; height: 1.333rem; border: 2px solid #8b969b;
+  place-items: center; margin-right: var(--s2); flex: 0 0 auto;
+}
 .choice-actions .selected .check { background: var(--orange); border-color: var(--orange); color: #fff; }
-.choice-actions .selected .check:after { content: "✓"; font-size: 10px; }
+.choice-actions .selected .check:after { content: "✓"; font-size: var(--fs-xs); }
 
-.surcharges { padding: 0 18px 14px; font-size: 10px; color: #56636a; }
-.surcharges label { display: block; margin-top: 6px; }
+.surcharges { padding: 0 var(--s4) var(--s3); font-size: var(--fs-base); color: #3f4c54; }
+.surcharges b { display: block; margin-bottom: var(--s1); }
+.surcharges label {
+  display: flex; align-items: center; gap: var(--s2);
+  min-height: var(--tap); line-height: var(--lh-body); cursor: pointer;
+}
+.surcharges input { width: 1.333rem; height: 1.333rem; flex: 0 0 auto; accent-color: var(--orange); }
 
-.all-options { font-size: 10px; color: #748086; margin-top: 16px; max-width: 720px; line-height: 1.5; }
+.all-options { font-size: var(--fs-sm); color: #4b5760; margin-top: var(--s4); max-width: 62ch; line-height: var(--lh-body); }
 
 .notice {
-  max-width: 760px; background: #fff; border: 1px solid #d8dcde;
-  border-left: 3px solid var(--orange); padding: 20px 22px;
+  max-width: 54rem; background: #fff; border: 1px solid #d8dcde;
+  border-left: 4px solid var(--orange); padding: var(--s5);
 }
-.notice h2 { font-family: Georgia, serif; font-size: 20px; margin: 0 0 8px; }
-.notice p { font-size: 12px; color: #56636a; line-height: 1.55; margin: 0 0 8px; }
+.notice h2 { font-family: Georgia, serif; font-size: var(--fs-lg); line-height: var(--lh-tight); margin: 0 0 var(--s3); }
+.notice p { font-size: var(--fs-base); color: #3f4c54; line-height: var(--lh-body); margin: 0 0 var(--s3); }
 
 /* ── Payment ──────────────────────────────────────────────────────────── */
-.finance-box { max-width: 760px; background: #fff; border: 1px solid #d8dcde; padding: 22px; }
-.terms-readonly { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 20px; }
-.terms-readonly div span { display: block; font-size: 9px; letter-spacing: .1em; color: #7d888e; font-weight: 700; }
-.terms-readonly div b { font-family: Georgia, serif; font-size: 19px; font-weight: 500; }
-.estimate { display: flex; justify-content: space-between; border-top: 1px solid #d8dcde; padding-top: 18px; gap: 24px; flex-wrap: wrap; }
-.estimate small { font-size: 9px; letter-spacing: .1em; font-weight: 700; color: #7d888e; }
-.estimate strong { font-family: Georgia, serif; font-size: 36px; display: block; font-weight: 500; }
-.breakdown { font-size: 11px; line-height: 2; min-width: 250px; }
-.breakdown div { display: flex; justify-content: space-between; gap: 20px; }
-.breakdown .rule { border-top: 1px solid #e2e5e6; margin-top: 4px; padding-top: 4px; font-weight: 700; }
-.fine { font-size: 10px; color: #7d888e; line-height: 1.6; margin-top: 16px; max-width: 700px; }
+.finance-box { max-width: 54rem; background: #fff; border: 1px solid #d8dcde; padding: var(--s5); }
+.terms-readonly { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: var(--s4); margin-bottom: var(--s5); }
+/* A label that wraps ("ANNUAL PERCENTAGE RATE") must not drop its own value
+   below the other two. Each cell fills the row and pins its value to the
+   bottom, so the three figures share a baseline whatever the labels do. */
+.terms-readonly > div { display: flex; flex-direction: column; justify-content: space-between; gap: var(--s1); }
+.terms-readonly div span { display: block; font-size: var(--fs-xs); letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+.terms-readonly div b { font-family: Georgia, serif; font-size: var(--fs-lg); font-weight: 500; line-height: var(--lh-tight); }
+
+/* The payment is what the customer came to this screen for, so it is the
+   largest thing on it -- larger than the heading above it. */
+.estimate { display: flex; justify-content: space-between; border-top: 1px solid #d8dcde; padding-top: var(--s5); gap: var(--s5); flex-wrap: wrap; }
+.estimate small { font-size: var(--fs-xs); letter-spacing: .08em; font-weight: 700; color: var(--muted); }
+.estimate strong { font-family: Georgia, serif; font-size: var(--fs-pay); display: block; font-weight: 500; line-height: 1.05; letter-spacing: -.02em; }
+.breakdown { font-size: var(--fs-base); line-height: var(--lh-roomy); min-width: 17rem; }
+.breakdown div { display: flex; justify-content: space-between; gap: var(--s4); }
+.breakdown .rule { border-top: 1px solid #d3d8da; margin-top: var(--s1); padding-top: var(--s1); font-weight: 700; }
+.fine { font-size: var(--fs-xs); color: #4b5760; line-height: var(--lh-body); margin-top: var(--s4); max-width: 62ch; }
 
 /* ── Summary ──────────────────────────────────────────────────────────── */
-.summary-card { max-width: 760px; background: #fff; border: 1px solid #d8dcde; margin-bottom: 15px; }
-.summary-title { font-size: 10px; font-weight: bold; letter-spacing: .1em; padding: 14px; border-bottom: 1px solid #e0e3e4; }
-.summary-row { display: flex; justify-content: space-between; gap: 18px; padding: 11px 14px; border-bottom: 1px solid #eef0f0; font-size: 11px; }
+.summary-card { max-width: 54rem; background: #fff; border: 1px solid #d8dcde; margin-bottom: var(--s4); }
+.summary-title { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .1em; padding: var(--s3) var(--s4); border-bottom: 1px solid #e0e3e4; }
+.summary-row { display: flex; justify-content: space-between; gap: var(--s4); padding: var(--s3) var(--s4); border-bottom: 1px solid #eef0f0; font-size: var(--fs-base); align-items: baseline; }
 .summary-row:last-child { border: 0; }
-.summary-row .what b { display: block; font-size: 12px; }
-.summary-row .what span { color: #7d888e; font-size: 10px; }
-.summary-row .decision { white-space: nowrap; font-weight: 600; }
-.summary-row .decision.managed { color: #5d6a71; font-weight: 500; }
+.summary-row .what b { display: block; font-size: var(--fs-base); }
+.summary-row .what span { color: var(--muted); font-size: var(--fs-sm); }
+.summary-row .decision { white-space: nowrap; font-weight: 700; }
+.summary-row .decision.managed { color: #4b5760; font-weight: 500; }
 
-.ack { max-width: 760px; background: #fff; border: 1px solid #d8dcde; padding: 24px; }
-.ack h2 { font-family: Georgia, serif; font-size: 22px; margin: 0 0 12px; }
-.ack p { font-size: 11px; line-height: 1.65; color: #4f5c64; }
-.ack .meta { font-size: 10px; color: #7d888e; margin-top: 18px; border-top: 1px solid #e6e9ea; padding-top: 14px; }
+/* The one figure the customer takes home. It matches the payment screen rather
+   than being demoted to a table row. */
+.summary-row.total { padding: var(--s4); background: #fbfaf7; }
+.summary-row.total span { font-size: var(--fs-base); font-weight: 700; }
+.summary-row.total b { font-family: Georgia, serif; font-size: var(--fs-xl); font-weight: 500; line-height: 1.1; }
 
-.finish { text-align: center; padding-top: 45px; }
-.finish-mark { width: 72px; height: 72px; border: 2px solid var(--orange); display: grid; place-items: center; margin: auto; font-family: Georgia, serif; font-size: 25px; }
-.finish h1 { margin-top: 25px; }
-.finish > p { font-family: Georgia, serif; font-style: italic; font-size: 18px; }
-.finish h3 { font-family: Georgia, serif; font-size: 25px; }
-.finish .small { font-size: 10px; color: #657179; }
+.ack { max-width: 54rem; background: #fff; border: 1px solid #d8dcde; padding: var(--s5); }
+.ack h2 { font-family: Georgia, serif; font-size: var(--fs-lg); line-height: var(--lh-tight); margin: 0 0 var(--s4); }
+.ack p { font-size: var(--fs-base); line-height: var(--lh-body); color: #3f4c54; }
+.ack .meta { font-size: var(--fs-sm); color: #4b5760; margin-top: var(--s5); border-top: 1px solid #e6e9ea; padding-top: var(--s4); }
+
+.finish { text-align: center; padding-top: var(--s6); }
+.finish-mark { width: 5rem; height: 5rem; border: 3px solid var(--orange); display: grid; place-items: center; margin: auto; font-family: Georgia, serif; font-size: var(--fs-lg); }
+.finish h1 { margin: var(--s5) auto var(--s3); max-width: 24ch; }
+.finish > p { font-family: Georgia, serif; font-style: italic; font-size: var(--fs-md); margin: 0 0 var(--s6); }
+.finish h3 { font-family: Georgia, serif; font-size: var(--fs-lg); }
+.finish .small { font-size: var(--fs-sm); color: #4b5760; }
 
 /* ── Footer nav ───────────────────────────────────────────────────────── */
 .content footer {
-  min-height: 76px; border-top: 1px solid #d8dcde; background: #fff;
-  display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; padding: 14px 32px; gap: 12px;
+  border-top: 1px solid #d8dcde; background: #fff;
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+  padding: var(--s4) var(--s5); gap: var(--s4);
 }
-.content footer .status { text-align: center; font-size: 9px; color: #7d888e; }
+.content footer .status { text-align: center; font-size: var(--fs-sm); color: #4b5760; line-height: var(--lh-body); }
 .dark {
-  background: var(--ink); color: #fff; border: 0; padding: 14px 25px;
-  font-size: 9px; letter-spacing: .14em; font-weight: bold; justify-self: end;
+  background: var(--ink); color: #fff; border: 0;
+  padding: var(--s2) var(--s5); min-height: var(--tap);
+  font-size: var(--fs-sm); letter-spacing: .1em; font-weight: 700; justify-self: end;
+  display: inline-flex; align-items: center;
 }
 .dark[disabled] { opacity: .45; cursor: not-allowed; }
-.dark span { margin-left: 25px; }
-.back { background: #fff; border: 1px solid #bcc4c7; padding: 12px 22px; font-size: 9px; letter-spacing: .1em; justify-self: start; }
+.dark span { margin-left: var(--s4); }
+.back {
+  background: #fff; border: 2px solid #b9c2c6;
+  padding: var(--s2) var(--s4); min-height: var(--tap);
+  font-size: var(--fs-sm); letter-spacing: .08em; justify-self: start;
+  display: inline-flex; align-items: center;
+}
 
-.brand-footer { min-height: 110px; background: var(--navy); color: #fff; display: grid; grid-template-columns: 270px repeat(3, 1fr); align-items: center; }
-.brand-footer > div:not(.logo) { padding: 0 35px; border-left: 1px solid #647681; }
-.brand-footer b { font-size: 9px; letter-spacing: .13em; }
-.brand-footer span:not(.mountains) { display: block; font-size: 8px; color: #c6cfd3; margin-top: 5px; }
+.brand-footer { min-height: 8rem; background: var(--navy); color: #fff; display: grid; grid-template-columns: 17rem repeat(3, 1fr); align-items: center; }
+.brand-footer > div:not(.logo) { padding: var(--s4) var(--s5); border-left: 1px solid #647681; }
+.brand-footer b { font-size: var(--fs-xs); letter-spacing: .1em; }
+.brand-footer span:not(.mountains) { display: block; font-size: var(--fs-sm); color: #cbd4d8; margin-top: var(--s1); line-height: var(--lh-body); }
 
 /* ── Gate screens ─────────────────────────────────────────────────────── */
-.gate { min-height: 70vh; display: grid; place-items: center; padding: 40px 20px; }
-.gate-card { max-width: 480px; background: #fff; border: 1px solid #d8dcde; padding: 34px; text-align: center; }
-.gate-card h1 { font-family: Georgia, serif; font-size: 28px; margin: 0 0 12px; font-weight: 500; }
-.gate-card p { font-size: 12px; color: #657179; line-height: 1.6; }
+.gate { min-height: 70vh; display: grid; place-items: center; padding: var(--s6) var(--s4); }
+.gate-card { max-width: 34rem; background: #fff; border: 1px solid #d8dcde; padding: var(--s6); text-align: center; }
+.gate-card h1 { font-family: Georgia, serif; font-size: var(--fs-lg); margin: 0 0 var(--s3); font-weight: 500; line-height: var(--lh-tight); }
+.gate-card p { font-size: var(--fs-base); color: #3f4c54; line-height: var(--lh-body); margin: 0; }
+
+/* ── Narrower than a desk monitor ─────────────────────────────────────── */
+/* The brand panels give way before the type does. At 1024 the rail still
+   carries its labels; the tagline and the strapline are the first to go. */
+@media (max-width: 1280px) {
+  .header { grid-template-columns: 17rem 1fr 10rem; }
+  .tag { display: none; }
+}
+
+@media (max-width: 1100px) {
+  .header { grid-template-columns: 17rem 1fr; }
+  .experience { display: none; }
+}
+
+@media (max-width: 1024px) {
+  .planner { grid-template-columns: 19rem 1fr; }
+  .content-inner { padding: var(--s5) var(--s4); }
+  .visual-options { grid-template-columns: 1fr; max-width: 34rem; }
+}
 
 @media (max-width: 900px) {
-  .header { grid-template-columns: 230px 1fr 100px; }
-  .tag { display: none; }
-  .header nav { overflow: hidden; }
-  .prog { width: 65px; }
+  .product-head { grid-template-columns: 1fr; gap: var(--s3); }
+  .price-block { text-align: left; }
+  .price-block .duration { max-width: none; }
+}
+
+@media (max-width: 860px) {
+  .header { grid-template-columns: 1fr; min-height: 0; }
+  .logo { justify-content: flex-start; }
+  .header nav { border-top: 1px solid #e2e5e6; padding: var(--s3) var(--s2); }
+  .prog { width: 4.2rem; }
   .prog span { display: none; }
-  .planner { grid-template-columns: 220px 1fr; }
-  .content-inner { padding: 35px; }
-  .visual-options { grid-template-columns: 1fr; }
-  .detail dl { grid-template-columns: 1fr; gap: 4px 0; }
-  .detail dd { margin-bottom: 8px; }
-  .brand-footer { display: none; }
+  .prog:not(:last-child):after { left: 3rem; width: 2.5rem; }
+  .planner { display: block; }
+  .vehicle-panel { padding: var(--s4); border-right: 0; border-bottom: 1px solid #d8dcde; }
+  .detail dl { grid-template-columns: 1fr; gap: var(--s1) 0; }
+  .detail dd { margin-bottom: var(--s3); }
+  .brand-footer { grid-template-columns: 1fr; }
+  .brand-footer > div:not(.logo) { border-left: 0; border-top: 1px solid #647681; }
 }
 
 @media (max-width: 650px) {
-  .header { height: 64px; grid-template-columns: 1fr 85px; }
-  .header nav { display: none; }
-  .logo { padding: 0 15px; }
-  .planner { display: block; }
-  .vehicle-panel { padding: 16px 20px; height: auto; border-right: 0; border-bottom: 1px solid #d8dcde; }
-  .vehicle-panel h2 { font-size: 17px; margin: 8px 0 2px; }
-  .content-inner { padding: 28px 20px; }
-  .content h1 { font-size: 30px; }
-  .product-head { grid-template-columns: 1fr; }
-  .price-block { text-align: left; }
+  .content-inner { padding: var(--s4) var(--s3); }
+  .content h1 { font-size: var(--fs-lg); }
   .estimate { display: block; }
-  .breakdown { margin-top: 15px; min-width: 0; }
-  .content footer { grid-template-columns: 1fr 1fr; padding: 14px 16px; }
+  .estimate strong { font-size: 3rem; }
+  .breakdown { margin-top: var(--s4); min-width: 0; }
+  .finance-box, .notice, .ack, .gate-card { padding: var(--s4); }
+  /* Two full-width targets stacked beat two half-width ones side by side. */
+  .choice-actions { flex-direction: column; align-items: stretch; }
+  .choice-actions button { justify-content: center; }
+  .content footer { grid-template-columns: 1fr 1fr; padding: var(--s3) var(--s3); }
   .content footer .status { grid-column: 1 / 3; order: 3; }
   .brand-footer { display: none; }
 }
@@ -314,7 +439,7 @@ button { cursor: pointer; }
    deliberately withheld for unwritten copy, and not styled the same either --
    this one is a fault the buyer is being asked to help catch. */
 .all-options.warn {
-  border-left: 3px solid var(--orange);
-  padding: 10px 0 10px 12px;
-  color: #4f5c64;
+  border-left: 4px solid var(--orange);
+  padding: var(--s2) 0 var(--s2) var(--s3);
+  color: #3f4c54;
 }

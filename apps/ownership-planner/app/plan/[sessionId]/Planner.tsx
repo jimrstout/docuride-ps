@@ -628,7 +628,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                   <div className="summary-title">PAYMENT</div>
                   <div className="summary-row"><span>Vehicle</span><b>{money(totals.vehiclePayment)}</b></div>
                   <div className="summary-row"><span>Your plan</span><b>{money(totals.planPayment)}</b></div>
-                  <div className="summary-row"><span>Total monthly payment</span><b>{money(totals.totalPayment)}</b></div>
+                  <div className="summary-row total"><span>Total monthly payment</span><b>{money(totals.totalPayment)}</b></div>
                   <div className="summary-row">
                     <span>{session.financials.rate_label} and term</span>
                     <b>{rate}% • {term} months</b>
@@ -640,7 +640,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                    the one screen the customer takes home it says so. */
                 <div className="summary-card">
                   <div className="summary-title">YOUR PLAN</div>
-                  <div className="summary-row">
+                  <div className="summary-row total">
                     <span>Added to your purchase</span>
                     <b>{money(planTotal)}</b>
                   </div>
