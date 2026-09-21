@@ -23,7 +23,7 @@ html, body { margin: 0; min-height: 100%; background: var(--shell); }
 
 body {
   font-family: var(--font-sans);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-base);
   line-height: var(--lh-body);
   color: var(--ink);
   -webkit-text-size-adjust: 100%;
@@ -45,17 +45,17 @@ button { cursor: pointer; }
 
 /* ── Shared type roles ───────────────────────────────────────────────────── */
 .eyebrow {
-  font-size: var(--fs-note); letter-spacing: var(--track-wide);
+  font-size: var(--fs-xs); letter-spacing: var(--track-wide);
   text-transform: uppercase; font-weight: 700; color: var(--ink-55);
   margin: 0 0 var(--s3);
 }
 .eyebrow--rule { color: var(--ink); display: flex; align-items: center; gap: var(--s2); }
 .eyebrow--rule::before {
-  content: ""; width: 1.5rem; height: 3px; background: var(--copper); flex: 0 0 auto;
+  content: ""; width: 1.275rem; height: 3px; background: var(--copper); flex: 0 0 auto;
 }
 
 .kicker {
-  font-family: var(--font-sans); font-size: var(--fs-note);
+  font-family: var(--font-sans); font-size: var(--fs-xs);
   letter-spacing: var(--track-wide); text-transform: uppercase;
   font-weight: 800; color: var(--copper-deep); margin: 0 0 var(--s2);
 }
@@ -102,7 +102,7 @@ button { cursor: pointer; }
   border-right: var(--bw) solid var(--line-dark);
 }
 .brand-mark {
-  color: var(--copper); font-size: 2rem; letter-spacing: -0.7rem;
+  color: var(--copper); font-size: 1.7rem; letter-spacing: -0.6rem;
   transform: rotate(180deg); display: inline-block; padding-right: 0.7rem;
 }
 .brand-name b {
@@ -110,20 +110,20 @@ button { cursor: pointer; }
   font-weight: 600; line-height: 1.1; letter-spacing: 0.01em;
 }
 .brand-name small {
-  display: block; font-size: var(--fs-note); letter-spacing: var(--track-wide);
+  display: block; font-size: var(--fs-xs); letter-spacing: var(--track-wide);
   text-transform: uppercase; color: var(--ink-40); margin-top: 0.15rem;
 }
 
 .strapline {
   margin: 0; align-self: center; padding: var(--s3) var(--s4);
   border-left: var(--bw) solid var(--line-dark);
-  font-size: var(--fs-note); letter-spacing: var(--track-wide);
+  font-size: var(--fs-xs); letter-spacing: var(--track-wide);
   text-transform: uppercase; line-height: 1.4; text-align: right;
   color: var(--ink-40);
 }
 .strapline i {
   display: block; margin-top: var(--s1); margin-left: auto;
-  width: 2.2rem; height: 3px; background: var(--copper);
+  width: 1.87rem; height: 3px; background: var(--copper);
 }
 
 /* ── Progress ────────────────────────────────────────────────────────────── */
@@ -133,16 +133,16 @@ button { cursor: pointer; }
 .step > button, .step > span {
   display: flex; flex-direction: column; align-items: center; gap: var(--s1);
   width: 8rem; padding: var(--s1) var(--s1); background: none; border: 0;
-  font-size: var(--fs-note); line-height: 1.3; text-align: center;
+  font-size: var(--fs-xs); line-height: 1.3; text-align: center;
   color: var(--ink-40);
 }
 .step > button { cursor: pointer; }
 .step:not(:last-child)::after {
-  content: ""; position: absolute; top: 1.4rem; left: 5.1rem; width: 5.8rem;
+  content: ""; position: absolute; top: 1.19rem; left: 5.1rem; width: 5.8rem;
   height: 1px; background: var(--line-dark);
 }
 .step-n {
-  width: 2.3rem; height: 2.3rem; border-radius: 50%;
+  width: 1.955rem; height: 1.955rem; border-radius: 50%;
   display: grid; place-items: center; font-size: var(--fs-xs); font-weight: 700;
   background: transparent; border: var(--bw) solid var(--line-dark);
   color: var(--ink-40); position: relative; z-index: 2;
@@ -150,12 +150,12 @@ button { cursor: pointer; }
 .step--done > button { color: var(--paper); }
 .step--done .step-n { background: var(--navy-700); border-color: var(--navy-700); color: var(--paper); }
 /* Completed reads completed without relying on colour alone. */
-.step--done .step-n::after { content: "✓"; font-size: var(--fs-note); }
+.step--done .step-n::after { content: "✓"; font-size: var(--fs-xs); }
 .step--done .step-n { font-size: 0; }
 .step--current > span { color: var(--paper); }
 .step--current .step-n { background: var(--paper); border-color: var(--paper); color: var(--navy-900); }
 .step--current .step-n::before {
-  content: ""; position: absolute; bottom: -0.55rem; width: 0.4rem; height: 0.4rem;
+  content: ""; position: absolute; bottom: -0.47rem; width: 0.34rem; height: 0.34rem;
   border-radius: 50%; background: var(--copper);
 }
 
@@ -168,7 +168,7 @@ button { cursor: pointer; }
   padding: var(--s5) var(--s4) var(--s6);
 }
 .rail-photo, .plate { display: block; width: 100%; margin: var(--s3) 0 var(--s4); }
-.rail-photo { height: 11rem; object-fit: cover; background: var(--line-soft); }
+.rail-photo { height: 9.35rem; object-fit: cover; background: var(--line-soft); }
 .plate {
   padding: var(--s4); background: linear-gradient(150deg, var(--navy-800), var(--navy-700));
   color: var(--paper);
@@ -200,7 +200,7 @@ button { cursor: pointer; }
 .rail-deal dd { margin: 0; text-align: right; font-weight: 700; }
 
 .rail-note {
-  font-size: var(--fs-note); color: var(--ink-55); line-height: var(--lh-body);
+  font-size: var(--fs-xs); color: var(--ink-55); line-height: var(--lh-body);
   margin: 0; padding-top: var(--s3); border-top: var(--bw) solid var(--line);
 }
 
@@ -218,7 +218,7 @@ button { cursor: pointer; }
   margin: var(--s6) 0 0; padding-top: var(--s4);
   border-top: var(--bw-accent) solid var(--copper);
 }
-.rail-mood img { display: block; width: 100%; height: 9rem; object-fit: cover; margin-bottom: var(--s2); }
+.rail-mood img { display: block; width: 100%; height: 7.65rem; object-fit: cover; margin-bottom: var(--s2); }
 .rail-mood figcaption {
   font-family: var(--font-serif); font-size: var(--fs-md); font-style: italic;
   color: var(--ink-70); line-height: var(--lh-heading);
@@ -255,14 +255,14 @@ button { cursor: pointer; }
   min-height: var(--tap); overflow: hidden;
   transition: border-color var(--dur) var(--ease);
 }
-.choice-pic { display: block; width: 100%; height: 6.5rem; object-fit: cover; }
+.choice-pic { display: block; width: 100%; height: 5.525rem; object-fit: cover; }
 .choice--plain .choice-body { padding: var(--s4); }
 .choice-body {
   display: flex; gap: var(--s2); align-items: flex-start;
   padding: var(--s3); min-height: var(--tap);
 }
 .choice-box {
-  width: 1.5rem; height: 1.5rem; flex: 0 0 auto; margin-top: 0.15rem;
+  width: 1.275rem; height: 1.275rem; flex: 0 0 auto; margin-top: 0.15rem;
   border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
   display: grid; place-items: center;
 }
@@ -281,7 +281,7 @@ button { cursor: pointer; }
   display: flex; align-items: baseline; gap: var(--s2);
 }
 .goal-head::before {
-  content: ""; width: 1.2rem; height: 3px; background: var(--copper); flex: 0 0 auto;
+  content: ""; width: 1.02rem; height: 3px; background: var(--copper); flex: 0 0 auto;
 }
 
 .products { display: flex; flex-direction: column; gap: var(--s4); }
@@ -318,8 +318,11 @@ button { cursor: pointer; }
 .config { border: 0; margin: 0 var(--s4) var(--s3); padding: var(--s3) 0 0; border-top: var(--bw) solid var(--line-soft); }
 .config legend { padding: 0; font-size: var(--fs-ui); font-weight: 700; }
 .config-row { display: flex; align-items: center; gap: var(--s2); min-height: var(--tap); }
-.config-row input { width: 1.778rem; height: 1.778rem; flex: 0 0 auto; accent-color: var(--copper); }
-.config-row label { font-size: var(--fs-ui); line-height: var(--lh-body); cursor: pointer; }
+.config-row input { width: 1.511rem; height: 1.511rem; flex: 0 0 auto; accent-color: var(--copper); }
+.config-row label {
+  font-size: var(--fs-ui); line-height: var(--lh-body); cursor: pointer;
+  flex: 1; display: flex; align-items: center; min-height: var(--tap);
+}
 .config-cost { color: var(--ink-55); }
 
 .product-actions {
@@ -335,7 +338,7 @@ button { cursor: pointer; }
   transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
 }
 .decision-mark {
-  width: 1.4rem; height: 1.4rem; flex: 0 0 auto; margin-right: var(--s2);
+  width: 1.19rem; height: 1.19rem; flex: 0 0 auto; margin-right: var(--s2);
   border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
   display: inline-grid; place-items: center;
 }
@@ -365,7 +368,7 @@ button { cursor: pointer; }
 
 /* ── Notes ───────────────────────────────────────────────────────────────── */
 .note {
-  font-size: var(--fs-note); color: var(--ink-70); line-height: var(--lh-body);
+  font-size: var(--fs-xs); color: var(--ink-70); line-height: var(--lh-body);
   margin: var(--s4) 0 0; max-width: var(--measure);
 }
 /* A data problem the customer is being asked to help catch. Marked, not
@@ -387,7 +390,7 @@ button { cursor: pointer; }
   box-shadow: var(--shadow-card); padding: var(--s5); margin-bottom: var(--s4);
 }
 .panel-head {
-  font-size: var(--fs-note); letter-spacing: var(--track-wide);
+  font-size: var(--fs-xs); letter-spacing: var(--track-wide);
   text-transform: uppercase; font-weight: 800; color: var(--ink-55);
   margin: 0 0 var(--s4); padding-bottom: var(--s2);
   border-bottom: var(--bw) solid var(--line-soft);
@@ -409,7 +412,7 @@ button { cursor: pointer; }
 /* A label that wraps ("Annual percentage rate") must not drop its own value
    below the other two, so each cell fills the row and pins its value down. */
 .terms > div { display: flex; flex-direction: column; justify-content: space-between; gap: var(--s1); }
-.terms dt { font-size: var(--fs-note); letter-spacing: var(--track-ui); text-transform: uppercase; font-weight: 700; color: var(--ink-55); }
+.terms dt { font-size: var(--fs-xs); letter-spacing: var(--track-ui); text-transform: uppercase; font-weight: 700; color: var(--ink-55); }
 .terms dd { margin: 0; font-family: var(--font-serif); font-size: var(--fs-lg); line-height: var(--lh-heading); }
 .terms--inline { margin: var(--s4) 0 0; padding-top: var(--s3); border-top: var(--bw) solid var(--line-soft); }
 .terms--inline dd { font-size: var(--fs-md); }
@@ -417,7 +420,7 @@ button { cursor: pointer; }
 .figures { border-top: var(--bw) solid var(--line); padding-top: var(--s5); display: flex; flex-wrap: wrap; gap: var(--s6); justify-content: space-between; }
 .panel > .figures:first-child { border-top: 0; padding-top: 0; }
 .figure { margin: 0; }
-.figure-label { display: block; font-size: var(--fs-note); letter-spacing: var(--track-ui); text-transform: uppercase; font-weight: 700; color: var(--ink-55); }
+.figure-label { display: block; font-size: var(--fs-xs); letter-spacing: var(--track-ui); text-transform: uppercase; font-weight: 700; color: var(--ink-55); }
 /* The payment is what the customer came for, so it is the largest thing on the
    screen -- larger than the heading above it. */
 .figure-value { display: block; font-family: var(--font-serif); font-size: var(--fs-pay); font-weight: 500; line-height: 1.05; letter-spacing: -0.02em; }
@@ -454,13 +457,13 @@ button { cursor: pointer; }
 
 /* ── Completion ──────────────────────────────────────────────────────────── */
 .done { max-width: var(--content); }
-.done-mark { color: var(--copper); font-size: 2.6rem; letter-spacing: -0.9rem; transform: rotate(180deg); display: inline-block; margin: 0 0 var(--s4); }
+.done-mark { color: var(--copper); font-size: 2.21rem; letter-spacing: -0.77rem; transform: rotate(180deg); display: inline-block; margin: 0 0 var(--s4); }
 .done-head { font-family: var(--font-serif); font-size: var(--fs-2xl); font-weight: 400; line-height: var(--lh-tight); margin: 0 0 var(--s2); max-width: 20ch; }
 .done-sub { font-family: var(--font-serif); font-style: italic; font-size: var(--fs-md); color: var(--ink-70); margin: 0 0 var(--s6); }
 
 .arc { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: var(--s4); max-width: 46rem; }
 .arc li { border-top: 3px solid var(--line); padding-top: var(--s3); display: flex; flex-direction: column; gap: var(--s1); }
-.arc-when { font-size: var(--fs-note); letter-spacing: var(--track-wide); text-transform: uppercase; font-weight: 800; color: var(--ink-55); }
+.arc-when { font-size: var(--fs-xs); letter-spacing: var(--track-wide); text-transform: uppercase; font-weight: 800; color: var(--ink-55); }
 .arc-what { font-size: var(--fs-xs); color: var(--ink-70); line-height: var(--lh-body); }
 .arc-now { border-top-color: var(--copper); border-top-width: 6px; }
 .arc-now .arc-when { color: var(--ink); }
@@ -473,7 +476,7 @@ button { cursor: pointer; }
   padding: var(--s4) var(--s7); background: var(--paper);
   border-top: var(--bw) solid var(--line); box-shadow: var(--shadow-sticky);
 }
-.actions-status { margin: 0; text-align: center; font-size: var(--fs-note); color: var(--ink-55); line-height: var(--lh-body); }
+.actions-status { margin: 0; text-align: center; font-size: var(--fs-xs); color: var(--ink-55); line-height: var(--lh-body); }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
   min-height: var(--tap); padding: var(--s2) var(--s5);
@@ -498,8 +501,8 @@ button { cursor: pointer; }
   gap: var(--s5); padding: var(--s5) var(--s5);
 }
 .colophon p { margin: 0; }
-.colophon b { display: block; font-size: var(--fs-note); letter-spacing: var(--track-wide); text-transform: uppercase; }
-.colophon span, .colophon small { display: block; font-size: var(--fs-note); color: var(--ink-40); margin-top: var(--s1); line-height: var(--lh-body); }
+.colophon b { display: block; font-size: var(--fs-xs); letter-spacing: var(--track-wide); text-transform: uppercase; }
+.colophon span, .colophon small { display: block; font-size: var(--fs-xs); color: var(--ink-40); margin-top: var(--s1); line-height: var(--lh-body); }
 .colophon-brand b { font-family: var(--font-serif); font-size: var(--fs-md); text-transform: none; letter-spacing: 0; }
 
 /* ── Narrower than a desk monitor ────────────────────────────────────────
@@ -556,7 +559,7 @@ button { cursor: pointer; }
   .step-label { display: none; }
   .step:not(:last-child)::after { left: 3.2rem; width: 1.6rem; }
   .rail { display: block; padding: var(--s4) var(--s3); }
-  .rail-photo { height: 8rem; margin: var(--s3) 0; }
+  .rail-photo { height: 6.8rem; margin: var(--s3) 0; }
   .plate { margin: var(--s3) 0; padding: var(--s3); }
   .plate-name { font-size: var(--fs-md); }
   .rail-note { display: none; }
@@ -573,7 +576,7 @@ button { cursor: pointer; }
   .display { font-size: var(--fs-2xl); }
   .display--sm { font-size: var(--fs-lg); }
   .figures { display: block; }
-  .figure-value { font-size: 3rem; }
+  .figure-value { font-size: 2.55rem; }
   .figure-split { margin-top: var(--s4); min-width: 0; }
   .panel, .note--panel { padding: var(--s4); }
   .choices { grid-template-columns: 1fr; }
