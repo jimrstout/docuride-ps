@@ -221,6 +221,63 @@ button { cursor: pointer; }
 @keyframes enter { from { opacity: .2; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { .screen.active { animation: none; } }
 
+/* ── Opening screen ───────────────────────────────────────────────────── */
+/* Sets the frame before anything is asked. Read once, at arm's length, so it
+   runs wider and looser than the working screens that follow. */
+.welcome { max-width: 52rem; }
+.welcome-photo {
+  height: 15rem; margin-bottom: var(--s4);
+  background-size: cover; background-position: center;
+  background-color: #edf0ef;
+}
+.welcome-vehicle {
+  font-size: var(--fs-xs); letter-spacing: .12em; text-transform: uppercase;
+  font-weight: 800; color: var(--orange); margin: 0 0 var(--s2);
+}
+.welcome h1 { font-size: var(--fs-2xl); max-width: 18ch; margin-bottom: var(--s4); }
+.welcome .intro { font-size: var(--fs-md); line-height: var(--lh-body); color: #33424a; margin-bottom: var(--s4); max-width: 46ch; }
+.welcome-body { font-size: var(--fs-base); line-height: var(--lh-roomy); color: #3f4c54; margin: 0 0 var(--s6); max-width: 62ch; }
+
+/* The three goals. One line each, and they are the same three the product
+   catalog files everything under, so the language matches what follows. */
+.goals { list-style: none; margin: 0 0 var(--s6); padding: 0; max-width: 46rem; }
+.goals li {
+  padding: var(--s3) 0 var(--s3) var(--s4);
+  border-left: 4px solid var(--orange);
+  margin-bottom: var(--s3);
+}
+.goals b { display: block; font-family: Georgia, serif; font-size: var(--fs-md); font-weight: 500; line-height: var(--lh-tight); }
+.goals span { display: block; font-size: var(--fs-base); color: #3f4c54; line-height: var(--lh-body); margin-top: var(--s1); }
+
+/* The ownership arc. The middle is where the customer is standing and where
+   every decision on the following screens lives, so it carries the weight --
+   the outer two are context and are deliberately quieter. */
+.arc {
+  list-style: none; margin: 0 0 var(--s6); padding: 0;
+  display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: var(--s4);
+  align-items: stretch; max-width: 46rem;
+}
+.arc li {
+  border-top: 3px solid #d8dcde; padding-top: var(--s3);
+  display: flex; flex-direction: column; gap: var(--s1);
+}
+.arc .arc-when {
+  font-size: var(--fs-xs); letter-spacing: .12em; text-transform: uppercase;
+  font-weight: 800; color: var(--muted);
+}
+.arc .arc-what { font-size: var(--fs-sm); color: #4b5760; line-height: var(--lh-body); }
+.arc .arc-now { border-top-color: var(--orange); border-top-width: 6px; }
+.arc .arc-now .arc-when { color: var(--ink); font-size: var(--fs-sm); }
+.arc .arc-now .arc-what {
+  font-family: Georgia, serif; font-size: var(--fs-md);
+  color: var(--ink); line-height: var(--lh-tight);
+}
+
+.welcome-close {
+  font-size: var(--fs-base); line-height: var(--lh-roomy); color: #3f4c54;
+  margin: 0; max-width: 62ch; border-top: 1px solid #e2e5e6; padding-top: var(--s4);
+}
+
 /* ── Discovery ────────────────────────────────────────────────────────── */
 .visual-options { display: grid; grid-template-columns: repeat(2, minmax(17rem, 1fr)); gap: var(--s4); max-width: 48rem; }
 .visual-option {
@@ -400,6 +457,9 @@ button { cursor: pointer; }
 }
 
 @media (max-width: 900px) {
+  /* Stacked, the arc reads as a sequence down the page; the middle keeps its
+     weight through type and rule rather than through width. */
+  .arc { grid-template-columns: 1fr; gap: var(--s3); }
   .product-head { grid-template-columns: 1fr; gap: var(--s3); }
   .price-block { text-align: left; }
   .price-block .duration { max-width: none; }

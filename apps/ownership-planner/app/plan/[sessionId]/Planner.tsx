@@ -73,6 +73,20 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   const [answers, setAnswers] = useState<string[]>(
     () => (initial.session.discovery?.use_context as string[]) ?? []
   );
+
+  // The opening screen frames what the following screens are for. It is part of
+  // step 1 rather than a step of its own: "Your Ownership" is exactly what it
+  // is about, and numbering it separately would tell the buyer the process is
+  // longer than it is for a screen that asks them nothing.
+  //
+  // A session being resumed skips it. Someone who already answered a question
+  // or decided a product is not arriving for the first time, and re-framing
+  // the exercise at them would read as having lost their place.
+  const [intro, setIntro] = useState(
+    () =>
+      (initial.selections?.length ?? 0) === 0 &&
+      (((initial.session.discovery?.use_context as string[]) ?? []).length === 0)
+  );
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [ackState, setAckState] = useState<"idle" | "working" | "done" | "error">("idle");
@@ -350,8 +364,87 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
           <div className="content-inner">
             <div className="overline section-label">{LABELS[step]}</div>
 
-            {/* ── 0. Discovery ─────────────────────────────────────────── */}
-            <div className={`screen ${step === 0 ? "active" : ""}`}>
+            {/* ── 0a. Opening ──────────────────────────────────────────── */}
+            {/* Sets the frame before anything is asked. No warnings and nothing
+                about the machine failing: the premise is that the customer
+                bought something worth owning, and these are the tools for
+                deciding which ongoing costs they would rather plan for. */}
+            <div className={`screen ${step === 0 && intro ? "active" : ""}`}>
+              <div className="welcome">
+                {photos.length > 0 ? (
+                  <div
+                    className="welcome-photo"
+                    style={{ backgroundImage: `url(${photos[0]})` }}
+                    role="img"
+                    aria-label={vehicleName}
+                  />
+                ) : null}
+
+                <p className="welcome-vehicle">{vehicleName || "Your vehicle"}</p>
+                <h1>Your vehicle. Your ownership. Your plan.</h1>
+                <p className="intro">
+                  You&apos;ve chosen the vehicle that&apos;s right for you. Now let&apos;s
+                  shape an ownership plan around how you want to own it.
+                </p>
+
+                <p className="welcome-body">
+                  Owning anything valuable comes with ongoing costs. Some are
+                  predictable, some aren&apos;t. The options that follow are tools for
+                  deciding which of those costs you&apos;d rather plan for now, spread
+                  into smaller amounts, or handle yourself later.
+                </p>
+
+                <ul className="goals">
+                  <li>
+                    <b>Keep ownership manageable.</b>
+                    <span>Structure payments and costs to fit your budget.</span>
+                  </li>
+                  <li>
+                    <b>Keep ownership enjoyable.</b>
+                    <span>Smooth out the peaks, so one expense doesn&apos;t interrupt a ride.</span>
+                  </li>
+                  <li>
+                    <b>Keep it valuable.</b>
+                    <span>Care for it now to preserve its condition and value.</span>
+                  </li>
+                </ul>
+
+                {/* The arc. The middle is where the customer is and where the
+                    decisions live, so it carries the weight; the outer two are
+                    context. */}
+                <ol className="arc">
+                  <li>
+                    <span className="arc-when">Today</span>
+                    <span className="arc-what">{vehicleName || "Your vehicle"} is yours.</span>
+                  </li>
+                  <li className="arc-now" aria-current="step">
+                    <span className="arc-when">Your Ownership</span>
+                    <span className="arc-what">
+                      {term !== null
+                        ? `The next ${term} months of using it`
+                        : "The years you'll spend using it"}
+                      , and which of its costs you&apos;d rather settle now.
+                    </span>
+                  </li>
+                  <li>
+                    <span className="arc-when">What&apos;s Next</span>
+                    <span className="arc-what">
+                      Its condition and its value, whenever you&apos;re ready for
+                      what comes after it.
+                    </span>
+                  </li>
+                </ol>
+
+                <p className="welcome-close">
+                  Nothing is preselected, and nothing here is expected of you. Any
+                  of it can be something you take care of yourself instead — that
+                  is a real choice, not a lesser one. It takes a few minutes.
+                </p>
+              </div>
+            </div>
+
+            {/* ── 0b. Discovery ────────────────────────────────────────── */}
+            <div className={`screen ${step === 0 && !intro ? "active" : ""}`}>
               <h1>{profile.question}</h1>
               <p className="intro">{profile.intro}</p>
               <div className="visual-options">
@@ -696,8 +789,12 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
           <footer>
             <button
               className="back"
-              onClick={() => setStep((s) => Math.max(0, s - 1))}
-              style={{ visibility: step === 0 ? "hidden" : "visible" }}
+              onClick={() => {
+                // Discovery goes back to the opening, not off the front of the flow.
+                if (step === 0) setIntro(true);
+                else setStep((s) => Math.max(0, s - 1));
+              }}
+              style={{ visibility: step === 0 && intro ? "hidden" : "visible" }}
             >
               ← BACK
             </button>
@@ -714,11 +811,23 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
               className="dark"
               disabled={step === 1 && presentable.length > 0 && !allDecided}
               onClick={() => {
+                // The opening is inside step 1, so leaving it advances the
+                // screen without advancing the step.
+                if (step === 0 && intro) {
+                  setIntro(false);
+                  return;
+                }
                 if (step === 3) void finish();
                 setStep((s) => Math.min(STEPS.length - 1, s + 1));
               }}
             >
-              {step === 3 ? "FINISH & SAVE PLAN" : step === 4 ? "DONE" : "CONTINUE"}
+              {step === 0 && intro
+                ? "BEGIN"
+                : step === 3
+                  ? "FINISH & SAVE PLAN"
+                  : step === 4
+                    ? "DONE"
+                    : "CONTINUE"}
               <span>→</span>
             </button>
           </footer>
