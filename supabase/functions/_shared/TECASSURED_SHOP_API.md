@@ -80,11 +80,26 @@ UTV, BIKE and AUTO.** That is TecAssured's inconsistency, observed directly, and
 it means the property list has to be taken from `requiredproperties` per
 vehicle type rather than hard-coded.
 
-The required set genuinely varies: UTV requires `inservice.date`, MCYC does not.
-PWAC, BOAT and RV require no `engine.ccs`; SNOW does.
+The required set genuinely varies. Cached from dealer 3-306 on 2026-09-25 by
+`fni-refresh-rate-properties`, every vehicle type DocuRide can produce:
 
-Every vehicle type tried is valid for dealer 3-306: `UTV MCYC ATV BIKE PWAC
-BOAT SNOW AUTO RV`.
+| vtype | properties | warranty spelled | needs `inservice.date` | needs `engine.ccs` |
+| --- | --- | --- | --- | --- |
+| ATV  | 17 | `warranty` | yes | yes |
+| BIKE | 17 | `Warranty` | yes | yes |
+| BOAT | 14 | *(not required)* | no | no |
+| MCYC | 16 | `warranty` | no | yes |
+| PWAC | 14 | *(not required)* | no | no |
+| SNOW | 15 | *(not required)* | no | yes |
+| UTV  | 17 | `Warranty` | yes | yes |
+
+Three types do not ask for a warranty property at all, and the two that spell it
+with a capital are not the two that need `inservice.date`. There is no rule to
+infer here, which is exactly why the request is built from this endpoint's answer
+rather than from a table in our code.
+
+`AUTO` and `RV` also answer for this dealer but are not in DocuRide's body-type
+map, so nothing can produce them.
 
 ## The Dealer ID mechanism is confirmed working
 

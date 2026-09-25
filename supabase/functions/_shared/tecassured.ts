@@ -19,7 +19,16 @@
 //   holds a client for a store cannot accidentally send another store's
 //   Dealer ID.
 //
-// Migration 0009 is the schema half of this.
+// Migration 0009 is the schema half of this; 0011 replaced the vehicle-types
+// cache with fni.store_rate_properties.
+//
+// ── What this client talks to ──────────────────────────────────────
+// Seven endpoints, all verified present on the QA server:
+//   /auth/loginrequest   /auth/loginassertion
+//   /rate                /rate/requiredproperties
+//   /contract/submit     /contract/document        /contract/void
+// /rate/vehicletypes is NOT among them and has been removed.
+// See _shared/TECASSURED_SHOP_API.md.
 //
 // ── Provenance ─────────────────────────────────────────────────────────
 // Brought into the repository on 2026-09-20 after only ever being deployed out
@@ -56,8 +65,6 @@ export interface StoreProviderAccount {
   provider: string;
   dealer_code: string;
   active: boolean;
-  vehicle_types_cache: unknown | null;
-  vehicle_types_cached_at: string | null;
 }
 
 export interface LoginRequestResponse { nonce: string; digest: string; salt: string; }
