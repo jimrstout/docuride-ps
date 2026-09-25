@@ -57,49 +57,74 @@ were data. The client checks the body, not the status.
 
 Note the leading space in `" Missing displacement."` — theirs, not a typo here.
 
-## The rate request is a properties array, not named fields
+## `/rate` needs BOTH formats in one body
 
-`/rate/requiredproperties` returns what a given dealer needs for a given vehicle
-type, and the names are **dotted, lowercase**, not the camelCase fields the
-build was sending:
+This is the thing that cost the most time, so it is worth stating flatly.
 
-```
-vin  fuel.type  year  make  model  new.used  engine.ccs
-finance.type  finance.amount  finance.apr  finance.term
-odometer  price  sale.date  inservice.date  postal.code
-warranty | Warranty
-```
+The documentation (§5, §6.2) describes `/rate` as top-level camelCase fields:
+`vin`, `odometer`, `vehiclePrice`, `financeAmount`, `displacement`, `fuelType`
+and so on. `/rate/requiredproperties` returns what looks like a competing wire
+format: dotted lowercase names (`engine.ccs`, `finance.amount`, `new.used`,
+`postal.code`) wrapped in a `properties` array.
 
-Sending the camelCase top-level fields (`vehiclePrice`, `financeAmount`,
-`purchaseType`, `inServiceDate`, …) produces `" Missing displacement."` even
-when `displacement` is supplied in `properties`. Sending the dotted names gets
-past that check. So the request is built from the properties array.
+They are not competing. §7.7 calls the dotted list **Form Properties** — it is
+the schema of the *rating form*, telling you which inputs this dealer's product
+set needs. The server wants the camelCase envelope **and** the properties array
+in the same request:
 
-**`warranty` is lowercase for MCYC and ATV and capitalised as `Warranty` for
-UTV, BIKE and AUTO.** That is TecAssured's inconsistency, observed directly, and
-it means the property list has to be taken from `requiredproperties` per
-vehicle type rather than hard-coded.
+| What we sent | What the server answered |
+|---|---|
+| Properties array alone | `{"error":"Array index out of range: 0"}` |
+| Top-level fields alone | `{"error":" Missing displacement."}` — `displacement` inside `properties` does not satisfy it |
+| **Both together** | **HTTP 200 and a full quote: 11 products, 41 rates** |
 
-The required set genuinely varies. Cached from dealer 3-306 on 2026-09-25 by
-`fni-refresh-rate-properties`, every vehicle type DocuRide can produce:
+Confirmed 2026-09-25 against Dealer ID 3-306 (QA, shared test account), UTV,
+serial `4XARSM994V8046456`. Quote reference number `2026092514`, ident `48582`.
 
-| vtype | properties | warranty spelled | needs `inservice.date` | needs `engine.ccs` |
-| --- | --- | --- | --- | --- |
-| ATV  | 17 | `warranty` | yes | yes |
-| BIKE | 17 | `Warranty` | yes | yes |
-| BOAT | 14 | *(not required)* | no | no |
-| MCYC | 16 | `warranty` | no | yes |
-| PWAC | 14 | *(not required)* | no | no |
-| SNOW | 15 | *(not required)* | no | yes |
-| UTV  | 17 | `Warranty` | yes | yes |
+`buildRateRequest()` in `_shared/rate-properties.ts` emits both halves from one
+set of stored values, so there is no second source of truth and the two halves
+cannot drift apart.
 
-Three types do not ask for a warranty property at all, and the two that spell it
-with a capital are not the two that need `inservice.date`. There is no rule to
-infer here, which is exactly why the request is built from this endpoint's answer
-rather than from a table in our code.
+### Where the two formats duplicate each other
 
-`AUTO` and `RV` also answer for this dealer but are not in DocuRide's body-type
-map, so nothing can produce them.
+Every name `/rate/requiredproperties` returns for UTV has a top-level
+counterpart. Five are the same name; the rest are renames.
+
+| requiredproperties | top-level | note |
+|---|---|---|
+| `vin` | `vin` | identical |
+| `year` | `year` | identical |
+| `make` | `make` | identical |
+| `model` | `model` | identical |
+| `odometer` | `odometer` | identical |
+| `price` | `vehiclePrice` | rename |
+| `new.used` | `purchaseType` + `vehicleStatus` | one value, two top-level fields |
+| `engine.ccs` | `displacement` | rename |
+| `fuel.type` | `fuelType` | rename **and** a different value domain — see below |
+| `warranty` / `Warranty` | `remainingMWM` | rename; the casing varies by vtype |
+| `finance.type` | `financeType` | rename |
+| `finance.amount` | `financeAmount` | rename |
+| `finance.apr` | `financeApr` | rename |
+| `finance.term` | `financeTerm` | rename |
+| `sale.date` | `saleDate` + `vehiclePurchaseDate` | one value, two top-level fields |
+| `inservice.date` | `inServiceDate` | rename |
+| `postal.code` | `customerPostalCode` | rename |
+
+Top-level fields with **no** requiredproperties counterpart, which therefore
+have to come from our own knowledge of the request rather than from the form
+schema: `dealerCode`, `sessionId`, `productType`, `rateDate`, `customerCity`,
+`customerState`, `customerCountry`.
+
+`fuelType` is the one place the two halves legitimately disagree on the *value*
+and not just the name. §6.5 documents single letters — `G`, `E`, `D` — while the
+form schema carries the word the form displays (`Gas`). The proven call sent
+`"fuelType": "G"` alongside `{"name":"fuel.type","value":"Gas"}` and rated, so
+the builder maps to the letter for the top-level field and echoes the stored
+word in the array. Do not "fix" this into a single value.
+
+`remainingMWM` is documented as conditional (used vehicles with remaining
+manufacturer warranty), but `requiredproperties` asks for `warranty` on every
+rateable vtype we have looked at, so we send it whenever we have a value.
 
 ## The Dealer ID mechanism is confirmed working
 
@@ -113,34 +138,39 @@ dealerCode 3-306  ->  gets past dealer validation
 That is the check the one-login/per-store-Dealer-ID design depends on, and it
 does what it should.
 
-## Open: `/rate` returns "Array index out of range: 0"
+## What a successful quote looks like
 
-With the login accepted, the Dealer ID accepted and every required property
-supplied, `/rate` answers:
+The 2026-09-25 call returned 78,618 bytes of JSON with a single top-level key,
+`quote`, holding `asyncModify`, `attributes`, `buyerPostal`, `calculating`,
+`client`, `createdIP`, `createdName`, `createdWhen`, `displayName`, `ident`,
+`lienholder`, `modifiedWhen`, `referenceNumber`, `rerateFlag`, `saleDate`,
+`status`, `taxRate`, `vehicles` and `webSite`.
 
-```json
-{"error":"Array index out of range: 0"}
-```
+Products hang off `quote.vehicles[0]`, each with a `rates` array. Every rate
+carries `attributes`, `consumables`, `dealerCost`, `dealerDeduct`, `expireDate`,
+`expireMiles`, `fromService`, `fromZero`, `fuzzy`, `graceDays`, `ident`,
+`options`, `product`, `providerMarkup`, `selected`, `subTotal`, `systemMarkup`,
+`termMiles`, `termMonths` and `unique`. `dealerCost` is the number
+`fni-contract-submit` validates against before it will submit.
 
-It is a server-side Java fault, not a validation message, and it is **unchanged**
-by:
+Two things worth knowing about the QA response:
 
-- vehicle type (UTV, MCYC, and an invented one all behave the same)
-- the properties array being complete, partial, or empty
-- wrapping the vehicle in `vehicles: [...]`, in `vehicle: {...}`, or neither
-- `productType` being `All` or omitted
+- **Every product came back labelled USED** (`USED PLATINUM UTV`,
+  `USED ATV/UTV CARE`, …) even though the request said `purchaseType: "New"`,
+  `vehicleStatus: "New"` and `new.used: "New"`. The quote does not echo back
+  enough to say why. Most likely the shared QA Dealer ID simply has only used
+  programs loaded. Worth confirming against the production Dealer ID before
+  anyone reads product names as a condition check.
+- **There is no `error` key on success.** The refusal check has to look for the
+  key, not for a non-200 — see "Errors come back as HTTP 200" above.
 
-Because an empty properties array and an invalid vehicle type produce exactly
-the same error, the server is failing **before** it reads the vehicle data. The
-two candidates are an envelope element the request still lacks, or the shared
-test Dealer ID having no rate programs configured on QA. Telling those apart
-needs the documentation or TecAssured; further guessing at their QA server is
-not a good use of anyone's time.
+## The request body we send
 
-## The request body we send for a UTV
+Generated by the deployed builder. `sessionId` comes from
+`/auth/loginassertion`; everything else is derived from the session row and the
+cached `fni.store_rate_properties` for that store and vtype.
 
-Generated by the deployed builder from the QA test session, for comparison
-against TecAssured's sample when it arrives. `sessionId` is added by the client.
+### UTV
 
 ```json
 {
@@ -148,41 +178,207 @@ against TecAssured's sample when it arrives. `sessionId` is added by the client.
   "dealerCode": "3-306",
   "vtype": "UTV",
   "productType": "All",
+  "rateDate": "2026-09-25",
+  "vin": "4XARSM994V8046456",
+  "year": "2027",
+  "make": "Polaris",
+  "model": "Ranger Crew XP 1000 Cab",
+  "odometer": "5",
+  "vehiclePrice": "28995",
+  "purchaseType": "New",
+  "vehicleStatus": "New",
+  "vehiclePurchaseDate": "2026-09-25",
+  "saleDate": "2026-09-25",
+  "inServiceDate": "2026-09-25",
+  "financeAmount": "30500",
+  "financeTerm": "60",
+  "financeType": "Purchase",
+  "financeApr": "8.99",
+  "customerCity": "Parkersburg",
+  "customerState": "WV",
+  "customerCountry": "US",
+  "customerPostalCode": "26101",
+  "displacement": "999",
+  "fuelType": "G",
+  "remainingMWM": "12",
   "properties": [
-    { "name": "vin",            "value": "4XARSM994V8046456" },
-    { "name": "fuel.type",      "value": "Gas" },
-    { "name": "year",           "value": "2027" },
-    { "name": "make",           "value": "Polaris" },
-    { "name": "model",          "value": "Ranger Crew XP 1000 Cab" },
-    { "name": "new.used",       "value": "New" },
-    { "name": "engine.ccs",     "value": "999" },
-    { "name": "finance.type",   "value": "Purchase" },
-    { "name": "finance.amount", "value": "30500" },
-    { "name": "finance.apr",    "value": "8.99" },
-    { "name": "finance.term",   "value": "60" },
-    { "name": "odometer",       "value": "5" },
-    { "name": "price",          "value": "28995" },
-    { "name": "sale.date",      "value": "2026-09-25" },
-    { "name": "inservice.date", "value": "2026-09-25" },
-    { "name": "Warranty",       "value": "12" },
-    { "name": "postal.code",    "value": "26101" }
+    {
+      "name": "vin",
+      "value": "4XARSM994V8046456"
+    },
+    {
+      "name": "fuel.type",
+      "value": "Gas"
+    },
+    {
+      "name": "year",
+      "value": "2027"
+    },
+    {
+      "name": "make",
+      "value": "Polaris"
+    },
+    {
+      "name": "model",
+      "value": "Ranger Crew XP 1000 Cab"
+    },
+    {
+      "name": "new.used",
+      "value": "New"
+    },
+    {
+      "name": "engine.ccs",
+      "value": "999"
+    },
+    {
+      "name": "finance.type",
+      "value": "Purchase"
+    },
+    {
+      "name": "finance.amount",
+      "value": "30500"
+    },
+    {
+      "name": "finance.apr",
+      "value": "8.99"
+    },
+    {
+      "name": "finance.term",
+      "value": "60"
+    },
+    {
+      "name": "odometer",
+      "value": "5"
+    },
+    {
+      "name": "price",
+      "value": "28995"
+    },
+    {
+      "name": "sale.date",
+      "value": "2026-09-25"
+    },
+    {
+      "name": "inservice.date",
+      "value": "2026-09-25"
+    },
+    {
+      "name": "Warranty",
+      "value": "12"
+    },
+    {
+      "name": "postal.code",
+      "value": "26101"
+    }
   ]
 }
 ```
 
-Three things to check it against:
+### ATV
 
-- **`Warranty` is capitalised** because that is how the server spelled it for
-  UTV. The stored value is lowercase `warranty`; the builder looks values up
-  case-insensitively and echoes the server's name. For MCYC the same session
-  produces lowercase `warranty`.
-- **Every name comes from `/rate/requiredproperties`**, in its order. Nothing is
-  added on our side — no `msrp`, no camelCase duplicates — and nothing required
-  is omitted.
-- **`Loan` is sent as `Purchase`**, and `condition` as `new.used`.
+Identical apart from `vtype` and the `warranty` casing the server itself chose —
+lowercase for ATV, capitalised for UTV. `remainingMWM` is spelled the same in
+both, because that name comes from the documentation rather than from the form
+schema.
 
-The unresolved part is the envelope, not the properties: `dealerCode`, `vtype`
-and `productType` are our best reading, and `/rate` still answers
-`{"error":"Array index out of range: 0"}` identically for an empty properties
-array and an invented vehicle type — so the server is failing before it reads
-any of this. That is what the sample is needed to settle.
+```json
+{
+  "sessionId": "<from /auth/loginassertion>",
+  "dealerCode": "3-306",
+  "vtype": "ATV",
+  "productType": "All",
+  "rateDate": "2026-09-25",
+  "vin": "4XARSM994V8046456",
+  "year": "2027",
+  "make": "Polaris",
+  "model": "Ranger Crew XP 1000 Cab",
+  "odometer": "5",
+  "vehiclePrice": "28995",
+  "purchaseType": "New",
+  "vehicleStatus": "New",
+  "vehiclePurchaseDate": "2026-09-25",
+  "saleDate": "2026-09-25",
+  "inServiceDate": "2026-09-25",
+  "financeAmount": "30500",
+  "financeTerm": "60",
+  "financeType": "Purchase",
+  "financeApr": "8.99",
+  "customerCity": "Parkersburg",
+  "customerState": "WV",
+  "customerCountry": "US",
+  "customerPostalCode": "26101",
+  "displacement": "999",
+  "fuelType": "G",
+  "remainingMWM": "12",
+  "properties": [
+    {
+      "name": "vin",
+      "value": "4XARSM994V8046456"
+    },
+    {
+      "name": "fuel.type",
+      "value": "Gas"
+    },
+    {
+      "name": "year",
+      "value": "2027"
+    },
+    {
+      "name": "make",
+      "value": "Polaris"
+    },
+    {
+      "name": "model",
+      "value": "Ranger Crew XP 1000 Cab"
+    },
+    {
+      "name": "new.used",
+      "value": "New"
+    },
+    {
+      "name": "engine.ccs",
+      "value": "999"
+    },
+    {
+      "name": "finance.type",
+      "value": "Purchase"
+    },
+    {
+      "name": "finance.amount",
+      "value": "30500"
+    },
+    {
+      "name": "finance.apr",
+      "value": "8.99"
+    },
+    {
+      "name": "finance.term",
+      "value": "60"
+    },
+    {
+      "name": "odometer",
+      "value": "5"
+    },
+    {
+      "name": "price",
+      "value": "28995"
+    },
+    {
+      "name": "sale.date",
+      "value": "2026-09-25"
+    },
+    {
+      "name": "inservice.date",
+      "value": "2026-09-25"
+    },
+    {
+      "name": "warranty",
+      "value": "12"
+    },
+    {
+      "name": "postal.code",
+      "value": "26101"
+    }
+  ]
+}
+```
