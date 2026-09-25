@@ -58,6 +58,7 @@ interface SessionRow {
   buyer_city: string | null;
   buyer_state: string | null;
   buyer_zip: string | null;
+  vehicle_properties: Record<string, unknown> | null;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -147,7 +148,7 @@ serve(async (req: Request) => {
         "vehicle_type_code", "unit_submodel", "odometer", "condition",
         "sale_price", "amount_financed", "apr", "finance_term",
         "finance_type", "in_service_date", "vin", "unit_year",
-        "unit_make", "unit_model", "sale_date",
+        "unit_make", "unit_model", "sale_date", "vehicle_properties",
       ];
 
       const patch: Record<string, unknown> = {};
@@ -239,12 +240,46 @@ serve(async (req: Request) => {
     if (sess.buyer_state) ratePayload.customerState = sess.buyer_state;
     if (sess.buyer_zip) ratePayload.customerPostalCode = sess.buyer_zip;
 
+    // Provider-required vehicle properties (displacement and friends) plus the
+    // one we have always sent. Session values win over msrp only if they name
+    // it explicitly, which is what lets a user correct it.
     const properties: { name: string; value: string }[] = [];
     if (sess.sale_price) properties.push({ name: "msrp", value: String(sess.sale_price) });
+
+    const extra = sess.vehicle_properties;
+    if (extra && typeof extra === "object" && !Array.isArray(extra)) {
+      for (const [name, value] of Object.entries(extra)) {
+        if (value === null || value === undefined || String(value).trim() === "") continue;
+        const i = properties.findIndex((p) => p.name === name);
+        const pair = { name, value: String(value) };
+        if (i >= 0) properties[i] = pair;
+        else properties.push(pair);
+      }
+    }
+
     if (properties.length > 0) ratePayload.properties = properties;
 
     // ── Step 6: Rate ───────────────────────────────────────────────────
     const offerResponse = await client.rateVehicle(ratePayload);
+
+    // ── A refusal is not an offer ──────────────────────────────────────
+    // TecAssured answers a rejected request with HTTP 200 and an error string
+    // -- {"error":" Missing displacement."} is a real one. Without this check
+    // that object was written to rated_offers as the offer and the session was
+    // marked "Rated", so the planner would have shown a customer a menu built
+    // from an error message. The session deliberately keeps its current status.
+    if (offerResponse && typeof offerResponse === "object") {
+      const err = (offerResponse as Record<string, unknown>).error;
+      if (typeof err === "string" && err.trim() !== "") {
+        return json(400, {
+          error: `TecAssured could not rate this vehicle: ${err.trim()}`,
+          tecassured_error: err.trim(),
+          dealer_code: dealerCode,
+          // Echoed so the fix is visible without re-deriving the request.
+          request: ratePayload,
+        });
+      }
+    }
 
     let productCount = 0;
     if (offerResponse && typeof offerResponse === "object") {
