@@ -29,6 +29,8 @@ import {
   clientFor,
   resetSessionCache,
 } from "../_shared/tecassured.ts";
+import { RATEABLE_VTYPES } from "../_shared/vehicle-types.ts";
+import { parseRequiredProperties } from "../_shared/rate-properties.ts";
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -176,29 +178,45 @@ serve(async (_req: Request) => {
         const start = Date.now();
         let apiOk = false;
         let error: string | null = null;
-        let typeCount: number | null = null;
-
-        // "Unavailable" is not "Failed". A missing endpoint says nothing about
-        // whether this Dealer ID is good, and recording it as a failure would
-        // put nine red rows against nine perfectly fine stores. See the note on
-        // getVehicleTypes in _shared/tecassured.ts.
+        let propertyCount: number | null = null;
         let scopeStatus: string | null = null;
 
+        // ── Probing with an endpoint that exists ──────────────────────────
+        // This used to call getVehicleTypes, which 404s: the check could only
+        // ever report "Unavailable" and never actually verified a Dealer ID.
+        //
+        // /rate/requiredproperties does verify one. A wrong Dealer ID is
+        // rejected outright -- TecAssured answers "Invalid Client Website
+        // Pair" -- so a dealer-scoped call that returns properties is real
+        // evidence that this store's Dealer ID is good on this login, which is
+        // exactly what this check is for.
+        //
+        // One vtype is enough. Asking about all seven would multiply every
+        // sweep by seven for no extra signal: the Dealer ID is either accepted
+        // or it is not. fni-refresh-rate-properties covers the rest nightly.
+        const probeVtype = RATEABLE_VTYPES[0];
+
         try {
-          const types = await client.getVehicleTypes(acct.dealer_code);
-          apiOk = !!types;
-          typeCount = countTypes(types);
-          if (apiOk && typeCount === 0) {
-            // The call worked and the dealer has nothing to sell. That is not a
-            // transport failure, but it is not a healthy store either.
-            error = "getVehicleTypes returned no vehicle types for this Dealer ID";
+          const response = await client.getRequiredProperties(probeVtype, acct.dealer_code);
+          const parsed = parseRequiredProperties(response);
+          propertyCount = parsed.names.length;
+          apiOk = true;
+
+          if (propertyCount === 0) {
+            // The dealer answered, and has nothing for this type. The Dealer ID
+            // is good; this vehicle type is simply not sold there. Not a fault,
+            // and not a failure of the login either.
+            scopeStatus = "Unavailable";
+            error =
+              `Dealer ID accepted, but no rateable products for ${probeVtype}. ` +
+              `See fni.store_rate_properties for the full per-type picture.`;
           }
         } catch (err) {
           if (err instanceof EndpointNotFoundError) {
             scopeStatus = "Unavailable";
             error =
               `Dealer ID not verified: ${err.url} does not exist on this server. ` +
-              `The login is fine. Needs the correct endpoint from the Shop API documentation.`;
+              `The login is fine.`;
           } else {
             error = errText(err);
           }
@@ -223,7 +241,8 @@ serve(async (_req: Request) => {
           store_id: acct.store_id,
           dealer_code: acct.dealer_code,
           status: scopeStatus ?? statusFor(apiOk, error),
-          vehicle_type_count: typeCount,
+          property_count: propertyCount,
+          probe_vtype: probeVtype,
           response_time_ms: ms,
           error,
         });
@@ -246,13 +265,3 @@ serve(async (_req: Request) => {
     return json(500, { error: message });
   }
 });
-
-/** TecAssured has returned both a bare array and a wrapper over one. */
-function countTypes(types: unknown): number {
-  if (Array.isArray(types)) return types.length;
-  if (types && typeof types === "object") {
-    const inner = (types as Record<string, unknown>).vehicleTypes;
-    if (Array.isArray(inner)) return inner.length;
-  }
-  return 0;
-}

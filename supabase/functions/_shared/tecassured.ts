@@ -305,6 +305,30 @@ export class TecAssuredClient {
       if (!isSessionRefusal(parsed)) return parsed as T;
     }
 
+    // ── The fall-through ───────────────────────────────────────────
+    // A refused session ALWAYS lands here, whether it was refused by status or
+    // by the body, and it always leads to a fresh login and exactly one retry.
+    // No path above can hand a refusal back to the caller.
+    //
+    // This fires more often than an expiry clock would explain. TecAssured's
+    // sessions appear to be bound to the calling IP, and an Edge Function's
+    // outbound address is not stable between invocations -- so a session cached
+    // twenty seconds ago by one isolate can be refused for the next, with no
+    // expiry involved. The 25-minute cache is still worth having; this path is
+    // what makes relying on it safe.
+    //
+    // Logged on one stable marker so the frequency is countable rather than
+    // guessed at. In the Supabase log explorer, over edge_logs:
+    //   event_message like '%TECASSURED_SESSION_REFUSED%'
+    // and retry=succeeded vs retry=refused separates "normal, handled" from
+    // "something is actually wrong with the account".
+    const refusedBy = refusedByStatus ? `status ${res.status}` : sessionRefusalText(parsed);
+    const mark = (outcome: string) =>
+      console.warn(
+        `TECASSURED_SESSION_REFUSED credential=${this.credentialId} path=${path} ` +
+          `refused_by=${JSON.stringify(refusedBy)} retry=${outcome}`
+      );
+
     await this.invalidateSession();
     await this.authenticate();
 
@@ -314,17 +338,23 @@ export class TecAssuredClient {
     }
     if (!retryRes.ok) {
       const text = await retryRes.text();
+      mark(`failed status=${retryRes.status}`);
       throw new Error(`TecAssured API call failed after re-auth (${retryRes.status}): ${text}`);
     }
 
     const retryParsed = await retryRes.json();
+
     if (isSessionRefusal(retryParsed)) {
-      // A fresh login still refused. That is not a session problem any more.
+      // A login that had just succeeded, refused on the very next call. That is
+      // not a session problem any more, so it is not retried a second time.
+      mark("refused");
       throw new Error(
         `TecAssured refused the session immediately after a successful login: ` +
           `${sessionRefusalText(retryParsed)}`
       );
     }
+
+    mark("succeeded");
     return retryParsed as T;
   }
 
@@ -350,27 +380,22 @@ export class TecAssuredClient {
   // ─── Endpoints ─────────────────────────────────────────────────────────
 
   /**
-   * ── This endpoint does not exist on the QA server ─────────────────────
-   * Probed on 2026-09-25 against https://ratessys-qa.com/rs/. Every spelling
-   * of /rate/vehicletypes returns a Tomcat 404 -- the path is absent, not the
-   * dealer. The probe is trustworthy in both directions: /rate/requiredproperties
-   * (lowercase) answers while /rate/requiredProperties 404s, and GET /rate
-   * returns 405 Method Not Allowed rather than 404, so a present path is
-   * distinguishable from a missing one. POST and GET were both tried.
+   * The property names this dealer needs to rate this vehicle type.
    *
-   * The other five endpoints this client uses -- /rate, /rate/requiredproperties,
-   * /contract/submit, /contract/document, /contract/void -- all answer.
+   * This is the endpoint the rate request is built from, and the reason the
+   * request is a properties array rather than a set of named fields. The names
+   * are dotted and lowercase (engine.ccs, finance.amount, sale.date) and the
+   * set differs by vehicle type -- UTV needs inservice.date, MCYC does not.
    *
-   * So this one is most likely wrong rather than merely unimplemented on QA.
-   * It is kept, and its absence is reported as "Unavailable" rather than a
-   * failure by both callers, because a missing path says nothing about whether
-   * a Dealer ID is good. Correcting it should be one string here.
+   * /rate/vehicletypes used to sit here. It does not exist on the server under
+   * any spelling or method, so it has been removed rather than left as a method
+   * that can only throw. This call answers the more useful question anyway, and
+   * a vtype the dealer does not sell comes back with nothing, which is the same
+   * information the missing endpoint would have given.
+   *
+   * See _shared/TECASSURED_SHOP_API.md.
    */
-  async getVehicleTypes(dealerCode?: string): Promise<unknown> {
-    return await this.apiCall("POST", "/rate/vehicletypes", { dealerCode: this.dealer(dealerCode) });
-  }
-
-  async getVehicleInputProperties(vtype: string, dealerCode?: string): Promise<unknown> {
+  async getRequiredProperties(vtype: string, dealerCode?: string): Promise<unknown> {
     return await this.apiCall("POST", "/rate/requiredproperties", {
       dealerCode: this.dealer(dealerCode),
       vtype,

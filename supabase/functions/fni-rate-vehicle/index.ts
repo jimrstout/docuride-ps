@@ -8,7 +8,23 @@
 //
 // Auth: FNI_WEBHOOK_SECRET via ?secret= query param or x-webhook-secret header
 //
-// ── One login, many dealers (2026-09-25) ────────────────────────────────
+// ── The request is built from what the server asks for (2026-09-25) ───
+// The rate request is NOT a set of named camelCase fields. TecAssured wants a
+// `properties` array whose names come from /rate/requiredproperties for this
+// dealer and this vehicle type -- dotted and lowercase: engine.ccs,
+// finance.amount, sale.date, postal.code. Sending the camelCase fields makes
+// the server ask for displacement even when displacement is supplied; sending
+// the dotted names gets past that check.
+//
+// So this function asks what is needed, then answers exactly that: one entry
+// per name, in the server's order, spelled the server's way. The spelling
+// matters -- `warranty` for MCYC and ATV, `Warranty` for UTV, BIKE and AUTO --
+// and echoing their name back is what keeps that from becoming a list of
+// exceptions in our code.
+//
+// A property we cannot supply stops the request rather than being omitted: a
+// rate built from a partial request is a rate for a different vehicle.
+//// ── One login, many dealers (2026-09-25) ────────────────────────────────
 // The dealer code used to come off the credential row, because a credential was
 // a store. It now comes from the store's mapping in
 // fni.store_provider_accounts, resolved through createTecAssuredClient(store),
@@ -22,8 +38,16 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createTecAssuredClient } from "../_shared/tecassured.ts";
+import { createTecAssuredClient, EndpointNotFoundError } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
+import {
+  buildRateProperties,
+  parseRequiredProperties,
+  readRateProperties,
+  writeRateProperties,
+  type RateSource,
+  type RequiredProperty,
+} from "../_shared/rate-properties.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -70,31 +94,8 @@ function json(status: number, body: unknown): Response {
   });
 }
 
-function formatDate(v: unknown): string | null {
-  if (!v) return null;
-  if (typeof v === "string") {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-    const d = new Date(v);
-    if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
-  }
-  return null;
-}
 
-function mapCondition(condition: string | null): string {
-  if (!condition) return "New";
-  const lower = condition.toLowerCase();
-  if (lower === "used" || lower === "pre-owned") return "Used";
-  return "New";
-}
 
-function mapFinanceType(financeType: string | null): string | null {
-  if (!financeType) return null;
-  const lower = financeType.toLowerCase();
-  if (lower === "loan") return "Purchase";
-  if (lower === "lease") return "Lease";
-  if (lower === "cash") return "Cash";
-  return null;
-}
 
 // ─── Main handler ────────────────────────────────────────────────────────
 
@@ -185,81 +186,91 @@ serve(async (req: Request) => {
 
     const { client, credentials, dealerCode } = store;
 
-    // ── Step 4: Validate required fields ───────────────────────────────
-    const missing: string[] = [];
-    if (!sess.vin) missing.push("vin");
-    if (!sess.vehicle_type_code) missing.push("vehicle_type_code");
-    if (sess.sale_price === null || sess.sale_price === undefined) missing.push("sale_price");
-    if (sess.odometer === null || sess.odometer === undefined) missing.push("odometer");
-    if (!sess.condition) missing.push("condition");
-    if (!sess.sale_date) missing.push("sale_date");
-
-    if (missing.length > 0) {
+    // ── Step 4: What does this dealer need for this vehicle type? ────────────
+    //
+    // Cached overnight by fni-refresh-rate-properties. Fetched live when the
+    // cache is cold or last said Unavailable, so a store configured this
+    // morning still rates today, and a dealer since given the product is not
+    // refused on a stale answer.
+    if (!sess.vehicle_type_code) {
       return json(400, {
         error: "Missing required fields for rating",
-        missing_fields: missing,
-        message: `The following fields are required before rating: ${missing.join(", ")}. Use the overrides parameter to provide them.`,
+        missing_fields: ["vehicle_type_code"],
+        message:
+          "The vehicle type decides which properties TecAssured needs, so it has " +
+          "to be set before rating. Use the overrides parameter.",
       });
     }
 
-    // ── Step 5: Build the rate request ─────────────────────────────────
-    const today = new Date().toISOString().split("T")[0];
-    const saleDate = formatDate(sess.sale_date) ?? today;
-    const inServiceDate = formatDate(sess.in_service_date) ?? saleDate;
-    const purchaseType = mapCondition(sess.condition);
+    const vtype = sess.vehicle_type_code;
+    let required: RequiredProperty[];
+
+    try {
+      const cached = await readRateProperties(supabase, store.account.id, vtype);
+
+      if (cached && cached.status === "Cached") {
+        required = parseRequiredProperties(cached.properties).properties;
+      } else {
+        const live = await client.getRequiredProperties(vtype);
+        required = (await writeRateProperties(supabase, store.account.id, vtype, live)).properties;
+      }
+    } catch (err) {
+      if (err instanceof EndpointNotFoundError) {
+        return json(502, {
+          error:
+            `TecAssured's ${err.url} is not answering, so the properties needed to ` +
+            `rate a ${vtype} cannot be determined.`,
+        });
+      }
+      return json(502, {
+        error:
+          `Could not determine what TecAssured needs to rate a ${vtype}: ` +
+          (err instanceof Error ? err.message : String(err)),
+      });
+    }
+
+    if (required.length === 0) {
+      // The dealer answered and had nothing. Not a fault: this Dealer ID does
+      // not sell this vehicle type.
+      return json(400, {
+        error: `Dealer ID ${dealerCode} has no rateable products for vehicle type ${vtype}.`,
+        vtype,
+        dealer_code: dealerCode,
+        status: "Unavailable",
+      });
+    }
+
+    // ── Step 5: Answer exactly what was asked ────────────────────────────────
+    const built = buildRateProperties(required, sess as unknown as RateSource);
+
+    if (built.missing.length > 0) {
+      // Reported with TecAssured's own description, because that is what tells
+      // an F&I user what to type. engine.ccs, fuel.type and warranty have no
+      // Zoho field behind them and are supplied via vehicle_properties.
+      return json(400, {
+        error: "Missing required fields for rating",
+        vtype,
+        missing_fields: built.missing.map((m) => m.name),
+        missing_detail: built.missing.map((m) => ({
+          name: m.name,
+          description: m.description ?? null,
+          type: m.type ?? null,
+        })),
+        message:
+          `TecAssured requires ${built.missing.map((m) => m.description ?? m.name).join(", ")} ` +
+          `to rate a ${vtype}. Supply them through overrides.vehicle_properties, keyed ` +
+          `by the property name.`,
+      });
+    }
 
     const ratePayload: Record<string, unknown> = {
       dealerCode,
-      vtype: sess.vehicle_type_code,
-      vin: sess.vin,
-      // NOTE: vehiclePrice is the vehicle selling price (Sold_1_Vehicle_DSP).
-      // TecAssured may want the total amount financed before F&I products for
-      // some calculations like GAP. Revisit once live rate responses confirm it.
-      vehiclePrice: String(sess.sale_price),
-      odometer: String(sess.odometer),
-      purchaseType,
-      vehicleStatus: purchaseType,
-      rateDate: today,
-      saleDate,
-      vehiclePurchaseDate: saleDate,
-      inServiceDate,
+      vtype,
       productType: "All",
+      properties: built.properties,
     };
 
-    if (sess.unit_year) ratePayload.year = String(sess.unit_year);
-    if (sess.unit_make) ratePayload.make = sess.unit_make;
-    if (sess.unit_model) ratePayload.model = sess.unit_model;
-    if (sess.amount_financed) ratePayload.financeAmount = String(sess.amount_financed);
-    if (sess.finance_term) ratePayload.financeTerm = String(sess.finance_term);
-    if (sess.apr) ratePayload.financeApr = String(sess.apr);
-
-    const financeType = mapFinanceType(sess.finance_type);
-    if (financeType) ratePayload.financeType = financeType;
-
-    if (sess.buyer_city) ratePayload.customerCity = sess.buyer_city;
-    if (sess.buyer_state) ratePayload.customerState = sess.buyer_state;
-    if (sess.buyer_zip) ratePayload.customerPostalCode = sess.buyer_zip;
-
-    // Provider-required vehicle properties (displacement and friends) plus the
-    // one we have always sent. Session values win over msrp only if they name
-    // it explicitly, which is what lets a user correct it.
-    const properties: { name: string; value: string }[] = [];
-    if (sess.sale_price) properties.push({ name: "msrp", value: String(sess.sale_price) });
-
-    const extra = sess.vehicle_properties;
-    if (extra && typeof extra === "object" && !Array.isArray(extra)) {
-      for (const [name, value] of Object.entries(extra)) {
-        if (value === null || value === undefined || String(value).trim() === "") continue;
-        const i = properties.findIndex((p) => p.name === name);
-        const pair = { name, value: String(value) };
-        if (i >= 0) properties[i] = pair;
-        else properties.push(pair);
-      }
-    }
-
-    if (properties.length > 0) ratePayload.properties = properties;
-
-    // ── Step 6: Rate ───────────────────────────────────────────────────
+    // ── Step 6: Rate ─────────────────────────────────────────────────────────
     const offerResponse = await client.rateVehicle(ratePayload);
 
     // ── A refusal is not an offer ──────────────────────────────────────

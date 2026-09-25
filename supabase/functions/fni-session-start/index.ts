@@ -30,6 +30,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getRecord, ZohoRecord } from "../_shared/zoho.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { vtypeForBodyType } from "../_shared/vehicle-types.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -44,27 +45,14 @@ interface StoreRow {
   zoho_store_location: string | null;
 }
 
-// ─── Zoho Body Type -> TecAssured vehicle type code ──────────────────────
-// Best-guess mapping. The actual available types come from getVehicleTypes per
-// dealer, now cached on the store mapping. The UI lets the user correct this.
-
-const BODY_TYPE_MAP: Record<string, string> = {
-  "ATV Off Road": "ATV",
-  "ATV": "ATV",
-  "SxS": "UTV",
-  "Street Motorcycle": "MCYC",
-  "3 Wheel Motorcycle": "MCYC",
-  "Motorcycle Off Road": "BIKE",
-  "Motocross Off Road": "BIKE",
-  "PWCs": "PWAC",
-  "Power Boats": "BOAT",
-  "Snowmobile": "SNOW",
-  //
-  // Not TecAssured-ratable (no mapping needed):
-  // Boat Trailers, Trailer, Trailers, Trailer - Utility, Electric Bicycle,
-  // Excavators, Commercial zero turns, Residential zero turns,
-  // Residential tractors, Tractors
-};
+// The Zoho body type -> TecAssured vtype map lives in _shared/vehicle-types.ts,
+// so that the list of vtypes this function can produce and the list
+// fni-refresh-rate-properties caches required properties for are one list.
+//
+// Its old comment said the real types come from getVehicleTypes. They do not:
+// that endpoint does not exist. A dealer that does not sell a type answers
+// /rate/requiredproperties with nothing, and fni.store_rate_properties records
+// that as Unavailable.
 
 // ─── Field helpers ───────────────────────────────────────────────────────
 
@@ -124,7 +112,7 @@ function mapSession(
 ): Record<string, unknown> {
   const lienholderParsed = parseCityStateZip(record.Lienholder_City_State_ZIP);
   const bodyType = text(record.Sold_1_Body_Type);
-  const vehicleTypeCode = bodyType ? BODY_TYPE_MAP[bodyType] ?? null : null;
+  const vehicleTypeCode = vtypeForBodyType(bodyType);
   const hasLienholder = !!text(record.Lienholder_Name);
   const financeType = hasLienholder ? "Loan" : "Cash";
   const saleDate = record.Sale_Date ?? null;
