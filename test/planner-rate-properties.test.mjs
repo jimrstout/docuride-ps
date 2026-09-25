@@ -99,11 +99,27 @@ test("the dotted names carry the values the camelCase fields used to", () => {
   assert.equal(built["engine.ccs"], "999");
 });
 
-test("Loan becomes Purchase, because that is TecAssured's word", () => {
+test("finance type uses TecAssured's own value list", () => {
+  // The quote echoes finance.type's allowed values: None, Loan, Balloon, Lease.
+  // "Purchase" -- which we used to send for a financed deal -- is not among
+  // them, and a cash deal is None rather than "Cash".
   const b = (t) => asMap(buildRateProperties(parseRequiredProperties(UTV).properties, session({ finance_type: t })));
-  assert.equal(b("Loan")["finance.type"], "Purchase");
+  assert.equal(b("Loan")["finance.type"], "Loan");
+  assert.equal(b("Cash")["finance.type"], "None");
   assert.equal(b("Lease")["finance.type"], "Lease");
-  assert.equal(b("Cash")["finance.type"], "Cash");
+});
+
+test("nothing anywhere still sends Purchase", () => {
+  // Cheap guard: this is the value the server does not document, and it rated
+  // only because finance.type was optional for this vtype.
+  const full = { ...session(), buyer_city: "Parkersburg", buyer_state: "WV" };
+  for (const t of ["Loan", "Cash", "Lease", null]) {
+    const { request } = buildRateRequest(parseRequiredProperties(UTV).properties,
+      { ...full, finance_type: t }, { dealerCode: "3-306", vtype: "UTV" });
+    assert.notEqual(request.financeType, "Purchase");
+    const prop = request.properties.find((x) => x.name === "finance.type");
+    if (prop) assert.notEqual(prop.value, "Purchase");
+  }
 });
 
 test("condition becomes new.used", () => {

@@ -35,6 +35,14 @@
 // So this rewrites the whole persistence half against the actual tables. The
 // TecAssured request building is unchanged apart from the dealer code.
 //
+// ── It also read product keys that do not exist (2026-09-25) ───────────
+// Against a real quote the product node carries `label`, `ptype` and `unique`,
+// not name/productName, productType/type or productId/id. So this recorded
+// product_name as the unique ("754_6") and product_type as "Unknown" for every
+// contract, and only got provider_product_id right by falling through to
+// `unique`. That reading now lives in _shared/offer-selections.ts, where the
+// real 78KB quote in test/fixtures/ is run against it.
+//
 // ── Dealer cost is validated BEFORE the call, not after ─────────────────
 // agreement_products.final_dealer_cost is NOT NULL, and a contract whose cost
 // we cannot state is a contract we cannot record. Checking after submitting
@@ -45,34 +53,18 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
+import {
+  applySelections,
+  deepClone,
+  str,
+  type ProductSelection,
+} from "../_shared/offer-selections.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
-
-interface ProductSelection {
-  product_unique: string;
-  rate_unique: string;
-  option_uniques?: string[];
-  retail_price: number;
-}
 
 interface ContractSubmitRequest {
   session_id: string;
   selections: ProductSelection[];
-}
-
-/** What the offer tells us about a selected rate, gathered while flagging it. */
-interface ResolvedSelection {
-  selection: ProductSelection;
-  productName: string;
-  productType: string;
-  providerProductId: string;
-  rateUniqueId: string;
-  termMonths: number | null;
-  termMiles: number | null;
-  deductible: number | null;
-  dealerCost: number | null;
-  optionCostTotal: number;
-  rateSnapshot: unknown;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -82,141 +74,6 @@ function json(status: number, body: unknown): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
-}
-
-function deepClone<T>(obj: T): T {
-  return JSON.parse(JSON.stringify(obj));
-}
-
-function arrayAt(obj: Record<string, unknown>, key: string): unknown[] | null {
-  return Array.isArray(obj[key]) ? (obj[key] as unknown[]) : null;
-}
-
-/** TecAssured money objects are { amount, currency }. */
-function amountOf(money: unknown): number | null {
-  if (!money || typeof money !== "object") return null;
-  const m = money as Record<string, unknown>;
-  return typeof m.amount === "number" ? m.amount : null;
-}
-
-function intOf(v: unknown): number | null {
-  if (typeof v === "number" && Number.isFinite(v)) return Math.round(v);
-  if (typeof v === "string" && v.trim() !== "") {
-    const n = parseFloat(v);
-    return Number.isFinite(n) ? Math.round(n) : null;
-  }
-  return null;
-}
-
-function numOf(v: unknown): number | null {
-  if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v === "string" && v.trim() !== "") {
-    const n = parseFloat(v);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
-}
-
-function str(v: unknown, fallback: string): string {
-  if (typeof v === "string" && v.trim() !== "") return v.trim();
-  if (typeof v === "number") return String(v);
-  return fallback;
-}
-
-/**
- * Flag the customer's choices on a copy of the offer, and gather what each
- * selected rate says about itself.
- *
- * Both jobs in one pass because they read the same nodes: doing them
- * separately means walking the offer twice and risking two different answers
- * to "which rate did they pick".
- */
-function applySelections(
-  offer: Record<string, unknown>,
-  selections: ProductSelection[]
-): ResolvedSelection[] {
-  const byProduct = new Map(selections.map((s) => [s.product_unique, s]));
-  const selectedOptions = new Set(selections.flatMap((s) => s.option_uniques ?? []));
-  const resolved: ResolvedSelection[] = [];
-
-  const vehicles = arrayAt(offer, "vehicles");
-  if (!vehicles) return resolved;
-
-  for (const vehicle of vehicles) {
-    const products = arrayAt(vehicle as Record<string, unknown>, "products");
-    if (!products) continue;
-
-    for (const product of products) {
-      const p = product as Record<string, unknown>;
-      const productUnique = String(p.unique ?? "");
-      const sel = byProduct.get(productUnique);
-
-      p.selected = !!sel;
-
-      const rates = arrayAt(p, "rates");
-      if (!rates) continue;
-
-      for (const rate of rates) {
-        const r = rate as Record<string, unknown>;
-        const rateUnique = String(r.unique ?? "");
-
-        if (!sel || rateUnique !== sel.rate_unique) {
-          r.selected = false;
-          const options = arrayAt(r, "options");
-          if (options) for (const o of options) (o as Record<string, unknown>).selected = false;
-          continue;
-        }
-
-        r.selected = true;
-
-        const dealerCost = amountOf(r.dealerCost);
-
-        let optionCostTotal = 0;
-        const options = arrayAt(r, "options");
-        if (options) {
-          for (const opt of options) {
-            const o = opt as Record<string, unknown>;
-            const optUnique = String(o.unique ?? "");
-            // A mandatory option is not a choice, so it rides along whether or
-            // not the customer ticked it.
-            if (selectedOptions.has(optUnique) || o.mandatory === true) {
-              o.selected = true;
-              optionCostTotal += amountOf(o.dealerCost) ?? 0;
-            } else {
-              o.selected = false;
-            }
-          }
-        }
-
-        if (dealerCost !== null && sel.retail_price > 0) {
-          const markupAmount = sel.retail_price - dealerCost - optionCostTotal;
-          r.systemMarkup = {
-            percentage: false,
-            adjustment: { amount: Math.max(0, markupAmount), currency: "USD" },
-          };
-          r.subTotal = { amount: sel.retail_price, currency: "USD" };
-        }
-
-        resolved.push({
-          selection: sel,
-          productName: str(p.name ?? p.productName ?? p.description, productUnique),
-          productType: str(p.productType ?? p.type ?? p.category, "Unknown"),
-          // What TecAssured calls this product elsewhere in its own API. The
-          // document and void endpoints take it, so it has to survive.
-          providerProductId: str(p.productId ?? p.id ?? productUnique, productUnique),
-          rateUniqueId: rateUnique,
-          termMonths: intOf(r.termMonths ?? r.term ?? r.months),
-          termMiles: intOf(r.termMiles ?? r.miles),
-          deductible: numOf(amountOf(r.deductible) ?? r.deductible),
-          dealerCost,
-          optionCostTotal,
-          rateSnapshot: r,
-        });
-      }
-    }
-  }
-
-  return resolved;
 }
 
 // ─── Main handler ────────────────────────────────────────────────────────

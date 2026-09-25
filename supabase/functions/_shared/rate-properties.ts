@@ -171,13 +171,29 @@ function text(v: unknown): string | null {
   return s === "" ? null : s;
 }
 
-/** Loan -> Purchase is TecAssured's word for the same thing. */
+/**
+ * TecAssured's own finance-type values, read off a real quote.
+ *
+ * The quote echoes the form schema for finance.type, and its allowed values are
+ * exactly: None, Loan, Balloon, Lease (keys N, F, B, L). "Purchase" is not one
+ * of them, and "Cash" is not either -- a cash deal is None.
+ *
+ * We previously sent "Purchase" for a financed deal. It rated, but only because
+ * finance.type is required: false for UTV and every product on the QA dealer
+ * came back financeable: false, so the value was very likely ignored rather
+ * than understood. On a financeable product that would misrate silently, which
+ * is the kind of thing that is only ever found in someone's payment.
+ *
+ * Balloon has no DocuRide counterpart yet: fni.sessions.finance_type is only
+ * ever Cash or Loan today. When one appears, add it here and to the session.
+ */
 function financeType(v: string | null): string | null {
   if (!v) return null;
   const lower = v.toLowerCase();
-  if (lower === "loan") return "Purchase";
+  if (lower === "cash" || lower === "none") return "None";
+  if (lower === "loan" || lower === "finance" || lower === "purchase") return "Loan";
+  if (lower === "balloon") return "Balloon";
   if (lower === "lease") return "Lease";
-  if (lower === "cash") return "Cash";
   return null;
 }
 

@@ -122,6 +122,14 @@ form schema carries the word the form displays (`Gas`). The proven call sent
 the builder maps to the letter for the top-level field and echoes the stored
 word in the array. Do not "fix" this into a single value.
 
+`financeType` is the other place the documentation misleads. The quote echoes
+finance.type's own value list — **None, Loan, Balloon, Lease** (keys N, F, B, L)
+— and "Purchase" is not in it. The bodies below send `Loan` for a financed deal
+and `None` for cash, corrected 2026-09-25. The proven call had sent "Purchase",
+which rated only because finance.type is `required: false` for UTV and every
+product came back `financeable: false`, so it was very likely ignored rather
+than understood.
+
 `remainingMWM` is documented as conditional (used vehicles with remaining
 manufacturer warranty), but `requiredproperties` asks for `warranty` on every
 rateable vtype we have looked at, so we send it whenever we have a value.
@@ -225,7 +233,7 @@ cached `fni.store_rate_properties` for that store and vtype.
   "inServiceDate": "2026-09-25",
   "financeAmount": "30500",
   "financeTerm": "60",
-  "financeType": "Purchase",
+  "financeType": "Loan",
   "financeApr": "8.99",
   "customerCity": "Parkersburg",
   "customerState": "WV",
@@ -265,7 +273,7 @@ cached `fni.store_rate_properties` for that store and vtype.
     },
     {
       "name": "finance.type",
-      "value": "Purchase"
+      "value": "Loan"
     },
     {
       "name": "finance.amount",
@@ -334,7 +342,7 @@ schema.
   "inServiceDate": "2026-09-25",
   "financeAmount": "30500",
   "financeTerm": "60",
-  "financeType": "Purchase",
+  "financeType": "Loan",
   "financeApr": "8.99",
   "customerCity": "Parkersburg",
   "customerState": "WV",
@@ -374,7 +382,7 @@ schema.
     },
     {
       "name": "finance.type",
-      "value": "Purchase"
+      "value": "Loan"
     },
     {
       "name": "finance.amount",
