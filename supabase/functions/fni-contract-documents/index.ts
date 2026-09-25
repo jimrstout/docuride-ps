@@ -27,13 +27,15 @@
 //
 // It had only ever been deployed out of band; this is its first appearance in
 // the repository.
+//
+// ── One login, many dealers (2026-09-25) ────────────────────────────────
+// The dealer code used to come off the credential row. It now comes from the
+// store's mapping, carried on the client, so getContractDocument no longer
+// takes one: a client built for a store cannot send another store's Dealer ID.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import {
-  TecAssuredClient,
-  TecAssuredCredentials,
-} from "../_shared/tecassured.ts";
+import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -100,7 +102,7 @@ serve(async (req: Request) => {
     const { data: session, error: sessErr } = await supabase
       .schema("fni")
       .from("sessions")
-      .select("credential_id")
+      .select("id, store_id, is_test, dealer_code_used")
       .eq("id", session_id)
       .single();
 
@@ -108,26 +110,26 @@ serve(async (req: Request) => {
       return json(404, { error: `Session ${session_id} not found` });
     }
 
-    if (!session.credential_id) {
-      return json(400, { error: "No credentials for this session" });
+    // ── Step 2: Which login, which Dealer ID ───────────────────────────
+    let store;
+    try {
+      store = await createTecAssuredClient(session.store_id, supabase);
+    } catch (err) {
+      return json(400, { error: err instanceof Error ? err.message : String(err) });
     }
+    const { client, dealerCode } = store;
 
-    // ── Step 2: Load credentials ───────────────────────────────────────
-    const { data: cred, error: credErr } = await supabase
-      .schema("fni")
-      .from("provider_credentials")
-      .select("*")
-      .eq("id", session.credential_id)
-      .single();
-
-    if (credErr || !cred) {
-      return json(400, { error: "TecAssured credentials not found" });
-    }
-
-    const credentials = cred as TecAssuredCredentials;
-
-    if (!credentials.dealer_code) {
-      return json(400, { error: "Dealer code not configured" });
+    // Documents must be fetched as the dealer that submitted the contract. If
+    // the store has since been repointed at a different Dealer ID, say so
+    // rather than asking TecAssured for another dealer's paperwork.
+    if (session.dealer_code_used && session.dealer_code_used !== dealerCode) {
+      return json(409, {
+        error:
+          `This session was submitted under Dealer ID ${session.dealer_code_used}, but the store ` +
+          `now maps to ${dealerCode}. Documents must be retrieved under the Dealer ID that submitted them.`,
+        submitted_under: session.dealer_code_used,
+        store_maps_to: dealerCode,
+      });
     }
 
     // ── Step 3: Find the agreement and its products ────────────────────
@@ -175,14 +177,12 @@ serve(async (req: Request) => {
     }
 
     // ── Step 4: Fetch documents from TecAssured ────────────────────────
-    const client = new TecAssuredClient(credentials, supabase);
     const results: DocumentResult[] = [];
     const signatureMapLines: string[] = [];
 
     for (const product of products) {
       try {
         const docResponse = await client.getContractDocument(
-          credentials.dealer_code!,
           product.provider_product_id,
           product.contract_number
         );
@@ -289,6 +289,14 @@ serve(async (req: Request) => {
       signature_map: signatureMapLines.join("\n"),
       retrieved_count: results.filter((r) => r.error === null).length,
       total_count: results.length,
+      dealer_code: dealerCode,
+      // A synthetic session run against the provider's shared test account.
+      // Its buyer data is invented and it has no Zoho deal behind it, so
+      // nothing here may be written back. No PS function performs a write-back
+      // today -- the Deluge side does -- so this is the flag that tells it not
+      // to, stated at the boundary rather than assumed downstream.
+      is_test: session.is_test === true,
+      zoho_writeback: session.is_test === true ? "Suppressed -- test session" : "Not attempted here",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
