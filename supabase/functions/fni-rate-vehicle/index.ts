@@ -18,13 +18,15 @@
 //
 // So this function asks what is needed, then answers exactly that: one entry
 // per name, in the server's order, spelled the server's way. The spelling
-// matters -- `warranty` for MCYC and ATV, `Warranty` for UTV, BIKE and AUTO --
-// and echoing their name back is what keeps that from becoming a list of
-// exceptions in our code.
+// matters, and there is no rule to it: `warranty` for ATV and MCYC,
+// `Warranty` for UTV and BIKE, and not asked for at all by BOAT, PWAC or SNOW.
+// Echoing their name back is what keeps that from becoming a list of exceptions
+// in our code.
 //
 // A property we cannot supply stops the request rather than being omitted: a
 // rate built from a partial request is a rate for a different vehicle.
-//// ── One login, many dealers (2026-09-25) ────────────────────────────────
+//
+// ── One login, many dealers (2026-09-25) ────────────────────────────────
 // The dealer code used to come off the credential row, because a credential was
 // a store. It now comes from the store's mapping in
 // fni.store_provider_accounts, resolved through createTecAssuredClient(store),
