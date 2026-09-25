@@ -205,3 +205,88 @@ test("body types map the way the planner expects", () => {
   assert.equal(vtypeForBodyType("Tractors"), null, "not TecAssured-ratable");
   assert.equal(vtypeForBodyType(null), null);
 });
+
+// ── The combined request ──────────────────────────────────────────────────
+// Proved against the QA server on 2026-09-25: documented top-level fields PLUS
+// the requiredproperties array rates; either half alone does not.
+
+import { buildRateRequest } from "../supabase/functions/_shared/rate-properties.ts";
+
+const full = (over = {}) => ({ ...session(), buyer_city: "Parkersburg", buyer_state: "WV", ...over });
+const opts = { dealerCode: "3-306", vtype: "UTV", rateDate: "2026-09-25" };
+
+test("the request carries both halves", () => {
+  const { request, missing } = buildRateRequest(parseRequiredProperties(UTV).properties, full(), opts);
+  assert.deepEqual(missing, []);
+  // The documented half.
+  assert.equal(request.vehiclePrice, "28995");
+  assert.equal(request.displacement, "999");
+  assert.equal(request.remainingMWM, "12");
+  // And the form-schema half, untouched.
+  assert.equal(request.properties.length, 17);
+  assert.equal(request.properties.find((p) => p.name === "price").value, "28995");
+});
+
+test("fuelType is the documented code, not the word we store", () => {
+  // Section 6.5 lists only G, E and D. "Gas" is not a documented value.
+  const r = (v) => buildRateRequest(parseRequiredProperties(UTV).properties,
+    full({ vehicle_properties: { "engine.ccs": "999", "fuel.type": v, warranty: "12" } }), opts).request;
+  assert.equal(r("Gas").fuelType, "G");
+  assert.equal(r("G").fuelType, "G");
+  assert.equal(r("Electric").fuelType, "E");
+  assert.equal(r("Diesel").fuelType, "D");
+  // The array still echoes what was stored, which is what the proven call sent.
+  assert.equal(r("Gas").properties.find((p) => p.name === "fuel.type").value, "Gas");
+});
+
+test("one stored value feeds both names for engine size and warranty", () => {
+  const { request } = buildRateRequest(parseRequiredProperties(UTV).properties, full(), opts);
+  assert.equal(request.displacement, request.properties.find((p) => p.name === "engine.ccs").value);
+  assert.equal(request.remainingMWM, request.properties.find((p) => p.name === "Warranty").value);
+});
+
+test("a capitalised stored Warranty still reaches remainingMWM", () => {
+  const { request } = buildRateRequest(parseRequiredProperties(MCYC).properties,
+    full({ vehicle_properties: { "engine.ccs": "636", "fuel.type": "Gas", Warranty: "9" } }), { ...opts, vtype: "MCYC" });
+  assert.equal(request.remainingMWM, "9");
+  assert.equal(request.properties.find((p) => p.name === "warranty").value, "9");
+});
+
+test("purchaseType and vehicleStatus are both sent from the one value", () => {
+  // Section 6.2 calls vehicleStatus a duplicate of purchaseType and marks both Required.
+  const r = (c) => buildRateRequest(parseRequiredProperties(UTV).properties, full({ condition: c }), opts).request;
+  assert.equal(r("New").purchaseType, "New");
+  assert.equal(r("New").vehicleStatus, "New");
+  assert.equal(r("Used").vehicleStatus, "Used");
+});
+
+test("an optional field with no value is omitted, not sent empty", () => {
+  const { request } = buildRateRequest(parseRequiredProperties(MCYC).properties,
+    full({ amount_financed: null, apr: null, finance_term: null }), { ...opts, vtype: "MCYC" });
+  assert.equal("financeAmount" in request, false);
+  assert.equal("financeApr" in request, false);
+  assert.equal("financeTerm" in request, false);
+  // Required ones are still there.
+  assert.equal(request.vehiclePrice, "28995");
+});
+
+test("every requiredproperties name has a top-level counterpart", () => {
+  // The two formats are near-complete duplicates under different names. This
+  // pins the mapping so a rename on either side is caught here.
+  const counterpart = {
+    "vin": "vin", "year": "year", "make": "make", "model": "model",
+    "odometer": "odometer", "price": "vehiclePrice",
+    "new.used": "purchaseType", "engine.ccs": "displacement",
+    "fuel.type": "fuelType", "warranty": "remainingMWM", "Warranty": "remainingMWM",
+    "finance.type": "financeType", "finance.amount": "financeAmount",
+    "finance.apr": "financeApr", "finance.term": "financeTerm",
+    "sale.date": "saleDate", "inservice.date": "inServiceDate",
+    "postal.code": "customerPostalCode",
+  };
+  const { request } = buildRateRequest(parseRequiredProperties(UTV).properties, full(), opts);
+  for (const prop of request.properties) {
+    const top = counterpart[prop.name];
+    assert.ok(top, `no known top-level counterpart for ${prop.name}`);
+    assert.ok(top in request, `${prop.name} maps to ${top}, which is not in the request`);
+  }
+});

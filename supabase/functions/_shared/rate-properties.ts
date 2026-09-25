@@ -152,6 +152,8 @@ export interface RateSource {
   finance_type: string | null;
   sale_date: string | null;
   in_service_date: string | null;
+  buyer_city: string | null;
+  buyer_state: string | null;
   buyer_zip: string | null;
   vehicle_properties: Record<string, unknown> | null;
 }
@@ -262,4 +264,132 @@ export function buildRateProperties(
   }
 
   return { properties, missing };
+}
+
+// ─── The request ─────────────────────────────────────────────────────
+//
+// Proved against the QA server on 2026-09-25: dealer 3-306, the Ranger test
+// VIN, 11 products and 41 rates back with real dealer costs. What made it work
+// was sending BOTH halves.
+//
+// ── Why both ──────────────────────────────────────────────────────────
+// The documented /rate (section 5) takes named top-level camelCase fields.
+// /rate/requiredproperties returns dotted lowercase keys -- and section 7.7
+// names those "Form Properties", "the programmatic key (e.g. finance.type,
+// new.used)". They are the schema for the data-entry form, not the wire format.
+//
+// So the two are near-complete duplicates of each other under different names:
+// price/vehiclePrice, engine.ccs/displacement, Warranty/remainingMWM,
+// postal.code/customerPostalCode, and so on. Sending only the properties array
+// failed; sending only the camelCase fields failed with " Missing
+// displacement." because displacement was in the array rather than at the top.
+// Sending both rates.
+//
+// The array is still what requiredproperties asked for, because that is what
+// says which data a given dealer needs for a given vehicle type -- and it is
+// the thing that decides whether we have enough to rate at all.
+
+/** Section 6.5. The only documented values; "Gas" is not one of them. */
+const FUEL_TYPE_CODES: Record<string, string> = {
+  g: "G", gas: "G", gasoline: "G", petrol: "G",
+  e: "E", electric: "E", ev: "E",
+  d: "D", diesel: "D",
+};
+
+function fuelCode(v: unknown): string | null {
+  const raw = text(v);
+  return raw ? FUEL_TYPE_CODES[raw.toLowerCase()] ?? null : null;
+}
+
+export interface RateRequestOptions {
+  dealerCode: string;
+  vtype: string;
+  /** Defaults to today. The date the actuarial tables are pulled for. */
+  rateDate?: string;
+}
+
+export interface BuiltRateRequest {
+  request: Record<string, unknown>;
+  missing: RequiredProperty[];
+}
+
+/**
+ * The full /rate body: documented top-level fields plus the properties array.
+ *
+ * A field is omitted when its value is null rather than sent empty -- section
+ * 6.2 marks most of them optional, and an empty string is not the same as
+ * absent. `missing` still reports only what requiredproperties asked for and we
+ * could not answer, because that list is what decides whether a rate is
+ * possible; a null optional top-level field is not a blocker.
+ */
+export function buildRateRequest(
+  required: RequiredProperty[],
+  source: RateSource,
+  opts: RateRequestOptions
+): BuiltRateRequest {
+  const built = buildRateProperties(required, source);
+
+  const supplied = new Map<string, unknown>();
+  const extra = source.vehicle_properties;
+  if (extra && typeof extra === "object" && !Array.isArray(extra)) {
+    for (const [k, v] of Object.entries(extra)) supplied.set(k.toLowerCase(), v);
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  const saleDate = isoDate(source.sale_date) ?? today;
+  const inService = isoDate(source.in_service_date) ?? saleDate;
+  const status = newUsed(source.condition);
+
+  // Engine size and warranty months live under different names in the two
+  // formats. One stored value feeds both; the lookup is case-insensitive so a
+  // stored `warranty` answers `Warranty` here as it does in the array.
+  const displacement = text(supplied.get("engine.ccs")) ?? text(supplied.get("displacement"));
+  const warrantyMonths = text(supplied.get("warranty")) ?? text(supplied.get("remainingmwm"));
+  const fuel = fuelCode(supplied.get("fuel.type") ?? supplied.get("fueltype"));
+
+  const request: Record<string, unknown> = {
+    dealerCode: opts.dealerCode,
+    vtype: opts.vtype,
+    productType: "All",
+    rateDate: opts.rateDate ?? today,
+
+    vin: text(source.vin),
+    year: text(source.unit_year),
+    make: text(source.unit_make),
+    model: text(source.unit_model),
+    odometer: text(source.odometer),
+    vehiclePrice: text(source.sale_price),
+
+    // Section 6.2 calls vehicleStatus a duplicate of purchaseType. Both are
+    // marked Required, so both are sent from the one value rather than one
+    // being inferred.
+    purchaseType: status,
+    vehicleStatus: status,
+
+    vehiclePurchaseDate: saleDate,
+    saleDate,
+    inServiceDate: inService,
+
+    financeAmount: text(source.amount_financed),
+    financeTerm: text(source.finance_term),
+    financeType: financeType(source.finance_type),
+    financeApr: text(source.apr),
+
+    customerCity: text(source.buyer_city),
+    customerState: text(source.buyer_state),
+    customerCountry: "US",
+    customerPostalCode: text(source.buyer_zip),
+
+    displacement,
+    fuelType: fuel,
+    remainingMWM: warrantyMonths,
+  };
+
+  for (const [k, v] of Object.entries(request)) {
+    if (v === null || v === undefined) delete request[k];
+  }
+
+  request.properties = built.properties;
+
+  return { request, missing: built.missing };
 }

@@ -16,15 +16,21 @@
 // the server ask for displacement even when displacement is supplied; sending
 // the dotted names gets past that check.
 //
-// So this function asks what is needed, then answers exactly that: one entry
-// per name, in the server's order, spelled the server's way. The spelling
-// matters, and there is no rule to it: `warranty` for ATV and MCYC,
-// `Warranty` for UTV and BIKE, and not asked for at all by BOAT, PWAC or SNOW.
-// Echoing their name back is what keeps that from becoming a list of exceptions
-// in our code.
+// So this function asks what is needed, then sends BOTH halves: the documented
+// top-level fields, and a properties array with one entry per name
+// requiredproperties asked for, in its order, spelled its way. Proved against
+// the QA server on 2026-09-25 -- 11 products, 41 rates. Sending either half
+// alone fails. See _shared/rate-properties.ts for why the two formats are
+// near-duplicates of each other.
 //
-// A property we cannot supply stops the request rather than being omitted: a
-// rate built from a partial request is a rate for a different vehicle.
+// The spelling in the array matters and has no rule to it: `warranty` for ATV
+// and MCYC, `Warranty` for UTV and BIKE, and not asked for at all by BOAT,
+// PWAC or SNOW. Echoing their name back keeps that from becoming a list of
+// exceptions here.
+//
+// A property requiredproperties asked for that we cannot supply stops the
+// request rather than being omitted: a rate built from a partial request is a
+// rate for a different vehicle.
 //
 // ── One login, many dealers (2026-09-25) ────────────────────────────────
 // The dealer code used to come off the credential row, because a credential was
@@ -43,7 +49,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient, EndpointNotFoundError } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
 import {
-  buildRateProperties,
+  buildRateRequest,
   parseRequiredProperties,
   readRateProperties,
   writeRateProperties,
@@ -95,9 +101,6 @@ function json(status: number, body: unknown): Response {
     headers: { "Content-Type": "application/json" },
   });
 }
-
-
-
 
 // ─── Main handler ────────────────────────────────────────────────────────
 
@@ -243,7 +246,10 @@ serve(async (req: Request) => {
     }
 
     // ── Step 5: Answer exactly what was asked ────────────────────────────────
-    const built = buildRateProperties(required, sess as unknown as RateSource);
+    const built = buildRateRequest(required, sess as unknown as RateSource, {
+      dealerCode,
+      vtype,
+    });
 
     if (built.missing.length > 0) {
       // Reported with TecAssured's own description, because that is what tells
@@ -265,12 +271,7 @@ serve(async (req: Request) => {
       });
     }
 
-    const ratePayload: Record<string, unknown> = {
-      dealerCode,
-      vtype,
-      productType: "All",
-      properties: built.properties,
-    };
+    const ratePayload = built.request;
 
     // ── Step 6: Rate ─────────────────────────────────────────────────────────
     const offerResponse = await client.rateVehicle(ratePayload);
