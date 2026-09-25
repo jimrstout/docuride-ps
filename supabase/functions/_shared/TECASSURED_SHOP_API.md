@@ -140,7 +140,7 @@ does what it should.
 
 ## What a successful quote looks like
 
-The 2026-09-25 call returned 78,618 bytes of JSON with a single top-level key,
+The 2026-09-25 call returned 78,708 bytes of JSON with a single top-level key,
 `quote`, holding `asyncModify`, `attributes`, `buyerPostal`, `calculating`,
 `client`, `createdIP`, `createdName`, `createdWhen`, `displayName`, `ident`,
 `lienholder`, `modifiedWhen`, `referenceNumber`, `rerateFlag`, `saleDate`,
@@ -163,6 +163,39 @@ Two things worth knowing about the QA response:
   anyone reads product names as a condition check.
 - **There is no `error` key on success.** The refusal check has to look for the
   key, not for a non-200 — see "Errors come back as HTTP 200" above.
+
+### The product node's keys are not the ones you would guess
+
+Read off the real response, because three of them are load-bearing and none is
+named what the Offer Format section implies. A product under
+`quote.vehicles[0].products[]` carries:
+
+```
+adminid, administrator, attributes, blurb, customizable, desc, extraInfo,
+financeable, formFields, ident, label, preview, properties, provider,
+providerTaxes, ptype, rateClass, rates, selected, siteid, sortOrder,
+taxRate, unique, vehicle
+```
+
+| What you want | The key | Not |
+|---|---|---|
+| Display name | `label` (e.g. `USED PLATINUM UTV (Side by Side) - RIDERS ADVANTAGE PPM`) | `name`, `productName`, `description` |
+| Product type | `ptype` — `BAT`, `PPM`, `TAW`, `THP`, `VSA` | `productType`, `type`, `category` |
+| Identifier | `unique` (e.g. `754_6`, `84_7`) | `productId`, `id` |
+
+`ident` exists but is **`"0"` on every one of the eleven products**, so it is not
+an identifier despite the name. `unique` is. Rates have their own `unique`
+(e.g. `34343`), which is what a selection names.
+
+`dealerCost` **is** a `{ amount, currency }` object (`{"amount":115,"currency":"USD"}`),
+so code that reads `.amount` is right. Rates also carry `termMiles: 0`
+throughout for this vtype, and every product came back `financeable: false`.
+
+`fni-contract-submit` reads `name`/`productName`, `productType`/`type` and
+`productId`/`id`, so against a real offer it records `product_name` as the
+unique (`754_6`) and `product_type` as `"Unknown"`. Its `provider_product_id`
+falls through to `unique`, which is correct by accident. Not yet fixed — that
+function is deliberately deployed and untested until submit is exercised.
 
 ## The request body we send
 
