@@ -139,6 +139,10 @@
      column. The cards were drawn at 820px, which left a third of a desk
      monitor empty. */
   --content: 61.111rem;  /* 1100px */
+  /* The internal console's table. Wider than --content because a list of
+     deals is scanned across, not read down: every 100px here is a vehicle
+     name that stops wrapping onto a second line. */
+  --content-wide: 77.778rem; /* 1400px */
   --measure: 62ch;
   --measure-tight: 46ch;
   --rail: 21rem;         /* 378px */

@@ -113,4 +113,24 @@ export const edge = {
 
   documents: <T>(body: unknown) =>
     call<T>("fni-contract-documents", { method: "POST", body }),
+
+  // ── The internal console ────────────────────────────────────────────
+  // Same seam, same secret, same reason: the browser cannot hold it. The
+  // console's own sign-in decides who reaches this layer; the secret decides
+  // that only this layer reaches Supabase.
+
+  adminAuth: <T>(email: string, password: string) =>
+    call<T>("fni-admin-auth", { method: "POST", body: { email, password } }),
+
+  adminSessions: <T>(limit: number) =>
+    call<T>("fni-admin-sessions", {
+      method: "GET",
+      query: { limit: String(limit) },
+    }),
+
+  adminExtend: <T>(sessionId: string, hours: number) =>
+    call<T>("fni-admin-sessions", {
+      method: "POST",
+      body: { session_id: sessionId, hours },
+    }),
 };

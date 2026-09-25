@@ -151,3 +151,31 @@ export function num(v: string | number | null | undefined): number | null {
   const n = typeof v === "number" ? v : parseFloat(v);
   return Number.isFinite(n) ? n : null;
 }
+
+// ── The internal console ──────────────────────────────────────────────────
+// What fni-admin-sessions returns. Deliberately narrow: no buyer, co-buyer,
+// lienholder or VIN field appears here because the Edge Function never sends
+// one, and this type is the record of that.
+
+export interface ConsoleSessionRow {
+  id: string;
+  deal_number: string | null;
+  status: string | null;
+  mode: SessionMode | null;
+  store_name: string | null;
+  year: number | null;
+  make: string | null;
+  model: string | null;
+  submodel: string | null;
+  stock_number: string | null;
+  created_at: string;
+  expires_at: string;
+  /** Decided by the Edge Function against one clock, never recomputed here. */
+  expired: boolean;
+}
+
+export interface ConsoleListPayload {
+  limit: number;
+  as_of: string;
+  sessions: ConsoleSessionRow[];
+}

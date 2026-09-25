@@ -715,3 +715,173 @@ button { cursor: pointer; }
   .strapline { display: none; }
   .masthead { grid-template-columns: auto 1fr; }
 }
+
+/* ── The internal session browser ──────────────────────────────────────────
+   Deliberately after the viewport tiers above. Those pin html and body to the
+   viewport with overflow hidden, because no planner screen may ever scroll —
+   and a list of sessions must. Rather than unpick a rule the planner's whole
+   layout now depends on, the console brings its own scroller: the page still
+   does not scroll, the console inside it does. Nothing above this line
+   changes, and the planner is unaffected.
+
+   This is an operator's tool, not a buyer's, so it is plain on purpose: one
+   surface, one rule weight, no atmosphere. It still reads from the same tokens,
+   so it cannot drift away from the product it belongs to. */
+
+.console {
+  height: 100dvh;
+  overflow: auto;
+  background: var(--shell);
+  padding: var(--s6) var(--s5) var(--s8);
+}
+
+.console--gate { display: grid; place-items: center; padding: var(--s5); }
+
+.console-eyebrow {
+  font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: var(--track-wide); text-transform: uppercase;
+  color: var(--copper-deep); margin-bottom: var(--s2);
+}
+
+.console-head {
+  display: flex; flex-wrap: wrap; align-items: flex-end;
+  justify-content: space-between; gap: var(--s4);
+  max-width: var(--content-wide); margin: 0 auto var(--s4);
+}
+
+.console-title {
+  font-family: var(--font-serif); font-size: var(--fs-head);
+  line-height: var(--lh-heading); color: var(--ink);
+}
+
+.console-who {
+  display: flex; align-items: center; gap: var(--s3);
+  font-size: var(--fs-xs); color: var(--ink-55);
+}
+
+.console-note,
+.console-empty {
+  max-width: var(--content-wide); margin: 0 auto var(--s4);
+  font-size: var(--fs-xs); color: var(--ink-70); line-height: var(--lh-body);
+}
+
+.console-empty {
+  background: var(--paper); border: var(--bw) solid var(--line);
+  border-radius: var(--r-md); padding: var(--s5); color: var(--ink-70);
+}
+
+.console-scroll {
+  max-width: var(--content-wide); margin: 0 auto;
+  background: var(--paper);
+  border: var(--bw) solid var(--line); border-radius: var(--r-md);
+  /* The table keeps its column widths and scrolls sideways on a narrow screen
+     rather than wrapping a deal number down three lines. */
+  overflow-x: auto;
+}
+
+.console-table { width: 100%; border-collapse: collapse; font-size: var(--fs-base); }
+
+.console-table th {
+  text-align: left; font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: var(--track-ui); color: var(--ink-55);
+  padding: var(--s3) var(--s4);
+  border-bottom: var(--bw-accent) solid var(--line);
+  white-space: nowrap;
+}
+
+.console-table td {
+  padding: var(--s3) var(--s4);
+  border-bottom: var(--bw) solid var(--line-soft);
+  vertical-align: top;
+}
+
+.console-table tr:last-child td { border-bottom: 0; }
+.console-table tbody tr:hover { background: var(--cream-2); }
+
+/* An expired session is still a perfectly good row to open — it is the one
+   most likely to want extending. It is quieted, not struck out. */
+.console-table tr.is-expired td { color: var(--ink-55); }
+
+.console-table small {
+  display: block; font-size: var(--fs-xs); color: var(--ink-55);
+  line-height: var(--lh-tight); margin-top: 2px;
+}
+
+.cell-strong { font-weight: 600; color: var(--ink); }
+.cell-deal { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.cell-vehicle { min-width: 14rem; }
+.cell-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cell-do { white-space: nowrap; }
+
+.cell-do form { display: flex; }
+
+/* Inside the cell, not on it: a td set to flex stops being a table cell and
+   takes the row's bottom rule with it. */
+.cell-do-inner { display: flex; gap: var(--s2); justify-content: flex-end; }
+
+.cell-do .btn {
+  min-height: var(--tap); padding: var(--s2) var(--s4);
+  font-size: var(--fs-xs); font-weight: 600;
+  /* Open is an anchor and Extend is a submit button, because one navigates and
+     the other writes. They have to look like one pair regardless. */
+  text-decoration: none;
+}
+
+.tag {
+  display: inline-block; font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: var(--track-ui);
+  padding: 2px var(--s2); border-radius: var(--r-sm);
+}
+
+.tag--live { background: var(--cream); color: var(--ink-70); border: var(--bw) solid var(--line); }
+.tag--expired { background: var(--copper-tint); color: var(--copper-deep); border: var(--bw) solid var(--copper); }
+
+/* ── Sign in ───────────────────────────────────────────────────────────── */
+
+.signin {
+  width: 100%; max-width: 24rem;
+  background: var(--paper);
+  border: var(--bw) solid var(--line); border-radius: var(--r-md);
+  padding: var(--s6);
+  box-shadow: var(--shadow-card);
+}
+
+.signin-title {
+  font-family: var(--font-serif); font-size: var(--fs-q);
+  line-height: var(--lh-heading); color: var(--ink); margin-bottom: var(--s2);
+}
+
+.signin-body {
+  font-size: var(--fs-xs); color: var(--ink-70);
+  line-height: var(--lh-body); margin-bottom: var(--s4);
+}
+
+.signin-notice {
+  font-size: var(--fs-xs); color: var(--copper-deep);
+  background: var(--copper-tint);
+  border: var(--bw) solid var(--copper);
+  border-radius: var(--r-sm);
+  padding: var(--s3); margin-bottom: var(--s4);
+}
+
+.signin-field { display: block; margin-bottom: var(--s4); }
+
+.signin-field span {
+  display: block; font-size: var(--fs-xs); font-weight: 600;
+  color: var(--ink-70); margin-bottom: var(--s2);
+}
+
+.signin-field input {
+  width: 100%; min-height: var(--tap);
+  padding: var(--s2) var(--s3);
+  font-family: var(--font-sans); font-size: var(--fs-base); color: var(--ink);
+  background: var(--paper);
+  border: var(--bw-control) solid var(--line-strong);
+  border-radius: var(--r-sm);
+}
+
+.signin-field input:focus-visible {
+  outline: var(--bw-accent) solid var(--copper); outline-offset: 1px;
+}
+
+.signin-submit { width: 100%; }

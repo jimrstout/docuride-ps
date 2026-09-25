@@ -53,6 +53,13 @@ const nextConfig = {
         source: "/plan/:path*",
         headers: [{ key: "Cache-Control", value: "no-store, private" }],
       },
+      {
+        // The internal session browser lists live deals behind a sign-in
+        // cookie. Rendering is already dynamic; this is the half that keeps a
+        // shared proxy from serving one operator's list to the next visitor.
+        source: "/",
+        headers: [{ key: "Cache-Control", value: "no-store, private" }],
+      },
     ];
   },
 };

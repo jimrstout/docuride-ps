@@ -174,3 +174,45 @@ join.
 copy is a content task and it needs checking against TecAssured's approved
 language before anything goes live. The pricing bands are placeholders with the
 right shape and invented numbers.
+
+## The internal session browser
+
+`https://ps.docuride.com/` lists the 25 most recent planning sessions with a
+link into each one, so a session can be opened without copying a link out of
+the CRM. Nothing customer-facing links to it and the planner never mentions it.
+
+**Signing in.** The same Supabase Auth account as the admin site, and the
+account must carry `profiles.is_platform_admin = true`. A valid dealership
+login is refused: this list crosses tenants, and platform admin is the existing
+flag for exactly that distinction (migration `0002_platform_admin`). Granting
+someone access is one statement:
+
+```sql
+update public.profiles set is_platform_admin = true
+where user_id = (select id from auth.users where email = 'someone@docuride.com');
+```
+
+**No new environment variable.** The sign-in cookie is signed with a key
+derived from `FNI_WEBHOOK_SECRET` via HKDF, which this app already holds and
+cannot run without. The derivation is one-way and domain-separated, so the
+cookie never carries the secret and a value signed for one purpose cannot be
+replayed as the other. Rotating `FNI_WEBHOOK_SECRET` signs every operator out,
+which is the correct consequence of a rotation. The cookie is `HttpOnly`,
+`Secure`, `SameSite=Strict`, and lasts twelve hours.
+
+**Edge Functions.** `fni-admin-auth` checks the password and the platform-admin
+flag; `fni-admin-sessions` serves the list (`GET`) and extends an expiry
+(`POST`). Both authenticate with `FNI_WEBHOOK_SECRET` and both are deployed
+with `verify_jwt` off, like every other `fni` function — they carry their own
+auth, and the gateway's JWT check would reject the secret header before it
+reached them.
+
+**What the list is not sent.** `fni-admin-sessions` selects an explicit column
+list and no buyer, co-buyer, lienholder, VIN or `raw_snapshot` field is in it.
+The console cannot leak what it never receives, which is why the filtering is
+in the Edge Function rather than in the page that renders it.
+
+**Extending.** One press adds 24 hours from whichever is later, now or the
+current expiry — so it revives a session that lapsed weeks ago rather than
+adding a day to a date already in the past. The Edge Function caps a single
+extension at 30 days.
