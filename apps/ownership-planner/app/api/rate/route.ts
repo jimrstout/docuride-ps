@@ -1,7 +1,7 @@
 // POST /api/rate -> fni-rate-vehicle
 //
-// Live rating is blocked until TecAssured credentials land. The function is
-// already written and deployed, so this route needs no change when they do.
+// Rating is live against the QA credential. All of it happens in the Edge
+// Function: this route holds the secret and forwards, nothing more.
 import { edge } from "@/lib/edge";
 import { edgeFailure, noStore, requireSessionId } from "@/lib/route-helpers";
 
