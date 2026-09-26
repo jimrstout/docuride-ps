@@ -44,8 +44,24 @@ export async function POST(
     const before = await edge.sessionGet<SessionPayload>(check.id);
     const state = before.offer_status?.state ?? "Pending";
 
+    // ── The verification gate ───────────────────────────────────────────
+    //
+    // A rate is a price a customer is shown, and two of the seventeen fields
+    // TecAssured asks for on a UTV have no source in the CRM. Rating an
+    // unverified deal means assembling that price partly from defaults, with
+    // nobody's name on it. So the planner does not.
+    //
+    // Nothing is reported to the customer either way: the neutral screen is
+    // already what they are looking at, and "your dealership has not checked
+    // your deal yet" is not a sentence to put in front of somebody.
+    if ((before.verification?.state ?? "Needs Verification") !== "Verified") {
+      return noStore({ outcome: "Skipped" as Outcome, state, reason: "Needs Verification" });
+    }
+
     // Already asked. Whatever the answer was, it stands until someone re-rates
-    // on purpose.
+    // on purpose. "Superseded" is not a reason to ask again here either: the
+    // inputs moved, so the session went back to Needs Verification and the gate
+    // above has already turned this away.
     if (state !== "Pending") {
       return noStore({ outcome: "Skipped" as Outcome, state });
     }

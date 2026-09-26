@@ -139,6 +139,16 @@ export const edge = {
   adminRate: <T>(sessionId: string) =>
     call<T>("fni-rate-vehicle", { method: "POST", body: { session_id: sessionId } }),
 
+  // ── The Verify step ─────────────────────────────────────────────────
+  // Staff only. The sheet, the two fields nobody else carries, the VIN decode,
+  // the CRM refresh, and the gate itself.
+
+  verifySheet: <T>(sessionId: string) =>
+    call<T>("fni-session-verify", { method: "GET", query: { session_id: sessionId } }),
+
+  verifyAction: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-session-verify", { method: "POST", body }),
+
   adminSettings: <T>() => call<T>("fni-admin-settings", { method: "GET" }),
 
   adminSaveSettings: <T>(body: Record<string, unknown>) =>

@@ -163,3 +163,126 @@ export async function saveSettings(formData: FormData): Promise<void> {
   revalidatePath("/settings");
   redirect("/settings?saved=1");
 }
+
+
+// ── The Verify step ───────────────────────────────────────────────────────
+//
+// Four buttons, one endpoint. Each redirects back to the same screen, because
+// the screen is the feedback: the sheet re-renders with new values, new sources
+// and a Verify button that is enabled or is not.
+//
+// Every one of these re-checks the operator. A Server Action is a POST endpoint
+// like any other, and the page having rendered the button is not evidence that
+// whoever called it was allowed to.
+
+/** Where a verify action lands, with a message if it has one to pass on. */
+function backToVerify(sessionId: string, params: Record<string, string> = {}): never {
+  const qs = new URLSearchParams(params).toString();
+  redirect(`/verify/${sessionId}${qs ? `?${qs}` : ""}`);
+}
+
+async function verifyAction(
+  formData: FormData,
+  build: (sessionId: string) => Record<string, unknown>,
+  onOk: Record<string, string> = {}
+): Promise<never> {
+  const operator = await currentOperator();
+  if (!operator) redirect("/");
+
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+
+  try {
+    await edge.verifyAction<unknown>(build(sessionId));
+  } catch (err) {
+    // The Edge Function's own message, not a reworded one. It names the field
+    // that is missing or quotes the provider, which is exactly what the person
+    // standing at the screen needs, and a second wording of the same problem is
+    // one more thing to keep in step.
+    const message =
+      err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
+    console.error(`console verify action failed for ${sessionId}:`, err);
+    backToVerify(sessionId, { refused: message });
+  }
+
+  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath("/");
+  backToVerify(sessionId, onOk);
+}
+
+/** Save the fields the CRM does not carry. */
+export async function saveVerifyFields(formData: FormData): Promise<void> {
+  await verifyAction(
+    formData,
+    (session_id) => ({
+      session_id,
+      action: "save",
+      entries: {
+        "engine.ccs": String(formData.get("engine.ccs") ?? ""),
+        warranty: String(formData.get("warranty") ?? ""),
+        "fuel.type": String(formData.get("fuel.type") ?? ""),
+      },
+    }),
+    { saved: "1" }
+  );
+}
+
+/** Ask TecAssured what the VIN is. Fills engine size and fuel type. */
+export async function decodeVin(formData: FormData): Promise<void> {
+  await verifyAction(formData, (session_id) => ({ session_id, action: "decode" }), {
+    decoded: "1",
+  });
+}
+
+/** Re-pull the deal's rating inputs from the CRM. */
+export async function refreshFromCrm(formData: FormData): Promise<void> {
+  await verifyAction(formData, (session_id) => ({ session_id, action: "refresh" }), {
+    refreshed: "1",
+  });
+}
+
+/**
+ * Verify, then rate.
+ *
+ * In that order and not the other way round: the verification is recorded first,
+ * so a provider having a bad afternoon cannot cost a person credit for work they
+ * actually did. A failed rate leaves the session Verified with a Failed rating,
+ * which is a state the console can show and a person can retry.
+ */
+export async function verifyAndRate(formData: FormData): Promise<void> {
+  const operator = await currentOperator();
+  if (!operator) redirect("/");
+
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+
+  try {
+    await edge.verifyAction<unknown>({
+      session_id: sessionId,
+      action: "verify",
+      // Whoever is signed in. The gate refuses an unnamed verification, because
+      // a verification with nobody's name on it is not one.
+      verified_by: operator.email,
+    });
+  } catch (err) {
+    const message =
+      err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
+    console.error(`console verify failed for ${sessionId}:`, err);
+    backToVerify(sessionId, { refused: message });
+  }
+
+  // Now the rating. Its own failure is recorded on the session by
+  // fni-rate-vehicle and shows in the Rating row, so there is nothing to say
+  // here beyond a server-side log.
+  let rated = "1";
+  try {
+    await edge.adminRate<{ product_count?: number }>(sessionId);
+  } catch (err) {
+    console.error(`rate after verify failed for ${sessionId}:`, err);
+    rated = "failed";
+  }
+
+  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath("/");
+  backToVerify(sessionId, { verified: "1", rated });
+}

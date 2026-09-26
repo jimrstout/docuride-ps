@@ -509,3 +509,34 @@ map. `data` is base64 `%PDF-1.7`, 385,400 characters for this one-page contract.
 `String(doc.error).trim() !== ""` check already handles.
 
 `/contract/void` answers `{"error":"","message":"Contract Successfully Voided."}`.
+
+## /decode/ps returns more than section 3 documents
+
+Tested 2026-09-26, dealer 3-306, VIN `3JBUKAJ44TK002241` (2026 Can-Am Defender
+XT HD7). Both `/decode` (with `vtype`) and `/decode/ps` (without) returned the
+same body:
+
+```json
+{"year":"2026","make":"Can-Am","model":"Defender","displacement":"650","vtype":"UTV","fuelType":"G"}
+```
+
+Section 3 documents only year, make, model and displacement. Two more fields
+come back, and both matter:
+
+| Field | Answers | Was |
+| --- | --- | --- |
+| `displacement` | `engine.ccs` | Unobtainable. No Zoho field carries it. |
+| `fuelType` | `fuel.type` | Defaulted to gasoline by us. |
+| `vtype` | An independent check on `BODY_TYPE_MAP` | Our inference alone. |
+
+So the decode is a real source for the two properties nothing else could supply,
+and it agrees with our own body-type mapping on this unit: `SxS` -> `UTV`.
+
+**It does not return warranty information of any kind.** Remaining
+manufacturer warranty months has no source anywhere: not Zoho, not DX1, not the
+decode. It is the one rating input that must be typed by a person, which is why
+the Verify screen exists.
+
+`vtype` is optional on `/decode/ps` and required on `/decode`. The powersports
+endpoint is therefore the one to call when the vehicle type is what you are
+trying to establish.

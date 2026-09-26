@@ -409,6 +409,27 @@ export class TecAssuredClient {
     });
   }
 
+  /**
+   * Decode a powersports VIN.
+   *
+   * The only source in the whole system for engine size. It also returns fuel
+   * type and TecAssured's own opinion of the vehicle type, neither of which
+   * section 3 of the documentation mentions -- verified against a real VIN on
+   * 2026-09-26, see _shared/TECASSURED_SHOP_API.md.
+   *
+   * It returns no warranty information, which is why the Verify screen still
+   * has a field somebody has to type.
+   *
+   * `vtype` is optional here and required on /decode, so this is the endpoint to
+   * call when the vehicle type is itself the thing in question.
+   */
+  async decodePowersports(vin: string, dealerCode?: string): Promise<unknown> {
+    return await this.apiCall("POST", "/decode/ps", {
+      dealerCode: this.dealer(dealerCode),
+      vin,
+    });
+  }
+
   /** The rate request carries its own dealerCode; callers build it from `dealerCode`. */
   async rateVehicle(rateRequest: Record<string, unknown>): Promise<unknown> {
     return await this.apiCall("POST", "/rate", rateRequest);

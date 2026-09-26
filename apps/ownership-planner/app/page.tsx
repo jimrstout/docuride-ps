@@ -44,7 +44,7 @@ const STAMP = new Intl.DateTimeFormat("en-GB", {
 
 function stamp(iso: string): string {
   const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return "—";
+  if (!Number.isFinite(t)) return "Not set";
   return `${STAMP.format(t).replace(",", "")} UTC`;
 }
 
@@ -77,7 +77,7 @@ function vehicle(row: ConsoleSessionRow): string {
   const parts = [row.year, row.make, row.model, row.submodel]
     .map((p) => (p === null || p === undefined ? "" : String(p).trim()))
     .filter((p) => p !== "");
-  return parts.length > 0 ? parts.join(" ") : "—";
+  return parts.length > 0 ? parts.join(" ") : "Not set";
 }
 
 // ── Sign in ───────────────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ function SignIn({ notice }: { notice: string | null }) {
         <p className="console-eyebrow">DocuRide PS</p>
         <h1 className="signin-title">Session browser</h1>
         <p className="signin-body">
-          Sign in with your DocuRide administrator account — the same email and
+          Sign in with your DocuRide administrator account. The same email and
           password as the admin site.
         </p>
 
@@ -185,7 +185,7 @@ function Rating({ row, now }: { row: ConsoleSessionRow; now: number }) {
 function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
   return (
     <tr className={row.expired ? "is-expired" : undefined}>
-      <td className="cell-deal">{row.deal_number ?? "—"}</td>
+      <td className="cell-deal">{row.deal_number ?? "Not set"}</td>
 
       <td className="cell-vehicle">
         <span className="cell-strong">{vehicle(row)}</span>
@@ -194,10 +194,10 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
         ) : null}
       </td>
 
-      <td>{row.store_name ?? "—"}</td>
+      <td>{row.store_name ?? "Not set"}</td>
 
       <td>
-        <span className="cell-strong">{row.status ?? "—"}</span>
+        <span className="cell-strong">{row.status ?? "Not set"}</span>
         {row.mode ? <small>{row.mode}</small> : null}
       </td>
 
@@ -230,9 +230,13 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
               +24h
             </button>
           </form>
-          {/* Shown only where it can do something. A rated session re-rated is
-              a second provider call for the same answer. */}
-          {row.rating?.state !== "Rated" ? (
+          {/* Verify is where rating starts now, so it is the button that is
+              always here. Rate on its own is for re-asking after a failure on a
+              deal that is already verified. */}
+          <Link className="btn btn--quiet" href={`/verify/${row.id}`} prefetch={false}>
+            Verify
+          </Link>
+          {row.rating?.state === "Failed" ? (
             <form action={rateSession}>
               <input type="hidden" name="session_id" value={row.id} />
               <button type="submit" className="btn btn--quiet">
@@ -293,8 +297,9 @@ async function SessionList({ email }: { email: string }) {
         The {rows.length === 1 ? "most recent session" : `${rows.length} most recent sessions`},
         newest first. Times are UTC. Extending adds 24 hours from now, which
         reopens a session that has already lapsed. Rating says whether the
-        customer has a menu, and why not when they do not; Rate asks the
-        provider again after you have fixed what stopped it.
+        customer has a menu, and why not when they do not. Verify is where you
+        check what a rate would be built from; nothing is rated until somebody
+        has.
       </p>
 
       {rows.length === 0 ? (

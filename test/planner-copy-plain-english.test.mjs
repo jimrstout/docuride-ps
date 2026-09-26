@@ -66,6 +66,28 @@ test("no em or en dashes in customer-facing copy", () => {
   );
 });
 
+test("no em or en dashes in the staff console either", () => {
+  // House style, not just customer-facing style. The console is read by people
+  // under time pressure with a customer beside them, which is not the moment for
+  // a clause held open.
+  const STAFF = ["app/page.tsx", "app/settings", "app/verify", "app/console-actions.ts"];
+  const offenders = [];
+
+  for (const dir of STAFF) {
+    for (const file of filesUnder(dir)) {
+      code(readFileSync(file, "utf8"))
+        .split("\n")
+        .forEach((line, i) => {
+          if (DASHES.test(line)) {
+            offenders.push(`${relative(ROOT, file)}:${i + 1}: ${line.trim()}`);
+          }
+        });
+    }
+  }
+
+  assert.deepEqual(offenders, [], `Em dashes in console copy:\n${offenders.join("\n")}`);
+});
+
 test("the phrase that prompted this reads as two sentences", () => {
   const planner = readFileSync(join(ROOT, "app/plan/[sessionId]/Planner.tsx"), "utf8");
   assert.ok(planner.includes('"Saved. You can come back to this later."'));

@@ -350,6 +350,75 @@ button { cursor: pointer; }
 .decision-option.is-chosen .decision-mark { background: var(--copper); border-color: var(--copper); }
 .decision-option.is-chosen .decision-mark::after { content: "✓"; color: var(--paper); font-size: var(--fs-xs); }
 
+/* ── The Verify step ─────────────────────────────────────────────────────
+   A checking screen, not a form to fill in. So the provenance chip sits level
+   with the label rather than below the value: the eye runs down the right-hand
+   edge looking for "Missing", which is the whole job. */
+.vstate {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--s3); margin: var(--s4) 0;
+  padding: var(--s3) var(--s4);
+  background: var(--paper); border: var(--bw) solid var(--line);
+  border-radius: var(--r-md);
+}
+.vstate dt {
+  font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em;
+  font-weight: 700; color: var(--ink-55); margin-bottom: var(--s1);
+}
+.vstate dd { margin: 0; font-size: var(--fs-base); }
+.vstate dd small { display: block; margin-top: var(--s1); font-size: var(--fs-xs); color: var(--ink-70); }
+
+.vsheet { margin: var(--s4) 0 0; }
+.vgroup { margin-bottom: var(--s5); }
+.vgroup-head { border-bottom: var(--bw) solid var(--line); padding-bottom: var(--s2); margin-bottom: var(--s3); }
+.vgroup-head h2 {
+  font-family: var(--font-serif); font-size: var(--fs-title); font-weight: 600; margin: 0;
+}
+.vgroup-head p { margin: var(--s1) 0 0; font-size: var(--fs-xs); color: var(--ink-70); }
+
+.vgroup-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: var(--s3); }
+
+.vfield {
+  padding: var(--s2) var(--s3);
+  border: var(--bw) solid var(--line); border-radius: var(--r-md);
+  background: var(--paper);
+}
+/* A required field with nothing in it. Copper rather than red: it is a thing to
+   do, not an error somebody made. */
+.vfield.is-missing { border-left: var(--bw-accent) solid var(--copper); background: var(--copper-tint); }
+.vfield-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); }
+.vfield-label { font-size: var(--fs-xs); font-weight: 700; }
+.vfield-req {
+  display: inline-block; margin-left: var(--s2); border: 0;
+  font-size: var(--fs-xs); font-weight: 400; text-decoration: none;
+  color: var(--ink-55);
+}
+.vfield-value { margin: var(--s1) 0 0; font-size: var(--fs-base); }
+.vfield-value em { color: var(--ink-55); }
+.vfield input {
+  width: 100%; margin-top: var(--s1); min-height: var(--tap);
+  padding: 0 var(--s2); font-size: var(--fs-base);
+  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
+  background: var(--paper); color: inherit;
+}
+.vfield-note { margin: var(--s1) 0 0; font-size: var(--fs-xs); color: var(--ink-70); line-height: 1.35; }
+
+.vactions { display: flex; align-items: center; gap: var(--s3); margin: var(--s3) 0; flex-wrap: wrap; }
+.vactions--aside { padding-top: var(--s3); border-top: var(--bw) solid var(--line); }
+.vactions .vfield-note { margin: 0; flex: 1 1 18rem; }
+
+.vgate {
+  margin: var(--s5) 0 var(--s6);
+  padding: var(--s4);
+  border: var(--bw) solid var(--line); border-left: var(--bw-accent) solid var(--copper);
+  border-radius: var(--r-md); background: var(--paper);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s4); flex-wrap: wrap;
+}
+.vgate-say { margin: 0; flex: 1 1 22rem; font-size: var(--fs-base); line-height: var(--lh-body); }
+.vgate-say--blocked { color: var(--ink-70); }
+.vgate .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+
 /* The rating column. The reason wraps rather than truncating: it names a field
    or quotes the provider, and half of either is no use to anybody. */
 .cell-rating { white-space: normal; max-width: 22rem; }

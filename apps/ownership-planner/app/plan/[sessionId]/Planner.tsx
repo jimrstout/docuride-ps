@@ -452,6 +452,10 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   const askedForRate = useRef(false);
   useEffect(() => {
     if (askedForRate.current) return;
+    // Not until a person has checked the inputs. The route refuses an unverified
+    // session too, and this is the same rule stated where it saves a round trip:
+    // there is no point asking a question we know the answer to.
+    if ((initial.verification?.state ?? "Needs Verification") !== "Verified") return;
     if ((initial.offer_status?.state ?? "Pending") !== "Pending") return;
     askedForRate.current = true;
 
@@ -478,7 +482,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     return () => {
       cancelled = true;
     };
-  }, [initial.offer_status?.state, session.id, router]);
+  }, [initial.offer_status?.state, initial.verification?.state, session.id, router]);
 
   // Photos of the customer's actual machine, looked up server-side by VIN.
   useEffect(() => {

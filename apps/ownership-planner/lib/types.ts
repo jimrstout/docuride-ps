@@ -189,9 +189,21 @@ export interface SessionPayload {
    * this payload reaches the browser, so it is always null on the client.
    */
   offer_status: {
-    state: "Rated" | "Not Offered" | "Failed" | "Pending";
+    state: "Rated" | "Not Offered" | "Failed" | "Pending" | "Superseded";
     detail: string | null;
     attempted_at: string | null;
+  } | null;
+
+  /**
+   * Whether a person has checked the inputs a rate would be built from.
+   *
+   * The planner asks for its own rate and must not do so on an unverified deal.
+   * Only the state crosses to the browser; who verified it and what they saw
+   * live on the staff screen.
+   */
+  verification: {
+    state: "Needs Verification" | "Verified";
+    verified_at: string | null;
   } | null;
   catalog: CatalogEntry[];
   /** The dealer group as a buyer reads it. Null means no name is set. */
@@ -278,4 +290,64 @@ export interface ConsoleSettingsPayload {
   };
   templates: ConsoleTemplateRow[];
   warnings?: string[];
+}
+
+// ── The Verify step ───────────────────────────────────────────────────────
+// Staff-facing. None of this is ever rendered to a customer.
+
+export type FieldSource =
+  | "CRM"
+  | "DX1"
+  | "VIN Decode"
+  | "Entered by Staff"
+  | "Missing";
+
+export type FieldGroup = "Deal" | "Vehicle" | "Money" | "Customer";
+
+export interface VerifyField {
+  key: string;
+  label: string;
+  group: FieldGroup;
+  value: string | null;
+  source: FieldSource;
+  editable: boolean;
+  provider_property: string | null;
+  required: boolean;
+  missing: boolean;
+  note: string | null;
+}
+
+export interface VerifySheet {
+  session: {
+    id: string;
+    deal_number: string | null;
+    stock_number: string | null;
+    status: string | null;
+    is_test: boolean;
+    vehicle: string;
+    deal_type: string | null;
+    vehicle_type_code: string | null;
+  };
+  verification: {
+    state: "Needs Verification" | "Verified";
+    verified_at: string | null;
+    verified_by: string | null;
+  };
+  rating: {
+    state: "Rated" | "Not Offered" | "Failed" | "Pending";
+    product_count: number;
+    out_of_date: boolean;
+    rated_at: string | null;
+    detail: string | null;
+  };
+  vin_decode: Record<string, unknown> | null;
+  vin_decode_at: string | null;
+  /** Why nothing is required, when nothing is. Null when the sheet is normal. */
+  not_ready_reason: string | null;
+  fields: VerifyField[];
+  missing: VerifyField[];
+  ready: boolean;
+  unmapped_properties: string[];
+  /** Present on a refresh response: the rating inputs the CRM moved. */
+  changed_inputs?: string[];
 }

@@ -181,7 +181,16 @@ serve(async (req: Request) => {
       .eq("session_id", sessionId)
       .maybeSingle();
 
-    const offer = (offerRow ?? null) as Record<string, unknown> | null;
+    const offerRaw = (offerRow ?? null) as Record<string, unknown> | null;
+
+    // ── A superseded quote is not a quote ─────────────────────────────────
+    // A refresh that moved a rating input, or a fresh verification, marks the
+    // old quote out of date rather than deleting it: it was a real price once
+    // and the record of it matters. But it is not the answer to the current
+    // question, so nothing downstream may treat it as one -- the customer must
+    // not be shown prices built on inputs that have since changed.
+    const superseded = offerRaw?.out_of_date === true;
+    const offer = superseded ? null : offerRaw;
 
     const families: NormalizedFamily[] = offer
       ? normalizeOffer(offer.response_payload)
@@ -386,12 +395,26 @@ serve(async (req: Request) => {
       //
       // `detail` is written for a staff member and must not be rendered to a
       // customer. The planner's server layer logs it and drops it.
+      //   Superseded   A quote exists and its inputs have since moved. Neutral
+      //                copy, like Pending: there is nothing current to show and
+      //                the machine is not the reason.
       offer_status: {
-        state: offer ? String(offer.state ?? "Rated") : "Pending",
+        state: superseded ? "Superseded" : offer ? String(offer.state ?? "Rated") : "Pending",
         detail: offer && offer.state === "Failed"
           ? ((offer.error_detail as string | null) ?? null)
           : null,
-        attempted_at: offer ? offer.rated_at : null,
+        attempted_at: offerRaw ? offerRaw.rated_at : null,
+      },
+
+      // ── Has a person checked the inputs? ────────────────────────────────
+      // The planner asks for its own rate, and must not do so on a deal nobody
+      // has looked at: two of the fields TecAssured wants for a UTV have no
+      // source in the CRM, so an unattended request is one built partly on
+      // defaults. Staff-facing detail is deliberately absent -- the customer's
+      // browser gets the state and nothing else.
+      verification: {
+        state: String(s.verification_state ?? "Needs Verification"),
+        verified_at: s.verified_at ?? null,
       },
 
       // One object, or null. rated_offers is unique on session_id.
