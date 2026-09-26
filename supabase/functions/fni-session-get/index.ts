@@ -392,12 +392,12 @@ serve(async (req: Request) => {
       //                created seconds ago this is the normal state, not a
       //                fault, and it is what deal 14132 was in while the
       //                customer read that plans were not offered.
-      //
-      // `detail` is written for a staff member and must not be rendered to a
-      // customer. The planner's server layer logs it and drops it.
       //   Superseded   A quote exists and its inputs have since moved. Neutral
       //                copy, like Pending: there is nothing current to show and
       //                the machine is not the reason.
+      //
+      // `detail` is written for a staff member and must not be rendered to a
+      // customer. The planner's server layer logs it and drops it.
       offer_status: {
         state: superseded ? "Superseded" : offer ? String(offer.state ?? "Rated") : "Pending",
         detail: offer && offer.state === "Failed"
