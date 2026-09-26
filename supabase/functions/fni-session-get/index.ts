@@ -24,7 +24,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
-import { normalizeOffer, NormalizedProduct } from "../_shared/planner-offers.ts";
+import { allTiers, normalizeOffer, NormalizedFamily } from "../_shared/planner-offers.ts";
 import { priceProduct, PricingRule } from "../_shared/planner-pricing.ts";
 import { resolvePaymentBasis } from "../_shared/money.ts";
 import { modeLabel } from "../_shared/session-mode.ts";
@@ -34,6 +34,10 @@ import {
   indexCatalog,
   joinFailureReport,
 } from "../_shared/planner-catalog.ts";
+import {
+  type CopyTemplateRow,
+  resolveTemplates,
+} from "../_shared/copy-templates.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -177,7 +181,7 @@ serve(async (req: Request) => {
       .eq("session_id", sessionId)
       .maybeSingle();
 
-    const products: NormalizedProduct[] = offerRow
+    const families: NormalizedFamily[] = offerRow
       ? normalizeOffer((offerRow as Record<string, unknown>).response_payload)
       : [];
 
@@ -192,19 +196,56 @@ serve(async (req: Request) => {
 
     const rules = (ruleRows ?? []) as unknown as PricingRule[];
 
-    const pricedProducts = products.map((p) => {
-      const priced = priceProduct(rules, p.product_code, p.dealer_cost);
-      return {
-        ...p,
-        retail_price: priced.unpriced_reason ? null : priced.retail_price,
-        pricing_rule_id: priced.rule_id,
-        unpriced_reason: priced.unpriced_reason,
-      };
-    });
+    // Priced per RATE, not per product. A product's cost varies by length and
+    // deductible -- USED ATV/UTV CARE runs 578 to 881 across its twelve rates --
+    // so one price per product would be the wrong price for eleven of them.
+    const pricedFamilies = families.map((f) => ({
+      ...f,
+      tiers: f.tiers.map((t) => ({
+        ...t,
+        rates: t.rates.map((r) => {
+          const priced = priceProduct(rules, t.product_code, r.dealer_cost);
+          return {
+            ...r,
+            retail_price: priced.unpriced_reason ? null : priced.retail_price,
+            pricing_rule_id: priced.rule_id,
+            unpriced_reason: priced.unpriced_reason,
+          };
+        }),
+      })),
+    }));
+
+    // Catalog copy is keyed on the product code, which is the tier.
+    const tiers = allTiers(pricedFamilies);
+
+    // ── The dealer group's name, and the copy that uses it ─────────────
+    // Both were facts written into code until 0012. The name is what a buyer
+    // reads, not tenants.name, which is administrative. A tenant template row
+    // overrides the platform default, exactly as store copy overrides
+    // tenant-wide copy below.
+    const { data: tenantRow } = await supabase
+      .from("tenants")
+      .select("dealer_group_display_name")
+      .eq("id", s.tenant_id as string)
+      .maybeSingle();
+
+    const dealerGroupName =
+      ((tenantRow as { dealer_group_display_name?: string | null } | null)
+        ?.dealer_group_display_name ?? null);
+
+    const { data: templateRows } = await supabase
+      .schema("fni")
+      .from("copy_templates")
+      .select("tenant_id, template_key, body")
+      .or(`tenant_id.eq.${s.tenant_id},tenant_id.is.null`);
+
+    const copy = Object.fromEntries(
+      resolveTemplates((templateRows ?? []) as unknown as CopyTemplateRow[])
+    );
 
     // ── Product copy ────────────────────────────────────────────────────
     // Store copy overrides tenant-wide copy for the same product code.
-    const codes = pricedProducts.map((p) => p.product_code).filter((c) => c !== "");
+    const codes = tiers.map((t) => t.product_code).filter((c) => c !== "");
 
     let catalog: Record<string, unknown>[] = [];
     let byCode = new Map<string, CatalogRow>();
@@ -226,9 +267,9 @@ serve(async (req: Request) => {
     // copy is a decision; one that matched nothing is a defect. They used to be
     // the same silent absence. See _shared/planner-catalog.ts.
     const coverage = classifyCoverage(
-      pricedProducts.map((p) => ({
-        product_code: p.product_code,
-        product_name: p.product_name,
+      tiers.map((t) => ({
+        product_code: t.product_code,
+        product_name: t.product_name,
       })),
       byCode
     );
@@ -240,7 +281,7 @@ serve(async (req: Request) => {
           sessionId,
           (s.store_id as string) ?? null,
           coverage,
-          pricedProducts.map((p) => p.product_code)
+          tiers.map((t) => t.product_code)
         )
       );
     }
@@ -332,11 +373,26 @@ serve(async (req: Request) => {
         ? {
             rated_at: (offerRow as Record<string, unknown>).rated_at,
             product_count: (offerRow as Record<string, unknown>).product_count,
-            products: pricedProducts,
+            // Families, each with tiers, each tier with its rates. One decision
+            // per family rather than one per product: Platinum, Gold, Silver and
+            // Bronze are tiers of the same thing, and asking a customer to
+            // include or decline each of them separately invites a combination
+            // that makes no sense.
+            families: pricedFamilies,
           }
         : null,
 
       catalog,
+
+      // The dealer group as a customer should read it. Null means no name has
+      // been entered, and any sentence naming the group is omitted rather than
+      // rendered with a gap in it.
+      dealer_group_name: dealerGroupName,
+
+      // Customer-facing sentences with {placeholder} names still in them. The
+      // planner fills them, because only the planner knows which rate the
+      // customer chose and therefore what the amount is.
+      copy,
 
       // Whether each rated product found its copy. The UI needs the two
       // failures apart: one is a decision, the other is a defect.

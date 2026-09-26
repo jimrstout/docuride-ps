@@ -8,25 +8,62 @@ export type SessionMode = "Self-Guided" | "Collaborative" | "Staff-Presented";
 export interface SurchargeOption {
   code: string;
   label: string;
+  /** Can be negative. GPS EQUIPPED takes 50 off theft cover. */
   cost_delta: number;
+  /** Not a choice: it rides along whether or not the customer ticks it. */
+  mandatory: boolean;
   applied: boolean;
 }
 
-export interface OfferProduct {
-  product_code: string;
-  product_type: string;
-  product_name: string;
-  rate_unique_id: string | null;
+/**
+ * One buyable combination of length, deductible and price.
+ *
+ * A product has several. USED ATV/UTV CARE comes back with twelve, being four
+ * lengths times three deductibles, and which one the customer takes changes both
+ * the cover and the price. The old shape assumed one price per product, which
+ * was wrong for every product but the single-rate ones.
+ */
+export interface OfferRate {
+  rate_unique_id: string;
   term_months: number | null;
+  /** 0 on every powersports rate. Omitted from the interface when falsy. */
   term_miles: number | null;
   deductible: number | null;
+  /** The provider's own words: "0 Ded", "100 Dis Ded". */
+  deductible_code: string | null;
+  disappearing_deductible: boolean;
   dealer_cost: number | null;
-  surcharge_options: SurchargeOption[];
-  /** null when no pricing band covers the cost. Such a product is not presentable. */
+  provider_markup: number;
+  /** dealer_cost + provider_markup. The provider refuses a submit above it. */
+  offered_price: number | null;
+  options: SurchargeOption[];
+  /** null when no pricing band covers the cost. Such a rate is not sellable. */
   retail_price: number | null;
   pricing_rule_id: string | null;
   unpriced_reason: string | null;
   raw: Record<string, unknown>;
+}
+
+/** One product: a tier within its family. */
+export interface OfferTier {
+  product_code: string;
+  product_name: string;
+  product_type: string;
+  rates: OfferRate[];
+  raw: Record<string, unknown>;
+}
+
+/**
+ * One decision for the customer: which tier of this family, or none.
+ *
+ * The quote offers eleven products and four of them are Platinum, Gold, Silver
+ * and Bronze. They are tiers of one thing, so they are one screen and one
+ * choice, not four include-or-decline questions that could be answered yes
+ * four times.
+ */
+export interface OfferFamily {
+  family_code: string;
+  tiers: OfferTier[];
 }
 
 export interface CatalogEntry {
@@ -55,6 +92,8 @@ export interface Selection {
   disposition: Disposition;
   retail_price: string | number | null;
   term_months: number | null;
+  /** Which rate of that product, so a resumed session reopens on the same one. */
+  rate_unique_id: string | null;
   selected_options: unknown;
   presented_at: string | null;
 }
@@ -136,9 +175,13 @@ export interface SessionPayload {
   offer: {
     rated_at: string;
     product_count: number;
-    products: OfferProduct[];
+    families: OfferFamily[];
   } | null;
   catalog: CatalogEntry[];
+  /** The dealer group as a buyer reads it. Null means no name is set. */
+  dealer_group_name: string | null;
+  /** Customer-facing sentences with {placeholder} names still in them. */
+  copy: Record<string, string>;
   catalog_coverage: CatalogCoverage;
   selections: Selection[];
   photos: string[] | null;

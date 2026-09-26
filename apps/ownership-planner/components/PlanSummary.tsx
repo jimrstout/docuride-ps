@@ -15,7 +15,8 @@ export interface PlanLine {
   code: string;
   name: string;
   duration: string | null;
-  price: number;
+  /** Null when no rate could be priced, so the line reads "Ask us" rather than $0. */
+  price: number | null;
   disposition: Disposition | undefined;
 }
 
@@ -39,7 +40,7 @@ export default function PlanSummary({ lines }: { lines: PlanLine[] }) {
               <b>{l.name}</b>
               <small>
                 {l.duration}
-                {included ? ` · ${money(l.price)}` : ""}
+                {included ? ` · ${l.price === null ? "Ask us" : money(l.price)}` : ""}
               </small>
             </span>
             <span className={`tag ${included ? "tag--in" : "tag--own"}`}>

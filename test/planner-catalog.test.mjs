@@ -13,8 +13,13 @@ import {
   indexCatalog,
   joinFailureReport,
 } from "../supabase/functions/_shared/planner-catalog.ts";
-import { normalizeOffer } from "../supabase/functions/_shared/planner-offers.ts";
-import { RATED_OFFER_RESPONSE } from "./fixtures/rated-offer.mjs";
+import { allTiers, normalizeOffer } from "../supabase/functions/_shared/planner-offers.ts";
+import { readFileSync } from "node:fs";
+
+/** The real quote, so the join is tested on the codes production will see. */
+const QUOTE = JSON.parse(
+  readFileSync(new URL("./fixtures/tecassured-rate-utv-3-306.json", import.meta.url), "utf8")
+);
 
 const STORE = "7428435c";
 
@@ -27,44 +32,61 @@ function row(code, opts = {}) {
   };
 }
 
-/** The seeded catalog: four written, PPM registered with its copy unwritten. */
-const SEEDED = indexCatalog([
-  row("VSC", { display_name: "Vehicle Service Contract" }),
-  row("GAP", { display_name: "Guaranteed Asset Protection" }),
-  row("TW", { display_name: "Tire and Wheel Protection" }),
-  row("KEY", { display_name: "Key and Remote Replacement" }),
-  row("PPM", { display_name: "Planned Maintenance", is_presentable: false }),
-]);
+/**
+ * A catalog covering the real quote, with Platinum registered and its copy
+ * unwritten. Real provider codes: "84_7", "16_3" and so on, which is the point.
+ * The old version of this test used codes a person had invented on both sides
+ * of the join, so it could not fail the way production would.
+ */
+const PLATINUM = "84_7";
 
-const OFFERED = normalizeOffer(RATED_OFFER_RESPONSE).map((p) => ({
-  product_code: p.product_code,
-  product_name: p.product_name,
+const OFFERED = allTiers(normalizeOffer(QUOTE)).map((t) => ({
+  product_code: t.product_code,
+  product_name: t.product_name,
 }));
+
+const SEEDED = indexCatalog(
+  OFFERED.map((p) =>
+    row(p.product_code, {
+      display_name: p.product_name,
+      is_presentable: p.product_code !== PLATINUM,
+    })
+  )
+);
+
+/** Eleven products across five families. */
+const OFFERED_COUNT = OFFERED.length;
 
 test("the seeded offer matches every product it rates", () => {
   const c = classifyCoverage(OFFERED, SEEDED);
-  assert.equal(c.offered, 5);
-  assert.equal(c.matched, 5);
+  assert.equal(c.offered, OFFERED_COUNT);
+  assert.equal(c.matched, OFFERED_COUNT);
   assert.deepEqual(c.unmatched, [], "nothing should be unmatched against the seed");
 });
 
 test("a product whose copy is unwritten is withheld, and says so", () => {
   const c = classifyCoverage(OFFERED, SEEDED);
   assert.deepEqual(c.copy_pending, [
-    { product_code: "PPM", display_name: "Planned Maintenance" },
+    {
+      product_code: PLATINUM,
+      display_name: "USED PLATINUM UTV (Side by Side) - RIDERS ADVANTAGE PPM",
+    },
   ]);
 });
 
 // The assertion this whole change exists for.
 test("an unrecognised product is not reported as a withheld one", () => {
-  const withoutPpm = indexCatalog(
-    [...SEEDED.values()].filter((r) => r.product_code !== "PPM")
+  const withoutPlatinum = indexCatalog(
+    [...SEEDED.values()].filter((r) => r.product_code !== PLATINUM)
   );
-  const c = classifyCoverage(OFFERED, withoutPpm);
+  const c = classifyCoverage(OFFERED, withoutPlatinum);
 
-  // PPM now has no row at all, so it is a join failure, not a decision.
+  // Platinum now has no row at all, so it is a join failure, not a decision.
   assert.deepEqual(c.unmatched, [
-    { product_code: "PPM", product_name: "Planned Maintenance" },
+    {
+      product_code: PLATINUM,
+      product_name: "USED PLATINUM UTV (Side by Side) - RIDERS ADVANTAGE PPM",
+    },
   ]);
   assert.deepEqual(c.copy_pending, []);
 
@@ -77,7 +99,7 @@ test("the same product reads differently depending on why it is absent", () => {
   const registered = classifyCoverage(OFFERED, SEEDED);
   const absent = classifyCoverage(
     OFFERED,
-    indexCatalog([...SEEDED.values()].filter((r) => r.product_code !== "PPM"))
+    indexCatalog([...SEEDED.values()].filter((r) => r.product_code !== PLATINUM))
   );
 
   // Identical customer-facing outcome -- PPM is not shown either way -- but the
@@ -95,12 +117,15 @@ test("numeric provider codes fail loudly instead of emptying the page", () => {
   const c = classifyCoverage(numeric, SEEDED);
 
   assert.equal(c.matched, 0);
-  assert.equal(c.unmatched.length, 5);
+  assert.equal(c.unmatched.length, OFFERED_COUNT);
   assert.equal(c.copy_pending.length, 0, "none of this is a copy decision");
 
   const report = joinFailureReport("sess-1", STORE, c, numeric.map((p) => p.product_code));
   const parsed = JSON.parse(report);
-  assert.deepEqual(parsed.unmatched_codes, ["90001", "90002", "90003", "90004", "90005"]);
+  assert.deepEqual(
+    parsed.unmatched_codes,
+    Array.from({ length: OFFERED_COUNT }, (_, i) => String(90001 + i))
+  );
   assert.equal(parsed.session_id, "sess-1");
   assert.equal(parsed.store_id, STORE);
   assert.match(parsed.detail, /no row in fni\.product_catalog/);

@@ -350,6 +350,46 @@ button { cursor: pointer; }
 .decision-option.is-chosen .decision-mark { background: var(--copper); border-color: var(--copper); }
 .decision-option.is-chosen .decision-mark::after { content: "✓"; color: var(--paper); font-size: var(--fs-xs); }
 
+/* ── Which level, and on what terms ───────────────────────────────────────
+   Both sit ABOVE the price, because they are what the price depends on. A
+   customer who presses "5 years" and sees the figure move understands the
+   trade immediately; the same two controls placed below the price would read
+   as fine print on a number already decided.
+
+   Tiers stack, terms wrap into rows. Tiers carry a name and a price, so they
+   need the width; a term is two or three words and fits a chip. */
+.tiers, .rate-axis { border: 0; margin: 0; padding: 0; }
+.tiers legend, .rate-axis legend {
+  padding: 0 0 var(--s2); font-size: var(--fs-base); font-weight: 700;
+}
+.tiers-row { display: flex; flex-direction: column; gap: var(--s2); }
+
+.tier {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
+  min-height: var(--tap); padding: var(--s2) var(--s3);
+  font-size: var(--fs-base); text-align: left;
+  background: var(--paper); color: inherit;
+  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-md);
+  transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.tier-name { min-width: 0; font-weight: 600; }
+.tier-price { flex: 0 0 auto; color: var(--ink-55); }
+.tier.is-on { border-color: var(--copper); background: var(--copper-tint); }
+.tier.is-on .tier-price { color: inherit; }
+
+.rates { display: flex; flex-direction: column; gap: var(--s3); }
+.rate-row { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.chip {
+  min-height: var(--tap); padding: var(--s2) var(--s3);
+  font-size: var(--fs-base); background: var(--paper); color: inherit;
+  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-md);
+  transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.chip.is-on { border-color: var(--copper); background: var(--copper-tint); }
+/* A length that this deductible is not offered at. Shown rather than removed,
+   so the set of lengths does not change shape underneath the customer. */
+.chip:disabled { color: var(--ink-55); border-style: dashed; cursor: not-allowed; }
+
 /* ── Product configuration ────────────────────────────────────────────────
    The options that change what a product costs sit with it, and each states
    its own cost: an option that silently adds to the total is the thing a

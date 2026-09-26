@@ -27,13 +27,15 @@
 //   rounded per-product payments.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import type {
   CatalogEntry,
   Disposition,
-  OfferProduct,
+  OfferRate,
   SessionPayload,
 } from "@/lib/types";
 import { num } from "@/lib/types";
+import { durationOf } from "@/lib/copy";
 import { money, planTotals, productPayment, toCents } from "@/lib/money";
 import { profileFor, relevanceScore } from "@/lib/profiles";
 import { apiPath } from "@/lib/paths";
@@ -42,7 +44,10 @@ import AppShell from "@/components/AppShell";
 import ProgressStepper from "@/components/ProgressStepper";
 import VehicleContext from "@/components/VehicleContext";
 import OwnershipQuestion from "@/components/OwnershipQuestion";
-import ProductScreen, { type Presentable } from "@/components/ProductScreen";
+import ProductScreen, {
+  type Presentable,
+  type PresentableTier,
+} from "@/components/ProductScreen";
 import ActionFooter, { type SaveState } from "@/components/ActionFooter";
 import PlanSummary, { type PlanLine } from "@/components/PlanSummary";
 import CompletionState from "@/components/CompletionState";
@@ -99,6 +104,25 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     return resumed;
   });
 
+  // Which tier of each family, keyed by family code, and which rate of each
+  // tier, keyed by product code.
+  //
+  // Both default rather than starting empty, because a family screen with no
+  // tier and no length chosen cannot show a price, and a menu with no price is
+  // not a menu. The defaults are the least expensive end of each axis: the
+  // cheapest tier, the shortest term, the smallest deductible. Defaulting to
+  // the longest term and the lowest deductible would be defaulting to the most
+  // expensive configuration, which is a pressure pattern and not one this
+  // planner uses. The Include / I'll manage decision still starts empty.
+  const [tierChoice, setTierChoice] = useState<Record<string, string>>({});
+  const [rateChoice, setRateChoice] = useState<Record<string, string>>(() => {
+    const resumed: Record<string, string> = {};
+    for (const sel of initial.selections ?? []) {
+      if (sel.rate_unique_id) resumed[sel.provider_product_id] = sel.rate_unique_id;
+    }
+    return resumed;
+  });
+
   const [options, setOptions] = useState<Record<string, string[]>>(() => {
     const resumed: Record<string, string[]> = {};
     for (const s of initial.selections ?? []) {
@@ -143,42 +167,66 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     const bad: { name: string; why: string }[] = [];
     const missing: { name: string; code: string }[] = [];
 
-    for (const offer of initial.offer?.products ?? []) {
-      const copy = copyByCode.get(offer.product_code);
-      const price = offer.retail_price;
+    // A family is shown when at least one of its tiers can honestly be shown.
+    // A tier that has no copy, or no sellable rate, is dropped from the tier
+    // list rather than taking the whole family down with it: a customer can
+    // still choose Bronze if Platinum's copy is unwritten.
+    for (const family of initial.offer?.families ?? []) {
+      const tiers: PresentableTier[] = [];
 
-      // Filtering by genuine eligibility is correct. Filtering for relevance is
-      // steering, and is not done anywhere here. The exclusions below are
-      // neither: a product with no price or no plain-language copy cannot be
-      // presented honestly, which is exactly what the catalog exists to enforce.
-      //
-      // Order matters. A product with no catalog row at all is not a withheld
-      // product, it is one we failed to recognise, so it is checked first and
-      // reported separately rather than folded in with the deliberate cases.
-      if (!copy) {
-        missing.push({ name: offer.product_name, code: offer.product_code });
-        continue;
+      for (const tier of family.tiers) {
+        const copy = copyByCode.get(tier.product_code);
+        const sellable = tier.rates.filter((r) => r.retail_price !== null);
+        const fromPrice = sellable.length > 0
+          ? Math.min(...sellable.map((r) => r.retail_price as number))
+          : null;
+
+        // Filtering by genuine eligibility is correct. Filtering for relevance
+        // is steering, and is not done anywhere here. The exclusions below are
+        // neither: a tier with no price or no plain-language copy cannot be
+        // presented honestly, which is exactly what the catalog exists to
+        // enforce.
+        //
+        // Order matters. A tier with no catalog row at all is not a withheld
+        // product, it is one we failed to recognise, so it is checked first and
+        // reported separately rather than folded in with the deliberate cases.
+        if (!copy) {
+          missing.push({ name: tier.product_name, code: tier.product_code });
+          continue;
+        }
+        if (fromPrice === null) {
+          bad.push({
+            name: tier.product_name,
+            why: tier.rates[0]?.unpriced_reason ?? "No price available",
+          });
+          continue;
+        }
+        if (!copy.is_presentable) {
+          bad.push({
+            name: copy.display_name || tier.product_name,
+            why: "No approved plain-language description on file yet",
+          });
+          continue;
+        }
+
+        // Only the rates that carry a price. A rate no band covers cannot be
+        // offered, and offering the length without a price is worse.
+        tiers.push({ tier: { ...tier, rates: sellable }, copy, fromPrice });
       }
-      if (price === null || price === undefined) {
-        bad.push({ name: offer.product_name, why: offer.unpriced_reason ?? "No price available" });
-        continue;
-      }
-      if (!copy.is_presentable) {
-        bad.push({
-          name: copy.display_name || offer.product_name,
-          why: "No approved plain-language description on file yet",
-        });
-        continue;
-      }
-      ok.push({ offer, copy, price });
+
+      if (tiers.length > 0) ok.push({ family_code: family.family_code, tiers });
     }
 
-    // Discovery reorders. It never removes.
+    // Discovery reorders. It never removes. A family is scored by whichever of
+    // its tiers scores highest, so a relevant Platinum lifts the whole family.
+    const scoreOf = (f: Presentable) =>
+      Math.max(...f.tiers.map((t) => relevanceScore(t.copy.relevance_tags, t.copy.goal, allAnswers)));
+    const orderOf = (f: Presentable) =>
+      Math.min(...f.tiers.map((t) => t.copy.display_order));
+
     ok.sort((a, b) => {
-      const d =
-        relevanceScore(b.copy.relevance_tags, b.copy.goal, allAnswers) -
-        relevanceScore(a.copy.relevance_tags, a.copy.goal, allAnswers);
-      return d !== 0 ? d : a.copy.display_order - b.copy.display_order;
+      const d = scoreOf(b) - scoreOf(a);
+      return d !== 0 ? d : orderOf(a) - orderOf(b);
     });
 
     return { presentable: ok, withheld: bad, unmatched: missing };
@@ -206,19 +254,43 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   // the stamp rides with that product's decision. A resumed session keeps
   // whatever was recorded the first time round -- the customer saw it then,
   // and re-stamping it now would overwrite the fact with the retelling.
+  //
+  // Keyed by FAMILY, because the family is what has a screen. Every tier in it
+  // was on that screen, one keypress away, so they all carry the same stamp.
+  // On resume the stamp is recovered from any tier that already has one: they
+  // were written together, and the earliest is the one that is true.
+  //
+  // The resumed stamps are recovered in the initializer rather than in an
+  // effect, so they are in place before the first commit can stamp anything.
+  // An effect would have raced the stamping one below and could overwrite a
+  // real presentation time with the time of the resume.
   const shownAt = useRef<Record<string, string>>(
-    Object.fromEntries(
-      (initial.selections ?? [])
-        .filter((sel) => sel.presented_at)
-        .map((sel) => [sel.provider_product_id, sel.presented_at as string])
-    )
+    (() => {
+      const byProduct = new Map<string, string>();
+      for (const sel of initial.selections ?? []) {
+        if (sel.presented_at) byProduct.set(sel.provider_product_id, sel.presented_at);
+      }
+
+      const byFamily: Record<string, string> = {};
+      for (const p of presentable) {
+        // The earliest stamp across the family's tiers. They were written in one
+        // save, so they agree; taking the earliest is what keeps them agreeing
+        // if a later save ever adds a tier that was not there the first time.
+        const stamps = p.tiers
+          .map((t) => byProduct.get(t.tier.product_code))
+          .filter((v): v is string => v !== undefined)
+          .sort();
+        if (stamps.length > 0) byFamily[p.family_code] = stamps[0];
+      }
+      return byFamily;
+    })()
   );
 
   useEffect(() => {
     if (screen.kind !== "product") return;
-    const code = presentable[screen.pIndex]?.offer.product_code;
-    if (code && !shownAt.current[code]) {
-      shownAt.current[code] = new Date().toISOString();
+    const family = presentable[screen.pIndex]?.family_code;
+    if (family && !shownAt.current[family]) {
+      shownAt.current[family] = new Date().toISOString();
     }
   }, [screen, presentable]);
 
@@ -234,14 +306,35 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   const hasPayment = session.financials.has_payment === true;
   const isCash = session.financials.payment_basis === "cash";
 
+  /** The tier in force for a family: the customer's, else the cheapest. */
+  const tierOf = useCallback(
+    (p: Presentable): PresentableTier =>
+      p.tiers.find((t) => t.tier.product_code === tierChoice[p.family_code]) ?? p.tiers[0],
+    [tierChoice]
+  );
+
+  /** The rate in force for a tier: the customer's, else the shortest. */
+  const rateOf = useCallback(
+    (t: PresentableTier): OfferRate | undefined =>
+      t.tier.rates.find((r) => r.rate_unique_id === rateChoice[t.tier.product_code]) ??
+      t.tier.rates[0],
+    [rateChoice]
+  );
+
   const priceOf = useCallback(
-    (p: Presentable) => p.price + surchargeCost(p, options[p.offer.product_code] ?? []),
-    [options]
+    (p: Presentable): number | null => {
+      const t = tierOf(p);
+      const r = rateOf(t);
+      if (!r || r.retail_price === null) return null;
+      return r.retail_price + surchargeCost(r, options[t.tier.product_code] ?? []);
+    },
+    [tierOf, rateOf, options]
   );
 
   const includedPrices = presentable
-    .filter((p) => decisions[p.offer.product_code] === "Included")
-    .map(priceOf);
+    .filter((p) => decisions[p.family_code] === "Included")
+    .map(priceOf)
+    .filter((n): n is number => n !== null);
 
   /** What the plan costs, on every path. A cash deal has this and nothing else. */
   const planTotal = toCents(includedPrices.reduce((a, p) => a + p, 0));
@@ -256,29 +349,46 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
       setSaveState("saving");
       try {
         const body = {
-          decisions: presentable.map((p) => {
-            const disposition = decisions[p.offer.product_code];
-            const chosen = options[p.offer.product_code] ?? [];
-            const price = p.price + surchargeCost(p, chosen);
-            return {
-              product_code: p.offer.product_code,
-              product_type: p.offer.product_type,
-              product_name: p.copy.display_name,
-              disposition: disposition ?? "Managed by Customer",
-              rate_unique_id: p.offer.rate_unique_id,
-              term_months: p.offer.term_months,
-              term_miles: p.offer.term_miles,
-              deductible: p.offer.deductible,
-              dealer_cost: p.offer.dealer_cost,
-              retail_price: price,
-              customer_price: price,
-              selected_options: chosen,
-              rate_snapshot: p.offer.raw,
-              // The moment this product's own screen was shown. Null until it
-              // has been, so a product the customer has not reached is not
-              // recorded as presented.
-              presented_at: shownAt.current[p.offer.product_code] ?? null,
-            };
+          // One row per TIER, not per family. Every product the customer was
+          // shown is recorded, including the tiers they did not take and the
+          // families they are managing themselves: a record of a presentation
+          // that lists only what was bought is not a record of the presentation.
+          // Only the tier actually chosen, in a family they included, is
+          // Included.
+          decisions: presentable.flatMap((p) => {
+            const decided = decisions[p.family_code];
+            const chosenTier = tierOf(p);
+
+            return p.tiers.map((t) => {
+              const isChosen = t.tier.product_code === chosenTier.tier.product_code;
+              const rate = rateOf(t);
+              const chosen = options[t.tier.product_code] ?? [];
+              const price =
+                rate === undefined || rate.retail_price === null
+                  ? null
+                  : rate.retail_price + surchargeCost(rate, chosen);
+
+              return {
+                product_code: t.tier.product_code,
+                product_type: t.tier.product_type,
+                product_name: t.copy.display_name,
+                disposition:
+                  isChosen && decided === "Included" ? "Included" : "Managed by Customer",
+                rate_unique_id: rate?.rate_unique_id ?? null,
+                term_months: rate?.term_months ?? null,
+                term_miles: rate?.term_miles ?? null,
+                deductible: rate?.deductible ?? null,
+                dealer_cost: rate?.dealer_cost ?? null,
+                retail_price: price,
+                customer_price: price,
+                selected_options: chosen,
+                rate_snapshot: rate?.raw ?? t.tier.raw,
+                // The moment this family's screen was shown. Null until it has
+                // been, so a family the customer has not reached is not recorded
+                // as presented.
+                presented_at: shownAt.current[p.family_code] ?? null,
+              };
+            });
           }),
           discovery: {
             use_context: answers.use_context ?? [],
@@ -347,7 +457,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     }
   }, [save, session.id]);
 
-  const decided = presentable.filter((p) => decisions[p.offer.product_code]).length;
+  const decided = presentable.filter((p) => decisions[p.family_code]).length;
 
   const vehicleName = [
     session.vehicle.year,
@@ -381,13 +491,18 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     return best;
   }, [screens, furthest]);
 
-  const planLines: PlanLine[] = presentable.map((p) => ({
-    code: p.offer.product_code,
-    name: p.copy.display_name,
-    duration: p.copy.coverage_duration,
-    price: priceOf(p),
-    disposition: decisions[p.offer.product_code],
-  }));
+  // One line per family, naming the tier the customer settled on and the term
+  // they picked, so the page they take home says the same thing the screen did.
+  const planLines: PlanLine[] = presentable.map((p) => {
+    const t = tierOf(p);
+    return {
+      code: p.family_code,
+      name: t.copy.display_name,
+      duration: durationOf(rateOf(t), t.copy.coverage_duration),
+      price: priceOf(p),
+      disposition: decisions[p.family_code],
+    };
+  });
 
   // ── Footer wiring ───────────────────────────────────────────────────────
   const onBack = () => goTo(Math.max(0, at - 1));
@@ -405,7 +520,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   // would record a decision they never made.
   const undecidedHere =
     screen.kind === "product" &&
-    !decisions[presentable[screen.pIndex].offer.product_code];
+    !decisions[presentable[screen.pIndex].family_code];
 
   const status =
     undecidedHere ? "Choose one to continue"
@@ -427,18 +542,18 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
           <p className="eyebrow">Your options</p>
           <ol>
             {presentable.map((p, i) => {
-              const d = decisions[p.offer.product_code];
+              const d = decisions[p.family_code];
               const here = screen.kind === "product" && screen.pIndex === i;
               const reached = i <= furthestProduct;
               return (
-                <li key={p.offer.product_code} className={here ? "is-here" : ""}>
+                <li key={p.family_code} className={here ? "is-here" : ""}>
                   <button
                     type="button"
                     disabled={!reached}
                     aria-current={here ? "true" : undefined}
                     onClick={() => goTo(firstScreenOfStep(1) + i)}
                   >
-                    <span className="railnav-name">{p.copy.display_name}</span>
+                    <span className="railnav-name">{tierOf(p).copy.display_name}</span>
                     <span className="railnav-state">
                       {d === "Included" ? "Included" : d ? "Managing" : here ? "Deciding" : "—"}
                     </span>
@@ -454,6 +569,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
 
   return (
     <AppShell
+      dealerGroupName={initial.dealer_group_name}
       stepper={
         <ProgressStepper
           steps={STEPS}
@@ -572,31 +688,24 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
 
       {screen.kind === "product" && (
         <section className="screen screen--wide">
-          <ProductScreen
-            item={presentable[screen.pIndex]}
+          <FamilyScreen
+            family={presentable[screen.pIndex]}
             index={screen.pIndex + 1}
             total={presentable.length}
-            price={priceOf(presentable[screen.pIndex])}
-            perMonth={
-              hasPayment && rate !== null && term !== null
-                ? productPayment(priceOf(presentable[screen.pIndex]), rate, term)
-                : null
-            }
-            disposition={decisions[presentable[screen.pIndex].offer.product_code]}
-            chosenOptions={options[presentable[screen.pIndex].offer.product_code] ?? []}
-            onDecide={(d) =>
-              setDecisions((st) => ({
-                ...st,
-                [presentable[screen.pIndex].offer.product_code]: d,
-              }))
-            }
-            onOption={(code, on) =>
-              setOptions((st) => {
-                const pc = presentable[screen.pIndex].offer.product_code;
-                const cur = st[pc] ?? [];
-                return { ...st, [pc]: on ? [...cur, code] : cur.filter((c) => c !== code) };
-              })
-            }
+            tierOf={tierOf}
+            rateOf={rateOf}
+            priceOf={priceOf}
+            hasPayment={hasPayment}
+            rate={rate}
+            term={term}
+            decisions={decisions}
+            options={options}
+            dealerGroupName={initial.dealer_group_name}
+            copyTemplates={initial.copy ?? {}}
+            setTierChoice={setTierChoice}
+            setRateChoice={setRateChoice}
+            setDecisions={setDecisions}
+            setOptions={setOptions}
           />
         </section>
       )}
@@ -649,8 +758,17 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                   label="Added to your purchase"
                   total={planTotal}
                   lines={presentable
-                    .filter((p) => decisions[p.offer.product_code] === "Included")
-                    .map((p) => ({ name: p.copy.display_name, amount: priceOf(p) }))}
+                    .filter((p) => decisions[p.family_code] === "Included")
+                    .map((p) => ({
+                      name: tierOf(p).copy.display_name,
+                      amount: priceOf(p),
+                    }))
+                    // A family with no priced rate never reaches a screen, so
+                    // this drops nothing in practice; it is here so an unpriced
+                    // line can never be summed in as a zero.
+                    .filter((l): l is { name: string; amount: number } =>
+                      l.amount !== null
+                    )}
                 />
                 <p className="fine">
                   You&apos;re paying for this machine outright, so there&apos;s no
@@ -770,9 +888,101 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   );
 }
 
-/** Surcharges the customer added (lift kit, oversized tires, mud use, turbo). */
-function surchargeCost(p: Presentable, chosen: string[]): number {
-  return p.offer.surcharge_options
-    .filter((o) => chosen.includes(o.code))
+/**
+ * Surcharges on top of a rate (lift kit, oversized tires, commercial use).
+ *
+ * Options hang off the RATE, not the product, and a mandatory one is counted
+ * whether or not the customer ticked it: it is not a choice, and leaving it out
+ * of the price would quote a figure the provider will not honour.
+ */
+function surchargeCost(rate: OfferRate, chosen: string[]): number {
+  return rate.options
+    .filter((o) => o.mandatory || chosen.includes(o.code))
     .reduce((a, o) => a + o.cost_delta, 0);
+}
+
+// ── The family screen's wiring ────────────────────────────────────────────
+//
+// A thin adapter, not a second screen. ProductScreen renders; this resolves
+// which tier and which rate are in force and hands over the four setters. It
+// exists because the call site was accumulating a dozen
+// `presentable[screen.pIndex]` repetitions, and a screen index spelled out
+// twelve times is a screen index that will eventually be spelled wrong once.
+function FamilyScreen({
+  family,
+  index,
+  total,
+  tierOf,
+  rateOf,
+  priceOf,
+  hasPayment,
+  rate,
+  term,
+  decisions,
+  options,
+  dealerGroupName,
+  copyTemplates,
+  setTierChoice,
+  setRateChoice,
+  setDecisions,
+  setOptions,
+}: {
+  family: Presentable;
+  index: number;
+  total: number;
+  tierOf: (p: Presentable) => PresentableTier;
+  rateOf: (t: PresentableTier) => OfferRate | undefined;
+  priceOf: (p: Presentable) => number | null;
+  hasPayment: boolean;
+  rate: number | null;
+  term: number | null;
+  decisions: Record<string, Disposition>;
+  options: Record<string, string[]>;
+  dealerGroupName: string | null;
+  copyTemplates: Record<string, string>;
+  setTierChoice: Dispatch<SetStateAction<Record<string, string>>>;
+  setRateChoice: Dispatch<SetStateAction<Record<string, string>>>;
+  setDecisions: Dispatch<SetStateAction<Record<string, Disposition>>>;
+  setOptions: Dispatch<SetStateAction<Record<string, string[]>>>;
+}) {
+  const tier = tierOf(family);
+  const chosenRate = rateOf(tier);
+  const price = priceOf(family);
+  const code = tier.tier.product_code;
+
+  return (
+    <ProductScreen
+      item={family}
+      index={index}
+      total={total}
+      chosenTier={tier}
+      chosenRate={chosenRate}
+      price={price}
+      perMonth={
+        hasPayment && price !== null && rate !== null && term !== null
+          ? productPayment(price, rate, term)
+          : null
+      }
+      disposition={decisions[family.family_code]}
+      chosenOptions={options[code] ?? []}
+      dealerGroupName={dealerGroupName}
+      copyTemplates={copyTemplates}
+      onChooseTier={(productCode) =>
+        setTierChoice((st) => ({ ...st, [family.family_code]: productCode }))
+      }
+      onChooseRate={(rateUniqueId) =>
+        setRateChoice((st) => ({ ...st, [code]: rateUniqueId }))
+      }
+      onDecide={(d) => setDecisions((st) => ({ ...st, [family.family_code]: d }))}
+      onOption={(optionCode, on) =>
+        setOptions((st) => {
+          const cur = st[code] ?? [];
+          return {
+            ...st,
+            [code]: on ? [...cur, optionCode] : cur.filter((c) => c !== optionCode),
+          };
+        })
+      }
+    />
+  );
 }
