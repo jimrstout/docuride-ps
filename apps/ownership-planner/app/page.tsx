@@ -221,6 +221,16 @@ async function SessionList({ email }: { email: string }) {
         </form>
       </header>
 
+      {/* The only way to reach Settings. It is deliberately not linked from
+          anything customer-facing: /settings edits the words a buyer reads, so
+          it lives behind the same sign-in as the session list and nowhere else. */}
+      <nav className="console-tabs">
+        <span className="console-tab-here">Session browser</span>
+        <Link className="btn btn--quiet" href="/settings" prefetch={false}>
+          Settings
+        </Link>
+      </nav>
+
       <p className="console-note">
         The {rows.length === 1 ? "most recent session" : `${rows.length} most recent sessions`},
         newest first. Times are UTC. Extending adds 24 hours from now, which

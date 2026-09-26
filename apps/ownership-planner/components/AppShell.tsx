@@ -10,11 +10,21 @@ export default function AppShell({
   rail,
   children,
   footer,
+  dealerGroupName,
 }: {
   stepper?: React.ReactNode;
   rail?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /**
+   * The dealer group's customer-facing name, from the tenant row.
+   *
+   * A prop rather than a constant because this codebase serves more than one
+   * dealer group, and a hard-coded name in a shared frame is a name that will
+   * eventually appear above the wrong dealership's deal. Null when the tenant
+   * has not set one, in which case the line is left out rather than guessed at.
+   */
+  dealerGroupName?: string | null;
 }) {
   return (
     <div className="app">
@@ -47,10 +57,11 @@ export default function AppShell({
           the control bar. The stylesheet shows it only where scrolling is
           allowed, which is phones. */}
       <footer className="colophon">
-        <p className="colophon-brand">
-          <b>All Seasons</b>
-          <small>Powersports &amp; Equipment</small>
-        </p>
+        {dealerGroupName ? (
+          <p className="colophon-brand">
+            <b>{dealerGroupName}</b>
+          </p>
+        ) : null}
         <p><b>Local expertise</b><span>People who ride, work and live here.</span></p>
         <p><b>Long-term support</b><span>Service, parts and expertise.</span></p>
         <p><b>Stronger communities</b><span>Riders, workers and neighbors just like you.</span></p>
