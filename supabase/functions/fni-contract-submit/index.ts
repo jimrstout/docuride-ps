@@ -58,6 +58,13 @@ import {
   str,
   type ProductSelection,
 } from "../_shared/offer-selections.ts";
+import {
+  blockingByProduct,
+  describeContract,
+  submitRefusal,
+  type ContractRef,
+  type SubmitLockState,
+} from "../_shared/duplicates.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -106,6 +113,58 @@ serve(async (req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
+  // The lock's state lives out here, above the try, because the catch is the
+  // one place that has to decide what to leave it as. Everything from the
+  // moment it is taken must leave it in a defensible state: Idle if TecAssured
+  // was never called, Submit Status Unknown if it was and we got no answer.
+  let lockToken: string | null = null;
+  let lockHeld = false;
+  let providerWasCalled = false;
+
+  /** Put the session back to Idle. Used on every path that did not reach the
+   *  provider, and on the ones that reached it and got a clear answer. */
+  const releaseLock = async () => {
+    lockHeld = false;
+    await supabase
+      .schema("fni")
+      .from("sessions")
+      .update({
+        submit_state: "Idle",
+        submit_started_at: null,
+        submit_token: null,
+        submit_detail: null,
+      })
+      .eq("id", session_id)
+      .eq("submit_token", lockToken);
+  };
+
+  /**
+   * Leave the lock saying nobody knows.
+   *
+   * Never released on a timer. A submit that reached the provider and went
+   * quiet may well have created paperwork, and releasing the lock would be
+   * guessing that it did not -- which is exactly the guess that produces two
+   * live contracts for one product.
+   */
+  const markUnknown = async (detail: string) => {
+    lockHeld = false;
+    await supabase
+      .schema("fni")
+      .from("sessions")
+      .update({
+        submit_state: "Submit Status Unknown",
+        submit_detail: detail,
+      })
+      .eq("id", session_id)
+      .eq("submit_token", lockToken);
+  };
+
+  /** Refuse, and hand the lock back, because nothing was sent. */
+  const refuse = async (status: number, body: Record<string, unknown>) => {
+    await releaseLock();
+    return json(status, body);
+  };
+
   try {
     // ── Step 1: Load the session ───────────────────────────────────────
     const { data: session, error: sessErr } = await supabase
@@ -118,12 +177,64 @@ serve(async (req: Request) => {
     if (sessErr || !session) return json(404, { error: `Session ${session_id} not found` });
 
     // The real vocabulary, from the CHECK on fni.sessions.status.
-    const allowed = ["Rated", "Presenting", "Products Selected"];
+    //
+    // Agreement Created is in this list now, and that is the point. It was the
+    // only thing standing between a double-click and a second real contract, and
+    // it was the wrong thing: blunt (a session with one contract could not add a
+    // second product at all), leaky (the status update that produces it is
+    // logged rather than fatal, so a failure left the session submittable), and
+    // silent about what already existed. The lock below and the per-product
+    // check after it are the guards now, and they say what they found.
+    const allowed = ["Rated", "Presenting", "Products Selected", "Agreement Created"];
     if (!allowed.includes(session.status)) {
       return json(400, {
         error: `Session is ${session.status}. Must be one of ${allowed.join(", ")} to submit contracts.`,
       });
     }
+
+    // ── Step 1b: One submit at a time ──────────────────────────────────
+    //
+    // A double-click, an impatient retry and a second browser tab all arrive as
+    // concurrent requests that each pass every read-only check before either
+    // writes anything. So the lock is taken with a conditional UPDATE, which
+    // Postgres applies atomically: of two requests, exactly one gets a row back.
+    const refusal = submitRefusal(session as unknown as SubmitLockState);
+    if (refusal) {
+      return json(409, {
+        error: refusal,
+        submit_state: session.submit_state,
+        submit_started_at: session.submit_started_at ?? null,
+      });
+    }
+
+    lockToken = crypto.randomUUID();
+    const { data: locked } = await supabase
+      .schema("fni")
+      .from("sessions")
+      .update({
+        submit_state: "In Progress",
+        submit_started_at: new Date().toISOString(),
+        submit_token: lockToken,
+        submit_detail: null,
+      })
+      .eq("id", session_id)
+      // The whole guard. Only a session nobody is submitting can be locked, and
+      // the loser of a race gets no row rather than a second provider call.
+      .eq("submit_state", "Idle")
+      .select("id")
+      .maybeSingle();
+
+    if (!locked) {
+      lockToken = null;
+      return json(409, {
+        error:
+          "Another submit for this session started first. Wait for it to finish, " +
+          "then reload to see the result.",
+        submit_state: "In Progress",
+      });
+    }
+
+    lockHeld = true;
 
     // ── Step 2: Load the rated offer ───────────────────────────────────
     const { data: ratedOffer, error: offerErr } = await supabase
@@ -134,7 +245,7 @@ serve(async (req: Request) => {
       .single();
 
     if (offerErr || !ratedOffer) {
-      return json(400, { error: "No rated offer found for this session. Rate the vehicle first." });
+      return await refuse(400, { error: "No rated offer found for this session. Rate the vehicle first." });
     }
 
     // ── Step 3: Which login, which Dealer ID ───────────────────────────
@@ -142,7 +253,7 @@ serve(async (req: Request) => {
     try {
       store = await createTecAssuredClient(session.store_id, supabase);
     } catch (err) {
-      return json(400, { error: err instanceof Error ? err.message : String(err) });
+      return await refuse(400, { error: err instanceof Error ? err.message : String(err) });
     }
     const { client, credentials, dealerCode } = store;
 
@@ -150,8 +261,8 @@ serve(async (req: Request) => {
     // Pruned, not flagged: see _shared/offer-selections.ts. Sending all
     // eleven products with flags is a request to submit all eleven, and the
     // QA server simply stopped responding when we did.
-    const { quote: submitQuote, resolved } =
-      buildSubmitQuote(ratedOffer.response_payload as Record<string, unknown>, selections);
+    const offerPayload = ratedOffer.response_payload as Record<string, unknown>;
+    const { resolved } = buildSubmitQuote(offerPayload, selections);
 
     // Every selection must have been found in the offer. One that was not is a
     // stale menu, and submitting the rest silently would sell a different set
@@ -159,7 +270,7 @@ serve(async (req: Request) => {
     const foundRates = new Set(resolved.map((r) => r.selection.rate_unique));
     const notFound = selections.filter((s) => !foundRates.has(s.rate_unique));
     if (notFound.length > 0) {
-      return json(400, {
+      return await refuse(400, {
         error: "Some selections were not found in the rated offer. Re-rate and present again.",
         missing: notFound.map((s) => ({ product_unique: s.product_unique, rate_unique: s.rate_unique })),
       });
@@ -170,7 +281,7 @@ serve(async (req: Request) => {
     // submitted, so a failure leaves nothing behind at TecAssured.
     const uncosted = resolved.filter((r) => r.dealerCost === null);
     if (uncosted.length > 0) {
-      return json(400, {
+      return await refuse(400, {
         error:
           "The rated offer carries no dealer cost for some selected rates, so the " +
           "contract could not be recorded accurately. Re-rate before submitting.",
@@ -187,7 +298,7 @@ serve(async (req: Request) => {
     // where it can name the product instead.
     const overCap = resolved.filter((r) => r.overCap);
     if (overCap.length > 0) {
-      return json(400, {
+      return await refuse(400, {
         error:
           "Some selections are priced above what the provider will sell them for, " +
           "so the submit would be refused in full.",
@@ -202,6 +313,117 @@ serve(async (req: Request) => {
         })),
       });
     }
+
+    // ── Step 4b: A product that already has paperwork ──────────────────
+    //
+    // Jim's rule, and the one the schema now also enforces: there is never more
+    // than one live contract for the same product on the same deal.
+    //
+    // A selection whose product already has one is not an error to shout about
+    // and not a thing to submit again. The existing contract number is handed
+    // straight back, because that IS the answer to "submit this product": it is
+    // already done, and here is the paperwork. A retry after a dropped response
+    // therefore looks like a success to whoever retried, which is what makes the
+    // endpoint safe to retry at all.
+    //
+    // A customer who has genuinely changed their mind is a different matter, and
+    // it needs a person: the old contract must be voided at TecAssured first.
+    // That is said in words rather than done automatically, because voiding
+    // somebody's contract is not a side effect.
+    const { data: existingAgreement } = await supabase
+      .schema("fni")
+      .from("agreements")
+      .select("id")
+      .eq("session_id", session_id)
+      .maybeSingle();
+
+    let alreadyContracted = new Map<string, ContractRef>();
+
+    if (existingAgreement) {
+      const { data: existingRows } = await supabase
+        .schema("fni")
+        .from("agreement_products")
+        .select("provider_product_id, contract_number, product_name, status, rate_unique_id, pdf_link")
+        .eq("agreement_id", (existingAgreement as { id: string }).id);
+
+      alreadyContracted = blockingByProduct(
+        (existingRows ?? []) as unknown as ContractRef[]
+      );
+    }
+
+    // Same product, same rate: already done. Same product, different rate: the
+    // customer changed their mind and somebody has to void the old one.
+    const already: ContractRef[] = [];
+    const changedMind: { contract: ContractRef; wanted: string }[] = [];
+
+    for (const r of resolved) {
+      const existing = alreadyContracted.get(r.providerProductId);
+      if (!existing) continue;
+
+      const sameRate =
+        (existing as unknown as { rate_unique_id?: string }).rate_unique_id === r.rateUniqueId;
+
+      if (sameRate) already.push(existing);
+      else changedMind.push({ contract: existing, wanted: r.rateUniqueId });
+    }
+
+    if (changedMind.length > 0) {
+      return await refuse(409, {
+        error:
+          "This deal already has a live contract for " +
+          changedMind.map((c) => describeContract(c.contract)).join(", ") +
+          ", on a different rate than the one selected. Void it in TecAssured " +
+          "first, then submit again. There must never be two live contracts for " +
+          "the same product on one deal.",
+        must_void_first: changedMind.map((c) => ({
+          product_name: c.contract.product_name,
+          provider_product_id: c.contract.provider_product_id,
+          contract_number: c.contract.contract_number,
+          status: c.contract.status,
+          selected_rate_unique_id: c.wanted,
+        })),
+      });
+    }
+
+    // Every selection is already contracted, on the rate asked for. Nothing to
+    // send. Answered 200 with the numbers, because from the caller's point of
+    // view the request succeeded: these products have contracts.
+    const toSubmit = resolved.filter((r) => !alreadyContracted.has(r.providerProductId));
+
+    if (toSubmit.length === 0) {
+      await releaseLock();
+      return json(200, {
+        session_id,
+        status: session.status,
+        already_submitted: true,
+        contracts: already.map((c) => ({
+          contract_number: c.contract_number,
+          provider_product_id: c.provider_product_id,
+          product_name: c.product_name,
+          status: c.status,
+        })),
+        contract_count: already.length,
+        message:
+          already.length === 1
+            ? `Already submitted: ${describeContract(already[0])}. No new contract was created.`
+            : `Already submitted: ${already.map(describeContract).join(", ")}. ` +
+              `No new contracts were created.`,
+      });
+    }
+
+    // ── Step 4c: The quote, pruned to what is actually being sent ──────
+    //
+    // Rebuilt from only the selections without a contract. Presence is the
+    // selector on /contract/submit -- section 7, and the reason a flagged quote
+    // of all eleven products hung the QA server -- so leaving an
+    // already-contracted product in the quote would ask for a second contract
+    // for it. The one case that matters is a partial retry: two products
+    // selected, one already done, and this is what keeps the second submit to
+    // the one that is missing.
+    const { quote: submitQuote } = buildSubmitQuote(
+      offerPayload,
+      toSubmit.map((r) => r.selection)
+    );
 
     // ── Step 5: Buyer and lienholder ───────────────────────────────────
     if (session.buyer_first_name) submitQuote.buyerFirstName = session.buyer_first_name;
@@ -226,11 +448,20 @@ serve(async (req: Request) => {
     if (Object.keys(lienholder).length > 0) submitPayload.lienholder = lienholder;
 
     // ── Step 6: Submit ─────────────────────────────────────────────────
+    //
+    // The moment before this call is the last one at which "nothing happened" is
+    // knowable. From here, a timeout or a dropped connection means TecAssured may
+    // have created real paperwork we never heard about, so the flag below changes
+    // what the catch does: Idle if we never asked, Submit Status Unknown if we
+    // did and did not get an answer.
+    providerWasCalled = true;
     const submitResponse = await client.submitContract(submitPayload);
     const response = (submitResponse ?? {}) as Record<string, unknown>;
 
+    // A refusal is a clear answer: it declined, so nothing exists and the lock
+    // goes back. Only silence is ambiguous.
     if (response.error && String(response.error).trim() !== "") {
-      return json(400, {
+      return await refuse(400, {
         error: `TecAssured contract submit failed: ${response.error}`,
         tecassured_error: response.error,
       });
@@ -245,7 +476,7 @@ serve(async (req: Request) => {
       (c) => typeof c.error === "string" && c.error.trim() !== ""
     );
     if (failed.length > 0 && failed.length === contracts.length) {
-      return json(400, {
+      return await refuse(400, {
         error: "The provider refused every contract in this submit.",
         failures: failed.map((c) => ({
           rate_unique_id: c.rateUniqueId ?? c.rateUnique ?? null,
@@ -276,14 +507,24 @@ serve(async (req: Request) => {
       .single();
 
     if (agreementErr || !agreement) {
-      // Contracts may now exist at TecAssured with nothing here pointing at
-      // them. Say so plainly: this needs a person, not a retry.
+      // Contracts now exist at TecAssured with nothing here pointing at them.
+      // The session is parked at Submit Status Unknown rather than released:
+      // the next submit would create a second set of the same paperwork,
+      // because the rows that would have stopped it are the rows that failed
+      // to write. This needs a person, not a retry.
       console.error(`Failed to store agreement: ${agreementErr?.message}`);
+      await markUnknown(
+        `The provider returned ${contracts.length} contract(s) ` +
+          `(${contracts.map((c) => c.contractNumber ?? "no number").join(", ")}) ` +
+          `but the agreement could not be recorded: ${agreementErr?.message}`
+      );
       return json(500, {
         error:
           "Contracts were submitted to TecAssured but the agreement could not be recorded. " +
-          "Do not retry; the contracts may already exist.",
+          "Do not retry; the contracts may already exist. Staff must check TecAssured " +
+          "before this session can submit again.",
         detail: agreementErr?.message,
+        submit_state: "Submit Status Unknown",
         tecassured_response: submitResponse,
       });
     }
@@ -318,12 +559,20 @@ serve(async (req: Request) => {
       .select("id, provider_product_id");
 
     if (selErr || !selectedSaved) {
+      // Same reasoning as the agreement failure above: the paperwork is real
+      // and this side of it is incomplete, so the session stays blocked.
       console.error(`Failed to store selected products: ${selErr?.message}`);
+      await markUnknown(
+        `The provider returned ${contracts.length} contract(s) but the selections ` +
+          `could not be recorded: ${selErr?.message}`
+      );
       return json(500, {
         error:
           "Contracts were submitted to TecAssured but the selections could not be recorded. " +
-          "Do not retry; the contracts may already exist.",
+          "Do not retry; the contracts may already exist. Staff must check TecAssured " +
+          "before this session can submit again.",
         detail: selErr?.message,
+        submit_state: "Submit Status Unknown",
         agreement_id: agreement.id,
       });
     }
@@ -378,6 +627,9 @@ serve(async (req: Request) => {
         selected_options: r.selection.option_uniques ?? [],
         contract_number: str(c.contractNumber, "") || null,
         pdf_link: str(c.pdfLink, "") || null,
+        // The word that makes the "one live contract per product" index bite.
+        // Voiding is what changes it, in fni-contract-void.
+        status: "Live",
       });
     }
 
@@ -388,12 +640,23 @@ serve(async (req: Request) => {
         .insert(productRows);
 
       if (prodErr) {
+        // This is also where a genuinely simultaneous second submit lands: the
+        // partial unique index on (agreement_id, provider_product_id) refuses
+        // the duplicate row. Either way real contracts exist and our record of
+        // them does not, so the session is blocked for a person to sort out.
         console.error(`Failed to store agreement products: ${prodErr.message}`);
+        await markUnknown(
+          `The provider returned ${contracts.length} contract(s) ` +
+            `(${contracts.map((c) => c.contractNumber ?? "no number").join(", ")}) ` +
+            `but they could not be recorded: ${prodErr.message}`
+        );
         return json(500, {
           error:
             "Contracts were submitted to TecAssured but could not be recorded. " +
-            "Do not retry; the contracts may already exist.",
+            "Do not retry; the contracts may already exist. Staff must check TecAssured " +
+            "before this session can submit again.",
           detail: prodErr.message,
+          submit_state: "Submit Status Unknown",
           agreement_id: agreement.id,
           contracts: contracts.map((c) => c.contractNumber),
         });
@@ -413,6 +676,11 @@ serve(async (req: Request) => {
 
     if (statusErr) console.error(`Failed to update session status: ${statusErr.message}`);
 
+    // Everything that could go wrong has either gone right or returned above,
+    // and the agreement_products rows are now the thing that stops a second
+    // contract for these products. The lock has done its job; let it go.
+    await releaseLock();
+
     return json(200, {
       session_id,
       status: "Agreement Created",
@@ -428,6 +696,18 @@ serve(async (req: Request) => {
         pdf_link: p.pdf_link,
       })),
       contract_count: productRows.length,
+      // A partial retry: these products were already done before this call and
+      // were not sent again. Reported so the caller sees the whole deal, not
+      // just the part this request happened to create.
+      already_contracted:
+        already.length > 0
+          ? already.map((c) => ({
+              contract_number: c.contract_number,
+              provider_product_id: c.provider_product_id,
+              product_name: c.product_name,
+              status: c.status,
+            }))
+          : undefined,
       // Present only when TecAssured returned a contract we could not tie back
       // to a selection. Never silently dropped.
       unmatched_contracts: unmatched.length > 0 ? unmatched : undefined,
@@ -435,6 +715,28 @@ serve(async (req: Request) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("fni-contract-submit error:", message);
+
+    // The whole reason providerWasCalled exists. A timeout or a dropped
+    // connection after the submit call means TecAssured may have created real
+    // paperwork we never heard about, and there is no way to tell from here.
+    // So: release the lock if we never asked, and park the session at Submit
+    // Status Unknown if we did. Nothing retries on its own -- a person checks
+    // TecAssured, then voids or clears.
+    if (lockHeld) {
+      if (providerWasCalled) {
+        await markUnknown(`The submit call failed after reaching the provider: ${message}`);
+        return json(500, {
+          error:
+            "The submit reached TecAssured but we never learned the outcome: " +
+            message +
+            ". It may have created contracts. Staff must check TecAssured before " +
+            "this session can submit again. Nothing will be retried automatically.",
+          submit_state: "Submit Status Unknown",
+        });
+      }
+      await releaseLock();
+    }
+
     return json(500, { error: message });
   }
 });
