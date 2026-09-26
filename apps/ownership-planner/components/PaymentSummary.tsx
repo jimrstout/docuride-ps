@@ -69,9 +69,9 @@ export function DealTerms({
 }) {
   return (
     <dl className="terms">
-      <div><dt>Amount financed</dt><dd>{principal !== null ? money(principal) : "—"}</dd></div>
-      <div><dt>Term</dt><dd>{term !== null ? `${term} months` : "—"}</dd></div>
-      <div><dt>{rateLabel}</dt><dd>{rate !== null ? `${rate}%` : "—"}</dd></div>
+      <div><dt>Amount financed</dt><dd>{principal !== null ? money(principal) : "Not set"}</dd></div>
+      <div><dt>Term</dt><dd>{term !== null ? `${term} months` : "Not set"}</dd></div>
+      <div><dt>{rateLabel}</dt><dd>{rate !== null ? `${rate}%` : "Not set"}</dd></div>
     </dl>
   );
 }

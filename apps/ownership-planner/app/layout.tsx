@@ -3,7 +3,7 @@ import "./tokens.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "DocuRide PS — Ownership Planner",
+  title: "DocuRide PS Ownership Planner",
   description: "Plan how you'll own it.",
   // A session URL is the only credential protecting this page. Keep it out of
   // search indexes and out of referrers.
