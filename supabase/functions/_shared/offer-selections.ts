@@ -37,7 +37,20 @@ export interface ResolvedSelection {
   termMiles: number | null;
   deductible: number | null;
   dealerCost: number | null;
+  /** The provider's own markup, already baked into the rate's subTotal. */
+  providerMarkup: number;
   optionCostTotal: number;
+  /**
+   * The most this rate may be sold for: dealerCost + providerMarkup + options.
+   *
+   * The provider enforces this and rejects the whole submit when it is
+   * exceeded: "contract purchase price of $1,450.00 cannot be greater than the
+   * maximum selling price of $1,094.00" (QA, 2026-09-25, dealer 3-306, rate
+   * 2192 at dealerCost 1044 + providerMarkup 50).
+   */
+  offeredPrice: number | null;
+  /** retail_price is above offeredPrice, so submitting would be refused. */
+  overCap: boolean;
   rateSnapshot: unknown;
 }
 
@@ -161,11 +174,19 @@ export function applySelections(
           }
         }
 
-        if (dealerCost !== null && sel.retail_price > 0) {
-          const markupAmount = sel.retail_price - dealerCost - optionCostTotal;
+        // Purchase price, as the provider computes it, is
+        //   dealerCost + providerMarkup + systemMarkup + options
+        // so our markup is what is left after the provider has taken its own.
+        // Getting this wrong by the providerMarkup is how the first live submit
+        // came back over the cap by exactly 50 dollars.
+        const providerMarkup = amountOf((r.providerMarkup as Record<string, unknown> | undefined)?.adjustment) ?? 0;
+        const offeredPrice = dealerCost === null ? null : dealerCost + providerMarkup + optionCostTotal;
+        const overCap = offeredPrice !== null && sel.retail_price > offeredPrice;
+
+        if (offeredPrice !== null && sel.retail_price > 0) {
           r.systemMarkup = {
             percentage: false,
-            adjustment: { amount: Math.max(0, markupAmount), currency: "USD" },
+            adjustment: { amount: sel.retail_price - offeredPrice, currency: "USD" },
           };
           r.subTotal = { amount: sel.retail_price, currency: "USD" };
         }
@@ -185,7 +206,10 @@ export function applySelections(
           termMiles: intOf(r.termMiles),
           deductible: numOf(amountOf(r.dealerDeduct) ?? r.dealerDeduct),
           dealerCost,
+          providerMarkup,
           optionCostTotal,
+          offeredPrice,
+          overCap,
           rateSnapshot: r,
         });
       }
@@ -193,4 +217,70 @@ export function applySelections(
   }
 
   return resolved;
+}
+
+
+// ── Submit takes a pruned quote, not a flagged one ───────────────────────
+//
+// Section 7 of the Shop API doc: "To submit, send the object containing only
+// the products, rates, and options & surcharges you wish to submit. Every
+// product, rate, and option requested will be submitted."
+//
+// Flagging `selected` and sending all eleven products does not select one of
+// them -- it asks for all of them. Against the QA server that request never
+// came back at all: two submits hung, at 5 and at 55 seconds, while the same
+// quote pruned to one product answered in under fifteen. So presence is the
+// selector and the flags are decoration.
+
+export interface SubmitQuote {
+  quote: Record<string, unknown>;
+  resolved: ResolvedSelection[];
+}
+
+/**
+ * The quote cut down to exactly what is being bought.
+ *
+ * Runs applySelections first, on a copy, so the flags are still set the way the
+ * documented example shows them (rate selected, product not) -- and then keeps
+ * only the products and rates that were chosen, and only the options that ride
+ * with them.
+ */
+export function buildSubmitQuote(
+  offer: Record<string, unknown>,
+  selections: ProductSelection[]
+): SubmitQuote {
+  const working = deepClone(offer);
+  const resolved = applySelections(working, selections);
+
+  const chosenRates = new Set(resolved.map((r) => r.rateUniqueId));
+  const chosenProducts = new Set(resolved.map((r) => r.providerProductId));
+
+  const vehicles = vehiclesOf(working).map((vehicle) => {
+    const v = { ...(vehicle as Record<string, unknown>) };
+    const products = (arrayAt(v, "products") ?? [])
+      .map((p) => p as Record<string, unknown>)
+      .filter((p) => chosenProducts.has(String(p.unique ?? "")))
+      .map((p) => ({
+        ...p,
+        rates: (arrayAt(p, "rates") ?? [])
+          .map((rt) => rt as Record<string, unknown>)
+          .filter((rt) => chosenRates.has(String(rt.unique ?? "")))
+          .map((rt) => ({
+            ...rt,
+            // Only the options that are actually going on the contract.
+            options: (arrayAt(rt, "options") ?? [])
+              .map((o) => o as Record<string, unknown>)
+              .filter((o) => o.selected === true),
+          })),
+      }));
+    v.products = products;
+    return v;
+  });
+
+  // The envelope stays as rated -- ident, referenceNumber, buyerPostal and the
+  // rest are what tie the submit back to the quote.
+  const source = (working.quote ?? working) as Record<string, unknown>;
+  const quote = { ...source, vehicles };
+
+  return { quote, resolved };
 }

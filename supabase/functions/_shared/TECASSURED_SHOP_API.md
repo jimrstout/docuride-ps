@@ -423,3 +423,89 @@ schema.
   ]
 }
 ```
+
+## The contract flow, run end to end (2026-09-26)
+
+Login → rate → submit → document → void, against dealer 3-306 on QA with fake
+buyer data. One contract was created and voided: **`PPMV8046456-17062`**,
+`productId` 29107, rate 2192.
+
+Four things it taught, each of which had a matching bug in our code.
+
+### Submit takes a PRUNED quote, not a flagged one
+
+Section 7: "send the object containing only the products, rates, and options &
+surcharges you wish to submit. Every product, rate, and option requested will be
+submitted." Presence is the selector; `selected` is decoration.
+
+We sent all eleven products with `selected` flags. The server did not answer at
+all — two submits hung, one cut off at 5 s and one at 55 s — while the same
+quote pruned to one product answered in under 15 s. A hang, not an error, is
+what asking for eleven contracts looks like.
+
+`buildSubmitQuote()` in `_shared/offer-selections.ts` now prunes.
+
+### `dealerCode` is required at the top level of submit
+
+Not inferred from the session, and not read out of the quote:
+
+```
+{"error":"Missing Dealer Code."}
+```
+
+### The provider's markup counts against a price cap
+
+```
+contract purchase price of $1,450.00 cannot be greater than
+the maximum selling price of $1,094.00
+```
+
+Rate 2192: `dealerCost` 1044, `providerMarkup.adjustment` 50. So
+
+    purchase price   = dealerCost + providerMarkup + systemMarkup + options
+    maximum selling  = dealerCost + providerMarkup + options
+
+which means **`systemMarkup` may not be positive on this QA product** — the cap
+leaves no room for dealer markup. Our markup was computed as
+`retail − dealerCost − options`, ignoring `providerMarkup`, so it came out
+exactly 50 dollars over. The selling price that worked was 1094, the rate's own
+`subTotal`.
+
+Whether the live dealer's products leave markup room is a question for
+TecAssured; the arithmetic is the same either way.
+
+### Submit and document response shapes
+
+`/contract/submit` answers 200 with:
+
+```json
+{"contracts":[{"pdfLink":"RSAPI.ratessys-qa.com/final/0C3AD49F…",
+               "productId":29107,
+               "rateUniqueId":"2192",
+               "contractNumber":"PPMV8046456-17062"}]}
+```
+
+No `saleId` anywhere, so `agreements.tecassured_sale_id` stays null. `productId`
+is a real integer here, unlike the `ident: "0"` on quote products — this is the
+id `/contract/document` and `/contract/void` take.
+
+A **per-contract `error`** can appear while the call itself is a 200 with no
+top-level error, e.g. the price-cap refusal came back as
+`{"error":"We ran into error…","contracts":[{"productId":29106,"rateUniqueId":"2192","error":"Failed to submit…"}]}`.
+Those are failures, not contracts, and must not be recorded as paperwork.
+
+`/contract/document` answers with `data`, `error`, `pdfLink` and **`signatures`**:
+
+```json
+{"signatures":[
+  {"page":1,"type":"buyer", "left":233.238,"top":112.558,"right":386.566,"bottom":90.808},
+  {"page":1,"type":"seller","left":188.238,"top":78.808, "right":341.566,"bottom":57.058}]}
+```
+
+`signatures` is **plural and an array**, with a buyer block *and* a seller
+block. We read `doc.signature`, so every contract produced an empty signature
+map. `data` is base64 `%PDF-1.7`, 385,400 characters for this one-page contract.
+`error` is `""` rather than null on success, which the existing
+`String(doc.error).trim() !== ""` check already handles.
+
+`/contract/void` answers `{"error":"","message":"Contract Successfully Voided."}`.

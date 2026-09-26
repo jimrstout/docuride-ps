@@ -51,7 +51,8 @@ interface DocumentResult {
   provider_product_id: string;
   pdf_base64: string | null;
   pdf_link: string | null;
-  signature: unknown | null;
+  /** Every signature block on the document: buyer and seller, at least. */
+  signatures: unknown[];
   error: string | null;
 }
 
@@ -195,7 +196,7 @@ serve(async (req: Request) => {
             provider_product_id: product.provider_product_id,
             pdf_base64: null,
             pdf_link: null,
-            signature: null,
+            signatures: [],
             error: String(doc.error),
           });
           continue;
@@ -210,10 +211,19 @@ serve(async (req: Request) => {
         const ptype = product.rate_unique_id ?? "DOC";
         const filename = `FNI_${ptype}_${product.contract_number}.pdf`;
 
-        // Build signature map line if coordinates are present
-        const sig = doc.signature as Record<string, unknown> | null;
-        if (sig && sig.page !== undefined) {
-          const line = [
+        // ── signatures, plural, and there is more than one ──────────
+        // Confirmed against a real document on 2026-09-25: the key is
+        // `signatures` and it is an ARRAY -- two entries for this contract,
+        // type "buyer" and type "seller". Reading `doc.signature` found
+        // nothing, so every contract produced an empty signature map and the
+        // Deluge side would have had nowhere to place a signature field.
+        const signatures = Array.isArray(doc.signatures)
+          ? (doc.signatures as Record<string, unknown>[])
+          : [];
+
+        for (const sig of signatures) {
+          if (!sig || sig.page === undefined) continue;
+          signatureMapLines.push([
             filename,
             sig.page,
             sig.left,
@@ -221,8 +231,7 @@ serve(async (req: Request) => {
             sig.right,
             sig.bottom,
             sig.type ?? "buyer",
-          ].join("|");
-          signatureMapLines.push(line);
+          ].join("|"));
         }
 
         results.push({
@@ -230,7 +239,7 @@ serve(async (req: Request) => {
           provider_product_id: product.provider_product_id,
           pdf_base64: (doc.data as string) ?? null,
           pdf_link: (doc.pdfLink as string) ?? null,
-          signature: sig ?? null,
+          signatures,
           error: null,
         });
 
@@ -252,7 +261,7 @@ serve(async (req: Request) => {
           provider_product_id: product.provider_product_id,
           pdf_base64: null,
           pdf_link: null,
-          signature: null,
+          signatures: [],
           error: message,
         });
       }
@@ -284,7 +293,9 @@ serve(async (req: Request) => {
       status: allRetrieved ? "Finalized" : "Partial",
       documents: results,
       // Pre-built signature map for Zoho CRM field write-back.
-      // One line per contract: filename|page|left|top|right|bottom|signer_type
+      // One line per SIGNATURE, not per contract -- a contract carries a buyer
+      // block and a seller block, so a two-contract deal is four lines.
+      // filename|page|left|top|right|bottom|signer_type
       // The Deluge function in Flow parses this to place signature fields.
       signature_map: signatureMapLines.join("\n"),
       retrieved_count: results.filter((r) => r.error === null).length,

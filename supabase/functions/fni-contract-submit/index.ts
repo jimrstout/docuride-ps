@@ -54,8 +54,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
 import {
-  applySelections,
-  deepClone,
+  buildSubmitQuote,
   str,
   type ProductSelection,
 } from "../_shared/offer-selections.ts";
@@ -147,9 +146,12 @@ serve(async (req: Request) => {
     }
     const { client, credentials, dealerCode } = store;
 
-    // ── Step 4: Flag the selections and read back what they cost ───────
-    const offerClone = deepClone(ratedOffer.response_payload) as Record<string, unknown>;
-    const resolved = applySelections(offerClone, selections);
+    // ── Step 4: Cut the quote down to what is being bought ────────────
+    // Pruned, not flagged: see _shared/offer-selections.ts. Sending all
+    // eleven products with flags is a request to submit all eleven, and the
+    // QA server simply stopped responding when we did.
+    const { quote: submitQuote, resolved } =
+      buildSubmitQuote(ratedOffer.response_payload as Record<string, unknown>, selections);
 
     // Every selection must have been found in the offer. One that was not is a
     // stale menu, and submitting the rest silently would sell a different set
@@ -180,10 +182,31 @@ serve(async (req: Request) => {
       });
     }
 
+    // And none may be priced above what the provider will allow. It rejects
+    // the whole submit otherwise, naming the cap, so the check belongs here
+    // where it can name the product instead.
+    const overCap = resolved.filter((r) => r.overCap);
+    if (overCap.length > 0) {
+      return json(400, {
+        error:
+          "Some selections are priced above what the provider will sell them for, " +
+          "so the submit would be refused in full.",
+        over_cap: overCap.map((r) => ({
+          product_name: r.productName,
+          rate_unique: r.rateUniqueId,
+          retail_price: r.selection.retail_price,
+          maximum_selling_price: r.offeredPrice,
+          dealer_cost: r.dealerCost,
+          provider_markup: r.providerMarkup,
+          option_cost: r.optionCostTotal,
+        })),
+      });
+    }
+
     // ── Step 5: Buyer and lienholder ───────────────────────────────────
-    if (session.buyer_first_name) offerClone.buyerFirstName = session.buyer_first_name;
-    if (session.buyer_last_name) offerClone.buyerLastName = session.buyer_last_name;
-    if (session.buyer_address) offerClone.buyerAddress = session.buyer_address;
+    if (session.buyer_first_name) submitQuote.buyerFirstName = session.buyer_first_name;
+    if (session.buyer_last_name) submitQuote.buyerLastName = session.buyer_last_name;
+    if (session.buyer_address) submitQuote.buyerAddress = session.buyer_address;
 
     const lienholder: Record<string, string> = {};
     if (session.lienholder_name) lienholder.lienholderName = session.lienholder_name;
@@ -193,7 +216,13 @@ serve(async (req: Request) => {
     if (session.lienholder_zip) lienholder.lienholderZip = session.lienholder_zip;
     if (session.lienholder_phone) lienholder.lienholderPhone = session.lienholder_phone;
 
-    const submitPayload: Record<string, unknown> = { quote: offerClone };
+    // dealerCode is required at the top level and is NOT inferred from the
+    // session. Without it the server answers {"error":"Missing Dealer Code."},
+    // which is how this was found.
+    const submitPayload: Record<string, unknown> = {
+      dealerCode,
+      quote: submitQuote,
+    };
     if (Object.keys(lienholder).length > 0) submitPayload.lienholder = lienholder;
 
     // ── Step 6: Submit ─────────────────────────────────────────────────
@@ -208,6 +237,23 @@ serve(async (req: Request) => {
     }
 
     const contracts = (Array.isArray(response.contracts) ? response.contracts : []) as Record<string, unknown>[];
+
+    // A contract entry can carry its own error while the call itself is a 200
+    // with no top-level error. Those are failures, not contracts, and must not
+    // be written to agreement_products as though paperwork exists.
+    const failed = contracts.filter(
+      (c) => typeof c.error === "string" && c.error.trim() !== ""
+    );
+    if (failed.length > 0 && failed.length === contracts.length) {
+      return json(400, {
+        error: "The provider refused every contract in this submit.",
+        failures: failed.map((c) => ({
+          rate_unique_id: c.rateUniqueId ?? c.rateUnique ?? null,
+          provider_product_id: c.productId ?? null,
+          detail: c.error,
+        })),
+      });
+    }
 
     // ── Step 7: The agreement ──────────────────────────────────────────
     // Upsert on session_id, which carries a UNIQUE constraint: one agreement
@@ -297,6 +343,10 @@ serve(async (req: Request) => {
     const unmatched: unknown[] = [];
 
     for (const c of contracts) {
+      if (typeof c.error === "string" && c.error.trim() !== "") {
+        unmatched.push({ rate_unique_id: c.rateUniqueId ?? null, error: c.error });
+        continue;
+      }
       const rateId = str(c.rateUniqueId ?? c.rateUnique, "");
       const r = byRate.get(rateId);
 

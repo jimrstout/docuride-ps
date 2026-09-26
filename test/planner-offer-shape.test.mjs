@@ -20,6 +20,7 @@ import { readFileSync } from "node:fs";
 import {
   applySelections,
   amountOf,
+  buildSubmitQuote,
   deepClone,
 } from "../supabase/functions/_shared/offer-selections.ts";
 
@@ -156,17 +157,103 @@ test("only the chosen rate is flagged, on the chosen product only", () => {
   assert.equal(flagged[0].unique, "2192");
 });
 
-test("markup is retail minus dealer cost minus options", () => {
-  // Money: 1400 retail against 1044 cost and a 250 ticked surcharge = 106.
-  const offer = fresh();
-  applySelections(offer, [
-    { product_unique: "84_7", rate_unique: "2192", option_uniques: ["Service_Drive"], retail_price: 1400 },
-  ]);
-  const rate = offer.quote.vehicles[0].products
-    .find((p) => p.unique === "84_7").rates.find((r) => r.unique === "2192");
+test("the provider's own markup counts against the price cap", () => {
+  // Learned the hard way on 2026-09-25. Submitting rate 2192 at 1400 was
+  // refused: "contract purchase price of $1,450.00 cannot be greater than the
+  // maximum selling price of $1,094.00". 1450 = 1044 cost + 356 our markup +
+  // 50 provider markup, and the cap is 1044 + 50. So the provider's markup is
+  // inside the cap, and our markup is what is left of it -- here, nothing.
+  const r = applySelections(fresh(), [
+    { product_unique: "84_7", rate_unique: "2192", retail_price: 1400 },
+  ])[0];
 
-  assert.equal(rate.systemMarkup.adjustment.amount, 106);
-  assert.equal(rate.subTotal.amount, 1400);
+  assert.equal(r.dealerCost, 1044);
+  assert.equal(r.providerMarkup, 50);
+  assert.equal(r.offeredPrice, 1094);
+  assert.equal(r.overCap, true, "1400 is above the 1094 cap");
+});
+
+test("selling at the offered price is not over the cap", () => {
+  // This is the request that produced a real contract, PPMV8046456-17062.
+  const offer = fresh();
+  const r = applySelections(offer, [
+    { product_unique: "84_7", rate_unique: "2192", retail_price: 1094 },
+  ])[0];
+
+  assert.equal(r.overCap, false);
+  const rate = offer.quote.vehicles[0].products
+    .find((p) => p.unique === "84_7").rates.find((x) => x.unique === "2192");
+  assert.equal(rate.systemMarkup.adjustment.amount, 0);
+  assert.equal(rate.subTotal.amount, 1094);
+});
+
+test("a ticked option raises the cap by its cost", () => {
+  // Service_Drive is 250, so 1044 + 50 + 250 = 1344 becomes sellable.
+  const r = applySelections(fresh(), [
+    { product_unique: "84_7", rate_unique: "2192", option_uniques: ["Service_Drive"], retail_price: 1344 },
+  ])[0];
+  assert.equal(r.optionCostTotal, 250);
+  assert.equal(r.offeredPrice, 1344);
+  assert.equal(r.overCap, false);
+});
+
+// ── Submit takes a pruned quote ──────────────────────────────────────────
+
+test("the submit quote carries only what is being bought", () => {
+  // Sending all eleven products with flags is a request to submit all eleven.
+  // Two live submits shaped that way never responded at all.
+  const { quote } = buildSubmitQuote(fresh(), [
+    { product_unique: "84_7", rate_unique: "2192", retail_price: 1094 },
+  ]);
+
+  assert.equal(quote.vehicles.length, 1);
+  assert.equal(quote.vehicles[0].products.length, 1);
+  assert.equal(quote.vehicles[0].products[0].unique, "84_7");
+  assert.equal(quote.vehicles[0].products[0].rates.length, 1);
+  assert.equal(quote.vehicles[0].products[0].rates[0].unique, "2192");
+  // No options were ticked and none are mandatory on this rate.
+  assert.deepEqual(quote.vehicles[0].products[0].rates[0].options, []);
+});
+
+test("the pruned quote keeps the envelope that ties it to the rate", () => {
+  const { quote } = buildSubmitQuote(fresh(), [
+    { product_unique: "84_7", rate_unique: "2192", retail_price: 1094 },
+  ]);
+  assert.equal(quote.ident, 48582);
+  assert.equal(quote.referenceNumber, "2026092514");
+  assert.equal(quote.buyerPostal, "26101");
+  assert.equal(quote.vehicles[0].serial, "4XARSM994V8046456");
+});
+
+test("pruning keeps mandatory options and drops the rest", () => {
+  const { quote, resolved } = buildSubmitQuote(fresh(), [
+    { product_unique: "86_3", rate_unique: "2210-5", retail_price: 903 },
+  ]);
+  const options = quote.vehicles[0].products[0].rates[0].options;
+  assert.equal(options.length, 1);
+  assert.equal(options[0].unique, "Service_Drive");
+  assert.equal(options[0].mandatory, true);
+  assert.equal(resolved.length, 1);
+});
+
+test("two selections prune to two products", () => {
+  const { quote } = buildSubmitQuote(fresh(), [
+    { product_unique: "84_7", rate_unique: "2192", retail_price: 1094 },
+    { product_unique: "754_6", rate_unique: "34343", retail_price: 115 },
+  ]);
+  assert.deepEqual(
+    quote.vehicles[0].products.map((p) => p.unique).sort(),
+    ["754_6", "84_7"]
+  );
+  for (const p of quote.vehicles[0].products) assert.equal(p.rates.length, 1);
+});
+
+test("pruning does not mutate the offer it was given", () => {
+  const offer = fresh();
+  buildSubmitQuote(offer, [
+    { product_unique: "84_7", rate_unique: "2192", retail_price: 1094 },
+  ]);
+  assert.equal(offer.quote.vehicles[0].products.length, 11);
 });
 
 test("an unknown selection resolves to nothing rather than guessing", () => {
