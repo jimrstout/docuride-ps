@@ -885,3 +885,113 @@ button { cursor: pointer; }
 }
 
 .signin-submit { width: 100%; }
+
+/* ── Settings ──────────────────────────────────────────────────────────────
+   The same plain operator surface as the session browser. One column, because
+   every field here is a sentence and a sentence wants a measure, not a grid.
+   The preview is the point of the screen: it is the only place anyone sees the
+   wording as a customer will, so it is set in the buyer's face rather than the
+   operator's. */
+
+.console-tabs {
+  display: flex; align-items: center; gap: var(--s3);
+  margin-bottom: var(--s5);
+}
+
+.console-tab-here {
+  font-size: var(--fs-xs); font-weight: 700;
+  color: var(--ink); padding: var(--s2) var(--s3);
+  border-bottom: var(--bw-accent) solid var(--copper);
+}
+
+.console-flash {
+  margin-bottom: var(--s5); padding: var(--s3) var(--s4);
+  font-size: var(--fs-xs); color: var(--ink);
+  background: var(--cream); border-left: var(--bw-accent) solid var(--copper);
+  border-radius: var(--r-sm);
+}
+
+.console-flash--bad {
+  background: var(--copper-tint); color: var(--copper-deep);
+  border-left-color: var(--copper-deep);
+}
+
+.settings-form {
+  display: grid; gap: var(--s6);
+  max-width: 62ch;
+}
+
+.setting {
+  display: grid; gap: var(--s3);
+  padding: var(--s5);
+  background: var(--paper);
+  border: var(--bw) solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.setting-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--s3);
+}
+
+.setting-head h2 {
+  font-size: var(--fs-title); font-weight: 700; color: var(--ink);
+}
+
+.tag--quiet {
+  background: var(--cream-2); color: var(--ink-55);
+  border: var(--bw) solid var(--line);
+}
+
+.setting-note,
+.setting-help {
+  font-size: var(--fs-xs); color: var(--ink-70); line-height: var(--lh-body);
+}
+
+.setting-help code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em; padding: 0 0.25em;
+  background: var(--cream-2); border-radius: var(--r-sm);
+}
+
+.setting-field input,
+.setting-field textarea {
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  font-family: var(--font-sans); font-size: var(--fs-base); color: var(--ink);
+  background: var(--paper);
+  border: var(--bw-control) solid var(--line-strong);
+  border-radius: var(--r-sm);
+}
+
+.setting-field textarea { resize: vertical; line-height: var(--lh-body); }
+
+.setting-field input:focus-visible,
+.setting-field textarea:focus-visible {
+  outline: var(--bw-accent) solid var(--copper); outline-offset: 1px;
+}
+
+/* The buyer's voice, quoted. Set larger than the operator chrome around it
+   because this is the sentence that actually ships. */
+.setting-preview {
+  display: grid; gap: var(--s2);
+  padding: var(--s4);
+  background: var(--cream);
+  border-radius: var(--r-sm);
+}
+
+.setting-preview > span {
+  font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: var(--track-wide); text-transform: uppercase;
+  color: var(--ink-55);
+}
+
+.setting-preview q {
+  font-size: var(--fs-title); color: var(--ink); line-height: var(--lh-body);
+}
+
+.setting-preview em { font-size: var(--fs-xs); color: var(--ink-70); }
+.setting-preview small { font-size: var(--fs-xs); color: var(--ink-55); }
+.setting-preview--empty { background: var(--cream-2); }
+
+.settings-actions { display: flex; gap: var(--s3); }

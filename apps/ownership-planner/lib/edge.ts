@@ -133,4 +133,9 @@ export const edge = {
       method: "POST",
       body: { session_id: sessionId, hours },
     }),
+
+  adminSettings: <T>() => call<T>("fni-admin-settings", { method: "GET" }),
+
+  adminSaveSettings: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-admin-settings", { method: "POST", body }),
 };

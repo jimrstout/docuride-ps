@@ -1,6 +1,6 @@
 "use server";
 
-// app/console-actions.ts — the console's three writes.
+// app/console-actions.ts — the console's writes.
 //
 // Server Actions rather than route handlers, and plain <form> elements rather
 // than fetch, so the console works with no client JavaScript at all. That is
@@ -81,4 +81,50 @@ export async function extendSession(formData: FormData): Promise<void> {
   // clears. Nothing else needs to be said.
   revalidatePath("/");
   redirect("/");
+}
+
+
+/**
+ * Save the dealer group name and the copy that uses it.
+ *
+ * The Edge Function is the one that validates: it refuses a placeholder the
+ * sentence does not have, and it treats a blank wording as "revert to the
+ * platform default" by deleting this tenant's row. Its message is passed
+ * straight back rather than reworded, because it says exactly what is wrong and
+ * a second wording of the same problem is one more thing to keep in step.
+ */
+export async function saveSettings(formData: FormData): Promise<void> {
+  const operator = await currentOperator();
+  if (!operator) redirect("/settings");
+
+  const name = String(formData.get("dealer_group_display_name") ?? "");
+
+  // Sent as a nested object so one form can carry several templates later
+  // without the action learning about each one.
+  const templates: Record<string, string> = {};
+  for (const [field, value] of formData.entries()) {
+    if (field.startsWith("template:")) {
+      templates[field.slice("template:".length)] = String(value);
+    }
+  }
+
+  try {
+    await edge.adminSaveSettings({
+      dealer_group_display_name: name,
+      ...(Object.keys(templates).length > 0 ? { templates } : {}),
+    });
+  } catch (err) {
+    if (err instanceof EdgeError && err.status === 400) {
+      const detail =
+        typeof (err.body as { error?: unknown } | undefined)?.error === "string"
+          ? String((err.body as { error: string }).error)
+          : "That could not be saved.";
+      redirect(`/settings?refused=${encodeURIComponent(detail.slice(0, 300))}`);
+    }
+    console.error("console settings save failed:", err);
+    redirect("/settings?savefailed=1");
+  }
+
+  revalidatePath("/settings");
+  redirect("/settings?saved=1");
 }

@@ -179,3 +179,31 @@ export interface ConsoleListPayload {
   as_of: string;
   sessions: ConsoleSessionRow[];
 }
+
+// ── Console settings ──────────────────────────────────────────────────────
+// What fni-admin-settings returns. The dealer group's customer-facing name and
+// the sentences that use it, which are rows rather than string literals so a
+// wording change does not need a deploy.
+
+export interface ConsoleTemplateRow {
+  template_key: string;
+  /** The wording in force: this tenant's own, or the platform default. */
+  body: string | null;
+  source: "Tenant" | "Platform default" | "Not set";
+  platform_default: string | null;
+  allowed_placeholders: string[];
+  /** What a customer would read. Null means the line would be omitted. */
+  preview: string | null;
+  preview_uses_sample_amount: boolean;
+}
+
+export interface ConsoleSettingsPayload {
+  tenant: {
+    id: string;
+    /** Administrative name. Never shown to a buyer. */
+    name: string;
+    dealer_group_display_name: string | null;
+  };
+  templates: ConsoleTemplateRow[];
+  warnings?: string[];
+}
