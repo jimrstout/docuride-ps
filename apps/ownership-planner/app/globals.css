@@ -407,6 +407,17 @@ button { cursor: pointer; }
 .vactions--aside { padding-top: var(--s3); border-top: var(--bw) solid var(--line); }
 .vactions .vfield-note { margin: 0; flex: 1 1 18rem; }
 
+/* The one form inside a note panel: clearing Submit Status Unknown. A text box
+   and a button on one line, wrapping on a phone rather than shrinking the box
+   to nothing. */
+.note--panel form { display: flex; gap: var(--s3); flex-wrap: wrap; align-items: center; }
+.note--panel form input[type="text"] {
+  flex: 1 1 18rem; min-height: var(--tap);
+  padding: var(--s2) var(--s3); font: inherit; font-size: var(--fs-base);
+  color: var(--ink); background: var(--paper);
+  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
+}
+
 .vgate {
   margin: var(--s5) 0 var(--s6);
   padding: var(--s4);

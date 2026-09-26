@@ -27,10 +27,12 @@ import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError, isSessionId } from "@/lib/edge";
 import type { FieldGroup, VerifyField, VerifySheet } from "@/lib/types";
 import {
+  clearSubmitUnknown,
   decodeVin,
   refreshFromCrm,
   saveVerifyFields,
   verifyAndRate,
+  voidContract,
 } from "@/app/console-actions";
 
 export const dynamic = "force-dynamic";
@@ -154,6 +156,16 @@ export default async function VerifyPage({
     : one("saved") ? { tone: "ok", text: "Saved." }
     : one("decoded") ? { tone: "ok", text: "Decoded from the VIN." }
     : one("refreshed") ? { tone: "ok", text: "Re-pulled from CRM." }
+    : one("voided") ? {
+        tone: "ok",
+        text:
+          `Contract ${one("voided")} is voided. That product can be submitted ` +
+          `again on this deal.`,
+      }
+    : one("cleared") ? {
+        tone: "ok",
+        text: "Recorded as checked. This session can submit again.",
+      }
     : null;
 
   const verified = sheet.verification.state === "Verified";
@@ -256,6 +268,113 @@ export default async function VerifyPage({
           TecAssured is asking for {sheet.unmapped_properties.join(", ")}, which
           this screen has no field for. Nothing can be verified until it does.
         </p>
+      ) : null}
+
+      {/* ── Another open deal on this machine ──────────────────────────── */}
+      {/* A warning, not a block. Two deals on one VIN is sometimes a mistake
+          and sometimes a deal being re-written after the first fell through,
+          and nothing here can tell the difference. Staff can, once they can see
+          the other deal, which is what the link is for. */}
+      {sheet.duplicate_vin ? (
+        <p className="console-flash console-flash--bad" role="alert">
+          {sheet.duplicate_vin.message}{" "}
+          {sheet.duplicate_vin.sessions.map((other, i) => (
+            <span key={other.id}>
+              {i > 0 ? " " : ""}
+              <Link href={`/verify/${other.id}`} prefetch={false}>
+                Open deal {other.deal_number ?? "(no number)"}
+              </Link>
+              {" "}({other.status})
+            </span>
+          ))}
+        </p>
+      ) : null}
+
+      {/* ── A submit whose outcome nobody knows ─────────────────────────── */}
+      {/* Nothing clears this on a timer, because a timer would be guessing that
+          no contract was created, and that guess is how one deal ends up with
+          two of the same contract. It takes a person saying they looked. */}
+      {sheet.submit_state === "Submit Status Unknown" ? (
+        <section className="note note--panel">
+          <h2>Submit Status Unknown</h2>
+          <p>
+            A submit reached TecAssured and never came back, so we do not know
+            whether it created contracts. Nothing has been retried and nothing
+            will be. Check the deal in TecAssured. If contracts were created,
+            void the ones that should not stand, then clear this.
+          </p>
+          {sheet.submit_detail ? <p><small>{sheet.submit_detail}</small></p> : null}
+          <form action={clearSubmitUnknown}>
+            <input type="hidden" name="session_id" value={sheet.session.id} />
+            <input
+              type="text"
+              name="note"
+              placeholder="What you found in TecAssured (optional)"
+            />
+            <button type="submit" className="btn btn--quiet">
+              I have checked TecAssured
+            </button>
+          </form>
+        </section>
+      ) : null}
+
+      {/* ── Paperwork that already stands ───────────────────────────────── */}
+      {/* Here because this is where staff land when CRM sends a deal through a
+          second time. A product with a live contract cannot be submitted again,
+          and voiding is the only way to change that, so the two live together. */}
+      {sheet.contracts.length > 0 ? (
+        <>
+          <p className="console-note">
+            Contracts already submitted on this deal:{" "}
+            {sheet.contracts
+              .map((c) => c.contract_number ?? "number not returned")
+              .join(", ")}
+            . A product with a live contract cannot be submitted again. Void it
+            first if the customer has changed their mind.
+          </p>
+          <div className="console-scroll">
+            <table className="console-table">
+              <thead>
+                <tr>
+                  <th scope="col">Contract</th>
+                  <th scope="col">Product</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" />
+                </tr>
+              </thead>
+              <tbody>
+                {sheet.contracts.map((c) => (
+                  <tr key={`${c.provider_product_id}-${c.contract_number}`}>
+                    <td className="cell-deal">{c.contract_number ?? "Not returned"}</td>
+                    <td className="cell-vehicle">{c.product_name ?? c.provider_product_id}</td>
+                    <td>
+                      <span className="tag tag--quiet">{c.status}</span>
+                    </td>
+                    <td className="cell-do">
+                      <div className="cell-do-inner">
+                        {c.contract_number ? (
+                          <form action={voidContract}>
+                            <input type="hidden" name="session_id" value={sheet.session.id} />
+                            <input
+                              type="hidden"
+                              name="contract_number"
+                              value={c.contract_number}
+                            />
+                            <button type="submit" className="btn btn--quiet">
+                              Void
+                            </button>
+                          </form>
+                        ) : (
+                          <small>No number to void by. Ask TecAssured.</small>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       ) : null}
 
       {sheet.changed_inputs && sheet.changed_inputs.length > 0 ? (

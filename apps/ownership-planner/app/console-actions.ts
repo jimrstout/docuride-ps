@@ -286,3 +286,74 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
   revalidatePath("/");
   backToVerify(sessionId, { verified: "1", rated });
 }
+
+/**
+ * Void a contract at TecAssured, then here.
+ *
+ * On the verify screen rather than the planner, because it is not a customer's
+ * decision. A customer who changes their mind after signing produces a refusal
+ * from fni-contract-submit naming the contract to void, and this is where that
+ * gets done.
+ */
+export async function voidContract(formData: FormData): Promise<void> {
+  const operator = await currentOperator();
+  if (!operator) redirect("/");
+
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+
+  const contractNumber = String(formData.get("contract_number") ?? "").trim();
+  if (!contractNumber) backToVerify(sessionId, { refused: "No contract number was given." });
+
+  try {
+    await edge.contractVoid<unknown>({
+      session_id: sessionId,
+      action: "Void",
+      contract_number: contractNumber,
+      staff_email: operator.email,
+    });
+  } catch (err) {
+    const message =
+      err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
+    console.error(`void failed for ${sessionId} / ${contractNumber}:`, err);
+    backToVerify(sessionId, { refused: message });
+  }
+
+  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath("/");
+  backToVerify(sessionId, { voided: contractNumber });
+}
+
+/**
+ * Say that TecAssured has been checked.
+ *
+ * The only way out of Submit Status Unknown, and it is a person's word that they
+ * looked. Nothing times out of that state on its own, because the alternative is
+ * guessing that no contract was created, and that guess is how a deal ends up
+ * with two.
+ */
+export async function clearSubmitUnknown(formData: FormData): Promise<void> {
+  const operator = await currentOperator();
+  if (!operator) redirect("/");
+
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+
+  try {
+    await edge.contractVoid<unknown>({
+      session_id: sessionId,
+      action: "Clear Submit Status Unknown",
+      staff_email: operator.email,
+      note: String(formData.get("note") ?? "").trim() || undefined,
+    });
+  } catch (err) {
+    const message =
+      err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
+    console.error(`clear submit state failed for ${sessionId}:`, err);
+    backToVerify(sessionId, { refused: message });
+  }
+
+  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath("/");
+  backToVerify(sessionId, { cleared: "1" });
+}

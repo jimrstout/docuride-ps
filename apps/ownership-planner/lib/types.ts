@@ -342,6 +342,25 @@ export interface VerifySheet {
   };
   vin_decode: Record<string, unknown> | null;
   vin_decode_at: string | null;
+  /** Another open session on this VIN. Null when there is none, which is the
+   *  normal case: it is a warning, and it is never shown when there is nothing
+   *  to warn about. */
+  duplicate_vin: {
+    message: string | null;
+    sessions: { id: string; deal_number: string | null; status: string }[];
+  } | null;
+  /** Paperwork that already stands on this deal. Voided contracts are left out:
+   *  they no longer hold a product's slot. */
+  contracts: {
+    contract_number: string | null;
+    provider_product_id: string;
+    product_name: string | null;
+    status: string;
+  }[];
+  /** The submit lock. "Submit Status Unknown" blocks further submits until a
+   *  person has checked TecAssured. */
+  submit_state: "Idle" | "In Progress" | "Submit Status Unknown";
+  submit_detail: string | null;
   /** Why nothing is required, when nothing is. Null when the sheet is normal. */
   not_ready_reason: string | null;
   fields: VerifyField[];

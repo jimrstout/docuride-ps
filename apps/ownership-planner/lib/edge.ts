@@ -149,6 +149,11 @@ export const edge = {
   verifyAction: <T>(body: Record<string, unknown>) =>
     call<T>("fni-session-verify", { method: "POST", body }),
 
+  /** Void a contract, or clear a session parked at Submit Status Unknown.
+   *  Staff only, and both are recorded against whoever is signed in. */
+  contractVoid: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-contract-void", { method: "POST", body }),
+
   adminSettings: <T>() => call<T>("fni-admin-settings", { method: "GET" }),
 
   adminSaveSettings: <T>(body: Record<string, unknown>) =>
