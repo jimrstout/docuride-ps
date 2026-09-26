@@ -10,7 +10,7 @@
 // Process:
 //   1. Pull the full Zoho record fresh via getRecord()
 //   2. Look up the store (Store_Location -> stores)
-//   3. Return any existing active session rather than creating a duplicate
+//   3. Return the deal's existing session, refreshed, rather than a duplicate
 //   4. Resolve the store's provider mapping -> which login, which Dealer ID
 //   5. Map Zoho fields -> fni.sessions snapshot
 //   6. Return session_id + menu_url + provider status
@@ -27,10 +27,24 @@
 // a mapping edited months later cannot change what this deal was rated under.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getRecord, ZohoRecord } from "../_shared/zoho.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { vtypeForBodyType } from "../_shared/vehicle-types.ts";
+import { crmRatingFields } from "../_shared/crm-fields.ts";
+import {
+  buildVerification,
+  changedInputs,
+  ratingInputs,
+  type VerificationSource,
+} from "../_shared/verification.ts";
+import { parseRequiredProperties, readRateProperties } from "../_shared/rate-properties.ts";
+import {
+  contractsAlreadySubmittedMessage,
+  describeContract,
+  occupiesSlot,
+  type ContractRef,
+} from "../_shared/duplicates.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -196,6 +210,190 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+// ─── Reopening a deal that already has a session ─────────────────────────
+//
+// The CRM button is pressed more than once as a matter of course: a salesperson
+// reopens the deal, the customer comes back a day later, somebody double-clicks.
+// Every one of those used to hand back the session exactly as it was first
+// captured, however stale -- so a deal corrected in Zoho an hour ago still rated
+// off yesterday's figures.
+//
+// So a reopen refreshes. And because a refresh can move something a price was
+// built on, it can also take a verification away, which is the point: a rate
+// nobody has re-checked against the current deal is not a rate to show anybody.
+//
+// Except when contracts exist. Then nothing is touched at all.
+
+async function reopen(
+  supabase: SupabaseClient,
+  session: Record<string, unknown>,
+  record: ZohoRecord,
+  menuBaseUrl: string
+): Promise<Response> {
+  const sessionId = session.id as string;
+
+  // ── Contracts already submitted: look, do not touch ───────────────────
+  //
+  // Real paperwork exists at the provider with this customer's name on it.
+  // Refreshing the deal underneath it, or resetting a verification it was
+  // written from, would leave the record disagreeing with the contract. So the
+  // session is handed back exactly as it stands, with the numbers, and a person
+  // decides what happens next.
+  const { data: agreement } = await supabase
+    .schema("fni")
+    .from("agreements")
+    .select("id")
+    .eq("session_id", sessionId)
+    .maybeSingle();
+
+  if (agreement) {
+    const { data: rows } = await supabase
+      .schema("fni")
+      .from("agreement_products")
+      .select("provider_product_id, contract_number, product_name, status")
+      .eq("agreement_id", (agreement as { id: string }).id);
+
+    const contracts = ((rows ?? []) as unknown as ContractRef[]).filter(occupiesSlot);
+
+    if (contracts.length > 0) {
+      return json(200, {
+        session_id: sessionId,
+        status: session.status,
+        menu_url: `${menuBaseUrl}/${sessionId}`,
+        existing: true,
+        refreshed: false,
+        contracts_submitted: true,
+        contract_numbers: contracts.map((c) => c.contract_number).filter((n) => n !== null),
+        contracts: contracts.map(describeContract),
+        message: contractsAlreadySubmittedMessage(contracts),
+      });
+    }
+  }
+
+  // ── Refresh the rating inputs from the CRM ────────────────────────────
+  const patch = crmRatingFields(record as unknown as Record<string, unknown>);
+
+  const { error: patchErr } = await supabase
+    .schema("fni")
+    .from("sessions")
+    .update(patch)
+    .eq("id", sessionId);
+
+  if (patchErr) {
+    // The session is still usable; it is just carrying the older snapshot. Said
+    // plainly rather than failing the button, because refusing to open the
+    // planner over a stale field helps nobody standing at a desk.
+    console.error(`fni-session-start refresh failed for ${sessionId}: ${patchErr.message}`);
+    return json(200, {
+      session_id: sessionId,
+      status: session.status,
+      menu_url: `${menuBaseUrl}/${sessionId}`,
+      existing: true,
+      refreshed: false,
+      message: "Existing session reused. The deal data could not be refreshed.",
+    });
+  }
+
+  const merged = { ...session, ...patch } as Record<string, unknown>;
+
+  // ── Did the refresh move anything a rate is built on? ─────────────────
+  const changed = await ratingInputsChanged(supabase, merged);
+
+  let verification = String(session.verification_state ?? "Needs Verification");
+
+  if (changed.length > 0 && verification === "Verified") {
+    await supabase
+      .schema("fni")
+      .from("sessions")
+      .update({
+        verification_state: "Needs Verification",
+        verified_at: null,
+        verified_by: null,
+        verified_snapshot: null,
+      })
+      .eq("id", sessionId);
+
+    // The quote is kept and marked, not deleted. It was a real price once and
+    // the record of it matters; it is simply not the answer to the current
+    // question any more.
+    await supabase
+      .schema("fni")
+      .from("rated_offers")
+      .update({ out_of_date: true })
+      .eq("session_id", sessionId);
+
+    verification = "Needs Verification";
+  }
+
+  return json(200, {
+    session_id: sessionId,
+    status: session.status,
+    menu_url: `${menuBaseUrl}/${sessionId}`,
+    existing: true,
+    refreshed: true,
+    changed_inputs: changed,
+    verification_state: verification,
+    rates_out_of_date: changed.length > 0,
+    message:
+      changed.length > 0
+        ? `Existing session reused and refreshed. ${changed.length} rating ` +
+          `${changed.length === 1 ? "input" : "inputs"} changed, so this deal needs ` +
+          `verifying again and the old rates are out of date.`
+        : "Existing session reused and refreshed. Nothing a rate depends on changed.",
+  });
+}
+
+/**
+ * Which rating inputs differ from what the verifier approved.
+ *
+ * Compared against the verification snapshot rather than the row before the
+ * update, because the question is whether what a person signed off is still
+ * true. A field that changed twice and came back is unchanged. The same
+ * comparison fni-session-verify's Refresh makes, from the same module.
+ */
+async function ratingInputsChanged(
+  supabase: SupabaseClient,
+  session: Record<string, unknown>
+): Promise<string[]> {
+  const snapshot = (session.verified_snapshot ?? null) as Record<string, unknown> | null;
+  const before = (snapshot?.rating_inputs ?? null) as Record<string, string | null> | null;
+
+  // Never verified, so there is nothing to invalidate. Reporting every field as
+  // changed here would be true and useless.
+  if (!before) return [];
+
+  const vtype = session.vehicle_type_code;
+  let properties: string[] = [];
+
+  if (typeof vtype === "string" && vtype.trim() !== "") {
+    const { data: account } = await supabase
+      .schema("fni")
+      .from("store_provider_accounts")
+      .select("id")
+      .eq("store_id", session.store_id as string)
+      .eq("provider", "TecAssured")
+      .eq("active", true)
+      .maybeSingle();
+
+    if (account) {
+      const cached = await readRateProperties(
+        supabase,
+        (account as { id: string }).id,
+        vtype
+      );
+      if (cached && cached.status === "Cached") {
+        properties = parseRequiredProperties(cached.properties).names;
+      }
+    }
+  }
+
+  const after = ratingInputs(
+    buildVerification(session as unknown as VerificationSource, properties)
+  );
+
+  return changedInputs(before, after);
+}
+
 // ─── Main handler ────────────────────────────────────────────────────────
 
 serve(async (req: Request) => {
@@ -249,28 +447,34 @@ serve(async (req: Request) => {
 
     const storeRow = store as StoreRow;
 
-    // ── Step 3: Existing active session wins ───────────────────────────
-    const terminalStatuses = ["Finalized", "Written Back", "Cancelled"];
+    // ── Step 3: The deal's existing session wins, always ───────────────
+    //
+    // Any session, whatever its status. This used to exclude Finalized, Written
+    // Back and Cancelled, which meant a deal whose session had reached one of
+    // those got a SECOND session and a second planner link -- two records of one
+    // presentation, and two links a customer could be sent. A deal has one
+    // planning session for its whole life; "it is finished" is not a reason to
+    // make another one.
+    //
+    // Migration 0015 adds a unique index on zoho_deal_id, so this is now
+    // belt and braces: two simultaneous clicks used to be able to both find
+    // nothing and both insert, and the database refuses the second one now.
     const { data: existingSession } = await supabase
       .schema("fni")
       .from("sessions")
-      .select("id, status, created_at")
+      .select("*")
       .eq("zoho_deal_id", zoho_deal_id)
-      .not("status", "in", `(${terminalStatuses.join(",")})`)
-      .order("created_at", { ascending: false })
-      .limit(1)
       .maybeSingle();
 
     const menuBaseUrl = Deno.env.get("FNI_MENU_BASE_URL") ?? "https://docuride.app/fni";
 
     if (existingSession) {
-      return json(200, {
-        session_id: existingSession.id,
-        status: existingSession.status,
-        menu_url: `${menuBaseUrl}/${existingSession.id}`,
-        existing: true,
-        message: `Active session already exists (${existingSession.status})`,
-      });
+      return await reopen(
+        supabase,
+        existingSession as Record<string, unknown>,
+        record,
+        menuBaseUrl
+      );
     }
 
     // ── Step 4: public.deals linkage, when there is one ────────────────
