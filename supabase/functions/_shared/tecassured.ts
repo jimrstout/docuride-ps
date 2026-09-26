@@ -23,9 +23,10 @@
 // cache with fni.store_rate_properties.
 //
 // ── What this client talks to ──────────────────────────────────────
-// Seven endpoints, all verified present on the QA server:
+// Eight endpoints, all verified present on the QA server:
 //   /auth/loginrequest   /auth/loginassertion
 //   /rate                /rate/requiredproperties
+//   /decode              /decode/ps
 //   /contract/submit     /contract/document        /contract/void
 // /rate/vehicletypes is NOT among them and has been removed.
 // See _shared/TECASSURED_SHOP_API.md.
