@@ -48,6 +48,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient, EndpointNotFoundError } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { allTiers, normalizeOffer } from "../_shared/planner-offers.ts";
 import {
   buildRateRequest,
   parseRequiredProperties,
@@ -295,12 +296,12 @@ serve(async (req: Request) => {
       }
     }
 
-    let productCount = 0;
-    if (offerResponse && typeof offerResponse === "object") {
-      const offer = offerResponse as Record<string, unknown>;
-      if (Array.isArray(offer.products)) productCount = offer.products.length;
-      else if (Array.isArray(offer.productTypes)) productCount = offer.productTypes.length;
-    }
+    // Counted through the normalizer, which is the one place that knows where
+    // a real quote keeps its products: quote.vehicles[].products[]. This used
+    // to look for a top-level `products` array, which the QA server has never
+    // sent, so product_count was 0 on every live rating and the planner was
+    // told an eleven-product quote held none.
+    const productCount = allTiers(normalizeOffer(offerResponse)).length;
 
     // ── Step 7: Store the offer ────────────────────────────────────────
     const { error: offerErr } = await supabase

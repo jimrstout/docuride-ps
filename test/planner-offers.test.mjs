@@ -175,3 +175,23 @@ test("the provider's raw objects are kept", () => {
   assert.equal(tier("84_7").raw.rateClass, "7");
   assert.equal(tier("84_7").rates[0].raw.unique, "2192");
 });
+
+// ── What the old top-level reads got wrong ────────────────────────────────
+
+test("nothing useful sits at the top level of a real quote", () => {
+  // fni-rate-vehicle counted products with `offerResponse.products.length`, and
+  // this is why product_count was 0 on every live rating: the only top-level key
+  // is `quote`. The count goes through the normalizer now, and this pins the
+  // reason it has to.
+  assert.deepEqual(Object.keys(QUOTE), ["quote"]);
+  assert.equal(QUOTE.products, undefined);
+  assert.equal(QUOTE.productTypes, undefined);
+  assert.equal(allTiers(normalizeOffer(QUOTE)).length, 11);
+});
+
+test("a payload with a flat products array yields nothing", () => {
+  // The shape our own pre-credentials mock used. Left unrecognised on purpose:
+  // the provider has never sent it, and quietly accepting an invented shape is
+  // how a malformed payload gets to look like a valid offer.
+  assert.deepEqual(normalizeOffer({ products: [{ unique: "X", rates: [{ unique: "r" }] }] }), []);
+});
