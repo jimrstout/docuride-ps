@@ -33,9 +33,20 @@ export default function VehicleContext({
 }) {
   const v = session.vehicle;
   const f = session.financials;
+  // Condition, stock number, then the deal number.
+  //
+  // The deal number is here for STAFF, on a customer-facing panel, and that is
+  // deliberate: duplicate deals on the same unit do happen, and the person
+  // sitting beside the customer needs to confirm which one this planner is
+  // attached to without leaving the screen. It reads as an ordinary reference
+  // number to the customer, which is what it is.
+  //
+  // It is the same value the CRM calls the MUI number, carried on the session
+  // since fni-session-start; nothing new is read from the deal record for it.
   const facts = [
     v.condition,
     v.stock_number ? `Stock ${v.stock_number}` : null,
+    session.deal_number ? `Deal #${session.deal_number}` : null,
   ].filter(Boolean);
 
   return (
