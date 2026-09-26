@@ -33,6 +33,14 @@ import {
   type VerificationSource,
 } from "../_shared/verification.ts";
 import { parseRequiredProperties, readRateProperties } from "../_shared/rate-properties.ts";
+import {
+  duplicateVinWarning,
+  occupiesSlot,
+  sessionIsOpen,
+  TERMINAL_SESSION_STATUSES,
+  type ContractRef,
+  type OpenSessionRef,
+} from "../_shared/duplicates.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -73,6 +81,9 @@ const COLUMNS = [
   "buyer_city", "buyer_state", "buyer_zip",
   "vehicle_properties", "vin_decode", "vin_decode_at",
   "verification_state", "verified_at", "verified_by", "verified_snapshot",
+  // For the duplicate warnings and the submit lock, both of which the verify
+  // screen now shows.
+  "expires_at", "submit_state", "submit_detail",
 ].join(",");
 
 async function loadSession(
@@ -86,6 +97,69 @@ async function loadSession(
     .eq("id", sessionId)
     .maybeSingle();
   return (data as Record<string, unknown> | null) ?? null;
+}
+
+/**
+ * Case 3: the same machine on another open deal.
+ *
+ * Read-only and advisory. Nothing is blocked, because two deals on one VIN is
+ * as often a legitimate re-write as it is a mistake, and DocuRide cannot tell
+ * which from here. Staff can.
+ *
+ * Scoped to the tenant: two dealer groups can honestly hold the same VIN, one
+ * having sold the machine to the other.
+ */
+async function duplicateVinSessions(
+  supabase: SupabaseClient,
+  s: Record<string, unknown>
+): Promise<OpenSessionRef[]> {
+  const vin = typeof s.vin === "string" ? s.vin.trim() : "";
+  if (vin === "") return [];
+
+  let q = supabase
+    .schema("fni")
+    .from("sessions")
+    .select("id, deal_number, status, expires_at")
+    .eq("vin", vin)
+    .neq("id", s.id as string)
+    .not("status", "in", `(${TERMINAL_SESSION_STATUSES.join(",")})`);
+
+  if (typeof s.tenant_id === "string" && s.tenant_id !== "") {
+    q = q.eq("tenant_id", s.tenant_id);
+  }
+
+  const { data } = await q;
+  return ((data ?? []) as OpenSessionRef[]).filter((o) => sessionIsOpen(o));
+}
+
+/**
+ * Contracts already on this session.
+ *
+ * The verify screen is where staff land when CRM sends a deal through a second
+ * time, so it is where "this is already done" has to be visible. Voided rows
+ * are left out: they no longer hold a product's slot, and listing them would
+ * read as paperwork that still stands.
+ */
+async function liveContracts(
+  supabase: SupabaseClient,
+  sessionId: string
+): Promise<ContractRef[]> {
+  const { data: agreements } = await supabase
+    .schema("fni")
+    .from("agreements")
+    .select("id")
+    .eq("session_id", sessionId);
+
+  const ids = ((agreements ?? []) as { id: string }[]).map((a) => a.id);
+  if (ids.length === 0) return [];
+
+  const { data } = await supabase
+    .schema("fni")
+    .from("agreement_products")
+    .select("provider_product_id, contract_number, product_name, status")
+    .in("agreement_id", ids);
+
+  return ((data ?? []) as ContractRef[]).filter(occupiesSlot);
 }
 
 /**
@@ -159,6 +233,11 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
 
   const offer = (offerRow ?? null) as Record<string, unknown> | null;
 
+  const [duplicates, contracts] = await Promise.all([
+    duplicateVinSessions(supabase, s),
+    liveContracts(supabase, s.id as string),
+  ]);
+
   return {
     session: {
       id: s.id,
@@ -188,6 +267,27 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
       : { state: "Pending", product_count: 0, out_of_date: false, rated_at: null, detail: null },
     vin_decode: s.vin_decode ?? null,
     vin_decode_at: s.vin_decode_at ?? null,
+    // Case 3. A warning with the other deal numbers in it, and the ids so the
+    // screen can link straight there rather than making staff go hunting.
+    duplicate_vin: duplicates.length > 0
+      ? {
+          message: duplicateVinWarning(duplicates),
+          sessions: duplicates.map((d) => ({
+            id: d.id,
+            deal_number: d.deal_number,
+            status: d.status,
+          })),
+        }
+      : null,
+    // Case 1 and 2, seen from the staff side: paperwork that already exists.
+    contracts: contracts.map((c) => ({
+      contract_number: c.contract_number,
+      provider_product_id: c.provider_product_id,
+      product_name: c.product_name,
+      status: c.status,
+    })),
+    submit_state: s.submit_state ?? "Idle",
+    submit_detail: s.submit_detail ?? null,
     // Why nothing is required, when nothing is. Shown instead of a sheet that
     // looks complete because it is asking for nothing.
     not_ready_reason: reason,
