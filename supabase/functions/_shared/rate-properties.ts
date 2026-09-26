@@ -197,6 +197,62 @@ function financeType(v: string | null): string | null {
   return null;
 }
 
+/**
+ * The three finance numbers, resolved together.
+ *
+ * TecAssured asks for finance.amount, finance.apr and finance.term on every
+ * vehicle type it rates, cash deal or not, and a DocuRide cash deal has none of
+ * them: apr and finance_term are null. Sent as nulls they counted as missing,
+ * and the rate was refused before it was ever attempted. That is what stopped
+ * deal 14132 from rating.
+ *
+ * A cash purchase finances zero dollars over zero months at zero percent. That
+ * is not a placeholder standing in for an unknown, it is the arithmetic of the
+ * deal, so it is sent as fact.
+ *
+ * The amount is forced to zero too, and that part matters most. fni.sessions
+ * can still be carrying an amount_financed from an earlier draft of the deal --
+ * 14132 has 19,764.64 on it with no lienholder -- and passing that through would
+ * tell the provider a cash buyer financed nearly twenty thousand dollars. The
+ * same reasoning already governs resolvePaymentBasis in _shared/money.ts: on a
+ * cash deal the financing columns are leftovers, not facts.
+ */
+function financeFields(source: RateSource): {
+  type: string | null;
+  amount: string | null;
+  apr: string | null;
+  term: string | null;
+} {
+  const type = financeType(source.finance_type);
+
+  if (type === "None") {
+    return { type, amount: "0", apr: "0", term: "0" };
+  }
+
+  return {
+    type,
+    amount: text(source.amount_financed),
+    apr: text(source.apr),
+    term: text(source.finance_term),
+  };
+}
+
+/**
+ * Fuel type, defaulting to gasoline.
+ *
+ * No Zoho field carries it -- Sold_1_Fuel_Type does not exist on the record --
+ * and every unit in this dealer group's deal history is gasoline. Section 6.5
+ * allows G, E and D, so an electric unit is expressible and a staff member can
+ * set it through vehicle_properties; it is the DEFAULT that is gasoline, not the
+ * only value.
+ *
+ * Defaulting is defensible here in a way it would not be for engine size. Fuel
+ * type is an eligibility input rather than a price input, the wrong answer is
+ * visible on the contract, and the alternative was refusing to rate every deal
+ * in the system over a field nobody can currently fill in.
+ */
+const DEFAULT_FUEL_TYPE = "Gas";
+
 /** New or Used, which is what new.used wants. */
 function newUsed(condition: string | null): string | null {
   if (!condition) return null;
@@ -213,6 +269,8 @@ function newUsed(condition: string | null): string | null {
  * `Warranty` without either spelling appearing here.
  */
 function fromSession(source: RateSource): Record<string, string | null> {
+  const fin = financeFields(source);
+
   return {
     "vin": text(source.vin),
     "year": text(source.unit_year),
@@ -221,17 +279,19 @@ function fromSession(source: RateSource): Record<string, string | null> {
     "new.used": newUsed(source.condition),
     "odometer": text(source.odometer),
     "price": text(source.sale_price),
-    "finance.type": financeType(source.finance_type),
-    "finance.amount": text(source.amount_financed),
-    "finance.apr": text(source.apr),
-    "finance.term": text(source.finance_term),
+    "finance.type": fin.type,
+    "finance.amount": fin.amount,
+    "finance.apr": fin.apr,
+    "finance.term": fin.term,
     "sale.date": isoDate(source.sale_date),
     "inservice.date": isoDate(source.in_service_date) ?? isoDate(source.sale_date),
     "postal.code": text(source.buyer_zip),
+    "fuel.type": DEFAULT_FUEL_TYPE,
     //
-    // Deliberately absent, because no Zoho field carries them and inventing a
-    // value would be inventing a rate: engine.ccs, fuel.type, warranty. They
-    // come from sessions.vehicle_properties, set by the F&I user.
+    // Deliberately absent, because no field anywhere carries them and a guess
+    // would be a guess at somebody's price: engine.ccs and warranty. Both come
+    // from sessions.vehicle_properties, entered by staff, and a rate is refused
+    // without them rather than sent with a number we invented.
   };
 }
 
@@ -361,7 +421,9 @@ export function buildRateRequest(
   // stored `warranty` answers `Warranty` here as it does in the array.
   const displacement = text(supplied.get("engine.ccs")) ?? text(supplied.get("displacement"));
   const warrantyMonths = text(supplied.get("warranty")) ?? text(supplied.get("remainingmwm"));
-  const fuel = fuelCode(supplied.get("fuel.type") ?? supplied.get("fueltype"));
+  const fuel = fuelCode(supplied.get("fuel.type") ?? supplied.get("fueltype") ?? DEFAULT_FUEL_TYPE);
+
+  const fin = financeFields(source);
 
   const request: Record<string, unknown> = {
     dealerCode: opts.dealerCode,
@@ -386,10 +448,13 @@ export function buildRateRequest(
     saleDate,
     inServiceDate: inService,
 
-    financeAmount: text(source.amount_financed),
-    financeTerm: text(source.finance_term),
-    financeType: financeType(source.finance_type),
-    financeApr: text(source.apr),
+    // The same three values the properties array carries, from the same
+    // resolution, so the two halves of the request cannot disagree about
+    // whether this deal is financed.
+    financeAmount: fin.amount,
+    financeTerm: fin.term,
+    financeType: fin.type,
+    financeApr: fin.apr,
 
     customerCity: text(source.buyer_city),
     customerState: text(source.buyer_state),

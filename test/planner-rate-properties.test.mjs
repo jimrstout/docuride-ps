@@ -175,10 +175,67 @@ test("every unsupplied property is reported, not just the first", () => {
     parseRequiredProperties(UTV).properties,
     session({ vehicle_properties: null, buyer_zip: null })
   );
+  // fuel.type is absent from this list on purpose: it defaults to gasoline, so
+  // it is never the reason a rate is refused. engine.ccs and Warranty have no
+  // default and never will, because a guess at either is a guess at a price.
   assert.deepEqual(
     built.missing.map((m) => m.name).sort(),
-    ["Warranty", "engine.ccs", "fuel.type", "postal.code"]
+    ["Warranty", "engine.ccs", "postal.code"]
   );
+});
+
+// ── A cash deal has finance numbers, and they are zero ────────────────────
+//
+// This is what stopped deal 14132 rating. TecAssured asks for finance.amount,
+// finance.apr and finance.term on every vehicle type, and a DocuRide cash deal
+// carries null apr and null term, so the request was refused before it was sent.
+
+const cash = (over = {}) =>
+  session({ finance_type: "Cash", apr: null, finance_term: null, ...over });
+
+test("a cash deal answers the three finance properties with zero", () => {
+  const built = asMap(buildRateProperties(parseRequiredProperties(UTV).properties, cash()));
+  assert.equal(built["finance.type"], "None");
+  assert.equal(built["finance.amount"], "0");
+  assert.equal(built["finance.apr"], "0");
+  assert.equal(built["finance.term"], "0");
+});
+
+test("a cash deal is not refused for missing finance figures", () => {
+  const built = buildRateProperties(parseRequiredProperties(UTV).properties, cash());
+  assert.deepEqual(built.missing.map((m) => m.name), []);
+});
+
+test("a leftover amount_financed is not sent on a cash deal", () => {
+  // Deal 14132 carries amount_financed 19764.64 with no lienholder, left over
+  // from an earlier draft. Passing it through would tell the provider a cash
+  // buyer financed nearly twenty thousand dollars.
+  const built = asMap(
+    buildRateProperties(parseRequiredProperties(UTV).properties, cash({ amount_financed: 19764.64 }))
+  );
+  assert.equal(built["finance.amount"], "0");
+});
+
+test("a financed deal still sends its real figures", () => {
+  const built = asMap(buildRateProperties(parseRequiredProperties(UTV).properties, session()));
+  assert.equal(built["finance.type"], "Loan");
+  assert.equal(built["finance.amount"], "30500");
+  assert.equal(built["finance.apr"], "8.99");
+  assert.equal(built["finance.term"], "60");
+});
+
+test("fuel type defaults to gasoline and stays overridable", () => {
+  const dflt = asMap(
+    buildRateProperties(parseRequiredProperties(UTV).properties,
+      session({ vehicle_properties: { "engine.ccs": "650", warranty: "6" } }))
+  );
+  assert.equal(dflt["fuel.type"], "Gas");
+
+  const electric = asMap(
+    buildRateProperties(parseRequiredProperties(UTV).properties,
+      session({ vehicle_properties: { "engine.ccs": "0", warranty: "6", "fuel.type": "Electric" } }))
+  );
+  assert.equal(electric["fuel.type"], "Electric");
 });
 
 test("a user value overrides the session's", () => {
@@ -305,4 +362,53 @@ test("every requiredproperties name has a top-level counterpart", () => {
     assert.ok(top, `no known top-level counterpart for ${prop.name}`);
     assert.ok(top in request, `${prop.name} maps to ${top}, which is not in the request`);
   }
+});
+
+// ── The two halves agree about the cash deal ──────────────────────────────
+
+test("both halves of a cash request carry the same zeros", () => {
+  const { request, missing } = buildRateRequest(
+    parseRequiredProperties(UTV).properties,
+    full({ finance_type: "Cash", apr: null, finance_term: null, amount_financed: 19764.64 }),
+    opts
+  );
+
+  assert.deepEqual(missing, []);
+
+  // The documented camelCase half.
+  assert.equal(request.financeType, "None");
+  assert.equal(request.financeAmount, "0");
+  assert.equal(request.financeApr, "0");
+  assert.equal(request.financeTerm, "0");
+
+  // The form-schema half, from the same resolution, so the provider cannot be
+  // told two different stories about whether the deal is financed.
+  const byName = Object.fromEntries(request.properties.map((p) => [p.name, p.value]));
+  assert.equal(byName["finance.type"], "None");
+  assert.equal(byName["finance.amount"], "0");
+  assert.equal(byName["finance.apr"], "0");
+  assert.equal(byName["finance.term"], "0");
+});
+
+test("a cash request still sends the real vehicle price", () => {
+  // Zeroing the finance figures must not touch what the machine costs.
+  const { request } = buildRateRequest(
+    parseRequiredProperties(UTV).properties,
+    full({ finance_type: "Cash", apr: null, finance_term: null }),
+    opts
+  );
+  assert.equal(request.vehiclePrice, "28995");
+  assert.equal(
+    request.properties.find((p) => p.name === "price").value,
+    "28995"
+  );
+});
+
+test("fuelType defaults to the G code on the documented half", () => {
+  const { request } = buildRateRequest(
+    parseRequiredProperties(UTV).properties,
+    full({ vehicle_properties: { "engine.ccs": "650", warranty: "6" } }),
+    opts
+  );
+  assert.equal(request.fuelType, "G");
 });
