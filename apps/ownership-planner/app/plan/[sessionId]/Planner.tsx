@@ -27,6 +27,7 @@
 //   rounded per-product payments.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Dispatch, SetStateAction } from "react";
 import type {
   CatalogEntry,
@@ -86,13 +87,18 @@ type ScreenSpec =
   | { kind: "intro"; step: 0 }
   | { kind: "question"; step: 0; qIndex: number }
   | { kind: "product"; step: 1; pIndex: number }
+  // Two different reasons for a step with no products on it, and they say
+  // opposite things to a customer. "empty" is the provider having genuinely
+  // offered nothing; "unready" is anything on our side that has not worked yet.
   | { kind: "empty"; step: 1 }
+  | { kind: "unready"; step: 1 }
   | { kind: "payment"; step: 2 }
   | { kind: "plan"; step: 3 }
   | { kind: "ack"; step: 4 };
 
 export default function Planner({ initial }: { initial: SessionPayload }) {
   const { session } = initial;
+  const router = useRouter();
   const [at, setAt] = useState(0);
   const [furthest, setFurthest] = useState(0);
 
@@ -238,7 +244,16 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   const screens: ScreenSpec[] = useMemo(() => {
     const out: ScreenSpec[] = [{ kind: "intro", step: 0 }];
     profile.questions.forEach((_, qIndex) => out.push({ kind: "question", step: 0, qIndex }));
-    if (presentable.length === 0) out.push({ kind: "empty", step: 1 });
+    if (presentable.length === 0) {
+      // Only a provider that accepted the request and returned nothing earns
+      // the "not offered on this machine" screen. Every other reason for an
+      // empty menu -- never asked, asked and failed, a vehicle type we could
+      // not map, a property we could not supply -- gets the neutral screen,
+      // because a customer told their machine has no plans available when in
+      // fact nobody asked has been told something false about their own deal.
+      const state = initial.offer_status?.state;
+      out.push({ kind: state === "Not Offered" ? "empty" : "unready", step: 1 });
+    }
     else presentable.forEach((_, pIndex) => out.push({ kind: "product", step: 1, pIndex }));
     out.push({ kind: "payment", step: 2 }, { kind: "plan", step: 3 }, { kind: "ack", step: 4 });
     return out;
@@ -419,6 +434,52 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     return () => clearTimeout(t);
   }, [decisions, options, answers, allAnswers.length, save]);
 
+  // ── Asking for the menu ─────────────────────────────────────────────────
+  //
+  // The rate happens here, on mount, because nothing else was doing it. Every
+  // live session before this change went unrated: the planner read the session,
+  // found no offer, and told the customer their machine had no plans.
+  //
+  // Only from "Pending", which means no attempt has been recorded yet. A session
+  // that has already been answered -- rated, genuinely not offered, or failed --
+  // is not asked again on a reload; re-rating is a deliberate act from the staff
+  // console. So this is one provider call per session, not one per page view.
+  //
+  // router.refresh() rather than threading a new payload through state: the page
+  // is force-dynamic, so it re-reads the session server-side, and the App Router
+  // preserves this component's state across it. The customer keeps their answers
+  // and their place, and the menu appears where the neutral screen was.
+  const askedForRate = useRef(false);
+  useEffect(() => {
+    if (askedForRate.current) return;
+    if ((initial.offer_status?.state ?? "Pending") !== "Pending") return;
+    askedForRate.current = true;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(apiPath(`/api/session/${session.id}/rate`), {
+          method: "POST",
+        });
+        if (cancelled || !res.ok) return;
+        const data = (await res.json()) as { outcome?: string };
+        // Skipped means someone else got there first, so there is nothing new to
+        // show. Failed already has its screen, and re-reading the session would
+        // only replace the neutral copy with the same neutral copy.
+        if (data.outcome === "Rated" || data.outcome === "Not Offered") {
+          router.refresh();
+        }
+      } catch {
+        // The neutral screen is already what the customer is looking at, and it
+        // is the correct thing for them to be looking at. Nothing to interrupt
+        // them with; the reason is in the server logs and on the console.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initial.offer_status?.state, session.id, router]);
+
   // Photos of the customer's actual machine, looked up server-side by VIN.
   useEffect(() => {
     if (photos.length > 0) return;
@@ -526,7 +587,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     undecidedHere ? "Choose one to continue"
     : saveState === "saving" ? "Saving…"
     : saveState === "error" ? "We couldn't save that. We'll keep trying."
-    : saveState === "saved" ? "Saved — you can come back to this later"
+    : saveState === "saved" ? "Saved. You can come back to this later."
     : step === 1 && presentable.length > 0 ? `${decided} of ${presentable.length} decided`
     : null;
 
@@ -555,7 +616,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                   >
                     <span className="railnav-name">{tierOf(p).copy.display_name}</span>
                     <span className="railnav-state">
-                      {d === "Included" ? "Included" : d ? "Managing" : here ? "Deciding" : "—"}
+                      {d === "Included" ? "Included" : d ? "Managing" : here ? "Deciding" : "Not yet"}
                     </span>
                   </button>
                 </li>
@@ -631,7 +692,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
 
           <p className="body body--close">
             Nothing is preselected, and nothing here is expected of you. Any of
-            it can be something you take care of yourself instead — that is a
+            it can be something you take care of yourself instead. That is a
             real choice, not a lesser one. It takes a few minutes.
           </p>
         </section>
@@ -645,7 +706,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
           </h1>
           <p className="lede">
             {screen.qIndex === 0
-              ? "All available options are presented either way — your answers only change what comes first."
+              ? "All available options are presented either way. Your answers only change what comes first."
               : "Last one. This orders what you see, and nothing else."}
           </p>
 
@@ -682,6 +743,28 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
               is missing from your deal and there&apos;s nothing for you to decide.
             </p>
             <p>Your dealership can still answer any question about owning it.</p>
+          </div>
+        </section>
+      )}
+
+      {screen.kind === "unready" && (
+        <section className="screen">
+          <h1 className="display">We&apos;re still getting your options ready.</h1>
+          {/* Deliberately says nothing about why, and never that plans are
+              unavailable. Behind this screen is one of: no rate has been
+              requested yet, the request failed, the vehicle type could not be
+              mapped, or a required figure is missing from the deal. All four are
+              ours to fix and none is a fact about the customer's machine.
+              The reason is logged server-side and shows on the staff console. */}
+          <div className="note note--panel">
+            <p>
+              We&apos;re still getting your options ready. Your dealership will
+              help you with this step.
+            </p>
+            <p>
+              Nothing you&apos;ve decided so far is lost, and you can keep going
+              through the rest of your plan.
+            </p>
           </div>
         </section>
       )}
@@ -781,7 +864,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
               <>
                 <PlanCostOnly label="Added to your purchase" total={planTotal} lines={[]} />
                 <p className="fine">
-                  We can&apos;t show a monthly payment for this deal yet — the
+                  We can&apos;t show a monthly payment for this deal yet. The
                   financing terms haven&apos;t been finalized. The totals above are
                   correct; your dealership can walk you through what they come to
                   each month.
@@ -871,7 +954,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                 {new Date(presentedAt.current).toLocaleString("en-US")}
               </p>
               <p className="panel-foot">
-                Your dealership takes it from here — your plan is on your deal
+                Your dealership takes it from here. Your plan is on your deal
                 and joins the rest of your paperwork for signing. Nothing else
                 is needed from you on this screen.
               </p>

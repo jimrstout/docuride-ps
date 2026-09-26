@@ -24,7 +24,7 @@ export default async function PlanPage({
     return (
       <Gate
         title="We couldn't find this plan"
-        body="This link doesn't look right. Ask the dealership to send you a new one — it takes them one click."
+        body="This link doesn't look right. Ask the dealership to send you a new one. It takes them one click."
       />
     );
   }
@@ -37,7 +37,7 @@ export default async function PlanPage({
       return (
         <Gate
           title="This plan has expired"
-          body="For your privacy, planning links stop working after a while. Ask the dealership to start a new one — it takes them one click and nothing is lost."
+          body="For your privacy, planning links stop working after a while. Ask the dealership to start a new one. It takes them one click and nothing is lost."
         />
       );
     }
@@ -58,5 +58,27 @@ export default async function PlanPage({
     );
   }
 
-  return <Planner initial={payload} />;
+  // ── The reason stays server-side ────────────────────────────────────────
+  // offer_status.detail names the field that is missing, the provider's own
+  // refusal text, or the mapping gap. That is exactly what staff need and
+  // exactly what a customer should never read, and handing it to a client
+  // component publishes it: props are serialised into the HTML.
+  //
+  // So it is logged here, where Vercel's runtime logs keep it, and removed from
+  // what crosses to the browser. The staff console reads the same field from the
+  // database, which is the copy staff actually go looking at.
+  const status = payload.offer_status;
+  if (status && status.state !== "Rated") {
+    console.error(
+      `FNI_RATE_NOT_READY session=${sessionId} deal=${payload.session.deal_number ?? "?"} ` +
+        `vtype=${payload.session.vehicle.tecassured_code ?? "none"} state=${status.state} ` +
+        `detail=${JSON.stringify(status.detail)}`
+    );
+  }
+
+  const safe: SessionPayload = status
+    ? { ...payload, offer_status: { ...status, detail: null } }
+    : payload;
+
+  return <Planner initial={safe} />;
 }

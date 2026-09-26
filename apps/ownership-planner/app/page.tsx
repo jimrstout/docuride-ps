@@ -20,7 +20,7 @@ import Link from "next/link";
 import { currentOperator } from "@/lib/admin-session";
 import { edge } from "@/lib/edge";
 import type { ConsoleListPayload, ConsoleSessionRow } from "@/lib/types";
-import { signIn, signOut, extendSession } from "./console-actions";
+import { signIn, signOut, extendSession, rateSession } from "./console-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -136,6 +136,50 @@ function SignIn({ notice }: { notice: string | null }) {
   );
 }
 
+// ── Rating ────────────────────────────────────────────────────────────────
+//
+// The column that answers "the planner says plans aren't offered". The customer
+// sees one of two screens; staff see which of four states produced it.
+
+const RATING: Record<string, { label: string; tone: string; note: string }> = {
+  Rated: {
+    label: "Rated",
+    tone: "tag--live",
+    note: "The customer has a menu.",
+  },
+  "Not Offered": {
+    label: "Not offered",
+    tone: "tag--quiet",
+    note: "The provider has no products for this machine. The customer is told so.",
+  },
+  Failed: {
+    label: "Failed",
+    tone: "tag--expired",
+    note: "Ours to fix. The customer sees a neutral message, not a refusal.",
+  },
+  Pending: {
+    label: "Not asked yet",
+    tone: "tag--quiet",
+    note: "No rate has been requested. Normal on a session opened moments ago.",
+  },
+};
+
+function Rating({ row, now }: { row: ConsoleSessionRow; now: number }) {
+  const r = row.rating ?? { state: "Pending", detail: null, at: null };
+  const meta = RATING[r.state] ?? RATING.Pending;
+
+  return (
+    <>
+      <span className={`tag ${meta.tone}`}>{meta.label}</span>
+      {r.at ? <small>{since(r.at, now)}</small> : null}
+      {/* The provider's own words, or the field nobody filled in. This is the
+          whole point of the column, so it is shown rather than hidden behind a
+          hover: a reason you have to discover is a reason nobody reads. */}
+      {r.detail ? <small className="cell-why">{r.detail}</small> : null}
+    </>
+  );
+}
+
 // ── The list ──────────────────────────────────────────────────────────────
 
 function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
@@ -162,6 +206,10 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
         <small>{since(row.created_at, now)}</small>
       </td>
 
+      <td className="cell-rating">
+        <Rating row={row} now={now} />
+      </td>
+
       <td className="cell-when">
         {row.expired ? (
           <span className="tag tag--expired">Expired</span>
@@ -182,6 +230,16 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
               +24h
             </button>
           </form>
+          {/* Shown only where it can do something. A rated session re-rated is
+              a second provider call for the same answer. */}
+          {row.rating?.state !== "Rated" ? (
+            <form action={rateSession}>
+              <input type="hidden" name="session_id" value={row.id} />
+              <button type="submit" className="btn btn--quiet">
+                Rate
+              </button>
+            </form>
+          ) : null}
         </div>
       </td>
     </tr>
@@ -234,7 +292,9 @@ async function SessionList({ email }: { email: string }) {
       <p className="console-note">
         The {rows.length === 1 ? "most recent session" : `${rows.length} most recent sessions`},
         newest first. Times are UTC. Extending adds 24 hours from now, which
-        reopens a session that has already lapsed.
+        reopens a session that has already lapsed. Rating says whether the
+        customer has a menu, and why not when they do not; Rate asks the
+        provider again after you have fixed what stopped it.
       </p>
 
       {rows.length === 0 ? (
@@ -251,6 +311,7 @@ async function SessionList({ email }: { email: string }) {
                 <th scope="col">Vehicle</th>
                 <th scope="col">Store</th>
                 <th scope="col">Status</th>
+                <th scope="col">Rating</th>
                 <th scope="col">Created</th>
                 <th scope="col">Expires</th>
                 <th scope="col">

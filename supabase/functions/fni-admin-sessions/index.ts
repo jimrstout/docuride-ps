@@ -134,6 +134,32 @@ async function list(url: URL): Promise<Response> {
     }
   }
 
+  // ── Why a session has no menu ──────────────────────────────────────────
+  // The customer is deliberately not told which of the four states they are in.
+  // Staff are: this column is the only place the reason a rate failed is
+  // readable without going into the database, and "the planner said plans
+  // aren't offered" is a support call somebody has to be able to answer.
+  const sessionIds = sessions
+    .map((s) => s.id)
+    .filter((v): v is string => typeof v === "string");
+
+  const rating = new Map<string, { state: string; detail: string | null; at: string | null }>();
+  if (sessionIds.length > 0) {
+    const { data: offers } = await supabase
+      .schema("fni")
+      .from("rated_offers")
+      .select("session_id, state, error_detail, product_count, rated_at")
+      .in("session_id", sessionIds);
+
+    for (const o of (offers ?? []) as unknown as Record<string, unknown>[]) {
+      rating.set(String(o.session_id), {
+        state: String(o.state ?? "Rated"),
+        detail: (o.error_detail as string | null) ?? null,
+        at: (o.rated_at as string | null) ?? null,
+      });
+    }
+  }
+
   const now = Date.now();
 
   return json(200, {
@@ -155,6 +181,11 @@ async function list(url: URL): Promise<Response> {
       created_at: s.created_at,
       expires_at: s.expires_at,
       expired: isExpired(s.expires_at, now),
+
+      // No row means nobody has asked the provider yet. That is a real and
+      // common state on a session created moments ago, so it is named rather
+      // than folded into one of the outcomes.
+      rating: rating.get(String(s.id)) ?? { state: "Pending", detail: null, at: null },
     })),
   });
 }

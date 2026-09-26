@@ -134,6 +134,11 @@ export const edge = {
       body: { session_id: sessionId, hours },
     }),
 
+  // Staff re-rating a session by hand, after fixing whatever stopped it. The
+  // planner only ever rates from "Pending", so this is the one way to ask again.
+  adminRate: <T>(sessionId: string) =>
+    call<T>("fni-rate-vehicle", { method: "POST", body: { session_id: sessionId } }),
+
   adminSettings: <T>() => call<T>("fni-admin-settings", { method: "GET" }),
 
   adminSaveSettings: <T>(body: Record<string, unknown>) =>

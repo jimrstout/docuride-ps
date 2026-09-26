@@ -85,6 +85,41 @@ export async function extendSession(formData: FormData): Promise<void> {
 
 
 /**
+ * Ask TecAssured for a session's menu again.
+ *
+ * The planner rates a session once, on its first load, and then never again on
+ * its own: a session that has already been answered is not re-asked, so a deal
+ * that failed cannot turn a reload into a stream of provider calls. That leaves
+ * recovery to a person, which is what this is.
+ *
+ * Use it after fixing whatever stopped the rate: an engine size entered, a body
+ * type mapped, the deal corrected in the CRM. A success replaces the row and the
+ * customer's next page load shows the menu.
+ */
+export async function rateSession(formData: FormData): Promise<void> {
+  const operator = await currentOperator();
+  if (!operator) redirect("/");
+
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+
+  try {
+    await edge.adminRate<{ product_count?: number }>(sessionId);
+  } catch (err) {
+    // fni-rate-vehicle has already recorded the Failed row and its reason, so
+    // the row in the list will say what went wrong. Nothing to add here beyond
+    // a server-side log.
+    console.error(`console re-rate failed for ${sessionId}:`, err);
+  }
+
+  // The Rating column is the feedback either way: it shows the new state and,
+  // on a failure, the new reason.
+  revalidatePath("/");
+  redirect("/");
+}
+
+
+/**
  * Save the dealer group name and the copy that uses it.
  *
  * The Edge Function is the one that validates: it refuses a placeholder the

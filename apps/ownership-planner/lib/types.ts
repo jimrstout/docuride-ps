@@ -177,6 +177,22 @@ export interface SessionPayload {
     product_count: number;
     families: OfferFamily[];
   } | null;
+
+  /**
+   * Why there is no menu, when there is no menu.
+   *
+   * The planner shows "plans aren't offered on this machine" ONLY for
+   * "Not Offered". Every other state gets neutral copy, because the customer's
+   * machine is not the reason.
+   *
+   * `detail` is written for staff and is stripped by the server layer before
+   * this payload reaches the browser, so it is always null on the client.
+   */
+  offer_status: {
+    state: "Rated" | "Not Offered" | "Failed" | "Pending";
+    detail: string | null;
+    attempted_at: string | null;
+  } | null;
   catalog: CatalogEntry[];
   /** The dealer group as a buyer reads it. Null means no name is set. */
   dealer_group_name: string | null;
@@ -215,6 +231,19 @@ export interface ConsoleSessionRow {
   expires_at: string;
   /** Decided by the Edge Function against one clock, never recomputed here. */
   expired: boolean;
+
+  /**
+   * What happened the last time this session's menu was asked for.
+   *
+   * Staff-only. `detail` is the provider's refusal or the field that is
+   * missing, and it is the answer to "the planner says plans aren't offered" --
+   * which the customer's own screen deliberately will not tell them.
+   */
+  rating: {
+    state: "Rated" | "Not Offered" | "Failed" | "Pending";
+    detail: string | null;
+    at: string | null;
+  };
 }
 
 export interface ConsoleListPayload {

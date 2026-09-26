@@ -350,6 +350,14 @@ button { cursor: pointer; }
 .decision-option.is-chosen .decision-mark { background: var(--copper); border-color: var(--copper); }
 .decision-option.is-chosen .decision-mark::after { content: "✓"; color: var(--paper); font-size: var(--fs-xs); }
 
+/* The rating column. The reason wraps rather than truncating: it names a field
+   or quotes the provider, and half of either is no use to anybody. */
+.cell-rating { white-space: normal; max-width: 22rem; }
+.cell-why {
+  display: block; margin-top: var(--s1);
+  font-size: var(--fs-xs); line-height: 1.35; color: var(--ink-70);
+}
+
 /* ── Which level, and on what terms ───────────────────────────────────────
    Both sit ABOVE the price, because they are what the price depends on. A
    customer who presses "5 years" and sees the figure move understands the

@@ -181,8 +181,10 @@ serve(async (req: Request) => {
       .eq("session_id", sessionId)
       .maybeSingle();
 
-    const families: NormalizedFamily[] = offerRow
-      ? normalizeOffer((offerRow as Record<string, unknown>).response_payload)
+    const offer = (offerRow ?? null) as Record<string, unknown> | null;
+
+    const families: NormalizedFamily[] = offer
+      ? normalizeOffer(offer.response_payload)
       : [];
 
     // ── Pricing rules, then price each offered product ──────────────────
@@ -368,11 +370,35 @@ serve(async (req: Request) => {
         expires_at: s.expires_at,
       },
 
+      // ── Why there is no menu, when there is no menu ──────────────────
+      // Four states, because the customer must only ever be told that plans
+      // are not offered when that is actually what the provider said.
+      //
+      //   Rated        There is a menu.
+      //   Not Offered  A request the provider accepted came back with nothing.
+      //                The only state that earns "not offered on this machine".
+      //   Failed       We asked and it did not work. Neutral copy, and `detail`
+      //                says why, for staff.
+      //   Pending      Nobody has asked yet. Also neutral copy: on a session
+      //                created seconds ago this is the normal state, not a
+      //                fault, and it is what deal 14132 was in while the
+      //                customer read that plans were not offered.
+      //
+      // `detail` is written for a staff member and must not be rendered to a
+      // customer. The planner's server layer logs it and drops it.
+      offer_status: {
+        state: offer ? String(offer.state ?? "Rated") : "Pending",
+        detail: offer && offer.state === "Failed"
+          ? ((offer.error_detail as string | null) ?? null)
+          : null,
+        attempted_at: offer ? offer.rated_at : null,
+      },
+
       // One object, or null. rated_offers is unique on session_id.
-      offer: offerRow
+      offer: offer
         ? {
-            rated_at: (offerRow as Record<string, unknown>).rated_at,
-            product_count: (offerRow as Record<string, unknown>).product_count,
+            rated_at: offer.rated_at,
+            product_count: offer.product_count,
             // Families, each with tiers, each tier with its rates. One decision
             // per family rather than one per product: Platinum, Gold, Silver and
             // Bronze are tiers of the same thing, and asking a customer to
