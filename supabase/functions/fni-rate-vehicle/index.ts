@@ -57,6 +57,7 @@ import {
   type RateSource,
   type RequiredProperty,
 } from "../_shared/rate-properties.ts";
+import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -201,7 +202,31 @@ serve(async (req: Request) => {
       return json(400, { error: `Session is ${sess.status} and cannot be re-rated` });
     }
 
-    // ── Step 2: Apply overrides ────────────────────────────────────────
+    // ── Step 2: The staff layer ────────────────────────────────────────
+    //
+    // Corrections made on the Verify screen, applied over the CRM's figures. This
+    // is the whole reason those fields were made editable: a price the person at
+    // the desk corrected has to be the price the provider is asked about, in BOTH
+    // halves of the request. The properties array reads overrides out of
+    // vehicle_properties already, but the documented top-level fields --
+    // vehiclePrice, financeAmount, odometer -- come straight off the columns, so
+    // substituting here is what keeps the two halves from describing two
+    // different machines.
+    //
+    // In memory only. The columns keep the CRM's record; see migration 0016.
+    const staffEdits = parseStaffEdits(
+      (sess as unknown as Record<string, unknown>).staff_edits
+    );
+    const rateSource = applyStaffEdits(sess as unknown as Record<string, unknown>, staffEdits);
+
+    // ── Step 2b: The overrides parameter ───────────────────────────────
+    //
+    // Predates the Verify screen and no caller sends it today: the console and
+    // the planner both post session_id alone. It used to WRITE its values into
+    // the session's columns, which is now exactly the thing the design forbids,
+    // because it destroys the CRM figure that "differs from the CRM deal" has to
+    // be measured against. So it stays as a way to rate a one-off what-if, and
+    // it no longer persists anything.
     if (overrides && Object.keys(overrides).length > 0) {
       const allowedOverrides = [
         "vehicle_type_code", "unit_submodel", "odometer", "condition",
@@ -210,22 +235,8 @@ serve(async (req: Request) => {
         "unit_make", "unit_model", "sale_date", "vehicle_properties",
       ];
 
-      const patch: Record<string, unknown> = {};
       for (const key of allowedOverrides) {
-        if (key in overrides) {
-          patch[key] = overrides[key];
-          (sess as unknown as Record<string, unknown>)[key] = overrides[key];
-        }
-      }
-
-      if (Object.keys(patch).length > 0) {
-        const { error: updateErr } = await supabase
-          .schema("fni")
-          .from("sessions")
-          .update(patch)
-          .eq("id", session_id);
-
-        if (updateErr) console.error(`Failed to apply overrides: ${updateErr.message}`);
+        if (key in overrides) rateSource[key] = overrides[key];
       }
     }
 
@@ -250,7 +261,9 @@ serve(async (req: Request) => {
     // cache is cold or last said Unavailable, so a store configured this
     // morning still rates today, and a dealer since given the product is not
     // refused on a stale answer.
-    if (!sess.vehicle_type_code) {
+    const editedVtype = rateSource.vehicle_type_code as string | null;
+
+    if (!editedVtype) {
       // A body type DocuRide cannot map to a TecAssured vehicle type. Not the
       // customer's business and not "not offered": it is a gap in our mapping
       // or a blank Sold_1_Body_Type on the deal, and a person has to close it.
@@ -265,11 +278,11 @@ serve(async (req: Request) => {
         missing_fields: ["vehicle_type_code"],
         message:
           "The vehicle type decides which properties TecAssured needs, so it has " +
-          "to be set before rating. Use the overrides parameter.",
+          "to be set before rating. Set it on the Verify screen.",
       });
     }
 
-    const vtype = sess.vehicle_type_code;
+    const vtype = editedVtype;
     let required: RequiredProperty[];
 
     try {
@@ -309,7 +322,7 @@ serve(async (req: Request) => {
     }
 
     // ── Step 5: Answer exactly what was asked ────────────────────────────────
-    const built = buildRateRequest(required, sess as unknown as RateSource, {
+    const built = buildRateRequest(required, rateSource as unknown as RateSource, {
       dealerCode,
       vtype,
     });
