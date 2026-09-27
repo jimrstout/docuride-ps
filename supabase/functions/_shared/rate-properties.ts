@@ -1,6 +1,6 @@
 // _shared/rate-properties.ts
 //
-// Turning /rate/requiredproperties into a rate request.
+// What /rate/requiredproperties said, and the cache that remembers it.
 //
 // ── The shape of the thing ──────────────────────────────────────────────
 // TecAssured answers with a list of properties, each with a name, a
@@ -10,8 +10,8 @@
 //                  {"name":"finance.amount","description":"Finance Amount","type":"DECIMAL"}, ...]}
 //
 // The names are dotted and lowercase, and the set differs by vehicle type and
-// by dealer. The rate request is built from exactly this list -- one entry per
-// name the server asked for, nothing else.
+// by dealer. A rate request is built from exactly this list -- one entry per name
+// the server asked for, nothing else.
 //
 // The request builder that consumes this list lives in _shared/rate-request.ts.
 // It is separate so that a function which only reads the cache does not bundle
