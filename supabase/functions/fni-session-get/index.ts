@@ -27,7 +27,6 @@ import { secretsMatch } from "../_shared/supabase.ts";
 import { allTiers, normalizeOffer, NormalizedFamily } from "../_shared/planner-offers.ts";
 import { priceProduct, PricingRule } from "../_shared/planner-pricing.ts";
 import { resolvePaymentBasis } from "../_shared/money.ts";
-import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
 import { modeLabel } from "../_shared/session-mode.ts";
 import {
   CatalogRow,
@@ -137,7 +136,7 @@ serve(async (req: Request) => {
       return json(404, { error: "Session not found" });
     }
 
-    let s = session as Record<string, unknown>;
+    const s = session as Record<string, unknown>;
 
     if (s.expires_at && new Date(s.expires_at as string) <= new Date()) {
       return json(410, {
@@ -173,23 +172,6 @@ serve(async (req: Request) => {
         }
       }
     }
-
-    // ── The staff layer ────────────────────────────────────────────────
-    //
-    // Corrections made on the Verify screen, applied over the CRM's figures. The
-    // customer's screen has to agree with what the plans were rated against: if
-    // an F&I manager corrected the sale price from 24,000 to 25,500 and the rates
-    // came back on 25,500, showing the customer 24,000 would put the machine's
-    // price and the plan prices in different deals.
-    //
-    // After the payment-basis healing above, which reads the raw Zoho snapshot
-    // and is about filling gaps rather than correcting figures. In memory only;
-    // the columns keep the CRM's record.
-    //
-    // Nothing about WHO edited anything reaches this payload. The customer gets
-    // the number, as they would have if the deal had been right in the first
-    // place; the provenance is staff business and lives on the Verify screen.
-    s = applyStaffEdits(s, parseStaffEdits(s.staff_edits));
 
     // ── Rated offer (one row per session, not many) ─────────────────────
     const { data: offerRow } = await supabase
