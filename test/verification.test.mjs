@@ -90,20 +90,50 @@ test("a typed engine size beats the decode, and says so", () => {
 
 // ── The CRM owns what the CRM owns ────────────────────────────────────────
 
-test("every CRM field is read-only and says where to correct it", () => {
+// ── Every rating input is editable (2026-09-27) ───────────────────────────
+//
+// These two tests used to assert the opposite: that every CRM field was
+// read-only and that exactly three fields could be typed. That was the rule
+// until Jim replaced it. The rule now is that everything feeding a rate is
+// editable and the two identifiers are not, so that is what is asserted.
+
+test("every field that feeds a rate is editable", () => {
   const s = sheet({ vin_decode: DECODE });
   for (const f of s.fields) {
-    if (f.source !== "CRM") continue;
-    assert.equal(f.editable, false, `${f.key} must not be editable`);
+    if (f.key === "deal_number" || f.key === "stock_number") continue;
+    // The three finance figures close on a cash deal, and this fixture is one.
+    if (["amount_financed", "finance_term", "apr"].includes(f.key)) continue;
+    assert.equal(f.editable, true, `${f.key} must be editable`);
   }
-  assert.match(byKey(s).sale_price.note, /Correct this in CRM, then click Refresh\./);
 });
 
-test("only three fields can be typed at all", () => {
-  const editable = sheet({ vin_decode: DECODE }).fields.filter((f) => f.editable);
-  assert.deepEqual(editable.map((f) => f.key).sort(), [
-    STAFF_ENTERED.engineCc, "fuel.type", STAFF_ENTERED.warrantyMonths,
-  ].sort());
+test("only the two fields that identify the deal are never editable", () => {
+  const locked = sheet({ vin_decode: DECODE, finance_type: "Loan" })
+    .fields.filter((f) => !f.editable);
+  assert.deepEqual(locked.map((f) => f.key).sort(), ["deal_number", "stock_number"]);
+});
+
+test("a CRM field no longer tells you to go and fix it in CRM", () => {
+  // The old note was "Correct this in CRM, then click Refresh." It is wrong now:
+  // you can correct it right here.
+  const s = sheet({ vin_decode: DECODE });
+  for (const f of s.fields) {
+    if (f.note) assert.doesNotMatch(f.note, /Correct this in CRM/);
+  }
+  assert.match(byKey(s).sale_price.note, /Edit it here/);
+});
+
+test("the finance figures stay shut on a cash deal, and open on a loan", () => {
+  // Letting somebody type $19,000 into a cash deal is exactly how 14132 would
+  // have told the provider a cash buyer financed twenty thousand dollars.
+  const cash = byKey(sheet({ vin_decode: DECODE }));
+  assert.equal(cash.amount_financed.editable, false);
+  assert.equal(cash.apr.editable, false);
+  assert.match(cash.apr.note, /Change the deal type to edit it/);
+
+  const loan = byKey(sheet({ vin_decode: DECODE, finance_type: "Loan" }));
+  assert.equal(loan.amount_financed.editable, true);
+  assert.equal(loan.apr.editable, true);
 });
 
 // ── A cash deal's finance figures are facts, not gaps ─────────────────────
