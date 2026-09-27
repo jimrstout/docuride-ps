@@ -491,6 +491,14 @@ button { cursor: pointer; }
   .vgate-warn-table td::before { content: attr(data-label) ": "; color: var(--ink-55); }
 }
 
+/* "Somebody already did this." Above the button, quiet, and only when the
+   session really was verified before. */
+.vgate-was {
+  margin: 0 0 var(--s3); padding-bottom: var(--s3);
+  border-bottom: var(--bw) solid var(--line-soft);
+  font-size: var(--fs-xs); color: var(--ink-70); line-height: var(--lh-body);
+}
+
 .vgate {
   margin: var(--s5) 0 var(--s6);
   padding: var(--s4);
@@ -958,6 +966,22 @@ button { cursor: pointer; }
 .console-who {
   display: flex; align-items: center; gap: var(--s3);
   font-size: var(--fs-xs); color: var(--ink-55);
+  flex-wrap: wrap;
+}
+
+/* Who is checking this deal. Sits where the signed-in operator's email used to,
+   because it occupies the same place in a person's head: this is me. It is a
+   name on a record and not a sign-in, so it looks like a field and not a gate. */
+.vwho { display: flex; align-items: center; gap: var(--s2); }
+.vwho label {
+  font-size: var(--fs-xs); font-weight: 700; color: var(--ink-55);
+  letter-spacing: var(--track-ui); white-space: nowrap;
+}
+.vwho input {
+  width: 11rem; min-height: var(--tap);
+  padding: 0 var(--s2); font: inherit; font-size: var(--fs-base);
+  color: var(--ink); background: var(--paper);
+  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
 }
 
 .console-note,

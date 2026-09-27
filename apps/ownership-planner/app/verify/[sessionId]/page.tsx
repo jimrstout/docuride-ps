@@ -24,6 +24,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { currentOperator } from "@/lib/admin-session";
+import { currentChecker } from "@/lib/checker";
 import { edge, EdgeError, isSessionId } from "@/lib/edge";
 import type { FieldGroup, VerifyField, VerifySheet } from "@/lib/types";
 import {
@@ -32,6 +33,7 @@ import {
   discardEdits,
   refreshFromCrm,
   saveVerifyFields,
+  setCheckerName,
   verifyAndRate,
   voidContract,
 } from "@/app/console-actions";
@@ -166,8 +168,14 @@ export default async function VerifyPage({
   params: Promise<{ sessionId: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // No sign-in. The CRM button opens this screen directly and what protects it
+  // is holding the session link, the same as the presentation.
+  //
+  // `checker` is a name for the record, not a permission: see lib/checker.ts.
+  // `operator` is still read, but only to decide whether to offer Void, which
+  // reaches TecAssured and undoes real paperwork.
+  const checker = await currentChecker();
   const operator = await currentOperator();
-  if (!operator) redirect("/");
 
   const { sessionId } = await params;
   if (!isSessionId(sessionId)) notFound();
@@ -203,6 +211,14 @@ export default async function VerifyPage({
     : one("saved") ? { tone: "ok", text: "Saved." }
     : one("decoded") ? { tone: "ok", text: "Decoded from the VIN." }
     : one("refreshed") ? { tone: "ok", text: "Re-pulled from CRM." }
+    : one("needname") ? {
+        tone: "bad",
+        text:
+          "Put your name in the Checked by box at the top first. It goes on the " +
+          "record of what was verified, so it cannot be left blank.",
+      }
+    : one("who") ? { tone: "ok", text: "Saved. This device will remember it." }
+    : one("whocleared") ? { tone: "ok", text: "Name cleared." }
     : one("discarded") ? {
         tone: "ok",
         text:
@@ -233,13 +249,33 @@ export default async function VerifyPage({
             Verify deal {sheet.session.deal_number ?? "(no number)"}
           </h1>
         </div>
-        <form action={refreshFromCrm} className="console-who">
-          <span>{operator.email}</span>
-          <input type="hidden" name="session_id" value={sheet.session.id} />
-          <button type="submit" className="btn btn--quiet">
-            Refresh from CRM
-          </button>
-        </form>
+        <div className="console-who">
+          {/* Who is checking this deal. One box, once per device, remembered in a
+              cookie. It is a name on a record and not a sign-in: the endpoint
+              refuses a verification with nobody's name on it, so the name has to
+              come from somewhere, and with no accounts it comes from here. */}
+          <form action={setCheckerName} className="vwho">
+            <label htmlFor="checker_name">Checked by</label>
+            <input
+              id="checker_name"
+              type="text"
+              name="checker_name"
+              defaultValue={checker}
+              placeholder="Your name"
+              autoComplete="name"
+              aria-label="Your name, recorded on the verification"
+            />
+            <button type="submit" className="btn btn--quiet">
+              {checker ? "Change" : "Save"}
+            </button>
+          </form>
+          <form action={refreshFromCrm}>
+            <input type="hidden" name="session_id" value={sheet.session.id} />
+            <button type="submit" className="btn btn--quiet">
+              Refresh from CRM
+            </button>
+          </form>
+        </div>
       </header>
 
       <nav className="console-tabs">
@@ -357,6 +393,7 @@ export default async function VerifyPage({
             void the ones that should not stand, then clear this.
           </p>
           {sheet.submit_detail ? <p><small>{sheet.submit_detail}</small></p> : null}
+          {operator ? (
           <form action={clearSubmitUnknown}>
             <input type="hidden" name="session_id" value={sheet.session.id} />
             <input
@@ -368,6 +405,13 @@ export default async function VerifyPage({
               I have checked TecAssured
             </button>
           </form>
+          ) : (
+            <p className="vfield-note">
+              Clearing this needs a sign-in, because it is a statement that
+              somebody looked at TecAssured.{" "}
+              <Link href="/" prefetch={false}>Sign in</Link> to clear it.
+            </p>
+          )}
         </section>
       ) : null}
 
@@ -405,7 +449,15 @@ export default async function VerifyPage({
                     </td>
                     <td className="cell-do">
                       <div className="cell-do-inner">
-                        {c.contract_number ? (
+                        {/* Void is the one thing on this screen that still needs
+                            a sign-in. It calls TecAssured and cancels real
+                            paperwork, which is not something a session link
+                            should authorise. The contract is still listed either
+                            way, because knowing it exists is what stops somebody
+                            trying to submit it again. */}
+                        {!c.contract_number ? (
+                          <small>No number to void by. Ask TecAssured.</small>
+                        ) : operator ? (
                           <form action={voidContract}>
                             <input type="hidden" name="session_id" value={sheet.session.id} />
                             <input
@@ -418,7 +470,9 @@ export default async function VerifyPage({
                             </button>
                           </form>
                         ) : (
-                          <small>No number to void by. Ask TecAssured.</small>
+                          <Link className="btn btn--quiet" href="/" prefetch={false}>
+                            Sign in to void
+                          </Link>
                         )}
                       </div>
                     </td>
@@ -546,11 +600,23 @@ export default async function VerifyPage({
           </div>
         ) : null}
 
+        {/* Previously verified, and this is a fresh launch from CRM. The values
+            below are the ones that were approved, and saying so is the
+            difference between "check this again" and "somebody already did
+            this". */}
+        {verified ? (
+          <p className="vgate-was">
+            Verified by <b>{sheet.verification.verified_by ?? "unknown"}</b> on{" "}
+            {stamp(sheet.verification.verified_at)}. The values below are what
+            was verified.
+          </p>
+        ) : null}
+
         {sheet.ready ? (
           <p className="vgate-say">
-            Every field TecAssured asks for has a value. Verifying records your
-            name, the time, and each value with its source, then asks for the
-            rate.
+            Every field TecAssured asks for has a value. Confirming records your
+            name, the time, and each value with its source, asks for the rate,
+            and opens the presentation.
           </p>
         ) : (
           <p className="vgate-say vgate-say--blocked">
@@ -571,9 +637,23 @@ export default async function VerifyPage({
           </p>
         )}
 
-        <button type="submit" className="btn btn--go" disabled={!sheet.ready}>
-          {verified ? "Verify again and re-rate" : "Verify and rate"}
+        {/* The name travels with the button, so typing it and confirming in one
+            motion works. The action writes it back to the cookie. */}
+        <input type="hidden" name="checker_name" value={checker} />
+
+        <button
+          type="submit"
+          className="btn btn--go"
+          disabled={!sheet.ready || checker === ""}
+        >
+          Confirm and Continue
         </button>
+
+        <p className="vfield-note">
+          {checker === ""
+            ? "Put your name in the Checked by box at the top before confirming."
+            : `Confirming as ${checker}. This opens the presentation at step 1.`}
+        </p>
       </form>
     </main>
   );

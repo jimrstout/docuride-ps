@@ -17,6 +17,12 @@ import {
   currentOperator,
   mintConsoleCookie,
 } from "@/lib/admin-session";
+import {
+  CHECKER_COOKIE,
+  CHECKER_COOKIE_OPTIONS,
+  checkerFor,
+  cleanCheckerName,
+} from "@/lib/checker";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -167,13 +173,39 @@ export async function saveSettings(formData: FormData): Promise<void> {
 
 // ── The Verify step ───────────────────────────────────────────────────────
 //
-// Four buttons, one endpoint. Each redirects back to the same screen, because
+// Five buttons, one endpoint. Each redirects back to the same screen, because
 // the screen is the feedback: the sheet re-renders with new values, new sources
-// and a Verify button that is enabled or is not.
+// and a Confirm button that is enabled or is not. Confirm and Continue is the
+// exception: it leaves for the presentation, which is the whole point of it.
 //
-// Every one of these re-checks the operator. A Server Action is a POST endpoint
-// like any other, and the page having rendered the button is not evidence that
-// whoever called it was allowed to.
+// ── No sign-in here (2026-09-27) ─────────────────────────────────────────
+// These used to re-check the console operator and bounce to the sign-in page.
+// They no longer do. The CRM button opens this screen directly and the thing
+// that protects it is the same thing that protects the presentation: holding an
+// unguessable session link.
+//
+// What did NOT move: the session browser and the settings screen still require
+// a sign-in. They list twenty-five deals' worth of buyer names, addresses and
+// phone numbers across the whole store, which is a different exposure from one
+// deal to whoever was sent that deal's link.
+//
+// Voiding a contract and clearing Submit Status Unknown also still require a
+// sign-in, and they are further down this file. They reach TecAssured and undo
+// real paperwork, and they are not part of the flow being simplified.
+
+/** Remember who is at this desk. Attribution, not authorisation: see lib/checker.ts. */
+export async function setCheckerName(formData: FormData): Promise<void> {
+  const sessionId = String(formData.get("session_id") ?? "");
+  const name = cleanCheckerName(formData.get("checker_name"));
+
+  const jar = await cookies();
+  if (name === "") jar.delete(CHECKER_COOKIE);
+  else jar.set(CHECKER_COOKIE, name, CHECKER_COOKIE_OPTIONS);
+
+  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+  revalidatePath(`/verify/${sessionId}`);
+  backToVerify(sessionId, name === "" ? { whocleared: "1" } : { who: "1" });
+}
 
 /** Where a verify action lands, with a message if it has one to pass on. */
 function backToVerify(sessionId: string, params: Record<string, string> = {}): never {
@@ -186,9 +218,6 @@ async function verifyAction(
   build: (sessionId: string) => Record<string, unknown>,
   onOk: Record<string, string> = {}
 ): Promise<never> {
-  const operator = await currentOperator();
-  if (!operator) redirect("/");
-
   const sessionId = String(formData.get("session_id") ?? "");
   if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
 
@@ -223,12 +252,20 @@ async function verifyAction(
  * original value back.
  */
 export async function saveVerifyFields(formData: FormData): Promise<void> {
-  const operator = await currentOperator();
-  if (!operator) redirect("/");
+  const who = await checkerFor(formData);
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (who === "") {
+    // The endpoint refuses an unnamed edit, and it is right to. Said here so the
+    // person gets the sentence they need rather than the endpoint's.
+    if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+    backToVerify(sessionId, { needname: "1" });
+  }
 
   const entries: Record<string, string> = {};
   for (const [key, value] of formData.entries()) {
-    if (key === "session_id" || typeof value !== "string") continue;
+    // checker_name is who is typing, not a value on the deal.
+    if (key === "session_id" || key === "checker_name") continue;
+    if (typeof value !== "string") continue;
     entries[key] = value;
   }
 
@@ -240,7 +277,7 @@ export async function saveVerifyFields(formData: FormData): Promise<void> {
       entries,
       // An edit can move a price, so it carries a name the same way a
       // verification does.
-      edited_by: operator.email,
+      edited_by: who,
     }),
     { saved: "1" }
   );
@@ -284,19 +321,24 @@ export async function refreshFromCrm(formData: FormData): Promise<void> {
  * which is a state the console can show and a person can retry.
  */
 export async function verifyAndRate(formData: FormData): Promise<void> {
-  const operator = await currentOperator();
-  if (!operator) redirect("/");
-
   const sessionId = String(formData.get("session_id") ?? "");
   if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+
+  const who = await checkerFor(formData);
+  if (who === "") backToVerify(sessionId, { needname: "1" });
+
+  // Typing the name and pressing Confirm in one go should not make the person
+  // type it again on the next deal.
+  const jar = await cookies();
+  jar.set(CHECKER_COOKIE, who, CHECKER_COOKIE_OPTIONS);
 
   try {
     await edge.verifyAction<unknown>({
       session_id: sessionId,
       action: "verify",
-      // Whoever is signed in. The gate refuses an unnamed verification, because
-      // a verification with nobody's name on it is not one.
-      verified_by: operator.email,
+      // Whoever said they were checking it. The gate refuses an unnamed
+      // verification, because a verification with nobody's name on it is not one.
+      verified_by: who,
     });
   } catch (err) {
     const message =
@@ -317,8 +359,25 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
   }
 
   revalidatePath(`/verify/${sessionId}`);
+  revalidatePath(`/plan/${sessionId}`);
   revalidatePath("/");
-  backToVerify(sessionId, { verified: "1", rated });
+
+  // ── Straight into the presentation ─────────────────────────────────────
+  //
+  // Not back to this screen. Confirm and Continue is one motion: the person has
+  // checked the figures and is now going to sit down with the customer, and
+  // bouncing them back to the sheet they just approved only asks them to find
+  // the next button.
+  //
+  // Even when the rate failed. The planner has a screen for that -- the neutral
+  // "we are still getting your options ready" -- and it is the screen the
+  // customer should be looking at while somebody sorts it out. Landing back here
+  // would leave a staff member reading a provider error with a customer beside
+  // them.
+  //
+  // /plan/<id> with no step in the URL opens at step 1, which is where the
+  // presentation begins.
+  redirect(`/plan/${sessionId}`);
 }
 
 /**

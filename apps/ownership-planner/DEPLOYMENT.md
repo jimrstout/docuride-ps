@@ -81,8 +81,7 @@ recorded.
 ### After the project exists
 
 Point `fni-session-start` at it, so the button on the DocuRide record opens the
-right URL. It builds `${FNI_MENU_BASE_URL}/${session_id}` and currently defaults
-to `https://docuride.app/fni`:
+right URL:
 
 ```
 FNI_MENU_BASE_URL = https://ps.docuride.com/plan
@@ -91,6 +90,42 @@ FNI_MENU_BASE_URL = https://ps.docuride.com/plan
 That is a Supabase Edge Function secret, not a Vercel variable. No code change
 and no change to the Zoho button, which only opens whatever URL the function
 returns.
+
+### What the button opens (changed 2026-09-27)
+
+`menu_url` is the **Verify screen**, not the presentation:
+
+```
+https://ps.docuride.com/verify/<session_id>
+```
+
+Every launch from the CRM lands there, whatever state the session is in: new or
+existing, verified or not. Confirm and Continue then records the verification,
+rates, and opens `/plan/<session_id>` at step 1.
+
+The verify base is derived by swapping the trailing `/plan` on
+`FNI_MENU_BASE_URL`, so nothing needs editing for the value above.
+`FNI_VERIFY_BASE_URL` overrides it outright if the two routes ever stop being
+siblings. The response echoes `menu_base_url` and `verify_base_url` so a launch
+says which bases it resolved.
+
+The response also carries `plan_url`, the presentation link. That is the link a
+customer keeps, and reopening it goes straight to the presentation when the
+session is verified. Nothing redirects a customer to Verify.
+
+### Sign-in, and where it still applies
+
+The Verify screen has no sign-in. It is protected the way the presentation is:
+by holding an unguessable session link. "Checked by" is a name typed once per
+device and remembered in an unsigned cookie; it is attribution on the
+verification record and authorises nothing.
+
+Still behind the console sign-in:
+
+- the session browser at `/` and `/settings`, which list buyer names, addresses
+  and phone numbers across many deals
+- Void a contract, and Clear Submit Status Unknown, which reach TecAssured and
+  undo real paperwork
 
 ## Edge Functions
 

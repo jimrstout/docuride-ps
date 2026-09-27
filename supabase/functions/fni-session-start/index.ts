@@ -13,7 +13,7 @@
 //   3. Return the deal's existing session, refreshed, rather than a duplicate
 //   4. Resolve the store's provider mapping -> which login, which Dealer ID
 //   5. Map Zoho fields -> fni.sessions snapshot
-//   6. Return session_id + menu_url + provider status
+//   6. Return session_id + menu_url (the Verify screen) + provider status
 //
 // Does NOT use zoho-sync or the deals table for data. This is an intentional,
 // on-demand pull that captures PII (address, phone, email, lienholder) only in
@@ -210,6 +210,62 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+// ─── The URL the CRM button opens ────────────────────────────────────────
+//
+// `menu_url` is what the Zoho button opens. Nothing in Deluge builds a URL of
+// its own: the button opens whatever this function returns, which is why this is
+// the only place that has to change.
+//
+// ── It now opens Verify, not the presentation (2026-09-27) ───────────────
+// It used to be `${FNI_MENU_BASE_URL}/${session_id}`, the presentation itself.
+// So a deal that had been verified before went straight in, and a deal that had
+// not showed the customer the neutral "still getting your options ready" screen
+// while the staff screen nobody had opened sat behind a sign-in.
+//
+// Every launch from the CRM now lands on Verify first, whatever state the
+// session is in: new or existing, verified or not. Verified is not a reason to
+// skip it -- the figures may have moved since, and the person about to sit down
+// with a customer is the right person to look. A customer reopening their own
+// /plan/ link later still goes straight to the presentation; that link is
+// unchanged and this function does not hand it to them.
+//
+// ── Deriving the verify base ─────────────────────────────────────────────
+// FNI_MENU_BASE_URL is `https://ps.docuride.com/plan`, so the sibling route is
+// `https://ps.docuride.com/verify`. Swapping a trailing `/plan` handles that
+// without anybody editing a secret. FNI_VERIFY_BASE_URL overrides it outright if
+// the two ever stop being siblings, and the origin fallback covers a base that
+// does not end in /plan at all.
+function verifyBaseFrom(menuBaseUrl: string): string {
+  const explicit = Deno.env.get("FNI_VERIFY_BASE_URL");
+  if (explicit && explicit.trim() !== "") return explicit.trim().replace(/\/+$/, "");
+
+  const trimmed = menuBaseUrl.replace(/\/+$/, "");
+  if (/\/plan$/i.test(trimmed)) return trimmed.replace(/\/plan$/i, "/verify");
+
+  try {
+    return `${new URL(trimmed).origin}/verify`;
+  } catch {
+    return `${trimmed}/verify`;
+  }
+}
+
+/** Both links for a session: where the button goes, and where the customer goes. */
+function linksFor(menuBaseUrl: string, sessionId: string) {
+  const verifyBaseUrl = verifyBaseFrom(menuBaseUrl);
+  return {
+    // What the Zoho button opens. Verify, always.
+    menu_url: `${verifyBaseUrl}/${sessionId}`,
+    verify_url: `${verifyBaseUrl}/${sessionId}`,
+    // The presentation. Reached by Confirm and Continue, or by a customer
+    // reopening a link they already have.
+    plan_url: `${menuBaseUrl.replace(/\/+$/, "")}/${sessionId}`,
+    // Echoed so a launch says which base it resolved, rather than leaving the
+    // answer inside a secret nobody can read back.
+    menu_base_url: menuBaseUrl,
+    verify_base_url: verifyBaseUrl,
+  };
+}
+
 // ─── Reopening a deal that already has a session ─────────────────────────
 //
 // The CRM button is pressed more than once as a matter of course: a salesperson
@@ -259,7 +315,7 @@ async function reopen(
       return json(200, {
         session_id: sessionId,
         status: session.status,
-        menu_url: `${menuBaseUrl}/${sessionId}`,
+        ...linksFor(menuBaseUrl, sessionId),
         existing: true,
         refreshed: false,
         contracts_submitted: true,
@@ -287,7 +343,7 @@ async function reopen(
     return json(200, {
       session_id: sessionId,
       status: session.status,
-      menu_url: `${menuBaseUrl}/${sessionId}`,
+      ...linksFor(menuBaseUrl, sessionId),
       existing: true,
       refreshed: false,
       message: "Existing session reused. The deal data could not be refreshed.",
@@ -328,7 +384,7 @@ async function reopen(
   return json(200, {
     session_id: sessionId,
     status: session.status,
-    menu_url: `${menuBaseUrl}/${sessionId}`,
+    ...linksFor(menuBaseUrl, sessionId),
     existing: true,
     refreshed: true,
     changed_inputs: changed,
@@ -527,7 +583,7 @@ serve(async (req: Request) => {
     return json(200, {
       session_id: newSession.id,
       status: newSession.status,
-      menu_url: `${menuBaseUrl}/${newSession.id}`,
+      ...linksFor(menuBaseUrl, newSession.id),
       existing: false,
       has_credentials: !!credentialId,
       // The Dealer ID this store will rate under. Reported, not yet recorded:
