@@ -61,8 +61,10 @@ export type EditTarget =
  * business importing a staff screen's field list to find out, and the planner
  * least of all.
  *
- * A key absent from this table cannot be edited at all. That is exactly two
- * fields: Deal # and Stock #, which identify the deal rather than feeding a rate.
+ * A key absent from this table cannot be edited at all. That is exactly three
+ * fields: Deal # and Stock #, which identify the deal rather than feeding a rate,
+ * and Lender, which is shown so staff can confirm who is financing it. Deal type
+ * is the field that decides how a deal rates, and that one is editable.
  */
 export const EDIT_TARGETS: Record<string, EditTarget> = {
   // Deal

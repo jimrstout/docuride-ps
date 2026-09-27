@@ -38,10 +38,11 @@
 // So every field that feeds a rate is editable now. What keeps it honest is that
 // nothing is hidden: an edited field shows what it was and where that came from,
 // the edit carries the name of whoever made it, and a warning names every value
-// that no longer matches the deal until the deal is brought into line. The two
-// fields that identify the deal -- Deal # and Stock # -- stay read-only, because
-// they are not rating inputs and renaming a deal on this screen would only make
-// it harder to tell which deal you are on.
+// that no longer matches the deal until the deal is brought into line. Three
+// fields stay read-only: Deal # and Stock #, because they are not rating inputs
+// and renaming a deal on this screen would only make it harder to tell which
+// deal you are on, and Lender, which is shown so staff can confirm who is
+// financing it while deal type above is the field that decides how it rates.
 
 import { financeFigures, type FinanceSource } from "./finance-basis.ts";
 import {
@@ -80,7 +81,8 @@ export interface VerifyField {
   source: FieldSource;
   /**
    * Staff may type it here. True for every rating input, and false for exactly
-   * two -- Deal # and Stock # -- plus the three finance figures on a cash deal.
+   * three -- Deal #, Stock # and Lender -- plus the three finance figures on a
+   * cash deal.
    */
   editable: boolean;
   /** The TecAssured property this answers, when it answers one. */
@@ -276,7 +278,7 @@ interface Spec {
   // Where an edit lands is NOT declared here. It comes from EDIT_TARGETS in
   // _shared/staff-edits.ts, keyed on this spec's own key, so the screen and the
   // rate builder cannot end up with two answers. A key absent from that table is
-  // a field nobody may edit: Deal # and Stock #, and nothing else.
+  // a field nobody may edit: Deal #, Stock # and Lender, and nothing else.
   /** The CRM deal carries this too, so an edit can disagree with the deal. */
   in_crm?: boolean;
   /**
@@ -347,9 +349,10 @@ function staffThenDecode(
 const SPECS: Spec[] = [
   // ── Deal ───────────────────────────────────────────────────────────────
   //
-  // The two identifiers are the only fields on this sheet nobody may edit. They
-  // are not rating inputs, and their whole job is to let a person confirm which
-  // deal they are looking at -- which editing them here would defeat.
+  // The two identifiers are not editable. They are not rating inputs, and their
+  // whole job is to let a person confirm which deal they are looking at -- which
+  // editing them here would defeat. Lender below is read-only for its own
+  // reason: deal type is what decides how the deal rates.
   {
     key: "deal_number", label: "Deal #", group: "Deal", provider_property: null,
     resolve: (s) => fromCrm(text(s.deal_number)),
@@ -741,7 +744,7 @@ export function ratingInputs(sheet: VerificationSheet): Record<string, string | 
     // The second half catches three that reach the request without appearing in
     // requiredproperties: the vehicle type, which decides what is asked for at
     // all, and the customer's city and state, which go up as customerCity and
-    // customerState. Deal # and Stock # have neither, and are the only two
+    // customerState. Deal #, Stock # and Lender have neither, and are the only
     // fields on the sheet a change to cannot alter a price.
     // Keyed off the spec's target rather than f.editable, so the cash-deal
     // toggle on the three finance figures cannot quietly drop a field out of the
