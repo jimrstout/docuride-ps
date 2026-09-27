@@ -37,7 +37,7 @@ After that, pushing to `main` is enough.
 ## The warning about the CLI command
 
 **Do not run `supabase functions deploy` against a checkout older than commit
-`a9a1e4e`.** The two commands in the previous version of this file would have
+`39d4dbe`.** The two commands in the previous version of this file would have
 broken the live system, and I am glad you had not run them yet.
 
 `supabase functions deploy` reads `verify_jwt` from `supabase/config.toml`, and
