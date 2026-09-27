@@ -354,10 +354,14 @@ async function save(
   for (const [rawKey, rawValue] of Object.entries(entries)) {
     const key = allowed.find((k) => k.toLowerCase() === rawKey.toLowerCase());
     if (!key) {
-      // Either a field nothing may edit -- Deal # and Stock # -- or one closed by
-      // the deal as it stands, such as APR on a cash deal. Refused by name rather
-      // than ignored, because silently dropping somebody's correction is worse
-      // than saying no to it.
+      // Either a field nothing may edit -- Deal #, Stock # and Lender -- or one
+      // closed by the deal as it stands, such as APR on a cash deal. Refused by
+      // name rather than ignored, because silently dropping somebody's correction
+      // is worse than saying no to it.
+      //
+      // The console no longer sends anything but known rating inputs, so this
+      // should only ever name a real field now. It used to receive React's hidden
+      // $ACTION_ID field and refuse every save on this line.
       rejected.push(rawKey);
       continue;
     }
@@ -400,8 +404,8 @@ async function save(
     return json(400, {
       error:
         `These fields cannot be edited here: ${rejected.map(labelFor).join(", ")}. ` +
-        `Deal # and Stock # identify the deal, and the finance figures are fixed ` +
-        `at zero on a cash deal.`,
+        `Deal # and Stock # identify the deal, Lender comes from the CRM deal, ` +
+        `and the finance figures are fixed at zero on a cash deal.`,
       rejected,
     });
   }
