@@ -33,6 +33,15 @@ import { buildVerification } from "../supabase/functions/_shared/verification.ts
 import { buildRateRequest } from "../supabase/functions/_shared/rate-request.ts";
 import { crmRatingFields } from "../supabase/functions/_shared/crm-fields.ts";
 
+/** A slice of a file, refusing to guess when either marker is absent. */
+function between(text, startMarker, endMarker) {
+  const start = text.indexOf(startMarker);
+  assert.ok(start >= 0, `start marker not found: ${startMarker}`);
+  const end = text.indexOf(endMarker, start + startMarker.length);
+  assert.ok(end > start, `end marker not found after start: ${endMarker}`);
+  return text.slice(start, end);
+}
+
 const ACTIONS = readFileSync(
   new URL("../apps/ownership-planner/app/console-actions.ts", import.meta.url),
   "utf8"
@@ -422,4 +431,81 @@ test("the verify page no longer reads searchParams", () => {
   );
   assert.ok(!page.includes("searchParams"), "the page still reads the query string");
   assert.ok(page.includes("VERIFY_FLASH_COOKIE"), "the page does not read the flash cookie");
+});
+
+// ─── Ported back from the directly-deployed v4 and v12 (2026-09-27) ──────────
+//
+// Both functions were deployed straight through the Management API as
+// comment-stripped condensations of this repo's logic. Diffing them against the
+// repo turned up two things the deployed code had and the repo did not, so the
+// "all" workflow run would have quietly reverted them. Ported, with the cases
+// that would have caught each.
+
+test("the endpoint skips $-prefixed keys too, not just the console", () => {
+  // Defence in depth. The console filters to known rating inputs before posting,
+  // so this should never fire -- but refusing a whole save over React's own
+  // hidden $ACTION_ID field is bad enough to be worth blocking on both sides.
+  const verify = readFileSync(
+    new URL("../supabase/functions/fni-session-verify/index.ts", import.meta.url),
+    "utf8"
+  );
+  const save = between(verify, "async function save(", "// ── discard:");
+  assert.match(
+    save,
+    /if \(rawKey\.startsWith\("\$"\)\) continue;/,
+    "save() must skip framework-internal fields rather than reject them"
+  );
+  // Skipped, not rejected: it is not a field anybody asked to edit.
+  const skipAt = save.indexOf('rawKey.startsWith("$")');
+  const rejectAt = save.indexOf("rejected.push(rawKey)");
+  assert.ok(skipAt > 0 && rejectAt > skipAt, "the skip must come before the reject");
+});
+
+test("overriding the term actually moves the term", () => {
+  // The rate builder resolves through finance-basis.ts, which prefers
+  // finance_term_total over finance_term and apr over interest_rate. An override
+  // list that named only the old columns was silently shadowed: a caller asking
+  // for 48 months still got whatever finance_term_total held.
+  const rate = readFileSync(
+    new URL("../supabase/functions/fni-rate-vehicle/index.ts", import.meta.url),
+    "utf8"
+  );
+  const list = between(rate, "const allowedOverrides = [", "];");
+  for (const key of [
+    "finance_term_total",
+    "interest_rate",
+    "finance_term",
+    "apr",
+    "amount_financed",
+    "finance_type",
+  ]) {
+    assert.match(list, new RegExp(`"${key}"`), `${key} must be overridable`);
+  }
+});
+
+test("every finance column the resolver reads is overridable", () => {
+  // Derived from FinanceSource rather than listed again here, so adding a column
+  // to the resolver fails this test until the override list catches up.
+  const basis = readFileSync(
+    new URL("../supabase/functions/_shared/finance-basis.ts", import.meta.url),
+    "utf8"
+  );
+  const iface = between(basis, "export interface FinanceSource {", "}");
+  const columns = [...iface.matchAll(/^\s*([a-z_]+)\??:/gm)].map((m) => m[1]);
+  assert.ok(columns.length >= 8, `parsed too few columns: ${columns.join(", ")}`);
+
+  const rate = readFileSync(
+    new URL("../supabase/functions/fni-rate-vehicle/index.ts", import.meta.url),
+    "utf8"
+  );
+  const list = between(rate, "const allowedOverrides = [", "];");
+  const notOverridable = columns.filter((c) => !list.includes(`"${c}"`));
+  assert.deepEqual(
+    notOverridable,
+    // lienholder_name is deliberately not overridable: it is the CRM's record of
+    // who is financing the deal, and finance_type is the field that decides how a
+    // deal rates.
+    ["lienholder_name"],
+    `finance columns the resolver reads but nothing can override: ${notOverridable.join(", ")}`
+  );
 });

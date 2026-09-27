@@ -230,6 +230,15 @@ serve(async (req: Request) => {
       const allowedOverrides = [
         "vehicle_type_code", "unit_submodel", "odometer", "condition",
         "sale_price", "amount_financed", "apr", "finance_term",
+        // The three finance columns _shared/finance-basis.ts actually reads.
+        // finance_term_total and interest_rate are PREFERRED over finance_term and
+        // apr, so without them an override of the older pair is silently shadowed:
+        // the caller sets 48 months and the request still goes out with whatever
+        // finance_term_total holds. tila_amount_financed does not reach the
+        // request today -- financeAmount comes from amount_financed -- but it
+        // decides which branch of the resolver answers, and a caller correcting a
+        // deal's finance figures by hand should be able to set it.
+        "finance_term_total", "interest_rate", "tila_amount_financed",
         "finance_type", "in_service_date", "vin", "unit_year",
         "unit_make", "unit_model", "sale_date", "vehicle_properties",
       ];

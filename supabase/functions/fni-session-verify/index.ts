@@ -354,6 +354,14 @@ async function save(
   const now = new Date().toISOString();
 
   for (const [rawKey, rawValue] of Object.entries(entries)) {
+    // ── Framework plumbing is not an edit ──────────────────────────────────────
+    // Next.js Server Action forms carry a hidden $ACTION_ID_<hash> field of their
+    // own. The console filters to known rating inputs before it posts, so this
+    // should never fire -- but it is the thing that actually broke, and refusing a
+    // whole save over React's internals is bad enough to be worth blocking twice.
+    // Skipped rather than rejected: it is not a field anybody asked to edit.
+    if (rawKey.startsWith("$")) continue;
+
     const key = allowed.find((k) => k.toLowerCase() === rawKey.toLowerCase());
     if (!key) {
       // Either a field nothing may edit -- Deal #, Stock # and Lender -- or one
