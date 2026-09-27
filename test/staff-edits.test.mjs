@@ -499,21 +499,22 @@ test("the overrides parameter no longer writes over the CRM's columns", () => {
   assert.match(step2, /rateSource\[key\] = overrides\[key\]/);
 });
 
-test("the planner shows the corrected figures too", () => {
-  // Otherwise the machine's price and the plan prices belong to different deals.
-  assert.match(plannerFn, /s = applyStaffEdits\(s, parseStaffEdits\(s\.staff_edits\)\)/);
+test("the planner is untouched, and that is a decision for Jim", () => {
+  // The staff layer deliberately does NOT reach fni-session-get. A corrected
+  // sale price moves the rate; the customer's screen still shows the CRM figure
+  // until the deal is corrected in CRM, which is what the mismatch warning is
+  // for. Changing the customer-facing money path was not asked for, and doing it
+  // silently is worse than leaving the transitional mismatch visible to staff.
+  assert.doesNotMatch(plannerFn, /applyStaffEdits/);
 });
 
-test("neither the planner nor the rate builder imports the staff screen", () => {
+test("the rate builder does not import the staff screen", () => {
   // Where an edit lands is not a display question, so it lives in staff-edits.ts.
-  // The customer path has no business pulling a staff field list in to find out.
-  for (const [name, text] of [["planner", plannerFn], ["rate", rateFn]]) {
-    assert.doesNotMatch(
-      text,
-      /_shared\/verification\.ts/,
-      `${name} must not import the Verify sheet`
-    );
-  }
+  assert.doesNotMatch(
+    rateFn,
+    /_shared\/verification\.ts/,
+    "the rate builder must not import the Verify sheet"
+  );
 });
 
 test("there is exactly one table saying where an edit lands", () => {
@@ -527,8 +528,8 @@ test("there is exactly one table saying where an edit lands", () => {
 });
 
 test("no provenance reaches the customer's browser", () => {
-  const payload = plannerFn.slice(plannerFn.indexOf("applyStaffEdits(s,"));
+  // Whatever else changes about the planner, who edited what is staff business.
   for (const leak of ["edited_by", "original_source", "crm_warning", "crm_mismatches"]) {
-    assert.ok(!payload.includes(leak), `${leak} must not reach the planner payload`);
+    assert.ok(!plannerFn.includes(leak), `${leak} must not reach the planner payload`);
   }
 });
