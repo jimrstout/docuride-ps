@@ -210,20 +210,54 @@ async function verifyAction(
   backToVerify(sessionId, onOk);
 }
 
-/** Save the fields the CRM does not carry. */
+/**
+ * Save the sheet.
+ *
+ * Every editable field, not a hand-written list of three. The form posts whatever
+ * inputs the sheet rendered, and the sheet renders an input for exactly the
+ * fields the Edge Function will accept, so the two cannot drift: a field that
+ * closes -- APR on a cash deal -- stops being rendered and stops being posted.
+ *
+ * session_id is skipped because it is the address, not a value, and a blank box
+ * is sent through as an empty string on purpose: that is how a person puts the
+ * original value back.
+ */
 export async function saveVerifyFields(formData: FormData): Promise<void> {
+  const operator = await currentOperator();
+  if (!operator) redirect("/");
+
+  const entries: Record<string, string> = {};
+  for (const [key, value] of formData.entries()) {
+    if (key === "session_id" || typeof value !== "string") continue;
+    entries[key] = value;
+  }
+
   await verifyAction(
     formData,
     (session_id) => ({
       session_id,
       action: "save",
-      entries: {
-        "engine.ccs": String(formData.get("engine.ccs") ?? ""),
-        warranty: String(formData.get("warranty") ?? ""),
-        "fuel.type": String(formData.get("fuel.type") ?? ""),
-      },
+      entries,
+      // An edit can move a price, so it carries a name the same way a
+      // verification does.
+      edited_by: operator.email,
     }),
     { saved: "1" }
+  );
+}
+
+/**
+ * "Discard my edits and reload from CRM."
+ *
+ * Drops the overrides of fields the CRM carries and re-pulls the deal. Engine
+ * size, factory warranty and fuel type survive, because the CRM does not carry
+ * them and there would be nothing to reload them from.
+ */
+export async function discardEdits(formData: FormData): Promise<void> {
+  await verifyAction(
+    formData,
+    (session_id) => ({ session_id, action: "discard_edits" }),
+    { discarded: "1" }
   );
 }
 

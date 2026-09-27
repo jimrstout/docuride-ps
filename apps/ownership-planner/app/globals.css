@@ -386,6 +386,22 @@ button { cursor: pointer; }
 /* A required field with nothing in it. Copper rather than red: it is a thing to
    do, not an error somebody made. */
 .vfield.is-missing { border-left: var(--bw-accent) solid var(--copper); background: var(--copper-tint); }
+
+/* ── The three states an edited field can be in ──────────────────────────
+   Every rating input is editable now, so the sheet has to say at a glance which
+   figures a person changed and which of those the CRM deal has not caught up
+   with. Three weights, and the order matters:
+
+     edited   navy, quiet. A correction is work done, not a problem.
+     differs  copper edge on white. The CRM deal says something else, which is a
+              thing to go and do, so it is marked without being shouted.
+     invalid  copper on copper, the same weight as a missing required field,
+              because that is what it amounts to: the person's figure is not in
+              force and the rate would go out on the one they rejected. */
+.vfield.is-edited { border-left: var(--bw-accent) solid var(--navy-700); background: var(--cream-2); }
+.vfield.is-differs { border-left: var(--bw-accent) solid var(--copper); background: var(--paper); }
+.vfield.is-invalid { border-left: var(--bw-accent) solid var(--copper-deep); background: var(--copper-tint); }
+.vfield.is-invalid input { border-color: var(--copper-deep); }
 .vfield-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); }
 .vfield-label { font-size: var(--fs-xs); font-weight: 700; }
 .vfield-req {
@@ -403,6 +419,19 @@ button { cursor: pointer; }
 }
 .vfield-note { margin: var(--s1) 0 0; font-size: var(--fs-xs); color: var(--ink-70); line-height: 1.35; }
 
+/* What an edited field replaced, and who replaced it. Under the value rather
+   than beside it: at this width a two-column "was / now" would wrap into
+   nonsense on the narrower fields. */
+.vfield-was {
+  margin: var(--s2) 0 0; padding-top: var(--s2);
+  border-top: var(--bw) solid var(--line-soft);
+  font-size: var(--fs-xs); color: var(--ink-70); line-height: 1.35;
+}
+.vfield-was-value { font-weight: 700; color: var(--ink); }
+.vfield-was small {
+  display: block; margin-top: 2px; color: var(--ink-55);
+}
+
 .vactions { display: flex; align-items: center; gap: var(--s3); margin: var(--s3) 0; flex-wrap: wrap; }
 .vactions--aside { padding-top: var(--s3); border-top: var(--bw) solid var(--line); }
 .vactions .vfield-note { margin: 0; flex: 1 1 18rem; }
@@ -416,6 +445,50 @@ button { cursor: pointer; }
   padding: var(--s2) var(--s3); font: inherit; font-size: var(--fs-base);
   color: var(--ink); background: var(--paper);
   border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
+}
+
+/* ── Values that no longer match the CRM deal ────────────────────────────
+   Inside the gate panel and above the button, because it is the last thing to
+   read before verifying. It does not disable anything: staff can verify, and
+   this stays up until the deal is corrected. */
+.vgate-warn {
+  margin: 0 0 var(--s4); padding: var(--s3);
+  border: var(--bw) solid var(--copper);
+  border-left: var(--bw-accent) solid var(--copper);
+  border-radius: var(--r-md); background: var(--copper-tint);
+}
+.vgate-warn-say {
+  margin: 0 0 var(--s3); font-weight: 700; color: var(--copper-deep);
+  font-size: var(--fs-base); line-height: var(--lh-body);
+}
+.vgate-warn-table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); }
+.vgate-warn-table th {
+  text-align: left; font-weight: 700; color: var(--ink-55);
+  letter-spacing: var(--track-ui); white-space: nowrap;
+  padding: 0 var(--s3) var(--s2) 0;
+  border-bottom: var(--bw) solid var(--copper);
+}
+.vgate-warn-table td {
+  padding: var(--s2) var(--s3) var(--s2) 0; vertical-align: top;
+  border-bottom: var(--bw) solid var(--line-soft);
+}
+.vgate-warn-table tr:last-child td { border-bottom: 0; }
+.vgate-warn-table small { display: block; color: var(--ink-55); }
+.vgate-warn .vfield-note { margin-top: var(--s3); }
+
+@media (max-width: 34rem) {
+  /* The four columns stop being a table and become four labelled lines, so a
+     deal number and a price are never squeezed into three characters each. */
+  .vgate-warn-table thead { display: none; }
+  .vgate-warn-table, .vgate-warn-table tbody, .vgate-warn-table tr, .vgate-warn-table td {
+    display: block; width: 100%;
+  }
+  .vgate-warn-table tr {
+    padding: var(--s2) 0; border-bottom: var(--bw) solid var(--copper);
+  }
+  .vgate-warn-table tr:last-child { border-bottom: 0; }
+  .vgate-warn-table td { padding: 0; border-bottom: 0; }
+  .vgate-warn-table td::before { content: attr(data-label) ": "; color: var(--ink-55); }
 }
 
 .vgate {

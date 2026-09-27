@@ -300,6 +300,7 @@ export type FieldSource =
   | "DX1"
   | "VIN Decode"
   | "Entered by Staff"
+  | "Edited by Staff"
   | "Missing";
 
 export type FieldGroup = "Deal" | "Vehicle" | "Money" | "Customer";
@@ -315,6 +316,27 @@ export interface VerifyField {
   required: boolean;
   missing: boolean;
   note: string | null;
+
+  /** The value this one replaced, as the sheet showed it. Null if never edited. */
+  original: string | null;
+  original_source: FieldSource | null;
+  /** The CRM deal carries this too, so an edit to it can disagree with the deal. */
+  in_crm: boolean;
+  /** Edited, and the CRM deal still says something else. */
+  differs_from_crm: boolean;
+  /** An edit that could not be read as a number or a date. Blocks Verify. */
+  invalid: boolean;
+  edited_by: string | null;
+  edited_at: string | null;
+}
+
+export interface CrmMismatch {
+  key: string;
+  label: string;
+  crm_value: string | null;
+  edited_value: string | null;
+  edited_by: string;
+  edited_at: string;
 }
 
 export interface VerifySheet {
@@ -367,6 +389,16 @@ export interface VerifySheet {
   missing: VerifyField[];
   ready: boolean;
   unmapped_properties: string[];
+  /** Every field a person has edited, in the order they appear on the sheet. */
+  edited: VerifyField[];
+  /** Edited fields the CRM deal does not agree with. */
+  crm_mismatches: CrmMismatch[];
+  /** The warning shown above Verify, or null when there is nothing to say. */
+  crm_warning: string | null;
+  /** Edits that could not be read. Verify is refused while any exists. */
+  invalid: VerifyField[];
   /** Present on a refresh response: the rating inputs the CRM moved. */
   changed_inputs?: string[];
+  /** Present on a discard response: the edits that were thrown away. */
+  discarded_edits?: string[];
 }

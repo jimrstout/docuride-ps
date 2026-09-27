@@ -29,6 +29,7 @@ import type { FieldGroup, VerifyField, VerifySheet } from "@/lib/types";
 import {
   clearSubmitUnknown,
   decodeVin,
+  discardEdits,
   refreshFromCrm,
   saveVerifyFields,
   verifyAndRate,
@@ -49,7 +50,23 @@ const EDITABLE_HELP: Record<string, string> = {
   "engine.ccs": "Engine displacement in cc.",
   warranty: "Whole months of factory coverage left on the day of sale.",
   "fuel.type": "G, E or D.",
+  vehicle_type_code: "UTV, ATV, MCYC, BIKE, PWAC, BOAT or SNOW.",
+  deal_type: "Cash, Finance or Lease.",
+  condition: "New or Used.",
+  sale_date: "YYYY-MM-DD.",
+  in_service_date: "YYYY-MM-DD.",
+  sale_price: "A plain number. No currency symbol needed.",
+  amount_financed: "A plain number.",
+  finance_term: "Whole months.",
+  apr: "A percentage, as a number.",
 };
+
+/** The three that take a word rather than a number, so the keypad stays away. */
+const TEXT_FIELDS = new Set([
+  "fuel.type", "vehicle_type_code", "deal_type", "condition",
+  "vin", "unit_make", "unit_model", "buyer_city", "buyer_state",
+  "sale_date", "in_service_date",
+]);
 
 function stamp(iso: string | null): string {
   if (!iso) return "never";
@@ -72,9 +89,17 @@ function Source({ source }: { source: VerifyField["source"] }) {
 
 function Field({ field }: { field: VerifyField }) {
   const help = EDITABLE_HELP[field.key];
+  const edited = field.original_source !== null;
+
+  const state =
+    field.invalid ? "is-invalid"
+    : field.missing ? "is-missing"
+    : field.differs_from_crm ? "is-differs"
+    : edited ? "is-edited"
+    : "";
 
   return (
-    <div className={`vfield ${field.missing ? "is-missing" : ""}`}>
+    <div className={`vfield ${state}`}>
       <div className="vfield-head">
         <span className="vfield-label">
           {field.label}
@@ -94,20 +119,42 @@ function Field({ field }: { field: VerifyField }) {
             name={field.key}
             defaultValue={field.value ?? ""}
             autoComplete="off"
-            inputMode={field.key === "fuel.type" ? "text" : "numeric"}
+            inputMode={TEXT_FIELDS.has(field.key) ? "text" : "numeric"}
             placeholder={field.missing ? "Needed to rate" : ""}
             aria-label={field.label}
+            aria-invalid={field.invalid ? true : undefined}
           />
           {help ? <p className="vfield-note">{help}</p> : null}
         </>
       ) : (
-        <>
-          <p className="vfield-value">
-            {field.value ?? <em>Not set</em>}
-          </p>
-          {field.note ? <p className="vfield-note">{field.note}</p> : null}
-        </>
+        <p className="vfield-value">{field.value ?? <em>Not set</em>}</p>
       )}
+
+      {/* ── What this replaced ──────────────────────────────────────────
+          Shown for every edit, not only the ones that disagree with CRM. The
+          question a person asks looking at a corrected price is "what was it",
+          and they should not have to open the CRM to find out. */}
+      {edited ? (
+        <p className="vfield-was">
+          Was <span className="vfield-was-value">{field.original ?? "not set"}</span>
+          {" "}from {field.original_source}.{" "}
+          {field.invalid
+            ? "This edit could not be read, so it is not in force."
+            : field.differs_from_crm
+              ? "The CRM deal still says the old value."
+              : field.in_crm
+                ? "The CRM deal now matches."
+                : "The CRM does not carry this field."}
+          <small>
+            Edited by {field.edited_by ?? "unknown"}, {stamp(field.edited_at)}.
+            {" "}Clear the box to go back to the original.
+          </small>
+        </p>
+      ) : null}
+
+      {/* A read-only field still explains itself. An editable one that has not
+          been touched says where its value came from. */}
+      {field.note && !edited ? <p className="vfield-note">{field.note}</p> : null}
     </div>
   );
 }
@@ -156,6 +203,12 @@ export default async function VerifyPage({
     : one("saved") ? { tone: "ok", text: "Saved." }
     : one("decoded") ? { tone: "ok", text: "Decoded from the VIN." }
     : one("refreshed") ? { tone: "ok", text: "Re-pulled from CRM." }
+    : one("discarded") ? {
+        tone: "ok",
+        text:
+          "Your edits to the CRM fields are gone and the deal has been re-pulled. " +
+          "Engine size, factory warranty and fuel type were kept.",
+      }
     : one("voided") ? {
         tone: "ok",
         text:
@@ -409,8 +462,12 @@ export default async function VerifyPage({
 
         <div className="vactions">
           <button type="submit" className="btn btn--quiet">
-            Save entered fields
+            Save changes
           </button>
+          <p className="vfield-note">
+            Every field that feeds a rate can be changed here. Clearing a box puts
+            the original value back. Nothing is written back to the CRM.
+          </p>
         </div>
       </form>
 
@@ -428,9 +485,66 @@ export default async function VerifyPage({
         </p>
       </form>
 
+      {/* Its own form again, and deliberately not next to Save: this one throws
+          work away. */}
+      {sheet.edited.some((f) => f.in_crm) ? (
+        <form action={discardEdits} className="vactions vactions--aside">
+          <input type="hidden" name="session_id" value={sheet.session.id} />
+          <button type="submit" className="btn btn--quiet">
+            Discard my edits and reload from CRM
+          </button>
+          <p className="vfield-note">
+            Puts the CRM deal back in charge of every field it carries. Engine
+            size, factory warranty and fuel type are kept, since the CRM does not
+            carry them and there would be nothing to reload them from.
+          </p>
+        </form>
+      ) : null}
+
       {/* ── The gate ───────────────────────────────────────────────────── */}
       <form action={verifyAndRate} className="vgate">
         <input type="hidden" name="session_id" value={sheet.session.id} />
+
+        {/* ── Values that no longer match the deal ──────────────────────────
+            Above the button, on purpose, and it does not disable it: the person
+            at the desk can see the machine and the paperwork, so their figure is
+            the one to rate on. It stays here until the CRM deal is brought into
+            line and the sheet is refreshed, which is the only thing that clears
+            it. */}
+        {sheet.crm_warning ? (
+          <div className="vgate-warn" role="alert">
+            <p className="vgate-warn-say">{sheet.crm_warning}</p>
+            <table className="vgate-warn-table">
+              <thead>
+                <tr>
+                  <th scope="col">Field</th>
+                  <th scope="col">CRM deal</th>
+                  <th scope="col">This session</th>
+                  <th scope="col">Changed by</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sheet.crm_mismatches.map((m) => (
+                  <tr key={m.key}>
+                    <td data-label="Field">{m.label}</td>
+                    <td data-label="CRM deal">{m.crm_value ?? "Not set"}</td>
+                    <td data-label="This session" className="cell-strong">
+                      {m.edited_value ?? "Not set"}
+                    </td>
+                    <td data-label="Changed by">
+                      {m.edited_by}
+                      <small>{stamp(m.edited_at)}</small>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="vfield-note">
+              You can still verify and rate. The rate will use this session's
+              values. Nothing is sent back to the CRM.
+            </p>
+          </div>
+        ) : null}
 
         {sheet.ready ? (
           <p className="vgate-say">
@@ -440,7 +554,13 @@ export default async function VerifyPage({
           </p>
         ) : (
           <p className="vgate-say vgate-say--blocked">
-            {sheet.missing.length > 0 ? (
+            {sheet.invalid.length > 0 ? (
+              <>
+                These changes could not be read, so they are not in force:{" "}
+                <b>{sheet.invalid.map((f) => f.label).join(", ")}</b>. Correct them
+                above, or clear the box to go back to the original.
+              </>
+            ) : sheet.missing.length > 0 ? (
               <>
                 Still needed before this can be verified:{" "}
                 <b>{sheet.missing.map((f) => f.label).join(", ")}</b>.
