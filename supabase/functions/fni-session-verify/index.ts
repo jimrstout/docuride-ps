@@ -28,10 +28,18 @@ import {
   buildVerification,
   changedInputs,
   dealTypeLabel,
+  editableKeys,
+  editTargetFor,
+  labelFor,
   ratingInputs,
-  STAFF_ENTERED,
   type VerificationSource,
 } from "../_shared/verification.ts";
+import {
+  applyStaffEdits,
+  castForColumn,
+  parseStaffEdits,
+  type StaffEdits,
+} from "../_shared/staff-edits.ts";
 import { parseRequiredProperties, readRateProperties } from "../_shared/rate-properties.ts";
 import {
   duplicateVinWarning,
@@ -45,12 +53,10 @@ import {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/** The only fields a staff member may type. Anything else is CRM's or nobody's. */
-const EDITABLE_KEYS: readonly string[] = [
-  STAFF_ENTERED.engineCc,
-  STAFF_ENTERED.warrantyMonths,
-  "fuel.type",
-];
+// The fixed three-key allowlist that used to live here is gone. Which fields may
+// be edited is now a property of the sheet's own specs, and it depends on the
+// deal: the three finance figures close on a cash deal. editableKeys() is the one
+// answer, and the screen greys the same fields this endpoint refuses.
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -84,6 +90,8 @@ const COLUMNS = [
   // For the duplicate warnings and the submit lock, both of which the verify
   // screen now shows.
   "expires_at", "submit_state", "submit_detail",
+  // The staff layer over the CRM's figures. Migration 0016.
+  "staff_edits",
 ].join(",");
 
 async function loadSession(
@@ -221,8 +229,22 @@ async function requiredFor(
 
 /** The sheet, plus everything the screen shows around it. */
 async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
-  const { properties, reason } = await requiredFor(supabase, s.store_id as string, s.vehicle_type_code);
-  const sheet = buildVerification(s as unknown as VerificationSource, properties);
+  const edits = parseStaffEdits(s.staff_edits);
+
+  // The required-properties lookup has to use the EDITED vehicle type, not the
+  // CRM one. That is the whole point of making it editable: a Defender whose
+  // body type nobody has fixed in Zoho is corrected to UTV here, and the very
+  // next thing that must change is which seventeen fields TecAssured is asking
+  // for. Looking it up from the CRM value would leave the screen checking the
+  // wrong list against the right vehicle.
+  const edited = applyStaffEdits(s, edits, editTargetFor);
+
+  const { properties, reason } = await requiredFor(
+    supabase,
+    s.store_id as string,
+    edited.vehicle_type_code
+  );
+  const sheet = buildVerification(s as unknown as VerificationSource, properties, edits);
 
   const { data: offerRow } = await supabase
     .schema("fni")
@@ -248,8 +270,8 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
       vehicle: [s.unit_year, s.unit_make, s.unit_model]
         .filter((v) => v !== null && v !== undefined && String(v).trim() !== "")
         .join(" "),
-      deal_type: dealTypeLabel(s.finance_type),
-      vehicle_type_code: s.vehicle_type_code,
+      deal_type: dealTypeLabel(edited.finance_type),
+      vehicle_type_code: edited.vehicle_type_code,
     },
     verification: {
       state: s.verification_state ?? "Needs Verification",
@@ -300,45 +322,155 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
 async function save(
   supabase: SupabaseClient,
   s: Record<string, unknown>,
-  entries: Record<string, unknown>
+  entries: Record<string, unknown>,
+  editedBy: string
 ): Promise<Response> {
-  const current = (s.vehicle_properties ?? {}) as Record<string, unknown>;
-  const next: Record<string, unknown> = { ...current };
+  const edits = parseStaffEdits(s.staff_edits);
+
+  // What each field says with no staff layer at all. This is where an edit's
+  // "original" comes from, and taking it from the unedited sheet rather than from
+  // the row is what makes it read the way the screen showed it: "$24,000.00",
+  // not 24000. requiredProperties is irrelevant to resolving a value, so the
+  // lookup is skipped.
+  const base = buildVerification(s as unknown as VerificationSource, []);
+  const baseByKey = new Map(base.fields.map((f) => [f.key, f]));
+
+  // Editability depends on the deal as it now stands, edits included: changing
+  // the deal type from Cash to Finance in the same save that sets the APR has to
+  // let the APR through.
+  const provisional = applyStaffEdits(s, edits, editTargetFor) as unknown as VerificationSource;
+  const allowed = editableKeys(provisional);
 
   const rejected: string[] = [];
+  const unreadable: { key: string; label: string; value: string }[] = [];
+  const now = new Date().toISOString();
+
   for (const [rawKey, rawValue] of Object.entries(entries)) {
-    const key = EDITABLE_KEYS.find((k) => k.toLowerCase() === rawKey.toLowerCase());
+    const key = allowed.find((k) => k.toLowerCase() === rawKey.toLowerCase());
     if (!key) {
-      // A CRM-owned field arriving here is either a stale form or someone
-      // testing the endpoint. Refused by name rather than ignored, because
-      // silently dropping an edit somebody made is worse than saying no.
+      // Either a field nothing may edit -- Deal # and Stock # -- or one closed by
+      // the deal as it stands, such as APR on a cash deal. Refused by name rather
+      // than ignored, because silently dropping somebody's correction is worse
+      // than saying no to it.
       rejected.push(rawKey);
       continue;
     }
+
     const value = rawValue === null || rawValue === undefined ? "" : String(rawValue).trim();
-    if (value === "") delete next[key];
-    else next[key] = value;
+
+    // Cleared means "go back to what the source says", which is the only way out
+    // of an edit other than Discard.
+    if (value === "") {
+      delete edits[key];
+      continue;
+    }
+
+    // Refused before it is stored, not after. A price that cannot be read as a
+    // number would sit in the layer doing nothing while the screen implied it had
+    // taken effect.
+    const target = editTargetFor(key);
+    if (target && target.kind === "column" && castForColumn(target, value) === null) {
+      unreadable.push({ key, label: labelFor(key), value });
+      continue;
+    }
+
+    const wasEdited = edits[key];
+    const baseField = baseByKey.get(key);
+
+    edits[key] = {
+      value,
+      // An existing edit keeps its first original. Editing a price twice still
+      // records what the CRM said, not what the last person typed.
+      original: wasEdited ? wasEdited.original : (baseField?.value ?? null),
+      original_source: wasEdited
+        ? wasEdited.original_source
+        : (baseField?.source ?? "Missing"),
+      edited_by: editedBy,
+      edited_at: now,
+    };
   }
 
   if (rejected.length > 0) {
     return json(400, {
       error:
-        `These fields are owned by the CRM and cannot be set here: ${rejected.join(", ")}. ` +
-        `Correct them in CRM, then press Refresh.`,
+        `These fields cannot be edited here: ${rejected.map(labelFor).join(", ")}. ` +
+        `Deal # and Stock # identify the deal, and the finance figures are fixed ` +
+        `at zero on a cash deal.`,
       rejected,
+    });
+  }
+
+  if (unreadable.length > 0) {
+    return json(400, {
+      error:
+        `These values could not be read: ` +
+        `${unreadable.map((u) => `${u.label} ("${u.value}")`).join(", ")}. ` +
+        `Enter a plain number for money, a whole number for months and miles, ` +
+        `and a date as YYYY-MM-DD.`,
+      unreadable,
     });
   }
 
   const { error } = await supabase
     .schema("fni")
     .from("sessions")
-    .update({ vehicle_properties: Object.keys(next).length > 0 ? next : null })
+    .update({ staff_edits: Object.keys(edits).length > 0 ? edits : null })
     .eq("id", s.id as string);
 
   if (error) return json(500, { error: error.message });
 
   const fresh = await loadSession(supabase, s.id as string);
   return json(200, await sheetFor(supabase, fresh!));
+}
+
+// ── discard: put the CRM's figures back ───────────────────────────────────
+
+/**
+ * "Discard my edits and reload from CRM."
+ *
+ * Drops every edit to a field the CRM carries, then re-pulls the deal. The
+ * fields CRM does NOT carry -- engine size, factory warranty, fuel type -- are
+ * kept, because there is nothing to reload them from and throwing them away
+ * would leave the session unrateable for no reason at all. The screen says so
+ * under the button rather than leaving it as a surprise.
+ */
+async function discardEdits(
+  supabase: SupabaseClient,
+  s: Record<string, unknown>
+): Promise<Response> {
+  const edits = parseStaffEdits(s.staff_edits);
+  const base = buildVerification(s as unknown as VerificationSource, []);
+  const crmOwned = new Set(base.fields.filter((f) => f.in_crm).map((f) => f.key));
+
+  const kept: StaffEdits = {};
+  const discarded: string[] = [];
+  for (const [key, edit] of Object.entries(edits)) {
+    if (crmOwned.has(key)) discarded.push(labelFor(key));
+    else kept[key] = edit;
+  }
+
+  const { error } = await supabase
+    .schema("fni")
+    .from("sessions")
+    .update({ staff_edits: Object.keys(kept).length > 0 ? kept : null })
+    .eq("id", s.id as string);
+
+  if (error) return json(500, { error: error.message });
+
+  const fresh = (await loadSession(supabase, s.id as string))!;
+
+  // Then reload, which is the other half of what the button says. A session with
+  // no CRM deal behind it has nothing to reload from, and that is not a failure:
+  // the discard still happened.
+  if (typeof fresh.zoho_deal_id === "string" && fresh.zoho_deal_id !== "") {
+    return await refresh(supabase, fresh, discarded);
+  }
+
+  return json(200, {
+    ...(await sheetFor(supabase, fresh)),
+    discarded_edits: discarded,
+    refreshed: false,
+  });
 }
 
 // ── decode: ask TecAssured what the VIN is ────────────────────────────────
@@ -402,7 +534,8 @@ async function decode(
 
 async function refresh(
   supabase: SupabaseClient,
-  s: Record<string, unknown>
+  s: Record<string, unknown>,
+  discarded: string[] | null = null
 ): Promise<Response> {
   const zohoId = typeof s.zoho_deal_id === "string" ? s.zoho_deal_id : null;
   if (!zohoId) {
@@ -425,6 +558,10 @@ async function refresh(
     return json(404, { error: `CRM has no DocuRide record ${zohoId} any more.` });
   }
 
+  // Only the CRM's own columns. sessions.staff_edits is not in this patch and is
+  // not cleared anywhere in this function, which is how a refresh keeps staff
+  // edits: the layer sits above the columns being rewritten. Discard is the only
+  // thing that drops them.
   const patch = crmRatingFields(record as unknown as Record<string, unknown>);
 
   const { error } = await supabase
@@ -436,6 +573,7 @@ async function refresh(
   if (error) return json(500, { error: error.message });
 
   const fresh = (await loadSession(supabase, s.id as string))!;
+  const freshEdits = parseStaffEdits(fresh.staff_edits);
 
   // ── Did the refresh move anything a rate depends on? ──────────────────
   //
@@ -445,10 +583,15 @@ async function refresh(
   const { properties } = await requiredFor(
     supabase,
     fresh.store_id as string,
-    fresh.vehicle_type_code
+    (applyStaffEdits(fresh, freshEdits, editTargetFor)).vehicle_type_code
   );
+  // With the edits applied, because the question is whether what the verifier
+  // approved is still what would be sent, and what would be sent includes their
+  // corrections. A CRM field that moved underneath an edit changes nothing the
+  // provider sees, so it must not un-verify the session; it shows up in the
+  // mismatch warning instead, which is where it belongs.
   const after = ratingInputs(
-    buildVerification(fresh as unknown as VerificationSource, properties)
+    buildVerification(fresh as unknown as VerificationSource, properties, freshEdits)
   );
 
   const snapshot = (fresh.verified_snapshot ?? null) as Record<string, unknown> | null;
@@ -482,6 +625,8 @@ async function refresh(
     ...(await sheetFor(supabase, latest)),
     refreshed: true,
     changed_inputs: changed,
+    // Present only when this refresh came from Discard.
+    discarded_edits: discarded ?? undefined,
   });
 }
 
@@ -492,26 +637,35 @@ async function verify(
   s: Record<string, unknown>,
   verifiedBy: string
 ): Promise<Response> {
+  const edits = parseStaffEdits(s.staff_edits);
   const { properties, reason } = await requiredFor(
     supabase,
     s.store_id as string,
-    s.vehicle_type_code
+    (applyStaffEdits(s, edits, editTargetFor)).vehicle_type_code
   );
-  const sheet = buildVerification(s as unknown as VerificationSource, properties);
+  const sheet = buildVerification(s as unknown as VerificationSource, properties, edits);
 
   // Checked here and not only on the screen. The button being enabled is not
   // evidence that it should have been: this endpoint is a POST like any other,
   // and the same computation that greys the button refuses the request.
   if (!sheet.ready) {
     return json(400, {
-      error:
-        reason ??
-        `Not every field TecAssured asks for has a value yet: ` +
-        `${sheet.missing.map((f) => f.label).join(", ")}.`,
+      error: sheet.invalid.length > 0
+        ? `These edits could not be read, so they are not in force: ` +
+          `${sheet.invalid.map((f) => f.label).join(", ")}. Correct them before verifying.`
+        : reason ??
+          `Not every field TecAssured asks for has a value yet: ` +
+          `${sheet.missing.map((f) => f.label).join(", ")}.`,
       missing: sheet.missing.map((f) => ({ key: f.key, label: f.label })),
+      invalid: sheet.invalid.map((f) => ({ key: f.key, label: f.label })),
       unmapped_properties: sheet.unmapped_properties,
     });
   }
+
+  // A field that disagrees with the CRM deal does NOT stop a verification. Jim's
+  // rule, and the right one: the person at the desk can see the machine and the
+  // paperwork, so their figure is the one to rate on. What it does do is stay on
+  // the record and on the screen until the deal is brought into line.
 
   const now = new Date().toISOString();
 
@@ -531,6 +685,24 @@ async function verify(
       required: f.required,
     })),
     rating_inputs: ratingInputs(sheet),
+
+    // Who changed what, from what, to what, and when. The compliance half of
+    // making CRM fields editable: a price that was rated on a staff correction
+    // must be answerable months later, by name.
+    staff_edits: sheet.edited.map((f) => ({
+      key: f.key,
+      label: f.label,
+      from: f.original,
+      from_source: f.original_source,
+      to: f.value,
+      edited_by: f.edited_by,
+      edited_at: f.edited_at,
+      in_crm: f.in_crm,
+      differs_from_crm: f.differs_from_crm,
+    })),
+    // What the CRM deal disagreed with at the moment this was verified.
+    crm_mismatches: sheet.crm_mismatches,
+    crm_warning: sheet.crm_warning,
   };
 
   const { error } = await supabase
@@ -611,11 +783,18 @@ serve(async (req: Request) => {
       if (!entries || typeof entries !== "object" || Array.isArray(entries)) {
         return json(400, { error: "entries must be an object" });
       }
-      return await save(supabase, s, entries as Record<string, unknown>);
+      // An edit with nobody's name on it is not a record of anything, and these
+      // edits can now move a price. Same rule as verify.
+      const who = typeof body.edited_by === "string" ? body.edited_by.trim() : "";
+      if (who === "") {
+        return json(400, { error: "edited_by is required: an edit names a person." });
+      }
+      return await save(supabase, s, entries as Record<string, unknown>, who);
     }
 
     if (action === "decode") return await decode(supabase, s);
     if (action === "refresh") return await refresh(supabase, s);
+    if (action === "discard_edits") return await discardEdits(supabase, s);
 
     if (action === "verify") {
       const who = typeof body.verified_by === "string" ? body.verified_by.trim() : "";
@@ -626,7 +805,9 @@ serve(async (req: Request) => {
       return await verify(supabase, s, who);
     }
 
-    return json(400, { error: "action must be one of save, decode, refresh, verify" });
+    return json(400, {
+      error: "action must be one of save, decode, refresh, discard_edits, verify",
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("fni-session-verify error:", message);
