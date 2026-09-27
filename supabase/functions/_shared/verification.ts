@@ -24,9 +24,40 @@
 //                     and its absence from this list is itself informative.
 //   VIN Decode        From TecAssured's own /decode/ps. Engine size, fuel type,
 //                     and its opinion of the vehicle type.
-//   Entered by Staff  Typed on this screen, into sessions.vehicle_properties.
-//                     Only for fields no source carries.
+//   Entered by Staff  Typed on this screen, for a field no system carries.
+//   Edited by Staff   Typed on this screen, OVER a value another source gave.
+//                     Always shown beside the original and its source.
 //   Missing           No value from anywhere.
+//
+// ── Every rating input is editable (2026-09-27) ───────────────────────────
+// The CRM fields used to be read-only here, with a note telling whoever was
+// looking to go and correct the deal in Zoho. That was right about ownership and
+// wrong about the room: a person holding the machine's papers could see a wrong
+// odometer on the screen and not fix it, so either the rate went out wrong or the
+// deal waited on somebody else's data entry.
+//
+// So every field that feeds a rate is editable now. What keeps it honest is that
+// nothing is hidden: an edited field shows what it was and where that came from,
+// the edit carries the name of whoever made it, and a warning names every value
+// that no longer matches the deal until the deal is brought into line. The two
+// fields that identify the deal -- Deal # and Stock # -- stay read-only, because
+// they are not rating inputs and renaming a deal on this screen would only make
+// it harder to tell which deal you are on.
+
+import {
+  EDITED_SOURCE,
+  applyStaffEdits,
+  castForColumn,
+  crmMismatchWarning,
+  editTargetFor,
+  type CrmMismatch,
+  type StaffEdits,
+} from "./staff-edits.ts";
+
+// Re-exported so a caller that already holds the sheet does not need a second
+// import for it. The table itself lives in staff-edits.ts, because where an edit
+// lands is not a display question.
+export { editTargetFor };
 
 /** Where a value came from. Human-readable, because it is shown as written. */
 export type FieldSource =
@@ -34,6 +65,7 @@ export type FieldSource =
   | "DX1"
   | "VIN Decode"
   | "Entered by Staff"
+  | "Edited by Staff"
   | "Missing";
 
 export type FieldGroup = "Deal" | "Vehicle" | "Money" | "Customer";
@@ -56,6 +88,28 @@ export interface VerifyField {
   missing: boolean;
   /** Shown under a read-only field, or as help under an editable one. */
   note: string | null;
+
+  // ── The edit story, when there is one ──────────────────────────────────
+
+  /** The value this one replaced, as the sheet showed it at the time. */
+  original: string | null;
+  /** Where that original came from. Null when the field was never edited. */
+  original_source: FieldSource | null;
+  /** The CRM deal also carries this field, so an edit to it can disagree. */
+  in_crm: boolean;
+  /**
+   * Edited, and the CRM deal still says something else.
+   *
+   * Recomputed on every read against what CRM says NOW, not against the stored
+   * original, which is what makes the warning go away by itself once the deal is
+   * corrected and refreshed.
+   */
+  differs_from_crm: boolean;
+  /** An edit that could not be read as a number or a date. Blocks Verify. */
+  invalid: boolean;
+  /** Who made the edit and when. Null when the field was never edited. */
+  edited_by: string | null;
+  edited_at: string | null;
 }
 
 export interface VerificationSheet {
@@ -73,9 +127,18 @@ export interface VerificationSheet {
    * a field a person cannot fill in, which the gate must not call ready.
    */
   unmapped_properties: string[];
+
+  /** Every field a person has edited, in the order they appear on the sheet. */
+  edited: VerifyField[];
+  /** Edited fields whose value the CRM deal does not agree with. */
+  crm_mismatches: CrmMismatch[];
+  /** The one warning shown above Verify, or null when there is nothing to say. */
+  crm_warning: string | null;
+  /** An edit that could not be read. Verify is refused while any exists. */
+  invalid: VerifyField[];
 }
 
-const CORRECT_IN_CRM = "Correct this in CRM, then click Refresh.";
+const FROM_CRM = "From the CRM deal. Edit it here to correct the rate.";
 
 // ── Reading values ────────────────────────────────────────────────────────
 
@@ -195,9 +258,31 @@ interface Spec {
   provider_property: string | null;
   /** Resolved value and where it came from, in precedence order. */
   resolve: (src: VerificationSource) => { value: string | null; source: FieldSource };
-  editable?: boolean;
+  // Where an edit lands is NOT declared here. It comes from EDIT_TARGETS in
+  // _shared/staff-edits.ts, keyed on this spec's own key, so the screen and the
+  // rate builder cannot end up with two answers. A key absent from that table is
+  // a field nobody may edit: Deal # and Stock #, and nothing else.
+  /** The CRM deal carries this too, so an edit can disagree with the deal. */
+  in_crm?: boolean;
+  /**
+   * Editable only when this holds.
+   *
+   * Used by the three finance figures. On a cash deal they are not unknowns to
+   * be filled in, they are the deal's arithmetic: zero financed over zero months
+   * at zero percent. Letting somebody type $19,000 into a cash deal is how 14132
+   * would have told the provider a cash buyer financed twenty thousand dollars.
+   * Change the deal type first and they open up.
+   */
+  editableWhen?: (src: VerificationSource) => boolean;
   note?: string | null;
 }
+
+const NOT_ON_A_CASH_DEAL = (s: VerificationSource) =>
+  dealTypeLabel(s.finance_type) !== "Cash";
+
+const CASH_NOTE =
+  "Zero on a cash deal, which is the deal's arithmetic rather than a gap. " +
+  "Change the deal type to edit it.";
 
 /** A value the CRM owns. Read-only, and says so when it is empty. */
 function fromCrm(value: string | null) {
@@ -225,52 +310,65 @@ function staffThenDecode(
 
 const SPECS: Spec[] = [
   // ── Deal ───────────────────────────────────────────────────────────────
+  //
+  // The two identifiers are the only fields on this sheet nobody may edit. They
+  // are not rating inputs, and their whole job is to let a person confirm which
+  // deal they are looking at -- which editing them here would defeat.
   {
     key: "deal_number", label: "Deal #", group: "Deal", provider_property: null,
     resolve: (s) => fromCrm(text(s.deal_number)),
-    note: CORRECT_IN_CRM,
+    in_crm: true,
+    note: "Identifies the deal, so it is not editable here. Correct it in CRM.",
   },
   {
     key: "stock_number", label: "Stock #", group: "Deal", provider_property: null,
     resolve: (s) => fromCrm(text(s.stock_number)),
-    note: CORRECT_IN_CRM,
+    in_crm: true,
+    note: "Identifies the unit, so it is not editable here. Correct it in CRM.",
   },
   {
     key: "deal_type", label: "Deal type", group: "Deal", provider_property: "finance.type",
     resolve: (s) => fromCrm(dealTypeLabel(s.finance_type)),
-    note: "Cash, Finance or Lease. Set in CRM by whether a lienholder is attached.",
+    in_crm: true,
+    note: "Cash, Finance or Lease. Changing it opens or closes the finance figures below.",
   },
   {
     key: "sale_date", label: "Sale date", group: "Deal", provider_property: "sale.date",
     resolve: (s) => fromCrm(text(s.sale_date)),
-    note: CORRECT_IN_CRM,
+    in_crm: true,
+    note: FROM_CRM,
   },
 
   // ── Vehicle ────────────────────────────────────────────────────────────
   {
     key: "vin", label: "VIN", group: "Vehicle", provider_property: "vin",
     resolve: (s) => fromCrm(text(s.vin)),
-    note: CORRECT_IN_CRM,
+    in_crm: true,
+    note: FROM_CRM,
   },
   {
     key: "unit_year", label: "Year", group: "Vehicle", provider_property: "year",
     resolve: (s) => fromCrm(text(s.unit_year)),
-    note: CORRECT_IN_CRM,
+    in_crm: true,
+    note: FROM_CRM,
   },
   {
     key: "unit_make", label: "Make", group: "Vehicle", provider_property: "make",
     resolve: (s) => fromCrm(text(s.unit_make)),
-    note: CORRECT_IN_CRM,
+    in_crm: true,
+    note: FROM_CRM,
   },
   {
     key: "unit_model", label: "Model", group: "Vehicle", provider_property: "model",
     resolve: (s) => fromCrm(text(s.unit_model)),
-    note: CORRECT_IN_CRM,
+    in_crm: true,
+    note: FROM_CRM,
   },
   {
     key: "condition", label: "New or Used", group: "Vehicle", provider_property: "new.used",
     resolve: (s) => fromCrm(conditionLabel(s.condition)),
-    note: CORRECT_IN_CRM,
+    in_crm: true,
+    note: "New or Used. " + FROM_CRM,
   },
   {
     key: "vehicle_type_code", label: "Vehicle type", group: "Vehicle", provider_property: null,
@@ -284,25 +382,31 @@ const SPECS: Spec[] = [
       if (auto !== null) return { value: auto, source: "VIN Decode" };
       return { value: null, source: "Missing" };
     },
-    note: "Mapped from the deal's body type. Decides which fields TecAssured asks for.",
+    in_crm: true,
+    note:
+      "Mapped from the deal's body type, and it decides which fields TecAssured " +
+      "asks for. UTV, ATV, MCYC, BIKE, PWAC, BOAT or SNOW.",
   },
   {
     key: STAFF_ENTERED.engineCc, label: "Engine size (cc)", group: "Vehicle",
     provider_property: "engine.ccs",
     resolve: (s) => staffThenDecode(s, STAFF_ENTERED.engineCc, "displacement"),
-    editable: true,
-    note: "From the VIN decode where it answers. Type it to correct it.",
+    note:
+      "From the VIN decode where it answers. The CRM does not carry it, so " +
+      "typing it here raises no warning.",
   },
   {
     key: "odometer", label: "Odometer", group: "Vehicle", provider_property: "odometer",
     resolve: (s) => fromCrm(text(s.odometer)),
-    note: CORRECT_IN_CRM,
+    in_crm: true,
+    note: FROM_CRM,
   },
   {
     key: "in_service_date", label: "In-service date", group: "Vehicle",
     provider_property: "inservice.date",
     resolve: (s) => fromCrm(text(s.in_service_date) ?? text(s.sale_date)),
-    note: "Defaults to the sale date. " + CORRECT_IN_CRM,
+    in_crm: true,
+    note: "Defaults to the sale date. " + FROM_CRM,
   },
   {
     key: STAFF_ENTERED.warrantyMonths, label: "Factory warranty remaining (months)",
@@ -313,7 +417,6 @@ const SPECS: Spec[] = [
         ? { value: typed, source: "Entered by Staff" as FieldSource }
         : { value: null, source: "Missing" as FieldSource };
     },
-    editable: true,
     note:
       "No system carries this. Not in CRM, not in DX1, and the VIN decode does " +
       "not return it. Someone has to read it off the machine's coverage.",
@@ -321,7 +424,6 @@ const SPECS: Spec[] = [
   {
     key: "fuel.type", label: "Fuel type", group: "Vehicle", provider_property: "fuel.type",
     resolve: (s) => staffThenDecode(s, "fuel.type", "fuelType"),
-    editable: true,
     note: "From the VIN decode. G is gasoline, E electric, D diesel.",
   },
 
@@ -329,7 +431,8 @@ const SPECS: Spec[] = [
   {
     key: "sale_price", label: "Sale price", group: "Money", provider_property: "price",
     resolve: (s) => fromCrm(money(s.sale_price)),
-    note: CORRECT_IN_CRM,
+    in_crm: true,
+    note: FROM_CRM,
   },
   {
     key: "amount_financed", label: "Amount financed", group: "Money",
@@ -341,7 +444,9 @@ const SPECS: Spec[] = [
       dealTypeLabel(s.finance_type) === "Cash"
         ? { value: money(0), source: "CRM" }
         : fromCrm(money(s.amount_financed)),
-    note: "Zero on a cash deal. " + CORRECT_IN_CRM,
+    in_crm: true,
+    editableWhen: NOT_ON_A_CASH_DEAL,
+    note: CASH_NOTE,
   },
   {
     key: "finance_term", label: "Term (months)", group: "Money",
@@ -350,7 +455,9 @@ const SPECS: Spec[] = [
       dealTypeLabel(s.finance_type) === "Cash"
         ? { value: "0", source: "CRM" }
         : fromCrm(text(s.finance_term)),
-    note: "Zero on a cash deal. " + CORRECT_IN_CRM,
+    in_crm: true,
+    editableWhen: NOT_ON_A_CASH_DEAL,
+    note: CASH_NOTE,
   },
   {
     key: "apr", label: "APR", group: "Money", provider_property: "finance.apr",
@@ -359,29 +466,47 @@ const SPECS: Spec[] = [
       const v = text(s.apr);
       return v === null ? { value: null, source: "Missing" } : { value: `${v}%`, source: "CRM" };
     },
-    note: "Zero on a cash deal. " + CORRECT_IN_CRM,
+    in_crm: true,
+    editableWhen: NOT_ON_A_CASH_DEAL,
+    note: CASH_NOTE,
   },
 
   // ── Customer ───────────────────────────────────────────────────────────
   // City, state and ZIP only. Nothing on this screen needs the customer's name,
   // street, phone or email to check a rate, and a staff screen that shows them
-  // is a staff screen that leaks them.
+  // is a staff screen that leaks them. All three reach the rate request, so all
+  // three are editable.
   {
     key: "buyer_city", label: "City", group: "Customer", provider_property: null,
     resolve: (s) => fromCrm(text(s.buyer_city)),
-    note: CORRECT_IN_CRM,
+    in_crm: true,
+    note: FROM_CRM,
   },
   {
     key: "buyer_state", label: "State", group: "Customer", provider_property: null,
     resolve: (s) => fromCrm(text(s.buyer_state)),
-    note: CORRECT_IN_CRM,
+    in_crm: true,
+    note: FROM_CRM,
   },
   {
     key: "buyer_zip", label: "ZIP", group: "Customer", provider_property: "postal.code",
     resolve: (s) => fromCrm(text(s.buyer_zip)),
-    note: CORRECT_IN_CRM,
+    in_crm: true,
+    note: FROM_CRM,
   },
 ];
+
+/** Field keys a staff member may edit on this screen, given the current deal. */
+export function editableKeys(src: VerificationSource): string[] {
+  return SPECS.filter(
+    (s) => editTargetFor(s.key) !== null && (s.editableWhen ? s.editableWhen(src) : true)
+  ).map((s) => s.key);
+}
+
+/** The label a field key reads as, for a message that names it. */
+export function labelFor(key: string): string {
+  return SPECS.find((s) => s.key === key)?.label ?? key;
+}
 
 /**
  * Build the sheet.
@@ -398,26 +523,75 @@ const SPECS: Spec[] = [
  */
 export function buildVerification(
   src: VerificationSource,
-  requiredProperties: string[]
+  requiredProperties: string[],
+  edits: StaffEdits = {}
 ): VerificationSheet {
   const wanted = new Set(requiredProperties.map((p) => p.toLowerCase()));
 
+  // Two passes over the same specs, and that is the whole trick.
+  //
+  // `src` is the session as its sources left it: the CRM's figures, the decode's,
+  // and the fields only a person can supply. `edited` is the same row with the
+  // staff layer applied. Resolving each field against both means the "was" and
+  // the "now" have been through the identical formatter, so $24,000.00 is
+  // compared with $25,500.00 rather than with the string "25500" -- which is
+  // what makes "does this still differ from CRM" answerable at all.
+  const editedSrc = applyStaffEdits(
+    src as unknown as Record<string, unknown>,
+    edits,
+    editTargetFor
+  ) as unknown as VerificationSource;
+
   const fields: VerifyField[] = SPECS.map((spec) => {
-    const { value, source } = spec.resolve(src);
+    const asSourced = spec.resolve(src);
+    const target = editTargetFor(spec.key);
+    const edit = target === null ? undefined : edits[spec.key];
+
+    // An edit that will not cast is not applied, so the column still holds the
+    // CRM value. Reported rather than swallowed: somebody typed a correction and
+    // it is not in force, which the gate must refuse rather than rate around.
+    const invalid =
+      edit !== undefined &&
+      target !== null &&
+      target.kind === "column" &&
+      castForColumn(target, edit.value) === null;
+
+    const shown = edit !== undefined && !invalid ? spec.resolve(editedSrc) : asSourced;
+
     const required =
       spec.provider_property !== null && wanted.has(spec.provider_property.toLowerCase());
+
+    const editable =
+      target !== null && (spec.editableWhen ? spec.editableWhen(editedSrc) : true);
+
+    const in_crm = spec.in_crm === true;
 
     return {
       key: spec.key,
       label: spec.label,
       group: spec.group,
-      value,
-      source,
-      editable: spec.editable === true,
+      value: shown.value,
+      // An edit over a value something else supplied reads differently from a
+      // field only a person could fill in, and the screen shows the difference.
+      source: edit !== undefined
+        ? (asSourced.source === "Missing" ? "Entered by Staff" : EDITED_SOURCE)
+        : shown.source,
+      editable,
       provider_property: spec.provider_property,
       required,
-      missing: required && value === null,
+      missing: required && shown.value === null,
       note: spec.note ?? null,
+
+      original: edit !== undefined ? asSourced.value : null,
+      original_source: edit !== undefined ? asSourced.source : null,
+      in_crm,
+      // Against what CRM says NOW, not against the stored original. That is what
+      // lets the warning clear itself once the deal is corrected and refreshed.
+      differs_from_crm:
+        edit !== undefined && in_crm && !invalid && shown.value !== asSourced.value,
+      invalid,
+      edited_by: edit?.edited_by ?? null,
+      edited_at: edit?.edited_at ?? null,
     };
   });
 
@@ -432,17 +606,40 @@ export function buildVerification(
   );
 
   const missing = fields.filter((f) => f.missing);
+  const edited = fields.filter((f) => f.original_source !== null);
+  const invalid = fields.filter((f) => f.invalid);
+
+  const crm_mismatches: CrmMismatch[] = fields
+    .filter((f) => f.differs_from_crm)
+    .map((f) => ({
+      key: f.key,
+      label: f.label,
+      crm_value: f.original,
+      edited_value: f.value,
+      edited_by: f.edited_by ?? "unknown",
+      edited_at: f.edited_at ?? "",
+    }));
 
   return {
     fields,
     missing,
     // An unmapped property is a field the screen cannot show, so it cannot be
-    // filled in, so this is not ready however complete the sheet looks.
+    // filled in, so this is not ready however complete the sheet looks. An edit
+    // that could not be read blocks it too: the person's correction is not in
+    // force, and rating past that would quote the figure they just rejected.
+    //
+    // A field that merely disagrees with CRM does NOT block. Jim's rule: staff
+    // can still verify, and the warning stays up until the deal matches.
     ready:
       requiredProperties.length > 0 &&
       missing.length === 0 &&
-      unmapped_properties.length === 0,
+      unmapped_properties.length === 0 &&
+      invalid.length === 0,
     unmapped_properties,
+    edited,
+    crm_mismatches,
+    crm_warning: crmMismatchWarning(crm_mismatches),
+    invalid,
   };
 }
 
@@ -460,7 +657,18 @@ export function buildVerification(
 export function ratingInputs(sheet: VerificationSheet): Record<string, string | null> {
   const out: Record<string, string | null> = {};
   for (const f of sheet.fields) {
-    if (f.provider_property !== null) out[f.key] = f.value;
+    // A field feeds the rate if TecAssured named it, or if it is editable here.
+    // The second half catches three that reach the request without appearing in
+    // requiredproperties: the vehicle type, which decides what is asked for at
+    // all, and the customer's city and state, which go up as customerCity and
+    // customerState. Deal # and Stock # have neither, and are the only two
+    // fields on the sheet a change to cannot alter a price.
+    // Keyed off the spec's target rather than f.editable, so the cash-deal
+    // toggle on the three finance figures cannot quietly drop a field out of the
+    // comparison the verification gate depends on.
+    if (f.provider_property !== null || editTargetFor(f.key) !== null) {
+      out[f.key] = f.value;
+    }
   }
   return out;
 }
