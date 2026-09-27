@@ -23,10 +23,16 @@
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { currentOperator } from "@/lib/admin-session";
 import { currentChecker } from "@/lib/checker";
 import { edge, EdgeError, isSessionId } from "@/lib/edge";
 import type { FieldGroup, VerifyField, VerifySheet } from "@/lib/types";
+import {
+  VERIFY_FLASH_COOKIE,
+  decodeVerifyFlash,
+  flashMessage,
+} from "@/lib/verify-flash";
 import {
   clearSubmitUnknown,
   decodeVin,
@@ -163,10 +169,8 @@ function Field({ field }: { field: VerifyField }) {
 
 export default async function VerifyPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ sessionId: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   // No sign-in. The CRM button opens this screen directly and what protects it
   // is holding the session link, the same as the presentation.
@@ -195,47 +199,11 @@ export default async function VerifyPage({
     );
   }
 
-  const q = await searchParams;
-  const one = (k: string) => (typeof q[k] === "string" ? (q[k] as string) : null);
-
-  const refused = one("refused");
-  const flash =
-    refused ? { tone: "bad", text: refused }
-    : one("verified") ? {
-        tone: "ok",
-        text:
-          one("rated") === "failed"
-            ? "Verified. The rate did not come back; see Rating below and try again."
-            : "Verified, and the rate has been requested.",
-      }
-    : one("saved") ? { tone: "ok", text: "Saved." }
-    : one("decoded") ? { tone: "ok", text: "Decoded from the VIN." }
-    : one("refreshed") ? { tone: "ok", text: "Re-pulled from CRM." }
-    : one("needname") ? {
-        tone: "bad",
-        text:
-          "Put your name in the Checked by box at the top first. It goes on the " +
-          "record of what was verified, so it cannot be left blank.",
-      }
-    : one("who") ? { tone: "ok", text: "Saved. This device will remember it." }
-    : one("whocleared") ? { tone: "ok", text: "Name cleared." }
-    : one("discarded") ? {
-        tone: "ok",
-        text:
-          "Your edits to the CRM fields are gone and the deal has been re-pulled. " +
-          "Engine size, factory warranty and fuel type were kept.",
-      }
-    : one("voided") ? {
-        tone: "ok",
-        text:
-          `Contract ${one("voided")} is voided. That product can be submitted ` +
-          `again on this deal.`,
-      }
-    : one("cleared") ? {
-        tone: "ok",
-        text: "Recorded as checked. This session can submit again.",
-      }
-    : null;
+  // The one-shot message from whatever action just ran. It arrives in a
+  // short-lived cookie, not in the URL, so a provider refusal or a contract
+  // number never ends up in the address bar in front of a customer or in a
+  // pasted link. See lib/verify-flash.ts.
+  const flash = flashMessage(decodeVerifyFlash((await cookies()).get(VERIFY_FLASH_COOKIE)?.value));
 
   const verified = sheet.verification.state === "Verified";
   const byGroup = (g: FieldGroup) => sheet.fields.filter((f) => f.group === g);

@@ -85,7 +85,14 @@ export const EDIT_TARGETS: Record<string, EditTarget> = {
   // Money
   sale_price: { kind: "column", column: "sale_price", cast: "number" },
   amount_financed: { kind: "column", column: "amount_financed", cast: "number" },
-  finance_term: { kind: "column", column: "finance_term", cast: "integer" },
+  // finance_term_total, not finance_term. The sheet and the rate request both
+  // read the term through _shared/finance-basis.ts, which prefers
+  // finance_term_total -- so an edit written to finance_term would have been
+  // accepted, stored, and then invisible on the screen that accepted it.
+  finance_term: { kind: "column", column: "finance_term_total", cast: "integer" },
+  // Stays `apr`: the resolver prefers apr over interest_rate, so a typed rate
+  // takes effect over whatever the CRM's interest rate says, which is what
+  // somebody correcting the rate means.
   apr: { kind: "column", column: "apr", cast: "number" },
 
   // Customer. All three reach the rate request as customerCity, customerState

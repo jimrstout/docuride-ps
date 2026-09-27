@@ -23,6 +23,12 @@ import {
   checkerFor,
   cleanCheckerName,
 } from "@/lib/checker";
+import { ratingInputsFrom } from "@/lib/verify-fields";
+import {
+  VERIFY_FLASH_COOKIE,
+  VERIFY_FLASH_OPTIONS,
+  encodeVerifyFlash,
+} from "@/lib/verify-flash";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -204,19 +210,36 @@ export async function setCheckerName(formData: FormData): Promise<void> {
 
   if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
   revalidatePath(`/verify/${sessionId}`);
-  backToVerify(sessionId, name === "" ? { whocleared: "1" } : { who: "1" });
+  return backToVerify(sessionId, name === "" ? "whocleared" : "who");
 }
 
-/** Where a verify action lands, with a message if it has one to pass on. */
-function backToVerify(sessionId: string, params: Record<string, string> = {}): never {
-  const qs = new URLSearchParams(params).toString();
-  redirect(`/verify/${sessionId}${qs ? `?${qs}` : ""}`);
+/**
+ * Where a verify action lands, with a message if it has one to pass on.
+ *
+ * The message goes in a short-lived cookie and the URL stays clean. It used to
+ * be `?refused=<the endpoint's whole sentence>`, which put provider errors and
+ * contract numbers in the address bar in front of a customer and into anything
+ * the link was pasted into. See lib/verify-flash.ts.
+ *
+ * Not `never` any more, because setting a cookie has to be awaited before the
+ * redirect throws. Callers await it and then return.
+ */
+async function backToVerify(
+  sessionId: string,
+  code: string | null = null,
+  detail: string | null = null
+): Promise<never> {
+  if (code !== null) {
+    const jar = await cookies();
+    jar.set(VERIFY_FLASH_COOKIE, encodeVerifyFlash(code, detail), VERIFY_FLASH_OPTIONS);
+  }
+  redirect(`/verify/${sessionId}`);
 }
 
 async function verifyAction(
   formData: FormData,
   build: (sessionId: string) => Record<string, unknown>,
-  onOk: Record<string, string> = {}
+  onOk: string | null = null
 ): Promise<never> {
   const sessionId = String(formData.get("session_id") ?? "");
   if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
@@ -231,12 +254,12 @@ async function verifyAction(
     const message =
       err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
     console.error(`console verify action failed for ${sessionId}:`, err);
-    backToVerify(sessionId, { refused: message });
+    return backToVerify(sessionId, "refused", message);
   }
 
   revalidatePath(`/verify/${sessionId}`);
   revalidatePath("/");
-  backToVerify(sessionId, onOk);
+  return backToVerify(sessionId, onOk);
 }
 
 /**
@@ -258,16 +281,15 @@ export async function saveVerifyFields(formData: FormData): Promise<void> {
     // The endpoint refuses an unnamed edit, and it is right to. Said here so the
     // person gets the sentence they need rather than the endpoint's.
     if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
-    backToVerify(sessionId, { needname: "1" });
+    return backToVerify(sessionId, "needname");
   }
 
-  const entries: Record<string, string> = {};
-  for (const [key, value] of formData.entries()) {
-    // checker_name is who is typing, not a value on the deal.
-    if (key === "session_id" || key === "checker_name") continue;
-    if (typeof value !== "string") continue;
-    entries[key] = value;
-  }
+  // Only the known rating inputs. A Server Action form also carries React's own
+  // hidden $ACTION_ID field, and forwarding it made the endpoint refuse the
+  // whole save with "These fields cannot be edited here: $ACTION_ID_...". See
+  // lib/verify-fields.ts. session_id is the address and checker_name is who is
+  // typing; neither is a value on the deal, and neither is in the list.
+  const entries = ratingInputsFrom(formData.entries());
 
   await verifyAction(
     formData,
@@ -279,7 +301,7 @@ export async function saveVerifyFields(formData: FormData): Promise<void> {
       // verification does.
       edited_by: who,
     }),
-    { saved: "1" }
+    "saved"
   );
 }
 
@@ -294,22 +316,18 @@ export async function discardEdits(formData: FormData): Promise<void> {
   await verifyAction(
     formData,
     (session_id) => ({ session_id, action: "discard_edits" }),
-    { discarded: "1" }
+    "discarded"
   );
 }
 
 /** Ask TecAssured what the VIN is. Fills engine size and fuel type. */
 export async function decodeVin(formData: FormData): Promise<void> {
-  await verifyAction(formData, (session_id) => ({ session_id, action: "decode" }), {
-    decoded: "1",
-  });
+  await verifyAction(formData, (session_id) => ({ session_id, action: "decode" }), "decoded");
 }
 
 /** Re-pull the deal's rating inputs from the CRM. */
 export async function refreshFromCrm(formData: FormData): Promise<void> {
-  await verifyAction(formData, (session_id) => ({ session_id, action: "refresh" }), {
-    refreshed: "1",
-  });
+  await verifyAction(formData, (session_id) => ({ session_id, action: "refresh" }), "refreshed");
 }
 
 /**
@@ -325,7 +343,7 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
   if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
 
   const who = await checkerFor(formData);
-  if (who === "") backToVerify(sessionId, { needname: "1" });
+  if (who === "") return backToVerify(sessionId, "needname");
 
   // Typing the name and pressing Confirm in one go should not make the person
   // type it again on the next deal.
@@ -344,7 +362,7 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
     const message =
       err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
     console.error(`console verify failed for ${sessionId}:`, err);
-    backToVerify(sessionId, { refused: message });
+    return backToVerify(sessionId, "refused", message);
   }
 
   // Now the rating. Its own failure is recorded on the session by
@@ -396,7 +414,7 @@ export async function voidContract(formData: FormData): Promise<void> {
   if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
 
   const contractNumber = String(formData.get("contract_number") ?? "").trim();
-  if (!contractNumber) backToVerify(sessionId, { refused: "No contract number was given." });
+  if (!contractNumber) return backToVerify(sessionId, "refused", "No contract number was given.");
 
   try {
     await edge.contractVoid<unknown>({
@@ -409,12 +427,12 @@ export async function voidContract(formData: FormData): Promise<void> {
     const message =
       err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
     console.error(`void failed for ${sessionId} / ${contractNumber}:`, err);
-    backToVerify(sessionId, { refused: message });
+    return backToVerify(sessionId, "refused", message);
   }
 
   revalidatePath(`/verify/${sessionId}`);
   revalidatePath("/");
-  backToVerify(sessionId, { voided: contractNumber });
+  return backToVerify(sessionId, "voided", contractNumber);
 }
 
 /**
@@ -443,10 +461,10 @@ export async function clearSubmitUnknown(formData: FormData): Promise<void> {
     const message =
       err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
     console.error(`clear submit state failed for ${sessionId}:`, err);
-    backToVerify(sessionId, { refused: message });
+    return backToVerify(sessionId, "refused", message);
   }
 
   revalidatePath(`/verify/${sessionId}`);
   revalidatePath("/");
-  backToVerify(sessionId, { cleared: "1" });
+  return backToVerify(sessionId, "cleared");
 }

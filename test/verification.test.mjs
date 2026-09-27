@@ -100,17 +100,29 @@ test("a typed engine size beats the decode, and says so", () => {
 test("every field that feeds a rate is editable", () => {
   const s = sheet({ vin_decode: DECODE });
   for (const f of s.fields) {
-    if (f.key === "deal_number" || f.key === "stock_number") continue;
+    // Not rating inputs: the two that identify the deal, and the lender, which
+    // is shown so staff can confirm who is financing it. Deal type is the field
+    // that decides how the deal rates, and that one is editable.
+    if (["deal_number", "stock_number", "lender"].includes(f.key)) continue;
     // The three finance figures close on a cash deal, and this fixture is one.
     if (["amount_financed", "finance_term", "apr"].includes(f.key)) continue;
     assert.equal(f.editable, true, `${f.key} must be editable`);
   }
 });
 
-test("only the two fields that identify the deal are never editable", () => {
+test("only the fields that feed no rate are never editable", () => {
+  // Was "only the two that identify the deal". Lender joined them when the sheet
+  // started reading the finance figures from the same source as the planner: it
+  // is displayed for confirmation, and a lienholder is attached in CRM.
   const locked = sheet({ vin_decode: DECODE, finance_type: "Loan" })
     .fields.filter((f) => !f.editable);
-  assert.deepEqual(locked.map((f) => f.key).sort(), ["deal_number", "stock_number"]);
+  assert.deepEqual(
+    locked.map((f) => f.key).sort(),
+    ["deal_number", "lender", "stock_number"]
+  );
+  // None of the three is a TecAssured rating input, so changing one cannot
+  // invalidate a verification.
+  for (const f of locked) assert.equal(f.provider_property, null, f.key);
 });
 
 test("a CRM field no longer tells you to go and fix it in CRM", () => {

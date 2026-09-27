@@ -22,6 +22,7 @@
 // table would mean a code change the next time they add a vehicle type.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { financeFigures, type FinanceSource } from "./finance-basis.ts";
 
 export interface RequiredProperty {
   name: string;
@@ -150,6 +151,13 @@ export interface RateSource {
   apr: number | null;
   finance_term: number | null;
   finance_type: string | null;
+  // The corrected finance columns. Optional so a caller written before they
+  // existed still typechecks; absent reads as absent, not as zero. See
+  // _shared/finance-basis.ts for why these and not the three above.
+  interest_rate?: number | null;
+  finance_term_total?: number | null;
+  tila_amount_financed?: number | null;
+  lienholder_name?: string | null;
   sale_date: string | null;
   in_service_date: string | null;
   buyer_city: string | null;
@@ -229,11 +237,21 @@ function financeFields(source: RateSource): {
     return { type, amount: "0", apr: "0", term: "0" };
   }
 
+  // ── Resolved, not read straight off apr and finance_term ───────────────────
+  // Those two are only filled when TILA has been calculated. On deal 13759 --
+  // financed, Roadrunner Financial, 60 months at 6.99% -- both were null, so
+  // finance.apr and finance.term went up missing and TecAssured refused the
+  // rate for a deal whose terms the CRM knew perfectly well. The resolver reads
+  // the columns SPEC_CORRECTIONS.md §1 proved carry the real figures, and it is
+  // the same call the Verify screen makes, so the gate and the request cannot
+  // disagree about whether this deal has a term.
+  const fig = financeFigures(source as unknown as FinanceSource);
+
   return {
     type,
     amount: text(source.amount_financed),
-    apr: text(source.apr),
-    term: text(source.finance_term),
+    apr: fig.ratePercent === null ? null : String(fig.ratePercent),
+    term: fig.termMonths === null ? null : String(fig.termMonths),
   };
 }
 

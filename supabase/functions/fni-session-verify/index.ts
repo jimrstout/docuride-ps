@@ -85,6 +85,11 @@ const COLUMNS = [
   "vin", "unit_year", "unit_make", "unit_model", "condition",
   "vehicle_type_code", "odometer", "in_service_date",
   "sale_price", "amount_financed", "finance_term", "apr",
+  // The corrected finance columns the sheet resolves the term and rate from.
+  // Without these on the select, deal 13759's 60 months at 6.99% read as
+  // Missing and Confirm and Continue stayed disabled on a deal the CRM had
+  // complete. See _shared/finance-basis.ts.
+  "interest_rate", "finance_term_total", "tila_amount_financed", "lienholder_name",
   "buyer_city", "buyer_state", "buyer_zip",
   "vehicle_properties", "vin_decode", "vin_decode_at",
   "verification_state", "verified_at", "verified_by", "verified_snapshot",

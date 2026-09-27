@@ -43,6 +43,7 @@
 // they are not rating inputs and renaming a deal on this screen would only make
 // it harder to tell which deal you are on.
 
+import { financeFigures, type FinanceSource } from "./finance-basis.ts";
 import {
   EDITED_SOURCE,
   applyStaffEdits,
@@ -213,6 +214,18 @@ export interface VerificationSource {
   finance_term: unknown;
   apr: unknown;
 
+  // ── The finance figures the planner reads ─────────────────────────────────
+  // Not duplicates of the three above. SPEC_CORRECTIONS.md §1 settled which
+  // columns carry a deal's real term, rate and principal against an actual
+  // contract, and these are they. The sheet resolves through
+  // _shared/finance-basis.ts so this screen and the customer's screen cannot
+  // disagree about the term of the same loan. Deal 13759 is why: it showed
+  // "6.99% · 60 months" to the customer and "Missing" to staff.
+  interest_rate: unknown;
+  finance_term_total: unknown;
+  tila_amount_financed: unknown;
+  lienholder_name: unknown;
+
   buyer_city: unknown;
   buyer_state: unknown;
   buyer_zip: unknown;
@@ -276,15 +289,36 @@ interface Spec {
    * Change the deal type first and they open up.
    */
   editableWhen?: (src: VerificationSource) => boolean;
-  note?: string | null;
+  /**
+   * Help text under the field. A function where the right thing to say depends
+   * on the deal: the three finance figures used to explain, on every deal, that
+   * they read zero on a cash purchase -- which is confusing to the point of
+   * being wrong when you are looking at a financed one.
+   */
+  note?: string | null | ((src: VerificationSource) => string | null);
 }
 
 const NOT_ON_A_CASH_DEAL = (s: VerificationSource) =>
   dealTypeLabel(s.finance_type) !== "Cash";
 
-const CASH_NOTE =
-  "Zero on a cash deal, which is the deal's arithmetic rather than a gap. " +
-  "Change the deal type to edit it.";
+/**
+ * Said only on a cash deal.
+ *
+ * It used to be said on every deal, because it was a plain string. On deal 13759
+ * -- financed, 60 months at 6.99% -- the screen explained underneath each of the
+ * three finance figures that they were zero because this was a cash purchase.
+ */
+function cashNote(src: VerificationSource): string | null {
+  return dealTypeLabel(src.finance_type) === "Cash"
+    ? "Zero on a cash deal, which is the deal's arithmetic rather than a gap. " +
+      "Change the deal type to edit it."
+    : FROM_CRM;
+}
+
+/** The resolved figures for one session. */
+function figuresFor(src: VerificationSource) {
+  return financeFigures(src as unknown as FinanceSource);
+}
 
 /** A value the CRM owns. Read-only, and says so when it is empty. */
 function fromCrm(value: string | null) {
@@ -333,6 +367,24 @@ const SPECS: Spec[] = [
     resolve: (s) => fromCrm(dealTypeLabel(s.finance_type)),
     in_crm: true,
     note: "Cash, Finance or Lease. Changing it opens or closes the finance figures below.",
+  },
+  {
+    key: "lender", label: "Lender", group: "Deal", provider_property: null,
+    // Read from the same field the planner and the acknowledgment PDF read, so
+    // all three agree about who is financing this deal. Not a TecAssured rating
+    // input and not editable here: deal type is the field that decides how this
+    // deal rates, and it is editable two rows up. Attach or correct a lienholder
+    // in CRM.
+    resolve: (s) => {
+      const fig = figuresFor(s);
+      // A cash purchase has no lender, which is a fact rather than a gap.
+      if (!fig.financed) return { value: "None (cash deal)", source: "CRM" };
+      return fromCrm(fig.lenderName);
+    },
+    in_crm: true,
+    note:
+      "From the CRM deal, and what the customer's screen shows. Deal type above " +
+      "is what the rate uses. Attach a lienholder in CRM to change this.",
   },
   {
     key: "sale_date", label: "Sale date", group: "Deal", provider_property: "sale.date",
@@ -448,29 +500,44 @@ const SPECS: Spec[] = [
         : fromCrm(money(s.amount_financed)),
     in_crm: true,
     editableWhen: NOT_ON_A_CASH_DEAL,
-    note: CASH_NOTE,
+    note: cashNote,
   },
   {
     key: "finance_term", label: "Term (months)", group: "Money",
     provider_property: "finance.term",
-    resolve: (s) =>
-      dealTypeLabel(s.finance_type) === "Cash"
-        ? { value: "0", source: "CRM" }
-        : fromCrm(text(s.finance_term)),
+    resolve: (s) => {
+      if (dealTypeLabel(s.finance_type) === "Cash") return { value: "0", source: "CRM" };
+      // The resolved term, not sessions.finance_term. Same source the planner
+      // reads, so the two screens agree about the same loan.
+      const term = figuresFor(s).termMonths;
+      return term === null
+        ? { value: null, source: "Missing" }
+        : { value: String(term), source: "CRM" };
+    },
     in_crm: true,
     editableWhen: NOT_ON_A_CASH_DEAL,
-    note: CASH_NOTE,
+    note: cashNote,
   },
   {
     key: "apr", label: "APR", group: "Money", provider_property: "finance.apr",
     resolve: (s) => {
       if (dealTypeLabel(s.finance_type) === "Cash") return { value: "0%", source: "CRM" };
-      const v = text(s.apr);
-      return v === null ? { value: null, source: "Missing" } : { value: `${v}%`, source: "CRM" };
+      // APR where TILA was calculated, the deal's interest rate otherwise. The
+      // label says which, so nobody has to guess whether 6.99% is an APR.
+      const fig = figuresFor(s);
+      return fig.ratePercent === null
+        ? { value: null, source: "Missing" }
+        : { value: `${fig.ratePercent}%`, source: "CRM" };
     },
     in_crm: true,
     editableWhen: NOT_ON_A_CASH_DEAL,
-    note: CASH_NOTE,
+    note: (s) => {
+      if (dealTypeLabel(s.finance_type) === "Cash") return cashNote(s);
+      const fig = figuresFor(s);
+      return fig.rateLabel === null
+        ? FROM_CRM
+        : `${fig.rateLabel} on this deal. ${FROM_CRM}`;
+    },
   },
 
   // ── Customer ───────────────────────────────────────────────────────────
@@ -558,7 +625,18 @@ export function buildVerification(
       target.kind === "column" &&
       castForColumn(target, edit.value) === null;
 
-    const shown = edit !== undefined && !invalid ? spec.resolve(editedSrc) : asSourced;
+    // ── Always resolved against the corrected deal ───────────────────────────
+    // This used to resolve against `editedSrc` only for a field that had been
+    // edited itself, and against the raw row otherwise. So an edit to one field
+    // could not reach another: correcting a deal from Cash to Finance left Term
+    // reading "0" and Amount financed reading "$0.00", because those two specs
+    // branch on the deal type and were still being handed the uncorrected row.
+    // Worse, `editable` was already computed from the corrected deal, so the
+    // screen opened the boxes and then showed cash-deal zeroes in them.
+    //
+    // An un-castable edit needs no special case: applyStaffEdits does not apply
+    // one, so editedSrc still holds the value its source gave.
+    const shown = spec.resolve(editedSrc);
 
     const required =
       spec.provider_property !== null && wanted.has(spec.provider_property.toLowerCase());
@@ -582,7 +660,7 @@ export function buildVerification(
       provider_property: spec.provider_property,
       required,
       missing: required && shown.value === null,
-      note: spec.note ?? null,
+      note: typeof spec.note === "function" ? spec.note(editedSrc) : (spec.note ?? null),
 
       original: edit !== undefined ? asSourced.value : null,
       original_source: edit !== undefined ? asSourced.source : null,

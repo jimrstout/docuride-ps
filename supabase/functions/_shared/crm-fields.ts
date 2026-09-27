@@ -57,6 +57,24 @@ export function crmRatingFields(record: Record<string, unknown>): Record<string,
     amount_financed: num(record.DC_Sold_1_Balance_Due),
     apr: num(record.TILA_APR),
     finance_term: int(record.TILA_Pmt1_Count),
+
+    // ── The corrected finance columns ─────────────────────────────────────────
+    // Refreshed here because the Verify sheet and the rate request now read the
+    // term and rate through these, so a Refresh that left them alone would
+    // re-pull the deal and still show yesterday's term. The derivation is
+    // fni-session-get's derivePaymentBasis, which is where these three were
+    // first filled in; SPEC_CORRECTIONS.md §1 is why they are the right ones.
+    interest_rate: num(record.Interest_Rate),
+    tila_amount_financed: num(record.TILA_Amount_Financed),
+    finance_term_total:
+      int(record.Term_Months) ??
+      (int(record.TILA_Pmt1_Count) === null
+        ? null
+        : (int(record.TILA_Pmt1_Count) as number) + (int(record.TILA_Pmt2_Count) ?? 0)),
+    // Shown on the Verify screen as Lender, and what finance_type below is
+    // derived from, so the two cannot drift apart across a refresh.
+    lienholder_name: text(record.Lienholder_Name),
+
     finance_type: hasLienholder ? "Loan" : "Cash",
     sale_date: saleDate,
     in_service_date: saleDate,
