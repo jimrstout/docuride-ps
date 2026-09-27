@@ -1,16 +1,44 @@
 project_id = "fovccigwlcmmzfubpfny"
 
-# Both functions authenticate with a shared secret, not a Supabase JWT.
-# Zoho's webhook builder cannot attach one, and the pg_cron sweeper calls in
-# over pg_net. verify_jwt must stay false or every call 401s before reaching
-# the handler.
+# ── verify_jwt, and why every function is listed ─────────────────────────────
+#
+# `supabase functions deploy` sets verify_jwt from this file, and its DEFAULT IS
+# TRUE. A function missing from here is therefore not "left alone" by a CLI
+# deploy: it is switched to requiring a Supabase JWT, and every caller that
+# authenticates some other way starts getting 401 before the handler runs.
+#
+# Thirteen of these were missing. Every one of them authenticates with
+# FNI_WEBHOOK_SECRET, so the first CLI deploy of any of them would have taken the
+# Verify screen, the planner, the CRM button and both cron jobs off the air at
+# once. Nothing had broken yet only because every deploy so far went through the
+# Management API, which leaves the existing setting alone.
+#
+# So the rule is: every function that exists has a line here, whichever value it
+# needs, and test/edge-function-config.test.mjs fails the build if one is added
+# without one. The values below were read off the live project on 2026-09-27, not
+# assumed.
+#
+# Why false is right for these: Zoho's webhook builder cannot attach a Supabase
+# JWT, the pg_cron sweepers call in over pg_net, and the planner and console call
+# through a server-side shared secret. Each function checks that secret itself
+# before doing anything.
 
+# ── R&R, and the live Reynolds and Reynolds system ──────────────────────────
+# These two predate DocuRide PS and are the only functions here that DO verify a
+# JWT. They are excluded from CI deploys outright -- see
+# .github/workflows/deploy-edge-functions.yml -- because this repo is not where
+# they are developed. admin-users has no source in this repo at all.
+[functions.rr-report]
+verify_jwt = true
+
+# ── Zoho sync ───────────────────────────────────────────────────────────────
 [functions.zoho-sync]
 verify_jwt = false
 
 [functions.zoho-backfill]
 verify_jwt = false
 
+# ── The planner and the console ─────────────────────────────────────────────
 [functions.fni-session-get]
 verify_jwt = false
 
@@ -21,4 +49,42 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.fni-contract-documents]
+verify_jwt = false
+
+[functions.fni-session-start]
+verify_jwt = false
+
+[functions.fni-session-verify]
+verify_jwt = false
+
+[functions.fni-vin-decode]
+verify_jwt = false
+
+[functions.fni-rate-vehicle]
+verify_jwt = false
+
+[functions.fni-contract-submit]
+verify_jwt = false
+
+[functions.fni-contract-void]
+verify_jwt = false
+
+# ── The admin console's own endpoints ───────────────────────────────────────
+[functions.fni-admin-auth]
+verify_jwt = false
+
+[functions.fni-admin-sessions]
+verify_jwt = false
+
+[functions.fni-admin-settings]
+verify_jwt = false
+
+# ── Scheduled ───────────────────────────────────────────────────────────────
+[functions.fni-health-check]
+verify_jwt = false
+
+[functions.fni-refresh-rate-properties]
+verify_jwt = false
+
+[functions.fni-refresh-vehicle-types]
 verify_jwt = false
