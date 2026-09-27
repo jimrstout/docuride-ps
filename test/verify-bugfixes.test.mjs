@@ -30,7 +30,7 @@ import {
 import { EDIT_TARGETS } from "../supabase/functions/_shared/staff-edits.ts";
 import { financeFigures } from "../supabase/functions/_shared/finance-basis.ts";
 import { buildVerification } from "../supabase/functions/_shared/verification.ts";
-import { buildRateRequest } from "../supabase/functions/_shared/rate-properties.ts";
+import { buildRateRequest } from "../supabase/functions/_shared/rate-request.ts";
 import { crmRatingFields } from "../supabase/functions/_shared/crm-fields.ts";
 
 const ACTIONS = readFileSync(

@@ -11,10 +11,8 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import {
-  parseRequiredProperties,
-  buildRateProperties,
-} from "../supabase/functions/_shared/rate-properties.ts";
+import { parseRequiredProperties } from "../supabase/functions/_shared/rate-properties.ts";
+import { buildRateProperties } from "../supabase/functions/_shared/rate-request.ts";
 import {
   BODY_TYPE_MAP,
   RATEABLE_VTYPES,
@@ -283,7 +281,7 @@ test("body types map the way the planner expects", () => {
 // Proved against the QA server on 2026-09-25: documented top-level fields PLUS
 // the requiredproperties array rates; either half alone does not.
 
-import { buildRateRequest } from "../supabase/functions/_shared/rate-properties.ts";
+import { buildRateRequest } from "../supabase/functions/_shared/rate-request.ts";
 
 const full = (over = {}) => ({ ...session(), buyer_city: "Parkersburg", buyer_state: "WV", ...over });
 const opts = { dealerCode: "3-306", vtype: "UTV", rateDate: "2026-09-25" };

@@ -50,13 +50,12 @@ import { createTecAssuredClient, EndpointNotFoundError } from "../_shared/tecass
 import { secretsMatch } from "../_shared/supabase.ts";
 import { allTiers, normalizeOffer } from "../_shared/planner-offers.ts";
 import {
-  buildRateRequest,
   parseRequiredProperties,
   readRateProperties,
   writeRateProperties,
-  type RateSource,
   type RequiredProperty,
 } from "../_shared/rate-properties.ts";
+import { buildRateRequest, type RateSource } from "../_shared/rate-request.ts";
 import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────

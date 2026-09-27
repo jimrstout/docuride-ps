@@ -140,14 +140,20 @@ export const edge = {
     call<T>("fni-rate-vehicle", { method: "POST", body: { session_id: sessionId } }),
 
   // ── The Verify step ─────────────────────────────────────────────────
-  // Staff only. The sheet, the two fields nobody else carries, the VIN decode,
-  // the CRM refresh, and the gate itself.
+  // Staff only. The sheet, the two fields nobody else carries, the CRM refresh,
+  // and the gate itself.
 
   verifySheet: <T>(sessionId: string) =>
     call<T>("fni-session-verify", { method: "GET", query: { session_id: sessionId } }),
 
   verifyAction: <T>(body: Record<string, unknown>) =>
     call<T>("fni-session-verify", { method: "POST", body }),
+
+  /** Ask TecAssured what a VIN is. Its own function, not a verify action: it is
+   *  the only part of this screen that calls the provider, and keeping it here
+   *  made the sheet endpoint bundle the whole TecAssured client. */
+  vinDecode: <T>(sessionId: string) =>
+    call<T>("fni-vin-decode", { method: "POST", body: { session_id: sessionId } }),
 
   /** Void a contract, or clear a session parked at Submit Status Unknown.
    *  Staff only, and both are recorded against whoever is signed in. */

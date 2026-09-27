@@ -322,7 +322,24 @@ export async function discardEdits(formData: FormData): Promise<void> {
 
 /** Ask TecAssured what the VIN is. Fills engine size and fuel type. */
 export async function decodeVin(formData: FormData): Promise<void> {
-  await verifyAction(formData, (session_id) => ({ session_id, action: "decode" }), "decoded");
+  // fni-vin-decode rather than a verify action. It was the only part of this
+  // screen that calls the provider, and keeping it on fni-session-verify made a
+  // sheet endpoint bundle the entire TecAssured client. It returns the decode
+  // rather than the sheet, so the sheet is re-read the way any page load reads it.
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+
+  try {
+    await edge.vinDecode<unknown>(sessionId);
+  } catch (err) {
+    const message =
+      err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
+    console.error(`vin decode failed for ${sessionId}:`, err);
+    return backToVerify(sessionId, "refused", message);
+  }
+
+  revalidatePath(`/verify/${sessionId}`);
+  return backToVerify(sessionId, "decoded");
 }
 
 /** Re-pull the deal's rating inputs from the CRM. */

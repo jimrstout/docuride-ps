@@ -13,8 +13,11 @@
 //
 // Input:
 //   GET  ?session_id=<uuid>              -> the sheet: every field, value, source
-//   POST { session_id, action }          -> save | decode | refresh
-//                                           | discard_edits | verify
+//   POST { session_id, action }          -> save | refresh | discard_edits | verify
+//
+// The VIN decode used to be an action here. It is fni-vin-decode now: it was the
+// only thing this function did that called the provider, and it made a sheet
+// endpoint bundle the entire TecAssured client. See that function's header.
 //
 // Auth: FNI_WEBHOOK_SECRET, as every other fni function. The console's sign-in
 // decides who reaches the layer that holds the secret.
@@ -22,7 +25,6 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
-import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { getRecord } from "../_shared/zoho.ts";
 import { crmRatingFields } from "../_shared/crm-fields.ts";
 import {
@@ -483,63 +485,6 @@ async function discardEdits(
   });
 }
 
-// ── decode: ask TecAssured what the VIN is ────────────────────────────────
-
-async function decode(
-  supabase: SupabaseClient,
-  s: Record<string, unknown>
-): Promise<Response> {
-  const vin = typeof s.vin === "string" ? s.vin.trim() : "";
-  if (vin === "") {
-    return json(400, { error: "This deal has no VIN, so there is nothing to decode." });
-  }
-
-  let store;
-  try {
-    store = await createTecAssuredClient(s.store_id as string, supabase);
-  } catch (err) {
-    return json(400, { error: err instanceof Error ? err.message : String(err) });
-  }
-
-  let decoded: unknown;
-  try {
-    decoded = await store.client.decodePowersports(vin);
-  } catch (err) {
-    return json(502, {
-      error: `TecAssured could not decode ${vin}: ${err instanceof Error ? err.message : String(err)}`,
-    });
-  }
-
-  // A refusal comes back as HTTP 200 with an error string, as everywhere else in
-  // this API, and an unsupported VIN comes back empty. Neither is cached: a
-  // cached empty decode would read on the screen as "asked and there is nothing",
-  // which would send a staff member looking for a field to type when the real
-  // answer is that the call needs trying again.
-  const body = (decoded ?? {}) as Record<string, unknown>;
-  const refusal = typeof body.error === "string" ? body.error.trim() : "";
-  if (refusal !== "") {
-    return json(400, { error: `TecAssured could not decode ${vin}: ${refusal}` });
-  }
-  if (Object.keys(body).length === 0) {
-    return json(400, {
-      error:
-        `TecAssured returned nothing for ${vin}. This dealer code may not support ` +
-        `VIN decoding, or the VIN is not one it recognises. Type the engine size instead.`,
-    });
-  }
-
-  const { error } = await supabase
-    .schema("fni")
-    .from("sessions")
-    .update({ vin_decode: body, vin_decode_at: new Date().toISOString() })
-    .eq("id", s.id as string);
-
-  if (error) return json(500, { error: error.message });
-
-  const fresh = await loadSession(supabase, s.id as string);
-  return json(200, await sheetFor(supabase, fresh!));
-}
-
 // ── refresh: re-pull the deal from the CRM ────────────────────────────────
 
 async function refresh(
@@ -806,8 +751,7 @@ serve(async (req: Request) => {
       return await save(supabase, s, entries as Record<string, unknown>, who);
     }
 
-    if (action === "decode") return await decode(supabase, s);
-    if (action === "refresh") return await refresh(supabase, s);
+      if (action === "refresh") return await refresh(supabase, s);
     if (action === "discard_edits") return await discardEdits(supabase, s);
 
     if (action === "verify") {
@@ -820,7 +764,7 @@ serve(async (req: Request) => {
     }
 
     return json(400, {
-      error: "action must be one of save, decode, refresh, discard_edits, verify",
+      error: "action must be one of save, refresh, discard_edits, verify",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
