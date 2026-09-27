@@ -13,7 +13,8 @@
 //
 // Input:
 //   GET  ?session_id=<uuid>              -> the sheet: every field, value, source
-//   POST { session_id, action }          -> save | decode | refresh | verify
+//   POST { session_id, action }          -> save | decode | refresh
+//                                           | discard_edits | verify
 //
 // Auth: FNI_WEBHOOK_SECRET, as every other fni function. The console's sign-in
 // decides who reaches the layer that holds the secret.
@@ -317,7 +318,7 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
   };
 }
 
-// ── save: the fields nothing else carries ─────────────────────────────────
+// ── save: any field that feeds a rate ─────────────────────────────────────
 
 async function save(
   supabase: SupabaseClient,
@@ -638,10 +639,11 @@ async function verify(
   verifiedBy: string
 ): Promise<Response> {
   const edits = parseStaffEdits(s.staff_edits);
+  const edited = applyStaffEdits(s, edits, editTargetFor);
   const { properties, reason } = await requiredFor(
     supabase,
     s.store_id as string,
-    (applyStaffEdits(s, edits, editTargetFor)).vehicle_type_code
+    edited.vehicle_type_code
   );
   const sheet = buildVerification(s as unknown as VerificationSource, properties, edits);
 
@@ -674,7 +676,10 @@ async function verify(
   const snapshot = {
     verified_at: now,
     verified_by: verifiedBy,
-    vehicle_type_code: s.vehicle_type_code ?? null,
+    // The vehicle type as RATED, which on a corrected deal is not the CRM's.
+    // Recording the CRM value here would make the snapshot disagree with the
+    // required_properties list beside it, and the list is the one that was used.
+    vehicle_type_code: edited.vehicle_type_code ?? null,
     required_properties: properties,
     fields: sheet.fields.map((f) => ({
       key: f.key,

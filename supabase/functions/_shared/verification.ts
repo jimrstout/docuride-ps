@@ -15,10 +15,9 @@
 // exists to prevent, so every field carries its provenance and the screen shows
 // it. The sources are real and distinct:
 //
-//   CRM               From the Zoho deal. Read-only here: the deal is the
-//                     record, and editing a copy of it would put the planner and
-//                     the contract out of step. Corrected in Zoho, then
-//                     Refreshed.
+//   CRM               From the Zoho deal, and untouched since. The deal is still
+//                     the record; an edit here does not change it, it sits over
+//                     it and says so.
 //   DX1               From the DMS. Photos only today; no rating input comes
 //                     from it. Named anyway, because it is a source staff know
 //                     and its absence from this list is itself informative.
@@ -78,7 +77,10 @@ export interface VerifyField {
   /** As it should read to the person checking it. Null when there is nothing. */
   value: string | null;
   source: FieldSource;
-  /** Staff may type it here. False for everything the CRM owns. */
+  /**
+   * Staff may type it here. True for every rating input, and false for exactly
+   * two -- Deal # and Stock # -- plus the three finance figures on a cash deal.
+   */
   editable: boolean;
   /** The TecAssured property this answers, when it answers one. */
   provider_property: string | null;
