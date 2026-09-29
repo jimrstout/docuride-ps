@@ -93,13 +93,29 @@ function stamp(iso: string | null): string {
   }).format(t).replace(",", "") + " UTC";
 }
 
-/** The provenance chip. Missing is the only one that shouts. Default is quiet:
- *  it is a value nobody checked, not a gap. */
+/**
+ * The provenance chip, printed only when the value did NOT come from the CRM.
+ *
+ * CRM is the expected answer, and printing it on nearly every row hid the
+ * exceptions this screen exists to catch. So a CRM row shows no chip, and the
+ * sheet says once, above the groups, that values come from the CRM unless
+ * marked. The chip's space is still reserved (an invisible tag, so rows line
+ * up), and screen readers still hear where the value came from. Every field
+ * still carries its source in the data; this only changes what is printed.
+ *
+ * Missing is the only chip that shouts. Default is quiet: it is a value nobody
+ * checked, not a gap.
+ */
 function Source({ source }: { source: VerifyField["source"] }) {
-  const tone =
-    source === "Missing" ? "tag--expired"
-    : source === "CRM" ? "tag--live"
-    : "tag--quiet";
+  if (source === "CRM") {
+    return (
+      <>
+        <span className="tag tag--none" aria-hidden="true">CRM</span>
+        <span className="sr-only">From the CRM.</span>
+      </>
+    );
+  }
+  const tone = source === "Missing" ? "tag--expired" : "tag--quiet";
   return <span className={`tag ${tone}`}>{source}</span>;
 }
 
@@ -131,7 +147,10 @@ function Field({ field }: { field: VerifyField }) {
 
   // Shown in full only when the person has something to do about this field.
   const needsHelp = field.missing || field.invalid;
-  const tip = [field.label, field.note, help].filter(Boolean).join(" ");
+  // The row's tooltip says where the value came from. A CRM row has no chip,
+  // so it falls back to saying so when the field has no note of its own.
+  const origin = field.note ?? (field.source === "CRM" ? "From the CRM deal." : null);
+  const tip = [field.label, origin, help].filter(Boolean).join(" ");
 
   // The long form of what an edit replaced, for the tooltip. The short form is
   // on the page.
@@ -553,6 +572,9 @@ export default async function VerifyPage({
       {/* Each field keeps its permanent location in the review sheet. */}
       <form action={saveVerifyFields} id="vsheet" className="vsheet">
         <input type="hidden" name="session_id" value={sheet.session.id} />
+
+        {/* Said once here rather than on every row. See Source above. */}
+        <p className="vsheet-legend">Values come from the CRM unless marked.</p>
 
         {GROUPS.map(({ group, blurb }) => {
           const fields = byGroup(group);

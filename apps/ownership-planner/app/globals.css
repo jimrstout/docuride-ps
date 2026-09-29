@@ -1120,6 +1120,9 @@ button { cursor: pointer; }
 }
 
 .tag--live { background: var(--cream); color: var(--ink-70); border: var(--bw) solid var(--line); }
+/* A CRM row on Verify: no chip is shown, but the chip's space is kept so rows
+   with and without one line up. */
+.tag--none { visibility: hidden; }
 .tag--expired { background: var(--copper-tint); color: var(--copper-deep); border: var(--bw) solid var(--copper); }
 
 /* ── Sign in ───────────────────────────────────────────────────────────── */
@@ -1348,6 +1351,7 @@ button { cursor: pointer; }
 }
 .vattention-actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
 .vsheet { min-width: 0; }
+.vsheet-legend { margin: 0; font-size: var(--fs-xs); color: var(--ink-70); }
 .vfield { scroll-margin-top: var(--s5); }
 .vfield:target { outline: 2px solid var(--copper); outline-offset: 2px; }
 @media (min-width: 75rem) {
@@ -1359,10 +1363,11 @@ button { cursor: pointer; }
   .vsheet {
     grid-column: 2; grid-row: 1;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-areas: "deal vehicle customer" "money vehicle customer";
+    grid-template-areas: "legend legend legend" "deal vehicle customer" "money vehicle customer";
     column-gap: var(--s4); row-gap: var(--s3);
   }
   .vworkspace:not(:has(.vattention)) .vsheet { grid-column: 1; }
+  .vsheet-legend { grid-area: legend; }
   .vgroup--vehicle .vgroup-fields { display: grid; columns: auto; }
   .vgroup--vehicle .vfield { margin-bottom: 0; }
   .console--verify .vgroup-head { padding-bottom: var(--s1); border-bottom: var(--bw) solid var(--line); }
