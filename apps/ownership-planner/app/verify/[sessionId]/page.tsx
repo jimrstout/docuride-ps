@@ -500,13 +500,16 @@ export default async function VerifyPage({
               <div>
                 <p className="vattention-kicker">Finish verification</p>
                 <h2 id="vattention-title">{attention.length} {attention.length === 1 ? "item needs" : "items need"} attention</h2>
-                <p>Complete these fields, then save to update the rating status.</p>
+                <p>Complete these fields, then save.</p>
               </div>
-              {attention.some((f) => f.key === "engine.ccs" || f.key === "fuel.type") ? (
-                <button type="submit" form="vin-decode" className="btn btn--quiet" title="Decoding reloads this page. Save any other edits first.">
-                  Decode VIN for engine and fuel
-                </button>
-              ) : null}
+              <div className="vattention-actions">
+                {attention.some((f) => f.key === "engine.ccs" || f.key === "fuel.type") ? (
+                  <button type="submit" form="vin-decode" className="btn btn--quiet" title="Decoding reloads this page. Save any other edits first.">
+                    Decode VIN
+                  </button>
+                ) : null}
+                <button type="submit" form="vsheet" className="btn btn--go">Save changes</button>
+              </div>
             </div>
             <div className="vattention-fields">
               {attention.map((f) => <Field key={f.key} field={f} />)}
