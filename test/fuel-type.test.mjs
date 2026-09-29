@@ -218,10 +218,10 @@ test("a fuel edit accepts the three words and nothing else, on both sides", () =
 test("the save path refuses an unreadable fuel type and stores the word", () => {
   const verify = src("../supabase/functions/fni-session-verify/index.ts");
   assert.match(verify, /castForProperty\(target, value\)/);
-  assert.match(verify, /value: stored,/);
-  // Choosing what the deal already resolves to is not an edit, so Save never
-  // turns the default into one.
-  assert.match(verify, /key === "fuel\.type" && stored === baseField\?\.value/);
+  // The word is what is stored, through the general "only a real change is an
+  // edit" rule, which also covers choosing the value the deal already resolves
+  // to. See test/staff-edits.test.mjs for that rule itself.
+  assert.match(verify, /editFor\(target, stored, baseByKey\.get\(key\), edits\[key\], editedBy, now\)/);
 });
 
 test("the Verify page offers fuel type as a three-way dropdown", () => {

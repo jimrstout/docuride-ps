@@ -45,6 +45,7 @@ import {
   type StaffEdits,
 } from "../_shared/staff-edits.ts";
 import { parseRequiredProperties, readRateProperties } from "../_shared/rate-properties.ts";
+import { editFor } from "./save-edits.ts";
 import {
   duplicateVinWarning,
   occupiesSlot,
@@ -413,31 +414,17 @@ async function save(
       stored = cast;
     }
 
-    const wasEdited = edits[key];
-    const baseField = baseByKey.get(key);
-
-    // ── Fuel type is a dropdown, so it is always posted ────────────────────
-    // A text box that nobody touched posts what it showed, and so does a
-    // select. For fuel type that would turn the Gasoline default into a staff
-    // edit on every Save, and the sheet could no longer say it was not
-    // checked. So choosing the value the deal already resolves to without
-    // any edit is "go back to the original", the same as clearing a box.
-    if (key === "fuel.type" && stored === baseField?.value) {
+    // ── Only a real change is an edit ──────────────────────────────────────
+    // The form posts every input, pre-filled with what the sheet showed, so a
+    // value that means the same as the unedited one is not an edit, and it
+    // clears any earlier edit to that field. Compared by meaning, not by
+    // string: "$24,999.00" and "24999" are one price. See ./save-edits.ts.
+    const edit = editFor(target, stored, baseByKey.get(key), edits[key], editedBy, now);
+    if (edit === null) {
       delete edits[key];
       continue;
     }
-
-    edits[key] = {
-      value: stored,
-      // An existing edit keeps its first original. Editing a price twice still
-      // records what the CRM said, not what the last person typed.
-      original: wasEdited ? wasEdited.original : (baseField?.value ?? null),
-      original_source: wasEdited
-        ? wasEdited.original_source
-        : (baseField?.source ?? "Missing"),
-      edited_by: editedBy,
-      edited_at: now,
-    };
+    edits[key] = edit;
   }
 
   if (rejected.length > 0) {

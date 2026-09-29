@@ -399,6 +399,10 @@ import { readFileSync } from "node:fs";
 const src = (f) => readFileSync(new URL(f, import.meta.url), "utf8");
 
 const verifyFn = src("../supabase/functions/fni-session-verify/index.ts");
+const saveEditsFn = readFileSync(
+  new URL("../supabase/functions/fni-session-verify/save-edits.ts", import.meta.url),
+  "utf8"
+);
 const rateFn = src("../supabase/functions/fni-rate-vehicle/index.ts");
 const plannerFn = src("../supabase/functions/fni-session-get/index.ts");
 const migration = src("../supabase/migrations/0016_staff_edits.sql");
@@ -410,7 +414,9 @@ test("the edits live in their own column, not over the CRM's", () => {
 
 test("an edit is refused without a name on it", () => {
   assert.match(verifyFn, /edited_by is required: an edit names a person\./);
-  assert.match(verifyFn, /edited_by: editedBy/);
+  // The edit itself is built in save-edits.ts, with the same name on it.
+  assert.match(verifyFn, /editFor\(target, stored, baseByKey\.get\(key\), edits\[key\], editedBy, now\)/);
+  assert.match(saveEditsFn, /edited_by: editedBy/);
 });
 
 test("the fixed three-key allowlist is gone", () => {
@@ -423,13 +429,14 @@ test("the fixed three-key allowlist is gone", () => {
 test("a second edit keeps the first original", () => {
   // Editing a price twice must still record what the CRM said, not what the last
   // person typed, or the audit trail loses the only figure that mattered.
-  assert.match(verifyFn, /wasEdited \? wasEdited\.original :/);
+  // Built in save-edits.ts now, where save() gets each edit from.
+  assert.match(saveEditsFn, /original: existing \? existing\.original :/);
 });
 
 test("an unreadable value is refused before it is stored", () => {
   const save = verifyFn.slice(verifyFn.indexOf("async function save("));
   const guard = save.indexOf("castForColumn(target, value) === null");
-  const stored = save.indexOf("edits[key] = {");
+  const stored = save.indexOf("edits[key] = edit;");
   assert.ok(guard > 0 && guard < stored);
 });
 
@@ -532,4 +539,121 @@ test("no provenance reaches the customer's browser", () => {
   for (const leak of ["edited_by", "original_source", "crm_warning", "crm_mismatches"]) {
     assert.ok(!plannerFn.includes(leak), `${leak} must not reach the planner payload`);
   }
+});
+
+// ── Save: only a real change is an edit ──────────────────────────────────
+//
+// The Verify form posts every input, pre-filled with what the sheet showed. A
+// value that means the same as the unedited one must not become an edit, or a
+// single press of Save marks every field "Edited by Staff, was <same value>".
+// Session 9906521b did exactly that.
+
+import { editFor, sameAsUnedited } from "../supabase/functions/fni-session-verify/save-edits.ts";
+import { castForProperty } from "../supabase/functions/_shared/staff-edits.ts";
+
+/**
+ * What save() does with a posted form, minus the endpoint around it: skip a
+ * blank, cast a property to the stored form, then keep or drop the edit.
+ */
+function simulateSave(session, posted, edits = {}) {
+  const base = new Map(buildVerification(session, []).fields.map((f) => [f.key, f]));
+  const out = { ...edits };
+  const now = "2026-09-29T18:00:00.000Z";
+  for (const [key, raw] of Object.entries(posted)) {
+    const value = String(raw).trim();
+    if (value === "") { delete out[key]; continue; }
+    const target = editTargetFor(key);
+    let stored = value;
+    if (target && target.kind === "property") stored = castForProperty(target, value);
+    const next = editFor(target, stored, base.get(key), out[key], "Jim", now);
+    if (next === null) delete out[key];
+    else out[key] = next;
+  }
+  return out;
+}
+
+/** Every editable field posted exactly as the sheet displays it. */
+function postedAsShown(session) {
+  const s = buildVerification(session, UTV);
+  const keys = new Set(editableKeys(session));
+  return Object.fromEntries(
+    s.fields.filter((f) => keys.has(f.key) && f.value !== null).map((f) => [f.key, f.value])
+  );
+}
+
+test("posting every field unchanged creates no edits", () => {
+  // A financed deal, so the money fields are open too, with values that show
+  // formatted: "$24,999.00", "6.99%", "Finance", and a decode for engine and fuel.
+  const deal = defender({
+    finance_type: "Loan", lienholder_name: "Roadrunner Financial LLC.",
+    sale_price: "24999", amount_financed: "26500.5", apr: 6.99,
+    finance_term: 60, finance_term_total: 60,
+    vin_decode: { displacement: "650", fuelType: "G", vtype: "UTV" },
+    vehicle_properties: { warranty: "6" },
+  });
+  const posted = postedAsShown(deal);
+  // The sheet really does show them formatted, so this is the case that broke.
+  assert.equal(posted.sale_price, "$24,999.00");
+  assert.equal(posted.apr, "6.99%");
+  assert.equal(posted.deal_type, "Finance");
+  assert.ok(Object.keys(posted).length >= 15, "most of the sheet is posted");
+
+  assert.deepEqual(simulateSave(deal, posted), {});
+});
+
+test("a formatting-only difference is not an edit", () => {
+  const target = editTargetFor("sale_price");
+  for (const same of ["24999", "24,999", "$24,999.00", " 24999.00 "]) {
+    assert.equal(sameAsUnedited(target, same, "$24,999.00"), true, same);
+  }
+  assert.equal(sameAsUnedited(editTargetFor("apr"), "6.99", "6.99%"), true);
+  assert.equal(sameAsUnedited(editTargetFor("deal_type"), "Loan", "Finance"), true);
+  assert.equal(sameAsUnedited(editTargetFor("sale_date"), "09/26/2026", "2026-09-26"), true);
+  assert.equal(sameAsUnedited(editTargetFor("vehicle_type_code"), "utv", "UTV"), true);
+
+  const deal = defender({ sale_price: "24999" });
+  assert.deepEqual(simulateSave(deal, { sale_price: "24999" }), {});
+});
+
+test("a real change creates exactly one edit", () => {
+  const deal = defender({ sale_price: "24999" });
+  const posted = { ...postedAsShown(deal), sale_price: "23500" };
+  const edits = simulateSave(deal, posted);
+  assert.deepEqual(Object.keys(edits), ["sale_price"]);
+  assert.equal(edits.sale_price.value, "23500");
+  assert.equal(edits.sale_price.original, "$24,999.00");
+  assert.equal(edits.sale_price.original_source, "CRM");
+
+  // Typing into an empty field is always an edit.
+  assert.equal(sameAsUnedited(editTargetFor("engine.ccs"), "650", null), false);
+});
+
+test("setting an edited field back to the original removes the edit", () => {
+  const deal = defender({ sale_price: "24999" });
+  const first = simulateSave(deal, { sale_price: "23500" });
+  assert.ok(first.sale_price);
+  const back = simulateSave(deal, { sale_price: "$24,999.00" }, first);
+  assert.deepEqual(back, {});
+
+  // And a second real change keeps the first original.
+  const twice = simulateSave(deal, { sale_price: "23000" }, first);
+  assert.equal(twice.sale_price.value, "23000");
+  assert.equal(twice.sale_price.original, "$24,999.00");
+});
+
+test("choosing the fuel type the deal already resolves to creates no edit", () => {
+  // The Gasoline default, and a decoded diesel.
+  assert.deepEqual(simulateSave(defender(), { "fuel.type": "Gasoline" }), {});
+  const diesel = defender({ vin_decode: { fuelType: "D" } });
+  assert.deepEqual(simulateSave(diesel, { "fuel.type": "Diesel" }), {});
+  // A different choice is an edit, stored as the word.
+  assert.equal(simulateSave(diesel, { "fuel.type": "Electric" })["fuel.type"].value, "Electric");
+});
+
+test("save() uses the general rule and no fuel-only special case", () => {
+  const verify = readFileSync(
+    new URL("../supabase/functions/fni-session-verify/index.ts", import.meta.url), "utf8");
+  const save = verify.slice(verify.indexOf("async function save("), verify.indexOf("async function discardEdits("));
+  assert.match(save, /const edit = editFor\(target, stored, baseByKey\.get\(key\), edits\[key\], editedBy, now\);\s*if \(edit === null\) \{\s*delete edits\[key\];\s*continue;\s*\}/);
+  assert.doesNotMatch(save, /key === "fuel\.type"/);
 });
