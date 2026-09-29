@@ -28,6 +28,7 @@ import { currentOperator } from "@/lib/admin-session";
 import { currentChecker } from "@/lib/checker";
 import { edge, EdgeError, isSessionId } from "@/lib/edge";
 import type { FieldGroup, VerifyField, VerifySheet } from "@/lib/types";
+import { VerifySidebarFields } from "@/components/VerifySidebarFields";
 import {
   VERIFY_FLASH_COOKIE,
   decodeVerifyFlash,
@@ -141,7 +142,7 @@ function Field({ field }: { field: VerifyField }) {
     : "";
 
   return (
-    <div className={`vfield ${state}`} title={tip}>
+    <div id={`field-${field.key}`} className={`vfield ${state}`} title={tip}>
       <label className="vfield-label" htmlFor={field.editable ? id : undefined}>
         {field.label}
         {field.required ? (
@@ -486,47 +487,28 @@ export default async function VerifyPage({
       {/* Put work that blocks verification ahead of the reference sheet. Each
           field appears in exactly one place so edits cannot conflict. */}
       <div className="vworkspace">
-      {/* ── The sheet ──────────────────────────────────────────────────── */}
-      {/* Four groups in three columns on a desktop, so every field is on screen
-          at once: Deal and Money on the left, Vehicle (the long one, and where
-          the gaps are) in the middle, Customer on the right. One column below
-          that width. The group blurbs moved into the heading tooltips. */}
+      {attention.length > 0 ? (
+        <aside className="vattention" aria-labelledby="vattention-title">
+          <p className="vattention-kicker">To complete</p>
+          <h2 id="vattention-title">{attention.length} required {attention.length === 1 ? "field" : "fields"}</h2>
+          <VerifySidebarFields fields={attention.map((f) => ({
+            key: f.key, label: f.label, group: f.group, value: f.value,
+          }))} />
+          <div className="vattention-actions">
+            {attention.some((f) => f.key === "engine.ccs" || f.key === "fuel.type") ? (
+              <button type="submit" form="vin-decode" className="btn btn--quiet" title="Decoding reloads this page. Save any other edits first.">Decode VIN</button>
+            ) : null}
+            <button type="submit" form="vsheet" className="btn btn--go">Save changes</button>
+          </div>
+        </aside>
+      ) : null}
+
+      {/* Each field keeps its permanent location in the review sheet. */}
       <form action={saveVerifyFields} id="vsheet" className="vsheet">
         <input type="hidden" name="session_id" value={sheet.session.id} />
 
-        {attention.length > 0 ? (
-          <section className="vattention" aria-labelledby="vattention-title">
-            <div className="vattention-head">
-              <div>
-                <p className="vattention-kicker">Finish verification</p>
-                <h2 id="vattention-title">{attention.length} {attention.length === 1 ? "item needs" : "items need"} attention</h2>
-                <p>Complete these fields, then save.</p>
-              </div>
-              <div className="vattention-actions">
-                {attention.some((f) => f.key === "engine.ccs" || f.key === "fuel.type") ? (
-                  <button type="submit" form="vin-decode" className="btn btn--quiet" title="Decoding reloads this page. Save any other edits first.">
-                    Decode VIN
-                  </button>
-                ) : null}
-                <button type="submit" form="vsheet" className="btn btn--go">Save changes</button>
-              </div>
-            </div>
-            <div className="vattention-fields">
-              {attention.map((f) => <Field key={f.key} field={f} />)}
-            </div>
-          </section>
-        ) : null}
-
-        <div className="vreference-intro">
-          <div>
-            <p className="vattention-kicker">Deal review</p>
-            <h2>Rate inputs and sources</h2>
-          </div>
-          <p>Review the CRM values and any saved corrections before confirming.</p>
-        </div>
-
         {GROUPS.map(({ group, blurb }) => {
-          const fields = byGroup(group).filter((f) => !f.missing && !f.invalid);
+          const fields = byGroup(group);
           if (fields.length === 0) return null;
           return (
             <section className={`vgroup vgroup--${group.toLowerCase()}`} key={group}>
