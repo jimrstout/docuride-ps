@@ -1322,6 +1322,64 @@ button { cursor: pointer; }
   .console--verify .vtools { margin-top: var(--s3); }
 }
 
+/* Permanent field locations, with a compact navigation rail for gaps. */
+.vworkspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
+.vattention {
+  min-width: 0; box-shadow: none; padding: var(--s3);
+  border: var(--bw) solid var(--line); background: var(--paper);
+}
+.vattention h2 { font-family: var(--font-serif); font-size: var(--fs-title); margin: 0 0 var(--s2); }
+.vattention-kicker { margin: 0 0 2px !important; }
+.vattention-links { display: grid; gap: 0; }
+.vattention-links a {
+  display: flex; justify-content: space-between; gap: var(--s2);
+  padding: var(--s2) 0; border-bottom: var(--bw) solid var(--line-soft);
+  color: var(--ink); text-decoration: none; font-size: var(--fs-xs);
+}
+.vattention-links a:hover span { text-decoration: underline; }
+.vattention-links small { color: var(--ink-55); white-space: nowrap; }
+.vattention-item { padding: var(--s1) 0; border-bottom: var(--bw) solid var(--line-soft); }
+.vattention-item-head { display: flex; justify-content: space-between; gap: var(--s1); font-size: var(--fs-xs); }
+.vattention-item-head a { display: inline; padding: 0; border: 0; font-weight: 600; }
+.vattention-item input {
+  width: 100%; min-height: 1.8rem; margin-top: 2px; padding: 0 var(--s2);
+  border: var(--bw) solid var(--line-strong); border-radius: var(--r-sm);
+  background: var(--paper); font-size: var(--fs-base);
+}
+.vattention-actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+.vsheet { min-width: 0; }
+.vfield { scroll-margin-top: var(--s5); }
+.vfield:target { outline: 2px solid var(--copper); outline-offset: 2px; }
+@media (min-width: 75rem) {
+  .vworkspace { grid-template-columns: 14rem minmax(0, 1fr); align-items: start; column-gap: var(--s4); }
+  .vworkspace:not(:has(.vattention)) { grid-template-columns: 1fr; }
+  .vattention { grid-column: 1; grid-row: 1 / span 2; position: sticky; top: var(--s3); }
+  .vattention-actions { flex-direction: column; }
+  .vattention-actions .btn { width: 100%; }
+  .vsheet {
+    grid-column: 2; grid-row: 1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas: "deal vehicle customer" "money vehicle customer";
+    column-gap: var(--s4); row-gap: var(--s3);
+  }
+  .vworkspace:not(:has(.vattention)) .vsheet { grid-column: 1; }
+  .vgroup--vehicle .vgroup-fields { display: grid; columns: auto; }
+  .vgroup--vehicle .vfield { margin-bottom: 0; }
+  .console--verify .vgroup-head { padding-bottom: var(--s1); border-bottom: var(--bw) solid var(--line); }
+  .console--verify .vgroup .vfield {
+    grid-template-columns: minmax(6.5rem, 42%) minmax(0, 1fr) 2.7rem;
+    column-gap: var(--s1); min-height: 2rem;
+  }
+  .console--verify .vgroup .vfield > .tag { font-size: var(--fs-xs); }
+  .console--verify .vgroup .vfield.is-missing { background: var(--copper-tint); border-left: 2px solid var(--copper); padding-left: var(--s1); }
+  .console--verify .vgroup .vfield.is-missing > .tag,
+  .console--verify .vgroup .vfield.is-invalid > .tag { display: none; }
+  .console--verify .vgroup .vfield-note { display: none; }
+  .console--verify .vgroup .vfield input { min-height: 1.7rem; }
+  .vtools { grid-column: 2; grid-row: 2; }
+  .vworkspace:not(:has(.vattention)) .vtools { grid-column: 1; }
+}
+
 .settings-form {
   display: grid; gap: var(--s6);
   max-width: 62ch;
