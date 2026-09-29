@@ -15,6 +15,17 @@
 //
 // Input (POST JSON):
 //   session_id  - fni.sessions id (required)
+//   auto        - true when the Verify page asks on its own, the first time it
+//                 opens. It then decodes only if this session was never decoded
+//                 and never tried, and otherwise returns { skipped: true }.
+//
+// ── Every attempt is recorded ────────────────────────────────────────────
+// vin_decode_attempted_at is written BEFORE TecAssured is called, and
+// vin_decode_error holds the reason when it fails. Written first so that an
+// attempt the caller gave up on (the page waits about five seconds) still counts
+// as tried, and a TecAssured outage costs one automatic try per session rather
+// than one per page load. The Decode the VIN button is the manual retry, and it
+// always runs. Migration 0017.
 //
 // Auth: FNI_WEBHOOK_SECRET, as every other fni function.
 //
@@ -26,6 +37,9 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { createTecAssuredClient } from "../_shared/tecassured.ts";
+
+/** Kept short: it is shown to staff and stored on the row. */
+const MAX_ERROR = 300;
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -63,10 +77,23 @@ serve(async (req: Request) => {
     return json(400, { error: "A well-formed session_id is required" });
   }
 
+  const auto = body.auto === true;
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
+
+  /** Record why this attempt failed, then answer with it. */
+  const failed = async (status: number, message: string): Promise<Response> => {
+    const { error } = await supabase
+      .schema("fni")
+      .from("sessions")
+      .update({ vin_decode_error: message.slice(0, MAX_ERROR) })
+      .eq("id", sessionId);
+    if (error) console.error(`fni-vin-decode could not record the failure: ${error.message}`);
+    return json(status, { error: message });
+  };
 
   try {
     // Three columns, not the row. This function needs the VIN and the store and
@@ -74,32 +101,69 @@ serve(async (req: Request) => {
     const { data: session } = await supabase
       .schema("fni")
       .from("sessions")
-      .select("id, store_id, vin")
+      .select("id, store_id, vin, vin_decode_at, vin_decode_attempted_at")
       .eq("id", sessionId)
       .maybeSingle();
 
     if (!session) return json(404, { error: "Session not found" });
-    const s = session as { id: string; store_id: string; vin: string | null };
+    const s = session as {
+      id: string;
+      store_id: string;
+      vin: string | null;
+      vin_decode_at: string | null;
+      vin_decode_attempted_at: string | null;
+    };
 
     const vin = typeof s.vin === "string" ? s.vin.trim() : "";
     if (vin === "") {
       return json(400, { error: "This deal has no VIN, so there is nothing to decode." });
     }
 
+    // ── Claim the attempt ──────────────────────────────────────────────────
+    // An automatic decode claims it conditionally, so two page loads at once
+    // cannot both call TecAssured: only the one whose update matched a row goes
+    // on. A manual decode always goes on, and is recorded the same way.
+    const attemptedAt = new Date().toISOString();
+    if (auto) {
+      if (s.vin_decode_at !== null || s.vin_decode_attempted_at !== null) {
+        return json(200, { session_id: s.id, skipped: true });
+      }
+      const { data: claimed, error: claimErr } = await supabase
+        .schema("fni")
+        .from("sessions")
+        .update({ vin_decode_attempted_at: attemptedAt, vin_decode_error: null })
+        .eq("id", s.id)
+        .is("vin_decode_at", null)
+        .is("vin_decode_attempted_at", null)
+        .select("id");
+      if (claimErr) return json(500, { error: claimErr.message });
+      if (!claimed || claimed.length === 0) {
+        return json(200, { session_id: s.id, skipped: true });
+      }
+    } else {
+      const { error: markErr } = await supabase
+        .schema("fni")
+        .from("sessions")
+        .update({ vin_decode_attempted_at: attemptedAt, vin_decode_error: null })
+        .eq("id", s.id);
+      if (markErr) return json(500, { error: markErr.message });
+    }
+
     let store;
     try {
       store = await createTecAssuredClient(s.store_id, supabase);
     } catch (err) {
-      return json(400, { error: err instanceof Error ? err.message : String(err) });
+      return await failed(400, err instanceof Error ? err.message : String(err));
     }
 
     let decoded: unknown;
     try {
       decoded = await store.client.decodePowersports(vin);
     } catch (err) {
-      return json(502, {
-        error: `TecAssured could not decode ${vin}: ${err instanceof Error ? err.message : String(err)}`,
-      });
+      return await failed(
+        502,
+        `TecAssured could not decode ${vin}: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
 
     // A refusal comes back as HTTP 200 with an error string, as everywhere else in
@@ -110,21 +174,21 @@ serve(async (req: Request) => {
     const decodeBody = (decoded ?? {}) as Record<string, unknown>;
     const refusal = typeof decodeBody.error === "string" ? decodeBody.error.trim() : "";
     if (refusal !== "") {
-      return json(400, { error: `TecAssured could not decode ${vin}: ${refusal}` });
+      return await failed(400, `TecAssured could not decode ${vin}: ${refusal}`);
     }
     if (Object.keys(decodeBody).length === 0) {
-      return json(400, {
-        error:
-          `TecAssured returned nothing for ${vin}. This dealer code may not support ` +
-          `VIN decoding, or the VIN is not one it recognises. Type the engine size instead.`,
-      });
+      return await failed(
+        400,
+        `TecAssured returned nothing for ${vin}. This dealer code may not support ` +
+          `VIN decoding, or the VIN is not one it recognises. Type the engine size instead.`
+      );
     }
 
     const decodedAt = new Date().toISOString();
     const { error } = await supabase
       .schema("fni")
       .from("sessions")
-      .update({ vin_decode: decodeBody, vin_decode_at: decodedAt })
+      .update({ vin_decode: decodeBody, vin_decode_at: decodedAt, vin_decode_error: null })
       .eq("id", s.id);
 
     if (error) return json(500, { error: error.message });
@@ -139,6 +203,6 @@ serve(async (req: Request) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("fni-vin-decode error:", message);
-    return json(500, { error: message });
+    return await failed(500, message);
   }
 });

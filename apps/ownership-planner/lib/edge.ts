@@ -59,7 +59,13 @@ function secret(): string {
  */
 async function call<T>(
   fn: string,
-  init: { method: "GET" | "POST"; query?: Record<string, string>; body?: unknown }
+  init: {
+    method: "GET" | "POST";
+    query?: Record<string, string>;
+    body?: unknown;
+    /** Give up after this long. Only the automatic VIN decode sets one. */
+    timeoutMs?: number;
+  }
 ): Promise<T> {
   const url = new URL(`${base()}/${fn}`);
   for (const [k, v] of Object.entries(init.query ?? {})) {
@@ -75,6 +81,7 @@ async function call<T>(
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
     // Session data changes as the customer works; never serve it from a cache.
     cache: "no-store",
+    signal: init.timeoutMs !== undefined ? AbortSignal.timeout(init.timeoutMs) : undefined,
   });
 
   const text = await res.text();
@@ -152,8 +159,12 @@ export const edge = {
   /** Ask TecAssured what a VIN is. Its own function, not a verify action: it is
    *  the only part of this screen that calls the provider, and keeping it here
    *  made the sheet endpoint bundle the whole TecAssured client. */
-  vinDecode: <T>(sessionId: string) =>
-    call<T>("fni-vin-decode", { method: "POST", body: { session_id: sessionId } }),
+  vinDecode: <T>(sessionId: string, opts: { auto?: boolean; timeoutMs?: number } = {}) =>
+    call<T>("fni-vin-decode", {
+      method: "POST",
+      body: opts.auto ? { session_id: sessionId, auto: true } : { session_id: sessionId },
+      timeoutMs: opts.timeoutMs,
+    }),
 
   /** Void a contract, or clear a session parked at Submit Status Unknown.
    *  Staff only, and both are recorded against whoever is signed in. */

@@ -173,8 +173,8 @@ test("the Verify sheet shows Term and APR from CRM, not as Missing", () => {
 
   assert.deepEqual(
     sheet.missing.map((f) => f.key).sort(),
-    ["engine.ccs", "fuel.type", "warranty"],
-    "only the three fields no system carries are left"
+    ["engine.ccs", "warranty"],
+    "only the two fields no system carries are left (fuel type defaults to Gasoline)"
   );
 });
 

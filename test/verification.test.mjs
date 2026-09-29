@@ -47,11 +47,13 @@ const byKey = (s) => Object.fromEntries(s.fields.map((f) => [f.key, f]));
 
 // ── What the Defender is missing, and in what order it stops missing it ────
 
-test("a fresh cash deal is missing exactly the three fields nothing carries", () => {
+test("a fresh cash deal is missing exactly the two fields nothing carries", () => {
+  // Fuel type is no longer one of them: it defaults to Gasoline, shown as Default.
   const s = sheet();
   assert.deepEqual(s.missing.map((f) => f.key).sort(), [
-    "engine.ccs", "fuel.type", "warranty",
+    "engine.ccs", "warranty",
   ]);
+  assert.equal(byKey(s)["fuel.type"].source, "Default");
   assert.equal(s.ready, false);
 });
 
@@ -63,7 +65,8 @@ test("the VIN decode answers two of the three", () => {
   const f = byKey(s);
   assert.equal(f["engine.ccs"].value, "650");
   assert.equal(f["engine.ccs"].source, "VIN Decode");
-  assert.equal(f["fuel.type"].value, "G");
+  // Stored as the code TecAssured sent, shown as the word.
+  assert.equal(f["fuel.type"].value, "Gasoline");
   assert.equal(f["fuel.type"].source, "VIN Decode");
 });
 

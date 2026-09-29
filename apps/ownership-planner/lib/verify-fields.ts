@@ -61,6 +61,13 @@ export const RATING_INPUT_NAMES: readonly string[] = [
 const NAMES = new Set(RATING_INPUT_NAMES);
 
 /**
+ * The only values fuel type may be saved as. The Verify sheet offers exactly
+ * these in a dropdown, and _shared/fuel-type.ts FUEL_TYPES is the same list:
+ * test/fuel-type.test.mjs keeps the two in step.
+ */
+export const FUEL_TYPE_CHOICES: readonly string[] = ["Gasoline", "Electric", "Diesel"];
+
+/**
  * Is this form field an edit to the deal?
  *
  * The `$` test is redundant given the allow-list and is kept anyway, because it
@@ -79,6 +86,9 @@ export function ratingInputsFrom(
   for (const [key, value] of entries) {
     if (typeof value !== "string") continue;
     if (!isRatingInputName(key)) continue;
+    // Fuel type is one of three words or nothing. Anything else did not come
+    // from the dropdown and is not forwarded.
+    if (key === "fuel.type" && value !== "" && !FUEL_TYPE_CHOICES.includes(value)) continue;
     // A blank box is sent through on purpose: that is how a person puts the
     // original CRM value back.
     out[key] = value;

@@ -40,6 +40,7 @@ import {
 import {
   applyStaffEdits,
   castForColumn,
+  castForProperty,
   parseStaffEdits,
   type StaffEdits,
 } from "../_shared/staff-edits.ts";
@@ -94,6 +95,10 @@ const COLUMNS = [
   "interest_rate", "finance_term_total", "tila_amount_financed", "lienholder_name",
   "buyer_city", "buyer_state", "buyer_zip",
   "vehicle_properties", "vin_decode", "vin_decode_at",
+  // The last decode attempt, successful or not. The Verify page decodes on its
+  // own only when both this and vin_decode_at are empty, so a TecAssured outage
+  // costs one try per session rather than one per page load. Migration 0017.
+  "vin_decode_attempted_at", "vin_decode_error",
   "verification_state", "verified_at", "verified_by", "verified_snapshot",
   // For the duplicate warnings and the submit lock, both of which the verify
   // screen now shows.
@@ -297,6 +302,8 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
       : { state: "Pending", product_count: 0, out_of_date: false, rated_at: null, detail: null },
     vin_decode: s.vin_decode ?? null,
     vin_decode_at: s.vin_decode_at ?? null,
+    vin_decode_attempted_at: s.vin_decode_attempted_at ?? null,
+    vin_decode_error: s.vin_decode_error ?? null,
     // Case 3. A warning with the other deal numbers in it, and the ids so the
     // screen can link straight there rather than making staff go hunting.
     duplicate_vin: duplicates.length > 0
@@ -394,11 +401,34 @@ async function save(
       continue;
     }
 
+    // A field kept in vehicle_properties. Fuel type takes only Gasoline,
+    // Electric or Diesel, and is stored as the word.
+    let stored = value;
+    if (target && target.kind === "property") {
+      const cast = castForProperty(target, value);
+      if (cast === null) {
+        unreadable.push({ key, label: labelFor(key), value });
+        continue;
+      }
+      stored = cast;
+    }
+
     const wasEdited = edits[key];
     const baseField = baseByKey.get(key);
 
+    // ── Fuel type is a dropdown, so it is always posted ────────────────────
+    // A text box that nobody touched posts what it showed, and so does a
+    // select. For fuel type that would turn the Gasoline default into a staff
+    // edit on every Save, and the sheet could no longer say it was not
+    // checked. So choosing the value the deal already resolves to without
+    // any edit is "go back to the original", the same as clearing a box.
+    if (key === "fuel.type" && stored === baseField?.value) {
+      delete edits[key];
+      continue;
+    }
+
     edits[key] = {
-      value,
+      value: stored,
       // An existing edit keeps its first original. Editing a price twice still
       // records what the CRM said, not what the last person typed.
       original: wasEdited ? wasEdited.original : (baseField?.value ?? null),
@@ -426,7 +456,7 @@ async function save(
         `These values could not be read: ` +
         `${unreadable.map((u) => `${u.label} ("${u.value}")`).join(", ")}. ` +
         `Enter a plain number for money, a whole number for months and miles, ` +
-        `and a date as YYYY-MM-DD.`,
+        `a date as YYYY-MM-DD, and a fuel type as Gasoline, Electric or Diesel.`,
       unreadable,
     });
   }

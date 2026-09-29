@@ -16,6 +16,7 @@
 
 import { financeFigures, type FinanceSource } from "./finance-basis.ts";
 import type { RequiredProperty } from "./rate-properties.ts";
+import { fuelCodeFor, resolveFuelType } from "./fuel-type.ts";
 
 // ─── Building the request ────────────────────────────────────────────────
 
@@ -45,6 +46,10 @@ export interface RateSource {
   buyer_state: string | null;
   buyer_zip: string | null;
   vehicle_properties: Record<string, unknown> | null;
+  // The stored VIN decode. Fuel type falls back to it before the Gasoline
+  // default, exactly as the Verify sheet does. Optional so a caller that never
+  // loaded it still typechecks; absent reads as "not decoded".
+  vin_decode?: Record<string, unknown> | null;
 }
 
 function isoDate(v: unknown): string | null {
@@ -137,20 +142,17 @@ function financeFields(source: RateSource): {
 }
 
 /**
- * Fuel type, defaulting to gasoline.
+ * Fuel type as TecAssured's code: staff choice, then the VIN decode, then the
+ * Gasoline default, through the same resolver the Verify sheet uses.
  *
- * No Zoho field carries it -- Sold_1_Fuel_Type does not exist on the record --
- * and every unit in this dealer group's deal history is gasoline. Section 6.5
- * allows G, E and D, so an electric unit is expressible and a staff member can
- * set it through vehicle_properties; it is the DEFAULT that is gasoline, not the
- * only value.
- *
- * Defaulting is defensible here in a way it would not be for engine size. Fuel
- * type is an eligibility input rather than a price input, the wrong answer is
- * visible on the contract, and the alternative was refusing to rate every deal
- * in the system over a field nobody can currently fill in.
+ * One value for both halves of the request. The properties array used to get
+ * "Gas" from a default here while the top-level fuelType got "G", and a staff
+ * value went into the array as typed. Both now carry the code this returns.
+ * See _shared/fuel-type.ts for why there is a default at all.
  */
-const DEFAULT_FUEL_TYPE = "Gas";
+function fuelTypeCode(source: RateSource): "G" | "E" | "D" {
+  return fuelCodeFor(resolveFuelType(source.vehicle_properties, source.vin_decode).value);
+}
 
 /** New or Used, which is what new.used wants. */
 function newUsed(condition: string | null): string | null {
@@ -185,7 +187,7 @@ function fromSession(source: RateSource): Record<string, string | null> {
     "sale.date": isoDate(source.sale_date),
     "inservice.date": isoDate(source.in_service_date) ?? isoDate(source.sale_date),
     "postal.code": text(source.buyer_zip),
-    "fuel.type": DEFAULT_FUEL_TYPE,
+    "fuel.type": fuelTypeCode(source),
     //
     // Deliberately absent, because no field anywhere carries them and a guess
     // would be a guess at somebody's price: engine.ccs and warranty. Both come
@@ -228,8 +230,12 @@ export function buildRateProperties(
     const key = req.name.toLowerCase();
 
     // The user's value wins: it is the correction, and the session's is the
-    // default it is correcting.
-    const value = text(supplied.get(key)) ?? session[key] ?? null;
+    // default it is correcting. Fuel type is the exception, because its staff
+    // value is already inside the resolution and the array must carry the code,
+    // never the stored word.
+    const value = key === "fuel.type"
+      ? session[key]
+      : text(supplied.get(key)) ?? session[key] ?? null;
 
     if (value === null) {
       missing.push(req);
@@ -263,18 +269,6 @@ export function buildRateProperties(
 // The array is still what requiredproperties asked for, because that is what
 // says which data a given dealer needs for a given vehicle type -- and it is
 // the thing that decides whether we have enough to rate at all.
-
-/** Section 6.5. The only documented values; "Gas" is not one of them. */
-const FUEL_TYPE_CODES: Record<string, string> = {
-  g: "G", gas: "G", gasoline: "G", petrol: "G",
-  e: "E", electric: "E", ev: "E",
-  d: "D", diesel: "D",
-};
-
-function fuelCode(v: unknown): string | null {
-  const raw = text(v);
-  return raw ? FUEL_TYPE_CODES[raw.toLowerCase()] ?? null : null;
-}
 
 export interface RateRequestOptions {
   dealerCode: string;
@@ -320,7 +314,8 @@ export function buildRateRequest(
   // stored `warranty` answers `Warranty` here as it does in the array.
   const displacement = text(supplied.get("engine.ccs")) ?? text(supplied.get("displacement"));
   const warrantyMonths = text(supplied.get("warranty")) ?? text(supplied.get("remainingmwm"));
-  const fuel = fuelCode(supplied.get("fuel.type") ?? supplied.get("fueltype") ?? DEFAULT_FUEL_TYPE);
+  // The same code the properties array carries. See fuelTypeCode.
+  const fuel = fuelTypeCode(source);
 
   const fin = financeFields(source);
 

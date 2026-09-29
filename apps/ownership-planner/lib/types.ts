@@ -301,6 +301,9 @@ export type FieldSource =
   | "VIN Decode"
   | "Entered by Staff"
   | "Edited by Staff"
+  /** Filled in so the deal can be rated, and not checked by anyone. Today only
+   *  fuel type, which defaults to Gasoline. Not Missing: it does not block. */
+  | "Default"
   | "Missing";
 
 export type FieldGroup = "Deal" | "Vehicle" | "Money" | "Customer";
@@ -364,6 +367,11 @@ export interface VerifySheet {
   };
   vin_decode: Record<string, unknown> | null;
   vin_decode_at: string | null;
+  /** When a decode last started, successful or not. The page decodes on its
+   *  own only while this and vin_decode_at are both null. */
+  vin_decode_attempted_at: string | null;
+  /** Why the last decode failed. Null after a success. */
+  vin_decode_error: string | null;
   /** Another open session on this VIN. Null when there is none, which is the
    *  normal case: it is a warning, and it is never shown when there is nothing
    *  to warn about. */

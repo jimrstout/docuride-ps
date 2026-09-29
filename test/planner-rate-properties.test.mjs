@@ -227,13 +227,15 @@ test("fuel type defaults to gasoline and stays overridable", () => {
     buildRateProperties(parseRequiredProperties(UTV).properties,
       session({ vehicle_properties: { "engine.ccs": "650", warranty: "6" } }))
   );
-  assert.equal(dflt["fuel.type"], "Gas");
+  // The array carries TecAssured's code now, the same one as the top-level
+  // fuelType. It used to carry the word "Gas" here while the top level said G.
+  assert.equal(dflt["fuel.type"], "G");
 
   const electric = asMap(
     buildRateProperties(parseRequiredProperties(UTV).properties,
       session({ vehicle_properties: { "engine.ccs": "0", warranty: "6", "fuel.type": "Electric" } }))
   );
-  assert.equal(electric["fuel.type"], "Electric");
+  assert.equal(electric["fuel.type"], "E");
 });
 
 test("a user value overrides the session's", () => {
@@ -306,8 +308,8 @@ test("fuelType is the documented code, not the word we store", () => {
   assert.equal(r("G").fuelType, "G");
   assert.equal(r("Electric").fuelType, "E");
   assert.equal(r("Diesel").fuelType, "D");
-  // The array still echoes what was stored, which is what the proven call sent.
-  assert.equal(r("Gas").properties.find((p) => p.name === "fuel.type").value, "Gas");
+  // The array carries the same code as the top level, never the stored word.
+  assert.equal(r("Gas").properties.find((p) => p.name === "fuel.type").value, "G");
 });
 
 test("one stored value feeds both names for engine size and warranty", () => {

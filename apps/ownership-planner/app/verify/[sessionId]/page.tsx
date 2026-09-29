@@ -30,6 +30,12 @@ import { edge, EdgeError, isSessionId } from "@/lib/edge";
 import type { FieldGroup, VerifyField, VerifySheet } from "@/lib/types";
 import { VerifySidebarFields } from "@/components/VerifySidebarFields";
 import {
+  AUTO_DECODE_TIMEOUT_MS,
+  decodeDidNotAnswer,
+  shouldAutoDecode,
+} from "@/lib/auto-decode";
+import { FUEL_TYPE_CHOICES } from "@/lib/verify-fields";
+import {
   VERIFY_FLASH_COOKIE,
   decodeVerifyFlash,
   flashMessage,
@@ -58,7 +64,7 @@ const GROUPS: { group: FieldGroup; blurb: string }[] = [
 const EDITABLE_HELP: Record<string, string> = {
   "engine.ccs": "Engine displacement in cc.",
   warranty: "Whole months of factory coverage left on the day of sale.",
-  "fuel.type": "G, E or D.",
+  "fuel.type": "Gasoline, Electric or Diesel.",
   vehicle_type_code: "UTV, ATV, MCYC, BIKE, PWAC, BOAT or SNOW.",
   deal_type: "Cash, Finance or Lease.",
   condition: "New or Used.",
@@ -87,7 +93,8 @@ function stamp(iso: string | null): string {
   }).format(t).replace(",", "") + " UTC";
 }
 
-/** The provenance chip. Missing is the only one that shouts. */
+/** The provenance chip. Missing is the only one that shouts. Default is quiet:
+ *  it is a value nobody checked, not a gap. */
 function Source({ source }: { source: VerifyField["source"] }) {
   const tone =
     source === "Missing" ? "tag--expired"
@@ -151,7 +158,19 @@ function Field({ field }: { field: VerifyField }) {
       </label>
 
       <div className="vfield-control">
-        {field.editable ? (
+        {field.editable && field.key === "fuel.type" ? (
+          // A dropdown, because only three answers exist. The Gasoline default
+          // shows as Gasoline with the Default chip beside it. Choosing a value
+          // saves as a staff edit, and choosing what the deal already says
+          // without an edit leaves it as it was.
+          <select id={id} name={field.key} defaultValue={field.value ?? "Gasoline"}>
+            {FUEL_TYPE_CHOICES.map((choice) => (
+              <option key={choice} value={choice}>
+                {choice}
+              </option>
+            ))}
+          </select>
+        ) : field.editable ? (
           <input
             id={id}
             type="text"
@@ -224,6 +243,28 @@ export default async function VerifyPage({
         </p>
       </main>
     );
+  }
+
+  // ── The automatic VIN decode ─────────────────────────────────────────────
+  // Once per session, the first time Verify opens: a VIN, never decoded, never
+  // tried. Server side, through the same function as the Decode the VIN button.
+  // Never allowed to block this page: it gets a few seconds, and a failure or a
+  // timeout is logged and the sheet is shown as it stands. fni-vin-decode
+  // records the attempt before calling TecAssured, so an outage costs one try
+  // per session. Not in fni-session-start: the CRM button must not wait on
+  // TecAssured. See lib/auto-decode.ts.
+  if (shouldAutoDecode(sheet)) {
+    try {
+      await edge.vinDecode<unknown>(sessionId, { auto: true, timeoutMs: AUTO_DECODE_TIMEOUT_MS });
+    } catch (err) {
+      console.error(`automatic vin decode failed for ${sessionId}:`, err);
+    }
+    try {
+      sheet = await edge.verifySheet<VerifySheet>(sessionId);
+    } catch (err) {
+      // The sheet from before the decode is still a correct sheet to show.
+      console.error(`verify sheet reload after decode failed for ${sessionId}:`, err);
+    }
   }
 
   // The one-shot message from whatever action just ran. It arrives in a
@@ -539,13 +580,19 @@ export default async function VerifyPage({
         <form
           id="vin-decode"
           action={decodeVin}
-          title="Asks TecAssured what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed."
+          title="Asks TecAssured what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed. Verify also does this once on its own, the first time it opens."
         >
           <input type="hidden" name="session_id" value={sheet.session.id} />
           <button type="submit" className="btn btn--quiet">
             Decode the VIN
           </button>
         </form>
+
+        {decodeDidNotAnswer(sheet) ? (
+          <p className="vfield-note">
+            The automatic VIN decode did not answer. Press Decode the VIN to try again.
+          </p>
+        ) : null}
 
         {sheet.edited.some((f) => f.in_crm) ? (
           <form

@@ -24,6 +24,8 @@
 // and the rate request -- go through it, so the screen cannot show one set of
 // numbers while the provider is quoted another.
 
+import { fuelChoice } from "./fuel-type.ts";
+
 /** One correction, as recorded the moment it was made. */
 export interface StaffEdit {
   /** Exactly what the person typed. Cast when applied, not when stored. */
@@ -198,6 +200,24 @@ export function castForColumn(
     default:
       return v;
   }
+}
+
+/**
+ * A value for a field stored in vehicle_properties, or null if it cannot be one.
+ *
+ * Fuel type accepts only Gasoline, Electric or Diesel, and stores the word as
+ * written here. Older rows can hold G, E, D or Gas, and those are still read
+ * (see _shared/fuel-type.ts), but a new edit is always one of the three words.
+ * Engine size and warranty are taken as typed, as before.
+ */
+export function castForProperty(
+  target: Extract<EditTarget, { kind: "property" }>,
+  raw: string
+): string | null {
+  const v = raw.trim();
+  if (v === "") return null;
+  if (target.key === "fuel.type") return fuelChoice(v);
+  return v;
 }
 
 /**

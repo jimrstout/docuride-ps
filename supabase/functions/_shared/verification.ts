@@ -45,6 +45,7 @@
 // financing it while deal type above is the field that decides how it rates.
 
 import { financeFigures, type FinanceSource } from "./finance-basis.ts";
+import { resolveFuelType } from "./fuel-type.ts";
 import {
   EDITED_SOURCE,
   applyStaffEdits,
@@ -67,6 +68,10 @@ export type FieldSource =
   | "VIN Decode"
   | "Entered by Staff"
   | "Edited by Staff"
+  // A value nobody supplied and nobody checked, filled in so the deal can still
+  // be rated. Today only fuel type, which defaults to Gasoline. It is not
+  // Missing and does not block Confirm; it says the value was not checked.
+  | "Default"
   | "Missing";
 
 export type FieldGroup = "Deal" | "Vehicle" | "Money" | "Customer";
@@ -480,8 +485,12 @@ const SPECS: Spec[] = [
   },
   {
     key: "fuel.type", label: "Fuel type", group: "Vehicle", provider_property: "fuel.type",
-    resolve: (s) => staffThenDecode(s, "fuel.type", "fuelType"),
-    note: "From the VIN decode. G is gasoline, E electric, D diesel.",
+    // The same resolution the rate request uses, so the sheet and the request
+    // cannot disagree. See _shared/fuel-type.ts.
+    resolve: (s) => resolveFuelType(s.vehicle_properties, s.vin_decode),
+    note:
+      "From the VIN decode, or Gasoline by default when nothing else says. " +
+      "Choose Electric or Diesel if that is what it is.",
   },
 
   // ── Money ──────────────────────────────────────────────────────────────
@@ -657,7 +666,9 @@ export function buildVerification(
       // An edit over a value something else supplied reads differently from a
       // field only a person could fill in, and the screen shows the difference.
       source: edit !== undefined
-        ? (asSourced.source === "Missing" ? "Entered by Staff" : EDITED_SOURCE)
+        ? (asSourced.source === "Missing" || asSourced.source === "Default"
+            ? "Entered by Staff"
+            : EDITED_SOURCE)
         : shown.source,
       editable,
       provider_property: spec.provider_property,
