@@ -1289,6 +1289,39 @@ button { cursor: pointer; }
   .vattention-fields { gap: var(--s3); }
 }
 
+/* Dense desktop Verify workspace: the operator can scan the deal without
+   scrolling through oversized controls and repeated "Missing" labels. */
+@media (min-width: 75rem) {
+  .console--verify { padding: var(--s2) var(--s5) var(--s5); }
+  .console--verify .console-head { margin-bottom: var(--s2); }
+  .console--verify .console-title { font-size: var(--fs-q); }
+  .console--verify .vstate { margin-bottom: var(--s3); padding-bottom: var(--s2); }
+  .console--verify .vstate dd small { display: none; }
+  .vattention { padding: var(--s3) var(--s4); box-shadow: none; }
+  .vattention-head { margin-bottom: var(--s2); }
+  .vattention-head h2 { font-size: var(--fs-title); }
+  .vattention-head p:not(.vattention-kicker) { display: none; }
+  .vattention-kicker { margin: 0 !important; }
+  .vattention-actions { display: flex; gap: var(--s2); }
+  .vattention-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2) var(--s5); }
+  .vattention .vfield {
+    grid-template-columns: minmax(0, 1fr); gap: 2px;
+    padding: 0 0 var(--s2); border-bottom-color: var(--line-soft);
+  }
+  .vattention .vfield-label { font-size: var(--fs-xs); }
+  .vattention .vfield-control { grid-column: 1; }
+  .vattention .vfield input { min-height: 2rem; padding: 0 var(--s2); }
+  .vattention .vfield > .tag, .vattention .vfield-note { display: none; }
+  .vreference-intro { margin-top: var(--s3); padding-bottom: var(--s1); }
+  .vreference-intro h2 { font-size: var(--fs-title); }
+  .vreference-intro > p, .vreference-intro .vattention-kicker { display: none; }
+  .vsheet { row-gap: var(--s2); column-gap: var(--s5); }
+  .console--verify .vgroup-head { margin-bottom: 0; }
+  .console--verify .vgroup .vfield { padding: 2px 0; }
+  .console--verify .vgroup .vfield input { min-height: 1.8rem; }
+  .console--verify .vtools { margin-top: var(--s3); }
+}
+
 .settings-form {
   display: grid; gap: var(--s6);
   max-width: 62ch;
