@@ -510,3 +510,21 @@ test("every finance column the resolver reads is overridable", () => {
     `finance columns the resolver reads but nothing can override: ${notOverridable.join(", ")}`
   );
 });
+
+test("recording any rate attempt clears out_of_date", () => {
+  // Refresh, +24h and a rating input edit mark the offer out of date. The next
+  // attempt rates the current values, so its row is current whatever the state.
+  // Session b2630cfc was re-rated (Rated, 11 products) and stayed out of date.
+  const rate = readFileSync(
+    new URL("../supabase/functions/fni-rate-vehicle/index.ts", import.meta.url),
+    "utf8"
+  );
+  const fn = between(rate, "async function recordAttempt(", "\n}\n");
+  const row = between(fn, ".upsert(", '{ onConflict: "session_id" }');
+  assert.match(row, /out_of_date: false,/);
+  // One upsert serves every state, so no state can skip it.
+  assert.doesNotMatch(fn, /if \(state ===|switch \(state\)/);
+  for (const state of ["Rated", "Not Offered", "Failed"]) {
+    assert.match(rate, new RegExp(`recordAttempt\\(supabase, session_id, [^;]*"${state}"`), state);
+  }
+});

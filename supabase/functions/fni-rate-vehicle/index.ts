@@ -142,6 +142,11 @@ async function recordAttempt(
         // otherwise, so this is normalised here rather than at each call site.
         error_detail: state === "Failed" ? (fields.error ?? "Rating failed") : null,
         rated_at: new Date().toISOString(),
+        // Every attempt rates the session's current values, so its result is
+        // current by definition, whatever the state. Without this the flag set
+        // by Refresh, +24h or a rating input edit survived every re-rate, and
+        // Verify never offered Open presentation again.
+        out_of_date: false,
       },
       { onConflict: "session_id" }
     );
