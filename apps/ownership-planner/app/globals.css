@@ -351,90 +351,134 @@ button { cursor: pointer; }
 .decision-option.is-chosen .decision-mark::after { content: "✓"; color: var(--paper); font-size: var(--fs-xs); }
 
 /* ── The Verify step ─────────────────────────────────────────────────────
-   A checking screen, not a form to fill in. So the provenance chip sits level
-   with the label rather than below the value: the eye runs down the right-hand
-   edge looking for "Missing", which is the whole job. */
+   A checking screen, not a form to fill in. Each field is one row: label,
+   value, source chip. The eye runs down the right-hand edge looking for
+   "Missing", which is the whole job, so the chip keeps its own column.
+
+   The whole sheet fits on one desktop screen (1920 by 1080 with browser
+   chrome). The first version gave every field a card with its explanation
+   printed underneath, and ran to three screens. Explanations now live in the
+   row's tooltip and come out only on a field that is missing or unreadable. */
+
 .vstate {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-  gap: var(--s3); margin: var(--s4) 0;
-  padding: var(--s3) var(--s4);
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: var(--s2) var(--s6); margin: var(--s3) 0;
+  padding: var(--s2) var(--s4);
   background: var(--paper); border: var(--bw) solid var(--line);
   border-radius: var(--r-md);
 }
+.vstate > div { display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; }
 .vstate dt {
   font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em;
-  font-weight: 700; color: var(--ink-55); margin-bottom: var(--s1);
+  font-weight: 700; color: var(--ink-55);
 }
-.vstate dd { margin: 0; font-size: var(--fs-base); }
-.vstate dd small { display: block; margin-top: var(--s1); font-size: var(--fs-xs); color: var(--ink-70); }
+.vstate dd { margin: 0; font-size: var(--fs-base); display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; }
+.vstate dd small { font-size: var(--fs-xs); color: var(--ink-70); }
 
-.vsheet { margin: var(--s4) 0 0; }
-.vgroup { margin-bottom: var(--s5); }
-.vgroup-head { border-bottom: var(--bw) solid var(--line); padding-bottom: var(--s2); margin-bottom: var(--s3); }
-.vgroup-head h2 {
-  font-family: var(--font-serif); font-size: var(--fs-title); font-weight: 600; margin: 0;
+/* The sheet. One column until there is room for three. */
+.vsheet { display: grid; gap: var(--s4); margin: var(--s3) 0 0; }
+.vgroup { min-width: 0; }
+.vgroup-head {
+  font-family: var(--font-serif); font-size: var(--fs-title); font-weight: 600;
+  margin: 0 0 var(--s1); padding-bottom: var(--s1);
+  border-bottom: var(--bw) solid var(--line);
 }
-.vgroup-head p { margin: var(--s1) 0 0; font-size: var(--fs-xs); color: var(--ink-70); }
+.vgroup-fields { display: grid; gap: 2px; }
 
-.vgroup-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: var(--s3); }
+@media (min-width: 75rem) {
+  /* Vehicle is the long group and the one that matters, so it gets two of the
+     three columns and lays its fields out in two. That keeps both rows of the
+     grid about the same height, which is what gets the sheet onto one screen. */
+  .vsheet {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas:
+      "deal   vehicle  vehicle"
+      "money  customer .";
+    align-items: start;
+    column-gap: var(--s6);
+    row-gap: var(--s3);
+  }
+  .vgroup--deal     { grid-area: deal; }
+  .vgroup--vehicle  { grid-area: vehicle; }
+  .vgroup--money    { grid-area: money; }
+  .vgroup--customer { grid-area: customer; }
+  /* Newspaper columns rather than a grid, so a field with a note under it
+     does not stretch the field beside it. Reads down, then across. */
+  .vgroup--vehicle .vgroup-fields { display: block; columns: 2; column-gap: var(--s6); }
+  .vgroup--vehicle .vfield { break-inside: avoid; margin-bottom: 2px; }
+}
 
+/* One field. Label, value, chip; anything said about it runs underneath,
+   lined up with the value. */
 .vfield {
-  padding: var(--s2) var(--s3);
-  border: var(--bw) solid var(--line); border-radius: var(--r-md);
-  background: var(--paper);
+  display: grid;
+  grid-template-columns: minmax(8rem, 13rem) minmax(0, 1fr) 5.5rem;
+  align-items: center; column-gap: var(--s3);
+  padding: 2px var(--s2);
+  border-left: var(--bw-accent) solid transparent;
+  border-radius: var(--r-sm);
 }
+.vfield > .tag { justify-self: end; }
+.vfield-note, .vfield-was { grid-column: 2 / -1; }
+
 /* A required field with nothing in it. Copper rather than red: it is a thing to
    do, not an error somebody made. */
-.vfield.is-missing { border-left: var(--bw-accent) solid var(--copper); background: var(--copper-tint); }
+.vfield.is-missing { border-left-color: var(--copper); background: var(--copper-tint); }
 
 /* ── The three states an edited field can be in ──────────────────────────
-   Every rating input is editable now, so the sheet has to say at a glance which
-   figures a person changed and which of those the CRM deal has not caught up
-   with. Three weights, and the order matters:
-
      edited   navy, quiet. A correction is work done, not a problem.
      differs  copper edge on white. The CRM deal says something else, which is a
               thing to go and do, so it is marked without being shouted.
      invalid  copper on copper, the same weight as a missing required field,
-              because that is what it amounts to: the person's figure is not in
-              force and the rate would go out on the one they rejected. */
-.vfield.is-edited { border-left: var(--bw-accent) solid var(--navy-700); background: var(--cream-2); }
-.vfield.is-differs { border-left: var(--bw-accent) solid var(--copper); background: var(--paper); }
-.vfield.is-invalid { border-left: var(--bw-accent) solid var(--copper-deep); background: var(--copper-tint); }
+              because the person's figure is not in force. */
+.vfield.is-edited { border-left-color: var(--navy-700); background: var(--cream-2); }
+.vfield.is-differs { border-left-color: var(--copper); background: var(--paper); }
+.vfield.is-invalid { border-left-color: var(--copper-deep); background: var(--copper-tint); }
 .vfield.is-invalid input { border-color: var(--copper-deep); }
-.vfield-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2); }
-.vfield-label { font-size: var(--fs-xs); font-weight: 700; }
+
+.vfield-label { font-size: var(--fs-xs); font-weight: 700; line-height: 1.25; }
 .vfield-req {
-  display: inline-block; margin-left: var(--s2); border: 0;
-  font-size: var(--fs-xs); font-weight: 400; text-decoration: none;
-  color: var(--ink-55);
+  margin-left: 2px; border: 0; text-decoration: none;
+  font-weight: 700; color: var(--copper-deep);
 }
-.vfield-value { margin: var(--s1) 0 0; font-size: var(--fs-base); }
+.vfield-value { margin: 0; font-size: var(--fs-base); line-height: 1.3; overflow-wrap: anywhere; }
 .vfield-value em { color: var(--ink-55); }
 .vfield input {
-  width: 100%; margin-top: var(--s1); min-height: var(--tap);
+  width: 100%; min-height: 2rem;
   padding: 0 var(--s2); font-size: var(--fs-base);
-  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
+  border: var(--bw) solid var(--line-strong); border-radius: var(--r-sm);
   background: var(--paper); color: inherit;
 }
-.vfield-note { margin: var(--s1) 0 0; font-size: var(--fs-xs); color: var(--ink-70); line-height: 1.35; }
+.vfield-note { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--ink-70); line-height: 1.35; }
 
-/* What an edited field replaced, and who replaced it. Under the value rather
-   than beside it: at this width a two-column "was / now" would wrap into
-   nonsense on the narrower fields. */
+/* What an edited field replaced, and who replaced it. One line; the long form
+   is in its tooltip. */
 .vfield-was {
-  margin: var(--s2) 0 0; padding-top: var(--s2);
-  border-top: var(--bw) solid var(--line-soft);
+  margin: 2px 0 0;
   font-size: var(--fs-xs); color: var(--ink-70); line-height: 1.35;
 }
 .vfield-was-value { font-weight: 700; color: var(--ink); }
-.vfield-was small {
-  display: block; margin-top: 2px; color: var(--ink-55);
-}
 
-.vactions { display: flex; align-items: center; gap: var(--s3); margin: var(--s3) 0; flex-wrap: wrap; }
-.vactions--aside { padding-top: var(--s3); border-top: var(--bw) solid var(--line); }
-.vactions .vfield-note { margin: 0; flex: 1 1 18rem; }
+/* Save, Decode, Discard, and the key to the asterisk, on one line. */
+.vtools {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--s3);
+  margin: var(--s3) 0 0; padding-top: var(--s3);
+  border-top: var(--bw) solid var(--line);
+}
+.vtools form { margin: 0; }
+.vtools .vfield-note { margin: 0; flex: 1 1 20rem; }
+
+/* On a tablet the rows keep a full tap target; on a phone the label goes
+   above the value rather than squeezing it. */
+@media (pointer: coarse) {
+  .vfield input { min-height: var(--tap); border-width: var(--bw-control); }
+}
+@media (max-width: 34rem) {
+  .vfield { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; padding: var(--s2); }
+  .vfield-label { grid-column: 1; }
+  .vfield > .tag { grid-column: 2; grid-row: 1; }
+  .vfield-control, .vfield-note, .vfield-was { grid-column: 1 / -1; }
+}
 
 /* The one form inside a note panel: clearing Submit Status Unknown. A text box
    and a button on one line, wrapping on a phone rather than shrinking the box
@@ -500,8 +544,8 @@ button { cursor: pointer; }
 }
 
 .vgate {
-  margin: var(--s5) 0 var(--s6);
-  padding: var(--s4);
+  margin: var(--s3) 0 var(--s4);
+  padding: var(--s3) var(--s4);
   border: var(--bw) solid var(--line); border-left: var(--bw-accent) solid var(--copper);
   border-radius: var(--r-md); background: var(--paper);
   display: flex; align-items: center; justify-content: space-between;
@@ -1140,6 +1184,29 @@ button { cursor: pointer; }
   background: var(--copper-tint); color: var(--copper-deep);
   border-left-color: var(--copper-deep);
 }
+
+/* ── Verify: the console chrome, tightened ───────────────────────────────
+   The verify sheet has to fit one desktop screen, so its header loses the
+   tab row (the title already says where you are) and the headline drops a
+   size. Scoped to this page; the browser and settings keep their spacing. */
+.console--verify { padding: var(--s3) var(--s5) var(--s2); }
+.console--verify .console-head { max-width: none; margin-bottom: var(--s2); align-items: center; }
+.console--verify .console-title { font-size: var(--fs-q); }
+.console--verify .console-eyebrow { margin-bottom: 2px; display: flex; gap: var(--s4); align-items: baseline; }
+.console--verify .console-flash { margin-bottom: var(--s3); }
+/* Desktop controls on this page run a size down from the tablet tap target.
+   A coarse pointer (a tablet) gets the full target back, below. */
+.console--verify .btn { min-height: 2.25rem; padding: var(--s1) var(--s4); }
+.console--verify .vwho input { min-height: 2.25rem; }
+.console--verify .vgate .btn--go { min-height: var(--tap); padding: var(--s2) var(--s5); }
+@media (pointer: coarse) {
+  .console--verify .btn, .console--verify .vwho input { min-height: var(--tap); }
+}
+.console-back {
+  font-weight: 500; text-transform: none; letter-spacing: normal;
+  color: var(--ink-70); text-decoration: underline;
+}
+.console-back:hover { color: var(--ink); }
 
 .settings-form {
   display: grid; gap: var(--s6);

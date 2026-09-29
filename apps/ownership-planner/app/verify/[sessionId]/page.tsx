@@ -95,9 +95,24 @@ function Source({ source }: { source: VerifyField["source"] }) {
   return <span className={`tag ${tone}`}>{source}</span>;
 }
 
+/**
+ * One rating input, as one row: label, value, source.
+ *
+ * ── Why a row and not a card ────────────────────────────────────────────
+ * The first version gave every field a card with its explanation printed
+ * underneath. Twenty-three cards of that height ran the sheet to three screens,
+ * and most of the extra height was the same sentence repeated ("From the CRM
+ * deal. Edit it here to correct the rate."). The job here is to scan a column
+ * for Missing, so the whole sheet now fits on one desktop screen.
+ *
+ * Nothing was thrown away. The note and the typing help sit in the row's
+ * tooltip, and come out into the open only when they are needed: on a field
+ * that is missing or that could not be read.
+ */
 function Field({ field }: { field: VerifyField }) {
   const help = EDITABLE_HELP[field.key];
   const edited = field.original_source !== null;
+  const id = `vf-${field.key}`;
 
   const state =
     field.invalid ? "is-invalid"
@@ -106,63 +121,74 @@ function Field({ field }: { field: VerifyField }) {
     : edited ? "is-edited"
     : "";
 
-  return (
-    <div className={`vfield ${state}`}>
-      <div className="vfield-head">
-        <span className="vfield-label">
-          {field.label}
-          {field.required ? (
-            <abbr className="vfield-req" title="TecAssured asks for this">
-              required
-            </abbr>
-          ) : null}
-        </span>
-        <Source source={field.source} />
-      </div>
+  // Shown in full only when the person has something to do about this field.
+  const needsHelp = field.missing || field.invalid;
+  const tip = [field.label, field.note, help].filter(Boolean).join(" ");
 
-      {field.editable ? (
-        <>
+  // The long form of what an edit replaced, for the tooltip. The short form is
+  // on the page.
+  const wasDetail = edited
+    ? [
+        field.invalid
+          ? "This edit could not be read, so it is not in force."
+          : field.differs_from_crm
+            ? "The CRM deal still says the old value."
+            : field.in_crm
+              ? "The CRM deal now matches."
+              : "The CRM does not carry this field.",
+        "Clear the box to go back to the original.",
+      ].join(" ")
+    : "";
+
+  return (
+    <div className={`vfield ${state}`} title={tip}>
+      <label className="vfield-label" htmlFor={field.editable ? id : undefined}>
+        {field.label}
+        {field.required ? (
+          <abbr className="vfield-req" title="TecAssured asks for this">*</abbr>
+        ) : null}
+      </label>
+
+      <div className="vfield-control">
+        {field.editable ? (
           <input
+            id={id}
             type="text"
             name={field.key}
             defaultValue={field.value ?? ""}
             autoComplete="off"
             inputMode={TEXT_FIELDS.has(field.key) ? "text" : "numeric"}
             placeholder={field.missing ? "Needed to rate" : ""}
-            aria-label={field.label}
             aria-invalid={field.invalid ? true : undefined}
           />
-          {help ? <p className="vfield-note">{help}</p> : null}
-        </>
-      ) : (
-        <p className="vfield-value">{field.value ?? <em>Not set</em>}</p>
-      )}
+        ) : (
+          <p className="vfield-value">{field.value ?? <em>Not set</em>}</p>
+        )}
+      </div>
+
+      <Source source={field.source} />
+
+      {needsHelp && (help || field.note) ? (
+        <p className="vfield-note">{help ?? field.note}</p>
+      ) : null}
 
       {/* ── What this replaced ──────────────────────────────────────────
           Shown for every edit, not only the ones that disagree with CRM. The
           question a person asks looking at a corrected price is "what was it",
-          and they should not have to open the CRM to find out. */}
+          and they should not have to open the CRM to find out. One line; the
+          rest is in the tooltip. */}
       {edited ? (
-        <p className="vfield-was">
+        <p className="vfield-was" title={wasDetail}>
           Was <span className="vfield-was-value">{field.original ?? "not set"}</span>
-          {" "}from {field.original_source}.{" "}
+          {" "}({field.original_source}), changed by {field.edited_by ?? "unknown"},{" "}
+          {stamp(field.edited_at)}.
           {field.invalid
-            ? "This edit could not be read, so it is not in force."
+            ? " Not in force."
             : field.differs_from_crm
-              ? "The CRM deal still says the old value."
-              : field.in_crm
-                ? "The CRM deal now matches."
-                : "The CRM does not carry this field."}
-          <small>
-            Edited by {field.edited_by ?? "unknown"}, {stamp(field.edited_at)}.
-            {" "}Clear the box to go back to the original.
-          </small>
+              ? " The CRM deal still says the old value."
+              : ""}
         </p>
       ) : null}
-
-      {/* A read-only field still explains itself. An editable one that has not
-          been touched says where its value came from. */}
-      {field.note && !edited ? <p className="vfield-note">{field.note}</p> : null}
     </div>
   );
 }
@@ -209,10 +235,15 @@ export default async function VerifyPage({
   const byGroup = (g: FieldGroup) => sheet.fields.filter((f) => f.group === g);
 
   return (
-    <main className="console">
+    <main className="console console--verify">
       <header className="console-head">
         <div>
-          <p className="console-eyebrow">DocuRide PS</p>
+          <p className="console-eyebrow">
+            DocuRide PS
+            <Link className="console-back" href="/" prefetch={false}>
+              Session browser
+            </Link>
+          </p>
           <h1 className="console-title">
             Verify deal {sheet.session.deal_number ?? "(no number)"}
           </h1>
@@ -245,15 +276,6 @@ export default async function VerifyPage({
           </form>
         </div>
       </header>
-
-      <nav className="console-tabs">
-        <Link className="btn btn--quiet" href="/" prefetch={false}>
-          Session browser
-        </Link>
-        <span className="console-tab-here">
-          Verify {sheet.session.deal_number ?? ""}
-        </span>
-      </nav>
 
       {flash ? (
         <p
@@ -461,18 +483,19 @@ export default async function VerifyPage({
       ) : null}
 
       {/* ── The sheet ──────────────────────────────────────────────────── */}
-      <form action={saveVerifyFields} className="vsheet">
+      {/* Four groups in three columns on a desktop, so every field is on screen
+          at once: Deal and Money on the left, Vehicle (the long one, and where
+          the gaps are) in the middle, Customer on the right. One column below
+          that width. The group blurbs moved into the heading tooltips. */}
+      <form action={saveVerifyFields} id="vsheet" className="vsheet">
         <input type="hidden" name="session_id" value={sheet.session.id} />
 
         {GROUPS.map(({ group, blurb }) => {
           const fields = byGroup(group);
           if (fields.length === 0) return null;
           return (
-            <section className="vgroup" key={group}>
-              <div className="vgroup-head">
-                <h2>{group}</h2>
-                <p>{blurb}</p>
-              </div>
+            <section className={`vgroup vgroup--${group.toLowerCase()}`} key={group}>
+              <h2 className="vgroup-head" title={blurb}>{group}</h2>
               <div className="vgroup-fields">
                 {fields.map((f) => (
                   <Field key={f.key} field={f} />
@@ -481,47 +504,47 @@ export default async function VerifyPage({
             </section>
           );
         })}
-
-        <div className="vactions">
-          <button type="submit" className="btn btn--quiet">
-            Save changes
-          </button>
-          <p className="vfield-note">
-            Every field that feeds a rate can be changed here. Clearing a box puts
-            the original value back. Nothing is written back to the CRM.
-          </p>
-        </div>
       </form>
 
-      {/* Its own form: a VIN decode is not a save, and pressing it should not
-          submit half-typed values in the sheet above. */}
-      <form action={decodeVin} className="vactions vactions--aside">
-        <input type="hidden" name="session_id" value={sheet.session.id} />
-        <button type="submit" className="btn btn--quiet">
-          Decode the VIN
+      {/* ── The tools ──────────────────────────────────────────────────── */}
+      {/* One row. Save belongs to the sheet form through its form attribute, so
+          it can sit here without Decode and Discard being nested inside that
+          form. They stay separate forms on purpose: a VIN decode is not a save
+          and must not post half-typed values, and Discard throws work away. */}
+      <div className="vtools">
+        <button type="submit" form="vsheet" className="btn btn--quiet">
+          Save changes
         </button>
-        <p className="vfield-note">
-          Asks TecAssured what this VIN is. Fills engine size and fuel type. It
-          does not return warranty information, so that one is always typed.
-          {sheet.vin_decode_at ? ` Last decoded ${stamp(sheet.vin_decode_at)}.` : ""}
-        </p>
-      </form>
 
-      {/* Its own form again, and deliberately not next to Save: this one throws
-          work away. */}
-      {sheet.edited.some((f) => f.in_crm) ? (
-        <form action={discardEdits} className="vactions vactions--aside">
+        <form
+          action={decodeVin}
+          title="Asks TecAssured what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed."
+        >
           <input type="hidden" name="session_id" value={sheet.session.id} />
           <button type="submit" className="btn btn--quiet">
-            Discard my edits and reload from CRM
+            Decode the VIN
           </button>
-          <p className="vfield-note">
-            Puts the CRM deal back in charge of every field it carries. Engine
-            size, factory warranty and fuel type are kept, since the CRM does not
-            carry them and there would be nothing to reload them from.
-          </p>
         </form>
-      ) : null}
+
+        {sheet.edited.some((f) => f.in_crm) ? (
+          <form
+            action={discardEdits}
+            title="Puts the CRM deal back in charge of every field it carries. Engine size, factory warranty and fuel type are kept, since the CRM does not carry them and there would be nothing to reload them from."
+          >
+            <input type="hidden" name="session_id" value={sheet.session.id} />
+            <button type="submit" className="btn btn--quiet">
+              Discard my edits and reload from CRM
+            </button>
+          </form>
+        ) : null}
+
+        <p className="vfield-note">
+          * TecAssured asks for this. Hover a field to see where its value comes
+          from. Clearing a box puts the original value back. Nothing is written
+          back to the CRM.
+          {sheet.vin_decode_at ? ` VIN last decoded ${stamp(sheet.vin_decode_at)}.` : ""}
+        </p>
+      </div>
 
       {/* ── The gate ───────────────────────────────────────────────────── */}
       <form action={verifyAndRate} className="vgate">
