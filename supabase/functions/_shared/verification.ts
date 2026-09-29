@@ -147,6 +147,12 @@ export interface VerificationSheet {
   crm_warning: string | null;
   /** An edit that could not be read. Verify is refused while any exists. */
   invalid: VerifyField[];
+  /**
+   * Set when the finance company's maximum is known and the amount financed is
+   * already over it, before any protection products. A warning only: it does
+   * not block Verify.
+   */
+  over_cap_warning: string | null;
 }
 
 const FROM_CRM = "From the CRM deal. Edit it here to correct the rate.";
@@ -233,6 +239,10 @@ export interface VerificationSource {
   finance_term_total: unknown;
   tila_amount_financed: unknown;
   lienholder_name: unknown;
+  /** The down payment agreed on the deal, from Sold_1_Down_Payment. */
+  agreed_down_payment?: unknown;
+  /** The finance company's maximum, typed on Verify. The CRM does not carry it. */
+  max_amount_financed?: unknown;
 
   buyer_city: unknown;
   buyer_state: unknown;
@@ -298,6 +308,14 @@ interface Spec {
    */
   editableWhen?: (src: VerificationSource) => boolean;
   /**
+   * Editable, but stored in its own session column rather than through the
+   * staff edit layer, because nothing else supplies it. Never a rating input.
+   * Today only the maximum amount financed. See fni-session-verify save().
+   */
+  staff_column?: boolean;
+  /** Left off the sheet entirely unless this holds. */
+  shownWhen?: (src: VerificationSource) => boolean;
+  /**
    * Help text under the field. A function where the right thing to say depends
    * on the deal: the three finance figures used to explain, on every deal, that
    * they read zero on a cash purchase -- which is confusing to the point of
@@ -305,6 +323,13 @@ interface Spec {
    */
   note?: string | null | ((src: VerificationSource) => string | null);
 }
+
+/**
+ * A financed deal: a lienholder is attached, and the deal type has not been
+ * corrected to Cash. The maximum amount financed means nothing otherwise.
+ */
+const FINANCED_WITH_LENDER = (s: VerificationSource) =>
+  text(s.lienholder_name) !== null && dealTypeLabel(s.finance_type) !== "Cash";
 
 const NOT_ON_A_CASH_DEAL = (s: VerificationSource) =>
   dealTypeLabel(s.finance_type) !== "Cash";
@@ -372,24 +397,6 @@ const SPECS: Spec[] = [
     resolve: (s) => fromCrm(dealTypeLabel(s.finance_type)),
     in_crm: true,
     note: "Cash, Finance or Lease. Changing it opens or closes the finance figures below.",
-  },
-  {
-    key: "lender", label: "Lender", group: "Deal", provider_property: null,
-    // Read from the same field the planner and the acknowledgment PDF read, so
-    // all three agree about who is financing this deal. Not a TecAssured rating
-    // input and not editable here: deal type is the field that decides how this
-    // deal rates, and it is editable two rows up. Attach or correct a lienholder
-    // in CRM.
-    resolve: (s) => {
-      const fig = figuresFor(s);
-      // A cash purchase has no lender, which is a fact rather than a gap.
-      if (!fig.financed) return { value: "None (cash deal)", source: "CRM" };
-      return fromCrm(fig.lenderName);
-    },
-    in_crm: true,
-    note:
-      "From the CRM deal, and what the customer's screen shows. Deal type above " +
-      "is what the rate uses. Attach a lienholder in CRM to change this.",
   },
   {
     key: "sale_date", label: "Sale date", group: "Deal", provider_property: "sale.date",
@@ -491,6 +498,51 @@ const SPECS: Spec[] = [
   },
 
   // ── Money ──────────────────────────────────────────────────────────────
+  // Shown under the heading Financial. Lender comes first: it says whether
+  // there is a loan at all, which is what every row below it depends on.
+  {
+    key: "lender", label: "Lender", group: "Money", provider_property: null,
+    // Read from the same field the planner and the acknowledgment PDF read, so
+    // all three agree about who is financing this deal. Not a TecAssured rating
+    // input and not editable here: deal type is the field that decides how this
+    // deal rates, and it is editable two rows up. Attach or correct a lienholder
+    // in CRM.
+    resolve: (s) => {
+      const fig = figuresFor(s);
+      // A cash purchase has no lender, which is a fact rather than a gap.
+      if (!fig.financed) return { value: "None (cash deal)", source: "CRM" };
+      return fromCrm(fig.lenderName);
+    },
+    in_crm: true,
+    note:
+      "From the CRM deal, and what the customer's screen shows. Deal type is " +
+      "what the rate uses. Attach a lienholder in CRM to change this.",
+  },
+  {
+    key: "agreed_down_payment", label: "Down payment", group: "Money", provider_property: null,
+    // Read only, and not a rating input: TecAssured does not ask for it. From
+    // Sold_1_Down_Payment through _shared/crm-fields.ts, so creation, reopen and
+    // Refresh all fill it the same way.
+    resolve: (s) => fromCrm(money(s.agreed_down_payment)),
+    in_crm: true,
+    note: "The down payment agreed on the deal, before any protection products.",
+  },
+  {
+    key: "max_amount_financed", label: "Maximum amount financed", group: "Money",
+    provider_property: null,
+    // The finance company's approval is its only source, so it is typed here.
+    // Not required, and not a rating input: saving it never marks rates out of
+    // date or resets verification.
+    resolve: (s) => {
+      const v = money(s.max_amount_financed);
+      return { value: v, source: (v === null ? "Missing" : "Entered by Staff") as FieldSource };
+    },
+    staff_column: true,
+    shownWhen: FINANCED_WITH_LENDER,
+    editableWhen: FINANCED_WITH_LENDER,
+    note:
+      "From the finance company's approval. Leave blank if the approval has no maximum.",
+  },
   {
     key: "sale_price", label: "Sale price", group: "Money", provider_property: "price",
     resolve: (s) => fromCrm(money(s.sale_price)),
@@ -577,7 +629,9 @@ const SPECS: Spec[] = [
 /** Field keys a staff member may edit on this screen, given the current deal. */
 export function editableKeys(src: VerificationSource): string[] {
   return SPECS.filter(
-    (s) => editTargetFor(s.key) !== null && (s.editableWhen ? s.editableWhen(src) : true)
+    (s) =>
+      (editTargetFor(s.key) !== null || s.staff_column === true) &&
+      (s.editableWhen ? s.editableWhen(src) : true)
   ).map((s) => s.key);
 }
 
@@ -620,7 +674,9 @@ export function buildVerification(
     editTargetFor
   ) as unknown as VerificationSource;
 
-  const fields: VerifyField[] = SPECS.map((spec) => {
+  const fields: VerifyField[] = SPECS.filter(
+    (spec) => (spec.shownWhen ? spec.shownWhen(editedSrc) : true)
+  ).map((spec) => {
     const asSourced = spec.resolve(src);
     const target = editTargetFor(spec.key);
     const edit = target === null ? undefined : edits[spec.key];
@@ -651,7 +707,8 @@ export function buildVerification(
       spec.provider_property !== null && wanted.has(spec.provider_property.toLowerCase());
 
     const editable =
-      target !== null && (spec.editableWhen ? spec.editableWhen(editedSrc) : true);
+      (target !== null || spec.staff_column === true) &&
+      (spec.editableWhen ? spec.editableWhen(editedSrc) : true);
 
     const in_crm = spec.in_crm === true;
 
@@ -731,7 +788,33 @@ export function buildVerification(
     crm_mismatches,
     crm_warning: crmMismatchWarning(crm_mismatches),
     invalid,
+    over_cap_warning: overCapWarning(editedSrc),
   };
+}
+
+/** A money value as whole cents, or null. Cents, so a penny is never lost. */
+function cents(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[$,\s]/g, ""));
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
+}
+
+/**
+ * The amount financed is already over the finance company's maximum.
+ *
+ * Only on a financed deal with a maximum set, and measured against the Amount
+ * financed the sheet shows, with any staff correction applied. A warning: it
+ * says the plan has no room before any product is added, and does not block.
+ */
+export function overCapWarning(src: VerificationSource): string | null {
+  if (!FINANCED_WITH_LENDER(src)) return null;
+  const cap = cents(src.max_amount_financed);
+  const financed = cents(src.amount_financed);
+  if (cap === null || financed === null || financed <= cap) return null;
+  return (
+    `The amount financed is already ${money((financed - cap) / 100)} over the ` +
+    `maximum from the finance company, before any protection products.`
+  );
 }
 
 // ── Has anything that matters changed? ────────────────────────────────────

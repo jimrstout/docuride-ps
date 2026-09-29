@@ -74,7 +74,12 @@ const EDITABLE_HELP: Record<string, string> = {
   amount_financed: "A plain number.",
   finance_term: "Whole months.",
   apr: "A percentage, as a number.",
+  max_amount_financed:
+    "From the finance company's approval. Leave blank if the approval has no maximum.",
 };
+
+/** Optional fields: empty is a fine answer, so they are never marked Missing. */
+const OPTIONAL_FIELDS = new Set(["max_amount_financed"]);
 
 /** The three that take a word rather than a number, so the keypad stays away. */
 const TEXT_FIELDS = new Set([
@@ -103,7 +108,9 @@ function stamp(iso: string | null): string {
  * screen exists to catch, so that alone is still marked.
  */
 function MissingMarker({ field }: { field: VerifyField }) {
-  return field.source === "Missing" ? <span className="tag tag--expired">Missing</span> : null;
+  return field.source === "Missing" && !OPTIONAL_FIELDS.has(field.key)
+    ? <span className="tag tag--expired">Missing</span>
+    : null;
 }
 
 /**
@@ -201,7 +208,11 @@ function Field({ field }: { field: VerifyField }) {
             defaultValue={field.value ?? ""}
             autoComplete="off"
             inputMode={TEXT_FIELDS.has(field.key) ? "text" : "numeric"}
-            placeholder={field.missing ? "Needed to rate" : ""}
+            placeholder={
+              field.missing ? "Needed to rate"
+              : field.key === "max_amount_financed" ? "No maximum"
+              : ""
+            }
             aria-invalid={field.invalid ? true : undefined}
           />
         ) : (
@@ -571,6 +582,11 @@ export default async function VerifyPage({
                   <Field key={f.key} field={f} />
                 ))}
               </div>
+              {/* Over the finance company's maximum before any product is
+                  added. Said plainly, and it does not block Confirm. */}
+              {group === "Money" && sheet.over_cap_warning ? (
+                <p className="vgroup-warn" role="status">{sheet.over_cap_warning}</p>
+              ) : null}
             </section>
           );
         })}

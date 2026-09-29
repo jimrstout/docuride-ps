@@ -397,6 +397,13 @@ button { cursor: pointer; }
   border-bottom: var(--bw) solid var(--line);
 }
 .vgroup-fields { display: grid; gap: 2px; }
+/* A plain warning under the Financial group. Copper, like the other things
+   there is something to do about, and never blocking. */
+.vgroup-warn {
+  margin: var(--s2) 0 0; padding: var(--s2) var(--s3);
+  border-left: 3px solid var(--copper); background: var(--copper-tint);
+  font-size: var(--fs-xs); line-height: 1.4; color: var(--ink);
+}
 
 @media (min-width: 75rem) {
   /* Vehicle is the long group and the one that matters, so it gets two of the

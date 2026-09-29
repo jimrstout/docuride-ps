@@ -183,7 +183,8 @@ test("the Lender is shown, from the field the planner reads", () => {
   const lender = field(sheet, "lender");
   assert.equal(lender.value, "Roadrunner Financial LLC.");
   assert.equal(lender.source, "CRM");
-  assert.equal(lender.group, "Deal");
+  // Shown first under Financial, since it says whether there is a loan at all.
+  assert.equal(lender.group, "Money");
   assert.equal(lender.editable, false, "deal type is the editable field, not this");
   assert.equal(lender.required, false, "TecAssured never asks for it");
 });

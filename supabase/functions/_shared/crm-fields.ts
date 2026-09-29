@@ -74,6 +74,11 @@ export function crmRatingFields(record: Record<string, unknown>): Record<string,
     // Shown on the Verify screen as Lender, and what finance_type below is
     // derived from, so the two cannot drift apart across a refresh.
     lienholder_name: text(record.Lienholder_Name),
+    // The cash down agreed on the deal. Sold_1_Down_Payment, not
+    // TILA_Down_Payment: on deals where the TILA box is filled it is this plus
+    // any positive trade-in equity, which is a different number. Shown on
+    // Verify, read only, and not a rating input.
+    agreed_down_payment: num(record.Sold_1_Down_Payment),
 
     finance_type: hasLienholder ? "Loan" : "Cash",
     sale_date: saleDate,

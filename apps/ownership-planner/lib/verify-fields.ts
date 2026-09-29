@@ -58,7 +58,15 @@ export const RATING_INPUT_NAMES: readonly string[] = [
   "buyer_zip",
 ];
 
-const NAMES = new Set(RATING_INPUT_NAMES);
+/**
+ * Fields the Verify form posts that are NOT rating inputs. Saved to their own
+ * session column, never compared by the verification gate, and never a reason
+ * to re-rate. Kept out of RATING_INPUT_NAMES so that list stays equal to
+ * EDIT_TARGETS on the Deno side.
+ */
+export const OTHER_VERIFY_INPUT_NAMES: readonly string[] = ["max_amount_financed"];
+
+const NAMES = new Set([...RATING_INPUT_NAMES, ...OTHER_VERIFY_INPUT_NAMES]);
 
 /**
  * The only values fuel type may be saved as. The Verify sheet offers exactly

@@ -19,7 +19,8 @@ const fieldFn = page.slice(
 
 test("no row prints its source", () => {
   // The only chip a row can render is Missing.
-  assert.match(page, /function MissingMarker\(\{ field \}: \{ field: VerifyField \}\) \{\s*return field\.source === "Missing" \? <span className="tag tag--expired">Missing<\/span> : null;\s*\}/);
+  // An optional field (the maximum amount financed) is never marked Missing.
+  assert.match(page, /function MissingMarker\(\{ field \}: \{ field: VerifyField \}\) \{\s*return field\.source === "Missing" && !OPTIONAL_FIELDS\.has\(field\.key\)\s*\? <span className="tag tag--expired">Missing<\/span>\s*: null;\s*\}/);
   assert.match(fieldFn, /<MissingMarker field=\{field\} \/>/);
   assert.doesNotMatch(page, /<Source |function Source\(/);
   // And no row prints its source as text either.

@@ -107,6 +107,8 @@ test("every field that feeds a rate is editable", () => {
     // is shown so staff can confirm who is financing it. Deal type is the field
     // that decides how the deal rates, and that one is editable.
     if (["deal_number", "stock_number", "lender"].includes(f.key)) continue;
+    // Down payment is shown for confirmation and read only. It feeds no rate.
+    if (f.key === "agreed_down_payment") continue;
     // The three finance figures close on a cash deal, and this fixture is one.
     if (["amount_financed", "finance_term", "apr"].includes(f.key)) continue;
     assert.equal(f.editable, true, `${f.key} must be editable`);
@@ -121,9 +123,10 @@ test("only the fields that feed no rate are never editable", () => {
     .fields.filter((f) => !f.editable);
   assert.deepEqual(
     locked.map((f) => f.key).sort(),
-    ["deal_number", "lender", "stock_number"]
+    ["agreed_down_payment", "deal_number", "lender", "stock_number"]
   );
-  // None of the three is a TecAssured rating input, so changing one cannot
+  // Down payment joined them: shown in Financial, read only, from the CRM.
+  // None of them is a TecAssured rating input, so changing one cannot
   // invalidate a verification.
   for (const f of locked) assert.equal(f.provider_property, null, f.key);
 });

@@ -80,3 +80,76 @@ export function editFor(
     edited_at: now,
   };
 }
+
+// ── The maximum amount financed ─────────────────────────────────────────
+//
+// Not a staff edit to a CRM value: the finance company's approval is its only
+// source, so it is stored in its own column, sessions.max_amount_financed. Who
+// entered it, and when, is recorded in staff_edits under the same key, the way
+// every other edit is attributed. It is not an edit target, so the staff layer
+// never overlays it and it is never a rating input: saving it cannot mark rates
+// out of date or reset verification.
+
+export const MAX_AMOUNT_FINANCED = "max_amount_financed";
+
+/** Whole cents from a typed amount, or null if it is not a plain amount. */
+function amountCents(raw: string): number | null {
+  const v = raw.replace(/[$,\s]/g, "");
+  if (!/^-?(\d+\.?\d*|\.\d+)$/.test(v)) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
+}
+
+function storedCents(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  return amountCents(String(v));
+}
+
+function asMoney(c: number): string {
+  return (c / 100).toLocaleString("en-US", {
+    style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+}
+
+export type CapChange =
+  | { kind: "unreadable" }
+  | { kind: "unchanged" }
+  | { kind: "set"; column: string | null; edit: StaffEdit | null };
+
+/**
+ * What a posted maximum does to the session.
+ *
+ * $27,000, 27000 and 27,000.00 are one amount. A negative or a non-number is
+ * unreadable. Blank clears it. The same amount as already stored changes
+ * nothing, and keeps the name already on it.
+ */
+export function capChange(
+  posted: string,
+  current: unknown,
+  editedBy: string,
+  now: string
+): CapChange {
+  const was = storedCents(current);
+  const typed = posted.trim();
+
+  if (typed === "") {
+    return was === null ? { kind: "unchanged" } : { kind: "set", column: null, edit: null };
+  }
+
+  const c = amountCents(typed);
+  if (c === null || c < 0) return { kind: "unreadable" };
+  if (c === was) return { kind: "unchanged" };
+
+  return {
+    kind: "set",
+    // As a string with two places, so no binary fraction reaches the column.
+    column: (c / 100).toFixed(2),
+    edit: {
+      value: (c / 100).toFixed(2),
+      original: was === null ? null : asMoney(was),
+      original_source: was === null ? "Missing" : "Entered by Staff",
+      edited_by: editedBy,
+      edited_at: now,
+    },
+  };
+}

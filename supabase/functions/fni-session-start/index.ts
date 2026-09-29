@@ -172,6 +172,7 @@ function mapSession(
     interest_rate: crm.interest_rate,
     tila_amount_financed: crm.tila_amount_financed,
     finance_term_total: crm.finance_term_total,
+    agreed_down_payment: crm.agreed_down_payment,
     finance_type: financeType,
     sale_date: saleDate,
     in_service_date: saleDate,

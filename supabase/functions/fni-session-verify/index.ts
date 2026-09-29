@@ -45,7 +45,7 @@ import {
   type StaffEdits,
 } from "../_shared/staff-edits.ts";
 import { parseRequiredProperties, readRateProperties } from "../_shared/rate-properties.ts";
-import { editFor } from "./save-edits.ts";
+import { capChange, editFor, MAX_AMOUNT_FINANCED } from "./save-edits.ts";
 import {
   duplicateVinWarning,
   occupiesSlot,
@@ -94,6 +94,8 @@ const COLUMNS = [
   // Missing and Confirm and Continue stayed disabled on a deal the CRM had
   // complete. See _shared/finance-basis.ts.
   "interest_rate", "finance_term_total", "tila_amount_financed", "lienholder_name",
+  // Financial, shown on the sheet and not rating inputs. Migration 0018.
+  "agreed_down_payment", "max_amount_financed",
   "buyer_city", "buyer_state", "buyer_zip",
   "vehicle_properties", "vin_decode", "vin_decode_at",
   // The last decode attempt, successful or not. The Verify page decodes on its
@@ -360,6 +362,9 @@ async function save(
   const rejected: string[] = [];
   const unreadable: { key: string; label: string; value: string }[] = [];
   const now = new Date().toISOString();
+  // Columns this save writes besides staff_edits. Only the maximum amount
+  // financed, which has no other source. See ./save-edits.ts.
+  const columns: Record<string, unknown> = {};
 
   for (const [rawKey, rawValue] of Object.entries(entries)) {
     // ── Framework plumbing is not an edit ──────────────────────────────────────
@@ -385,6 +390,21 @@ async function save(
     }
 
     const value = rawValue === null || rawValue === undefined ? "" : String(rawValue).trim();
+
+    // ── The maximum amount financed ────────────────────────────────────────
+    // Its own column, with the name and time recorded in staff_edits. Never a
+    // rating input, so nothing here touches verification or the rates.
+    if (key === MAX_AMOUNT_FINANCED) {
+      const change = capChange(value, s.max_amount_financed, editedBy, now);
+      if (change.kind === "unreadable") {
+        unreadable.push({ key, label: labelFor(key), value });
+      } else if (change.kind === "set") {
+        columns.max_amount_financed = change.column;
+        if (change.edit) edits[key] = change.edit;
+        else delete edits[key];
+      }
+      continue;
+    }
 
     // Cleared means "go back to what the source says", which is the only way out
     // of an edit other than Discard.
@@ -451,7 +471,7 @@ async function save(
   const { error } = await supabase
     .schema("fni")
     .from("sessions")
-    .update({ staff_edits: Object.keys(edits).length > 0 ? edits : null })
+    .update({ staff_edits: Object.keys(edits).length > 0 ? edits : null, ...columns })
     .eq("id", s.id as string);
 
   if (error) return json(500, { error: error.message });

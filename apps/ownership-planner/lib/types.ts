@@ -405,6 +405,9 @@ export interface VerifySheet {
   crm_warning: string | null;
   /** Edits that could not be read. Verify is refused while any exists. */
   invalid: VerifyField[];
+  /** The amount financed is already over the finance company's maximum.
+   *  A warning only; it does not block Confirm. */
+  over_cap_warning: string | null;
   /** Present on a refresh response: the rating inputs the CRM moved. */
   changed_inputs?: string[];
   /** Present on a discard response: the edits that were thrown away. */
