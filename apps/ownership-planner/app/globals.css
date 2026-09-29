@@ -1225,6 +1225,70 @@ button { cursor: pointer; }
 }
 .console-back:hover { color: var(--ink); }
 
+/* Verify: a quiet work surface. Missing values are collected above the
+   reference details, with spacing and type doing the grouping. */
+.console--verify { padding: var(--s5) clamp(var(--s4), 3vw, var(--s8)) var(--s8); }
+.console--verify .console-head { margin-bottom: var(--s5); }
+.console--verify .console-title { font-size: var(--fs-head); }
+.console--verify .vstate {
+  background: transparent; border: 0; border-bottom: var(--bw) solid var(--line);
+  border-radius: 0; padding: 0 0 var(--s4); margin: 0 0 var(--s5);
+  gap: var(--s3) var(--s6);
+}
+.console--verify .vstate > div { gap: var(--s1) var(--s2); }
+.console--verify .vstate .tag { border-radius: 999px; }
+.vworkspace { background: transparent; border: 0; border-radius: 0; padding: 0; }
+.vattention {
+  background: var(--paper); border: var(--bw) solid var(--line-soft);
+  border-left: 0; border-radius: var(--r-md); padding: var(--s5) var(--s6);
+  box-shadow: 0 5px 24px rgba(11, 26, 36, 0.035);
+}
+.vattention-head { align-items: center; margin-bottom: var(--s5); }
+.vattention-head h2 { font-size: var(--fs-q); }
+.vattention-kicker { letter-spacing: var(--track-wide); }
+.vattention-fields { gap: var(--s4) var(--s7); }
+.vattention .vfield {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-content: start; align-items: end; column-gap: var(--s3); row-gap: var(--s1);
+  border: 0; border-bottom: var(--bw) solid var(--line-soft);
+  border-radius: 0; background: transparent; padding: 0 0 var(--s3);
+}
+.vattention .vfield-label { grid-column: 1; grid-row: 1; font-size: var(--fs-base); }
+.vattention .vfield-control { grid-column: 1; grid-row: 2; }
+.vattention .vfield > .tag {
+  grid-column: 2; grid-row: 2; align-self: center;
+  border: 0; background: transparent; padding: 0;
+  font-size: var(--fs-xs); font-weight: 600; color: var(--copper-deep);
+}
+.vattention .vfield-note, .vattention .vfield-was { grid-column: 1 / -1; margin: 0; }
+.vattention .vfield input {
+  min-height: 2.5rem; border: var(--bw) solid var(--line-strong);
+  border-radius: var(--r-sm); padding: var(--s1) var(--s3);
+}
+.vattention .vfield input:focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; }
+.vreference-intro { margin-top: var(--s5); padding-bottom: var(--s3); }
+.vreference-intro h2 { font-size: var(--fs-q); }
+.console--verify .vgroup-head { font-size: var(--fs-title); border: 0; margin-bottom: var(--s2); }
+.console--verify .vgroup-fields { gap: 0; }
+.console--verify .vgroup .vfield {
+  border: 0; border-bottom: var(--bw) solid var(--line-soft);
+  background: transparent; border-radius: 0; padding: var(--s2) 0;
+}
+.console--verify .vgroup .vfield-label { font-weight: 600; color: var(--ink-70); }
+.console--verify .vgroup .vfield > .tag {
+  border: 0; background: transparent; padding: 0;
+  font-size: var(--fs-xs); font-weight: 500; color: var(--ink-55);
+}
+.console--verify .vgroup .vfield.is-differs > .tag,
+.console--verify .vgroup .vfield.is-invalid > .tag { color: var(--copper-deep); }
+.console--verify .vgroup .vfield input { background: var(--cream-2); border-color: var(--line-soft); }
+.console--verify .vtools { margin-top: var(--s5); border: 0; padding: 0; }
+.console--verify .vgate { border-radius: var(--r-md); }
+@media (max-width: 65rem) {
+  .vattention { padding: var(--s4); }
+  .vattention-fields { gap: var(--s3); }
+}
+
 .settings-form {
   display: grid; gap: var(--s6);
   max-width: 62ch;
