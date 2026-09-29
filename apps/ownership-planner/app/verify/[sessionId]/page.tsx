@@ -233,6 +233,9 @@ export default async function VerifyPage({
   const flash = flashMessage(decodeVerifyFlash((await cookies()).get(VERIFY_FLASH_COOKIE)?.value));
 
   const verified = sheet.verification.state === "Verified";
+  // Verified, and nothing a rate depends on has moved since. Only then is there
+  // a presentation to open.
+  const presentable = verified && !sheet.rating.out_of_date;
   const byGroup = (g: FieldGroup) => sheet.fields.filter((f) => f.group === g);
   const attention = sheet.fields.filter((f) => f.missing || f.invalid);
 
@@ -625,8 +628,8 @@ export default async function VerifyPage({
         {sheet.ready ? (
           <p className="vgate-say">
             Every field TecAssured asks for has a value. Confirming records your
-            name, the time, and each value with its source, asks for the rate,
-            and opens the presentation.
+            name, the time, and each value with its source, and asks for the
+            rate.
           </p>
         ) : (
           <p className="vgate-say vgate-say--blocked">
@@ -653,7 +656,7 @@ export default async function VerifyPage({
 
         <button
           type="submit"
-          className="btn btn--go"
+          className={presentable ? "btn btn--quiet" : "btn btn--go"}
           disabled={!sheet.ready || checker === ""}
         >
           Confirm and Continue
@@ -662,8 +665,35 @@ export default async function VerifyPage({
         <p className="vfield-note">
           {checker === ""
             ? "Put your name in the Checked by box at the top before confirming."
-            : `Confirming as ${checker}. This opens the presentation at step 1.`}
+            : `Confirming as ${checker}. This screen stays open afterwards.`}
         </p>
+
+        {/* ── Open presentation ──────────────────────────────────────────
+            A plain link into its own tab. The target is NAMED, so pressing it
+            again reloads the same customer tab rather than opening another.
+            No rel="noopener" or rel="noreferrer": either one forces a new tab
+            every time and defeats that reuse. It is the same site, so there is
+            no opener risk, and the site already sends no referrer.
+
+            A tab opened this way has no history, so the customer cannot press
+            Back into this screen, and the planner has no link of any kind to
+            it. Shown only once the session is verified and its rates are
+            current. */}
+        {presentable ? (
+          <div className="vgate-open">
+            <a
+              className="btn btn--go"
+              href={`/plan/${sessionId}`}
+              target={`docuride-plan-${sessionId}`}
+            >
+              Open presentation
+            </a>
+            <p className="vfield-note">
+              Opens in its own tab. Close that tab when you are done. This screen
+              stays open for changes.
+            </p>
+          </div>
+        ) : null}
       </form>
     </main>
   );

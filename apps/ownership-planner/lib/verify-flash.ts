@@ -81,6 +81,24 @@ export function flashMessage(flash: VerifyFlash | null): FlashMessage | null {
   switch (flash.code) {
     case "refused":
       return { tone: "bad", text: flash.detail ?? "Something went wrong. Try again." };
+    case "rated":
+      return {
+        tone: "ok",
+        text:
+          "Verified and rated. Open the presentation when you are ready to show " +
+          "the customer.",
+      };
+    case "notrated": {
+      const why = flash.detail
+        ? /[.!?]$/.test(flash.detail) ? flash.detail : `${flash.detail}.`
+        : "The rate did not come back.";
+      return {
+        tone: "bad",
+        text:
+          `Verified, but not rated. ${why} You can still open the presentation. ` +
+          "The customer will see a neutral message.",
+      };
+    }
     case "saved":
       return { tone: "ok", text: "Saved." };
     case "decoded":

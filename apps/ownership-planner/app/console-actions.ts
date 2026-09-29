@@ -382,37 +382,38 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
     return backToVerify(sessionId, "refused", message);
   }
 
-  // Now the rating. Its own failure is recorded on the session by
-  // fni-rate-vehicle and shows in the Rating row, so there is nothing to say
-  // here beyond a server-side log.
-  let rated = "1";
+  // Now the rating. Its own failure is also recorded on the session by
+  // fni-rate-vehicle and shows in the Rating row. The reason is kept here too,
+  // so the person who pressed the button is told in words what happened.
+  let rated = false;
+  let reason: string | null = null;
   try {
-    await edge.adminRate<{ product_count?: number }>(sessionId);
+    const result = await edge.adminRate<{ product_count?: number }>(sessionId);
+    if ((result?.product_count ?? 0) > 0) {
+      rated = true;
+    } else {
+      reason = "TecAssured did not offer any plans for this deal.";
+    }
   } catch (err) {
     console.error(`rate after verify failed for ${sessionId}:`, err);
-    rated = "failed";
+    reason = err instanceof EdgeError ? err.message : "The rate did not come back.";
   }
 
   revalidatePath(`/verify/${sessionId}`);
   revalidatePath(`/plan/${sessionId}`);
   revalidatePath("/");
 
-  // ── Straight into the presentation ─────────────────────────────────────
+  // ── Back to this screen, not into the presentation ─────────────────────
   //
-  // Not back to this screen. Confirm and Continue is one motion: the person has
-  // checked the figures and is now going to sit down with the customer, and
-  // bouncing them back to the sheet they just approved only asks them to find
-  // the next button.
+  // The presentation opens in its own tab, from the Open presentation button
+  // this screen shows once the session is verified. Verify stays open here for
+  // changes. A tab opened that way has no history, so the customer cannot press
+  // Back into the staff screen, and the planner has no link of any kind to it.
   //
-  // Even when the rate failed. The planner has a screen for that -- the neutral
-  // "we are still getting your options ready" -- and it is the screen the
-  // customer should be looking at while somebody sorts it out. Landing back here
-  // would leave a staff member reading a provider error with a customer beside
-  // them.
-  //
-  // /plan/<id> with no step in the URL opens at step 1, which is where the
-  // presentation begins.
-  redirect(`/plan/${sessionId}`);
+  // Even when the rate failed, this comes back with a message rather than an
+  // error page. The presentation can still be opened: the planner has a neutral
+  // screen for a session with no rate, and that is what the customer sees.
+  return backToVerify(sessionId, rated ? "rated" : "notrated", reason);
 }
 
 /**

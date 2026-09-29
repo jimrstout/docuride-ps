@@ -1,5 +1,6 @@
 // The Verify flow after it was simplified: no sign-in, CRM always lands here,
-// and Confirm and Continue goes straight into the presentation.
+// and Confirm and Continue comes back to Verify, which opens the presentation
+// in its own tab.
 //
 // Mostly structural, over the source of the page, the server actions and
 // fni-session-start. Each assertion is a thing that could regress quietly and
@@ -140,36 +141,45 @@ test("the button says Confirm and Continue", () => {
   assert.doesNotMatch(page, /Verify and rate|Verify again and re-rate/);
 });
 
-test("confirming records the snapshot, rates, then opens the presentation", () => {
+test("confirming records the snapshot, rates, then returns to Verify", () => {
   const body = actionBody("verifyAndRate");
 
   const verifyAt = body.indexOf('action: "verify"');
   const rateAt = body.indexOf("adminRate");
-  const leaveAt = body.indexOf("redirect(`/plan/");
+  const backAt = body.indexOf("backToVerify(sessionId, rated");
 
   assert.ok(verifyAt > 0 && rateAt > verifyAt, "verify is recorded before rating");
-  assert.ok(leaveAt > rateAt, "the presentation opens after both");
-  assert.doesNotMatch(
-    body.slice(rateAt),
-    /backToVerify/,
-    "it must not bounce back to the sheet"
-  );
+  assert.ok(backAt > rateAt, "it returns to Verify after both");
+  // The presentation opens in its own tab from the Verify screen, never from
+  // this action.
+  assert.doesNotMatch(body, /redirect\(`\/plan\//, "it must not send this tab to the planner");
 });
 
-test("a failed rate still opens the presentation", () => {
-  // The planner has a neutral screen for that, and it is the screen the customer
-  // should be looking at. Landing back on the sheet would leave staff reading a
-  // provider error with a customer beside them.
+test("a failed rate still returns to Verify with a flash, not an error page", () => {
   const body = actionBody("verifyAndRate");
-  const failAt = body.indexOf('rated = "failed"');
-  const leaveAt = body.indexOf("redirect(`/plan/");
-  assert.ok(failAt > 0 && leaveAt > failAt);
-  assert.doesNotMatch(body.slice(failAt, leaveAt), /return|backToVerify/);
+  const catchAt = body.indexOf("catch (err)", body.indexOf("adminRate"));
+  const backAt = body.indexOf("return backToVerify(sessionId, rated");
+  assert.ok(catchAt > 0 && backAt > catchAt, "the rate failure is caught before returning");
+  // Nothing between the catch and the return may throw or leave early.
+  assert.doesNotMatch(body.slice(catchAt, backAt), /throw|return|redirect\(/);
+  // The flash says so plainly, and says the presentation can still be opened.
+  const flash = src("../apps/ownership-planner/lib/verify-flash.ts");
+  assert.match(flash, /case "notrated"/);
+  assert.match(flash, /You can still open the presentation/);
+  assert.match(flash, /Verified and rated\. Open the presentation when you are ready/);
 });
 
-test("the presentation opens at step 1", () => {
-  // No step in the URL, and the planner's own state starts at index 0.
-  assert.match(actionBody("verifyAndRate"), /redirect\(`\/plan\/\$\{sessionId\}`\)/);
+test("Open presentation is a named-target link to the plan, with no rel", () => {
+  const link = between(page, "<a\n", "</a>");
+  assert.match(link, /href=\{`\/plan\/\$\{sessionId\}`\}/);
+  // A named target, so pressing it again reloads the same customer tab.
+  assert.match(link, /target=\{`docuride-plan-\$\{sessionId\}`\}/);
+  // Either of these forces a new tab every time and defeats that reuse.
+  assert.doesNotMatch(link, /rel=|noopener|noreferrer/);
+  assert.match(link, /Open presentation/);
+  // Shown only once verified and current, and the planner still opens at step 1.
+  assert.match(page, /presentable = verified && !sheet\.rating\.out_of_date/);
+  assert.match(page, /\{presentable \? \(\s*<div className="vgate-open">/);
   const planner = src("../apps/ownership-planner/app/plan/[sessionId]/Planner.tsx");
   assert.match(planner, /const \[at, setAt\] = useState\(0\)/);
 });
