@@ -527,7 +527,7 @@ export default async function VerifyPage({
           if (fields.length === 0) return null;
           return (
             <section className={`vgroup vgroup--${group.toLowerCase()}`} key={group}>
-              <h2 className="vgroup-head" title={blurb}>{group}</h2>
+              <h2 className="vgroup-head" title={blurb}>{group === "Money" ? "Financial" : group}</h2>
               <div className="vgroup-fields">
                 {fields.map((f) => (
                   <Field key={f.key} field={f} />
