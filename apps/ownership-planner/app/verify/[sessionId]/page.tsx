@@ -94,33 +94,20 @@ function stamp(iso: string | null): string {
 }
 
 /**
- * The provenance chip, printed only when the value did NOT come from the CRM.
+ * The one marker a row can still carry: Missing.
  *
- * CRM is the expected answer, and printing it on nearly every row hid the
- * exceptions this screen exists to catch. So a CRM row shows no chip, and the
- * sheet says once, above the groups, that values come from the CRM unless
- * marked. The chip's space is still reserved (an invisible tag, so rows line
- * up), and screen readers still hear where the value came from. Every field
- * still carries its source in the data; this only changes what is printed.
- *
- * Missing is the only chip that shouts. Default is quiet: it is a value nobody
- * checked, not a gap.
+ * Where a value came from is not the presenter's business, so no row prints its
+ * source: not CRM, VIN Decode, Default, or who entered it. It is still in the
+ * data and the verification snapshot, and in the row's tooltip for the rare
+ * person who wants it. A required field with nothing in it is the thing this
+ * screen exists to catch, so that alone is still marked.
  */
-function Source({ source }: { source: VerifyField["source"] }) {
-  if (source === "CRM") {
-    return (
-      <>
-        <span className="tag tag--none" aria-hidden="true">CRM</span>
-        <span className="sr-only">From the CRM.</span>
-      </>
-    );
-  }
-  const tone = source === "Missing" ? "tag--expired" : "tag--quiet";
-  return <span className={`tag ${tone}`}>{source}</span>;
+function MissingMarker({ field }: { field: VerifyField }) {
+  return field.source === "Missing" ? <span className="tag tag--expired">Missing</span> : null;
 }
 
 /**
- * One rating input, as one row: label, value, source.
+ * One rating input, as one row: label and value.
  *
  * ── Why a row and not a card ────────────────────────────────────────────
  * The first version gave every field a card with its explanation printed
@@ -138,22 +125,30 @@ function Field({ field }: { field: VerifyField }) {
   const edited = field.original_source !== null;
   const id = `vf-${field.key}`;
 
+  // A value changed away from what the CRM deal says gets a quiet copper edge on
+  // its box, and nothing else: the details live in the warning above Confirm.
+  // A value typed into an empty field, or one the CRM does not carry, is not a
+  // change from the CRM and gets no edge.
+  const changedFromCrm =
+    field.differs_from_crm && field.original !== null && field.original_source !== "Missing";
+
   const state =
     field.invalid ? "is-invalid"
     : field.missing ? "is-missing"
-    : field.differs_from_crm ? "is-differs"
-    : edited ? "is-edited"
+    : changedFromCrm ? "is-changed"
     : "";
 
   // Shown in full only when the person has something to do about this field.
   const needsHelp = field.missing || field.invalid;
-  // The row's tooltip says where the value came from. A CRM row has no chip,
-  // so it falls back to saying so when the field has no note of its own.
-  const origin = field.note ?? (field.source === "CRM" ? "From the CRM deal." : null);
-  const tip = [field.label, origin, help].filter(Boolean).join(" ");
 
-  // The long form of what an edit replaced, for the tooltip. The short form is
-  // on the page.
+  // ── The tooltip ────────────────────────────────────────────────────────
+  // Nothing on the row says where the value came from or who changed it. The
+  // tooltip does, for the rare person who wants to know.
+  const origin =
+    field.source === "Missing" ? null
+    : field.source === "CRM" ? (field.note ? null : "From the CRM deal.")
+    : `Source: ${field.source}.`;
+
   const wasDetail = edited
     ? [
         field.invalid
@@ -167,6 +162,15 @@ function Field({ field }: { field: VerifyField }) {
       ].join(" ")
     : "";
 
+  const wasLine = edited
+    ? `Was ${field.original ?? "not set"} (${field.original_source}), changed by ` +
+      `${field.edited_by ?? "unknown"}, ${stamp(field.edited_at)}.`
+    : "";
+
+  const tip = [field.label, origin, field.note, help, wasLine, wasDetail]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div id={`field-${field.key}`} className={`vfield ${state}`} title={tip}>
       <label className="vfield-label" htmlFor={field.editable ? id : undefined}>
@@ -179,7 +183,7 @@ function Field({ field }: { field: VerifyField }) {
       <div className="vfield-control">
         {field.editable && field.key === "fuel.type" ? (
           // A dropdown, because only three answers exist. The Gasoline default
-          // shows as Gasoline with the Default chip beside it. Choosing a value
+          // shows as Gasoline, and says Default only in the tooltip. Choosing a value
           // saves as a staff edit, and choosing what the deal already says
           // without an edit leaves it as it was.
           <select id={id} name={field.key} defaultValue={field.value ?? "Gasoline"}>
@@ -205,29 +209,12 @@ function Field({ field }: { field: VerifyField }) {
         )}
       </div>
 
-      <Source source={field.source} />
+      <MissingMarker field={field} />
 
       {needsHelp && (help || field.note) ? (
         <p className="vfield-note">{help ?? field.note}</p>
       ) : null}
 
-      {/* ── What this replaced ──────────────────────────────────────────
-          Shown for every edit, not only the ones that disagree with CRM. The
-          question a person asks looking at a corrected price is "what was it",
-          and they should not have to open the CRM to find out. One line; the
-          rest is in the tooltip. */}
-      {edited ? (
-        <p className="vfield-was" title={wasDetail}>
-          Was <span className="vfield-was-value">{field.original ?? "not set"}</span>
-          {" "}({field.original_source}), changed by {field.edited_by ?? "unknown"},{" "}
-          {stamp(field.edited_at)}.
-          {field.invalid
-            ? " Not in force."
-            : field.differs_from_crm
-              ? " The CRM deal still says the old value."
-              : ""}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -572,9 +559,6 @@ export default async function VerifyPage({
       {/* Each field keeps its permanent location in the review sheet. */}
       <form action={saveVerifyFields} id="vsheet" className="vsheet">
         <input type="hidden" name="session_id" value={sheet.session.id} />
-
-        {/* Said once here rather than on every row. See Source above. */}
-        <p className="vsheet-legend">Values come from the CRM unless marked.</p>
 
         {GROUPS.map(({ group, blurb }) => {
           const fields = byGroup(group);

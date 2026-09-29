@@ -429,27 +429,31 @@ button { cursor: pointer; }
    lined up with the value. */
 .vfield {
   display: grid;
-  grid-template-columns: minmax(8rem, 13rem) minmax(0, 1fr) 5.5rem;
+  grid-template-columns: minmax(8rem, 13rem) minmax(0, 1fr);
   align-items: center; column-gap: var(--s3);
   padding: 2px var(--s2);
   border-left: var(--bw-accent) solid transparent;
   border-radius: var(--r-sm);
 }
-.vfield > .tag { justify-self: end; }
-.vfield-note, .vfield-was { grid-column: 2 / -1; }
+/* The Missing marker sits under the label, so the value box gets the full
+   width and every row lines up. */
+.vfield > .tag { grid-column: 1; grid-row: 2; justify-self: start; }
+.vfield-note { grid-column: 2 / -1; }
 
 /* A required field with nothing in it. Copper rather than red: it is a thing to
    do, not an error somebody made. */
 .vfield.is-missing { border-left-color: var(--copper); background: var(--copper-tint); }
 
-/* ── The three states an edited field can be in ──────────────────────────
-     edited   navy, quiet. A correction is work done, not a problem.
-     differs  copper edge on white. The CRM deal says something else, which is a
-              thing to go and do, so it is marked without being shouted.
+/* ── The two states an edited field can show ─────────────────────────────
+     changed  a quiet copper edge on the value box, and nothing else. The value
+              was changed away from what the CRM deal says; the details are in
+              the warning above Confirm.
      invalid  copper on copper, the same weight as a missing required field,
-              because the person's figure is not in force. */
-.vfield.is-edited { border-left-color: var(--navy-700); background: var(--cream-2); }
-.vfield.is-differs { border-left-color: var(--copper); background: var(--paper); }
+              because the person's figure is not in force.
+   An edit that is neither (typed into an empty field, or a field the CRM does
+   not carry) looks like any other row. */
+.vfield.is-changed .vfield-control > input,
+.vfield.is-changed .vfield-control > select { border-left: 3px solid var(--copper); }
 .vfield.is-invalid { border-left-color: var(--copper-deep); background: var(--copper-tint); }
 .vfield.is-invalid input { border-color: var(--copper-deep); }
 
@@ -467,14 +471,6 @@ button { cursor: pointer; }
   background: var(--paper); color: inherit;
 }
 .vfield-note { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--ink-70); line-height: 1.35; }
-
-/* What an edited field replaced, and who replaced it. One line; the long form
-   is in its tooltip. */
-.vfield-was {
-  margin: 2px 0 0;
-  font-size: var(--fs-xs); color: var(--ink-70); line-height: 1.35;
-}
-.vfield-was-value { font-weight: 700; color: var(--ink); }
 
 /* Save, Decode, Discard, and the key to the asterisk, on one line. */
 .vtools {
@@ -494,7 +490,7 @@ button { cursor: pointer; }
   .vfield { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; padding: var(--s2); }
   .vfield-label { grid-column: 1; }
   .vfield > .tag { grid-column: 2; grid-row: 1; }
-  .vfield-control, .vfield-note, .vfield-was { grid-column: 1 / -1; }
+  .vfield-control, .vfield-note { grid-column: 1 / -1; }
 }
 
 /* The one form inside a note panel: clearing Submit Status Unknown. A text box
@@ -1120,9 +1116,6 @@ button { cursor: pointer; }
 }
 
 .tag--live { background: var(--cream); color: var(--ink-70); border: var(--bw) solid var(--line); }
-/* A CRM row on Verify: no chip is shown, but the chip's space is kept so rows
-   with and without one line up. */
-.tag--none { visibility: hidden; }
 .tag--expired { background: var(--copper-tint); color: var(--copper-deep); border: var(--bw) solid var(--copper); }
 
 /* ── Sign in ───────────────────────────────────────────────────────────── */
@@ -1263,7 +1256,7 @@ button { cursor: pointer; }
   border: 0; background: transparent; padding: 0;
   font-size: var(--fs-xs); font-weight: 600; color: var(--copper-deep);
 }
-.vattention .vfield-note, .vattention .vfield-was { grid-column: 1 / -1; margin: 0; }
+.vattention .vfield-note { grid-column: 1 / -1; margin: 0; }
 .vattention .vfield input {
   min-height: 2.5rem; border: var(--bw) solid var(--line-strong);
   border-radius: var(--r-sm); padding: var(--s1) var(--s3);
@@ -1282,7 +1275,6 @@ button { cursor: pointer; }
   border: 0; background: transparent; padding: 0;
   font-size: var(--fs-xs); font-weight: 500; color: var(--ink-55);
 }
-.console--verify .vgroup .vfield.is-differs > .tag,
 .console--verify .vgroup .vfield.is-invalid > .tag { color: var(--copper-deep); }
 .console--verify .vgroup .vfield input { background: var(--cream-2); border-color: var(--line-soft); }
 .console--verify .vtools { margin-top: var(--s5); border: 0; padding: 0; }
@@ -1351,7 +1343,6 @@ button { cursor: pointer; }
 }
 .vattention-actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
 .vsheet { min-width: 0; }
-.vsheet-legend { margin: 0; font-size: var(--fs-xs); color: var(--ink-70); }
 .vfield { scroll-margin-top: var(--s5); }
 .vfield:target { outline: 2px solid var(--copper); outline-offset: 2px; }
 @media (min-width: 75rem) {
@@ -1363,16 +1354,15 @@ button { cursor: pointer; }
   .vsheet {
     grid-column: 2; grid-row: 1;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-areas: "legend legend legend" "deal vehicle customer" "money vehicle customer";
+    grid-template-areas: "deal vehicle customer" "money vehicle customer";
     column-gap: var(--s4); row-gap: var(--s3);
   }
   .vworkspace:not(:has(.vattention)) .vsheet { grid-column: 1; }
-  .vsheet-legend { grid-area: legend; }
   .vgroup--vehicle .vgroup-fields { display: grid; columns: auto; }
   .vgroup--vehicle .vfield { margin-bottom: 0; }
   .console--verify .vgroup-head { padding-bottom: var(--s1); border-bottom: var(--bw) solid var(--line); }
   .console--verify .vgroup .vfield {
-    grid-template-columns: minmax(6.5rem, 42%) minmax(0, 1fr) 2.7rem;
+    grid-template-columns: minmax(6.5rem, 42%) minmax(0, 1fr);
     column-gap: var(--s1); min-height: 2rem;
   }
   .console--verify .vgroup .vfield > .tag { font-size: var(--fs-xs); }
