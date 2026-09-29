@@ -268,7 +268,7 @@ test("the page never blocks on the decode", () => {
   // through to rendering the sheet.
   assert.equal(AUTO_DECODE_TIMEOUT_MS, 5000);
   assert.match(block, /try \{\s*await edge\.vinDecode<unknown>\(sessionId, \{ auto: true, timeoutMs: AUTO_DECODE_TIMEOUT_MS \}\);\s*\} catch \(err\) \{\s*console\.error/);
-  assert.match(block, /try \{\s*sheet = await edge\.verifySheet<VerifySheet>\(sessionId\);\s*\} catch \(err\) \{\s*\/\/[^\n]*\n\s*console\.error/);
+  assert.match(block, /try \{[\s\S]*?sheet = await edge\.verifySheet<VerifySheet>\(sessionId, \{ fresh: true \}\);\s*\} catch \(err\) \{\s*\/\/[^\n]*\n\s*console\.error/);
 
   // The timeout is a real abort on the fetch, not only a number.
   assert.match(src("../apps/ownership-planner/lib/edge.ts"), /AbortSignal\.timeout\(init\.timeoutMs\)/);
@@ -288,4 +288,23 @@ test("the attempt is recorded before TecAssured is called, and only once when au
 test("the CRM button does not wait on TecAssured", () => {
   const start = src("../supabase/functions/fni-session-start/index.ts");
   assert.doesNotMatch(start, /_shared\/tecassured\.ts|decodePowersports|fni-vin-decode|vinDecode/);
+});
+
+test("the reload after the automatic decode asks for a fresh sheet", () => {
+  // Next memoizes an identical GET within one render. Without a fresh read the
+  // reload returns the pre-decode sheet and never reaches fni-session-verify,
+  // which is what session 72384f64 showed: one GET, the decode POST, no second GET.
+  const page = src("../apps/ownership-planner/app/verify/[sessionId]/page.tsx");
+  const block = page.slice(page.indexOf("if (shouldAutoDecode(sheet))"));
+  const decodeAt = block.indexOf("edge.vinDecode");
+  const reloadAt = block.indexOf("edge.verifySheet<VerifySheet>(sessionId, { fresh: true })");
+  assert.ok(decodeAt > 0 && reloadAt > decodeAt, "the post-decode reload is fresh");
+  // The first read stays an ordinary one.
+  assert.match(page, /sheet = await edge\.verifySheet<VerifySheet>\(sessionId\);/);
+
+  // And fresh really attaches a signal, which is what Next will not memoize,
+  // while a timeout keeps its own signal.
+  const edgeSrc = src("../apps/ownership-planner/lib/edge.ts");
+  assert.match(edgeSrc, /init\.timeoutMs !== undefined \? AbortSignal\.timeout\(init\.timeoutMs\)\s*: init\.fresh \? new AbortController\(\)\.signal/);
+  assert.match(edgeSrc, /verifySheet: <T>\(sessionId: string, opts: \{ fresh\?: boolean \} = \{\}\)[\s\S]*?fresh: opts\.fresh,/);
 });

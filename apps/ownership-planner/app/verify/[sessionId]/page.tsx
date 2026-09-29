@@ -260,7 +260,10 @@ export default async function VerifyPage({
       console.error(`automatic vin decode failed for ${sessionId}:`, err);
     }
     try {
-      sheet = await edge.verifySheet<VerifySheet>(sessionId);
+      // Fresh, because this is the same GET as the first read in the same
+      // render, and Next would otherwise hand back that first, pre-decode
+      // response without making the request.
+      sheet = await edge.verifySheet<VerifySheet>(sessionId, { fresh: true });
     } catch (err) {
       // The sheet from before the decode is still a correct sheet to show.
       console.error(`verify sheet reload after decode failed for ${sessionId}:`, err);

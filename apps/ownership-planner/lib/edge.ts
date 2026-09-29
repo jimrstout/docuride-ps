@@ -65,6 +65,13 @@ async function call<T>(
     body?: unknown;
     /** Give up after this long. Only the automatic VIN decode sets one. */
     timeoutMs?: number;
+    /**
+     * Make the request even if an identical one already ran in this render.
+     * Next memoizes identical GETs within a render, so a second read of the
+     * same URL returns the first response without asking again. A request that
+     * carries a signal is never memoized, so a fresh read gets its own.
+     */
+    fresh?: boolean;
   }
 ): Promise<T> {
   const url = new URL(`${base()}/${fn}`);
@@ -81,7 +88,10 @@ async function call<T>(
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
     // Session data changes as the customer works; never serve it from a cache.
     cache: "no-store",
-    signal: init.timeoutMs !== undefined ? AbortSignal.timeout(init.timeoutMs) : undefined,
+    signal:
+      init.timeoutMs !== undefined ? AbortSignal.timeout(init.timeoutMs)
+      : init.fresh ? new AbortController().signal
+      : undefined,
   });
 
   const text = await res.text();
@@ -150,8 +160,12 @@ export const edge = {
   // Staff only. The sheet, the two fields nobody else carries, the CRM refresh,
   // and the gate itself.
 
-  verifySheet: <T>(sessionId: string) =>
-    call<T>("fni-session-verify", { method: "GET", query: { session_id: sessionId } }),
+  verifySheet: <T>(sessionId: string, opts: { fresh?: boolean } = {}) =>
+    call<T>("fni-session-verify", {
+      method: "GET",
+      query: { session_id: sessionId },
+      fresh: opts.fresh,
+    }),
 
   verifyAction: <T>(body: Record<string, unknown>) =>
     call<T>("fni-session-verify", { method: "POST", body }),
