@@ -46,6 +46,7 @@
 
 import { financeFigures, type FinanceSource } from "./finance-basis.ts";
 import { resolveFuelType } from "./fuel-type.ts";
+import { resolveEngineCc } from "./engine-size.ts";
 import {
   EDITED_SOURCE,
   applyStaffEdits,
@@ -338,17 +339,13 @@ function fromCrm(value: string | null) {
  * That order is deliberate. The decode is a good source and it is still a
  * lookup against a VIN pattern; a person holding the machine's papers beats it,
  * and the screen shows which of the two is in force.
+ *
+ * Engine size is resolved in _shared/engine-size.ts, the same function the rate
+ * request calls, so a decoded size shown here is the size that is sent.
  */
-function staffThenDecode(
-  src: VerificationSource,
-  staffKey: string,
-  decodeKey: string
-): { value: string | null; source: FieldSource } {
-  const typed = staffValue(src, staffKey);
-  if (typed !== null) return { value: typed, source: "Entered by Staff" };
-  const auto = decoded(src, decodeKey);
-  if (auto !== null) return { value: auto, source: "VIN Decode" };
-  return { value: null, source: "Missing" };
+function engineCc(src: VerificationSource): { value: string | null; source: FieldSource } {
+  return resolveEngineCc(src.vehicle_properties, src.vin_decode) ??
+    { value: null, source: "Missing" };
 }
 
 const SPECS: Spec[] = [
@@ -452,7 +449,7 @@ const SPECS: Spec[] = [
   {
     key: STAFF_ENTERED.engineCc, label: "Engine size (cc)", group: "Vehicle",
     provider_property: "engine.ccs",
-    resolve: (s) => staffThenDecode(s, STAFF_ENTERED.engineCc, "displacement"),
+    resolve: engineCc,
     note:
       "From the VIN decode where it answers. The CRM does not carry it, so " +
       "typing it here raises no warning.",

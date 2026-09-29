@@ -17,6 +17,7 @@
 import { financeFigures, type FinanceSource } from "./finance-basis.ts";
 import type { RequiredProperty } from "./rate-properties.ts";
 import { fuelCodeFor, resolveFuelType } from "./fuel-type.ts";
+import { resolveEngineCc } from "./engine-size.ts";
 
 // ─── Building the request ────────────────────────────────────────────────
 
@@ -188,11 +189,15 @@ function fromSession(source: RateSource): Record<string, string | null> {
     "inservice.date": isoDate(source.in_service_date) ?? isoDate(source.sale_date),
     "postal.code": text(source.buyer_zip),
     "fuel.type": fuelTypeCode(source),
+    // Staff value, then the VIN decode's displacement, through the same resolver
+    // the Verify sheet uses. Null when neither says, so a rate is refused rather
+    // than sent with a number we invented. See _shared/engine-size.ts.
+    "engine.ccs": resolveEngineCc(source.vehicle_properties, source.vin_decode)?.value ?? null,
     //
-    // Deliberately absent, because no field anywhere carries them and a guess
-    // would be a guess at somebody's price: engine.ccs and warranty. Both come
-    // from sessions.vehicle_properties, entered by staff, and a rate is refused
-    // without them rather than sent with a number we invented.
+    // Deliberately absent, because no field anywhere carries it and a guess
+    // would be a guess at somebody's price: warranty. It comes from
+    // sessions.vehicle_properties, entered by staff, and a rate is refused
+    // without it rather than sent with a number we invented.
   };
 }
 
@@ -230,10 +235,10 @@ export function buildRateProperties(
     const key = req.name.toLowerCase();
 
     // The user's value wins: it is the correction, and the session's is the
-    // default it is correcting. Fuel type is the exception, because its staff
-    // value is already inside the resolution and the array must carry the code,
-    // never the stored word.
-    const value = key === "fuel.type"
+    // default it is correcting. Fuel type and engine size are the exceptions:
+    // their staff value is already inside the shared resolution, and fuel type
+    // must go out as the code, never the stored word.
+    const value = key === "fuel.type" || key === "engine.ccs"
       ? session[key]
       : text(supplied.get(key)) ?? session[key] ?? null;
 
@@ -310,9 +315,10 @@ export function buildRateRequest(
   const status = newUsed(source.condition);
 
   // Engine size and warranty months live under different names in the two
-  // formats. One stored value feeds both; the lookup is case-insensitive so a
-  // stored `warranty` answers `Warranty` here as it does in the array.
-  const displacement = text(supplied.get("engine.ccs")) ?? text(supplied.get("displacement"));
+  // formats. One value feeds both; the lookup is case-insensitive so a stored
+  // `warranty` answers `Warranty` here as it does in the array. Engine size is
+  // the same resolution as the array's engine.ccs, VIN decode included.
+  const displacement = resolveEngineCc(source.vehicle_properties, source.vin_decode)?.value ?? null;
   const warrantyMonths = text(supplied.get("warranty")) ?? text(supplied.get("remainingmwm"));
   // The same code the properties array carries. See fuelTypeCode.
   const fuel = fuelTypeCode(source);
