@@ -233,6 +233,7 @@ export default async function VerifyPage({
 
   const verified = sheet.verification.state === "Verified";
   const byGroup = (g: FieldGroup) => sheet.fields.filter((f) => f.group === g);
+  const attention = sheet.fields.filter((f) => f.missing || f.invalid);
 
   return (
     <main className="console console--verify">
@@ -482,6 +483,9 @@ export default async function VerifyPage({
         </p>
       ) : null}
 
+      {/* Put work that blocks verification ahead of the reference sheet. Each
+          field appears in exactly one place so edits cannot conflict. */}
+      <div className="vworkspace">
       {/* ── The sheet ──────────────────────────────────────────────────── */}
       {/* Four groups in three columns on a desktop, so every field is on screen
           at once: Deal and Money on the left, Vehicle (the long one, and where
@@ -490,8 +494,36 @@ export default async function VerifyPage({
       <form action={saveVerifyFields} id="vsheet" className="vsheet">
         <input type="hidden" name="session_id" value={sheet.session.id} />
 
+        {attention.length > 0 ? (
+          <section className="vattention" aria-labelledby="vattention-title">
+            <div className="vattention-head">
+              <div>
+                <p className="vattention-kicker">Finish verification</p>
+                <h2 id="vattention-title">{attention.length} {attention.length === 1 ? "item needs" : "items need"} attention</h2>
+                <p>Complete these fields, then save to update the rating status.</p>
+              </div>
+              {attention.some((f) => f.key === "engine.ccs" || f.key === "fuel.type") ? (
+                <button type="submit" form="vin-decode" className="btn btn--quiet" title="Decoding reloads this page. Save any other edits first.">
+                  Decode VIN for engine and fuel
+                </button>
+              ) : null}
+            </div>
+            <div className="vattention-fields">
+              {attention.map((f) => <Field key={f.key} field={f} />)}
+            </div>
+          </section>
+        ) : null}
+
+        <div className="vreference-intro">
+          <div>
+            <p className="vattention-kicker">Deal review</p>
+            <h2>Rate inputs and sources</h2>
+          </div>
+          <p>Review the CRM values and any saved corrections before confirming.</p>
+        </div>
+
         {GROUPS.map(({ group, blurb }) => {
-          const fields = byGroup(group);
+          const fields = byGroup(group).filter((f) => !f.missing && !f.invalid);
           if (fields.length === 0) return null;
           return (
             <section className={`vgroup vgroup--${group.toLowerCase()}`} key={group}>
@@ -517,6 +549,7 @@ export default async function VerifyPage({
         </button>
 
         <form
+          id="vin-decode"
           action={decodeVin}
           title="Asks TecAssured what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed."
         >
@@ -544,6 +577,7 @@ export default async function VerifyPage({
           back to the CRM.
           {sheet.vin_decode_at ? ` VIN last decoded ${stamp(sheet.vin_decode_at)}.` : ""}
         </p>
+      </div>
       </div>
 
       {/* ── The gate ───────────────────────────────────────────────────── */}
