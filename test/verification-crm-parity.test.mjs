@@ -145,3 +145,30 @@ test("the body type becomes the vehicle type through the one shared map", () => 
   assert.match(SESSION_START, /vtypeForBodyType\(bodyType\)/);
   assert.match(SESSION_START, /bodyType\s*=\s*text\(record\.Sold_1_Body_Type\)/);
 });
+
+test("mapSession fills the corrected finance columns from crmRatingFields", () => {
+  // Creation, reopen and Refresh all derive these three one way. A session
+  // created without them showed Term and APR as Missing on Verify.
+  const body = SESSION_START.match(/function mapSession\([\s\S]*?\n}\n/);
+  assert.ok(body, "mapSession not found in fni-session-start");
+  assert.match(body[0], /crmRatingFields\(record\b/, "mapSession must call crmRatingFields");
+  for (const column of ["interest_rate", "tila_amount_financed", "finance_term_total"]) {
+    assert.match(
+      body[0],
+      new RegExp(`^\\s*${column}:\\s*crm\\.${column},`, "m"),
+      `mapSession must set ${column} from crm.${column}`
+    );
+  }
+});
+
+test("crmRatingFields reads term and rate when the TILA fields are empty", () => {
+  const b = crmRatingFields({
+    Interest_Rate: "6.99",
+    Term_Months: "60",
+    TILA_Amount_Financed: null,
+    TILA_Pmt1_Count: null,
+  });
+  assert.equal(b.interest_rate, 6.99);
+  assert.equal(b.finance_term_total, 60);
+  assert.equal(b.tila_amount_financed, null);
+});

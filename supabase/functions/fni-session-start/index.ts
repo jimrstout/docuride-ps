@@ -131,6 +131,12 @@ function mapSession(
   const financeType = hasLienholder ? "Loan" : "Cash";
   const saleDate = record.Sale_Date ?? null;
 
+  // The corrected finance columns, from creation. The insert used to leave
+  // these out, so a new session showed Term and APR as Missing on Verify until
+  // the planner's backfill or a Refresh filled them in. Read from
+  // crmRatingFields so creation, reopen and Refresh derive them one way.
+  const crm = crmRatingFields(record as unknown as Record<string, unknown>);
+
   return {
     credential_id: credentialId,
     deal_id: dealId,
@@ -163,6 +169,9 @@ function mapSession(
     apr: numeric(record.TILA_APR),
     finance_term: integer(record.TILA_Pmt1_Count),
     payment: numeric(record.TILA_Pmt1_Amount),
+    interest_rate: crm.interest_rate,
+    tila_amount_financed: crm.tila_amount_financed,
+    finance_term_total: crm.finance_term_total,
     finance_type: financeType,
     sale_date: saleDate,
     in_service_date: saleDate,
