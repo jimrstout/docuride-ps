@@ -145,6 +145,14 @@ export interface PlannerSession {
      */
     payment_basis: "tila" | "lienholder" | "cash" | "unavailable";
     has_payment: boolean;
+    /**
+     * The finance company's maximum amount financed. Anything past it is paid
+     * at signing instead of financed. Null on a cash deal, or when no maximum
+     * was given. Used in the arithmetic only; never shown to the customer.
+     */
+    max_amount_financed: number | null;
+    /** The down payment agreed on the deal, from the CRM. */
+    agreed_down_payment: number | null;
   };
   discovery: DiscoveryAnswers | null;
   expires_at: string | null;

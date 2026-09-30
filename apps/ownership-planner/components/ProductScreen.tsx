@@ -54,6 +54,7 @@ export default function ProductScreen({
   chosenRate,
   price,
   perMonth,
+  downImpact = 0,
   disposition,
   chosenOptions,
   dealerGroupName,
@@ -72,6 +73,11 @@ export default function ProductScreen({
   price: number | null;
   /** Null on a cash deal, or when the deal cannot produce a payment. */
   perMonth: number | null;
+  /**
+   * How much including this adds to the money down, because the plan would go
+   * past the finance company's maximum. Zero when it would not.
+   */
+  downImpact?: number;
   disposition: Disposition | undefined;
   chosenOptions: string[];
   dealerGroupName: string | null;
@@ -175,6 +181,11 @@ export default function ProductScreen({
           </span>
           {perMonth !== null && (
             <span className="ps-price-month">about {money(perMonth)} a month</span>
+          )}
+          {downImpact > 0 && (
+            <span className="ps-price-down">
+              Including this adds {money(downImpact)} to your money down.
+            </span>
           )}
           {durationLine && <span className="ps-price-term">{durationLine}</span>}
           {copy.full_terms_url && (

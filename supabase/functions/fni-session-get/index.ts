@@ -25,8 +25,8 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { allTiers, normalizeOffer, NormalizedFamily } from "../_shared/planner-offers.ts";
-import { priceProduct, PricingRule } from "../_shared/planner-pricing.ts";
-import { resolvePaymentBasis } from "../_shared/money.ts";
+import { PricingRule } from "../_shared/planner-pricing.ts";
+import { priceFamilies, sessionCap, sessionPaymentBasis } from "../_shared/plan-prices.ts";
 import { modeLabel } from "../_shared/session-mode.ts";
 import {
   CatalogRow,
@@ -207,24 +207,10 @@ serve(async (req: Request) => {
 
     const rules = (ruleRows ?? []) as unknown as PricingRule[];
 
-    // Priced per RATE, not per product. A product's cost varies by length and
-    // deductible -- USED ATV/UTV CARE runs 578 to 881 across its twelve rates --
-    // so one price per product would be the wrong price for eleven of them.
-    const pricedFamilies = families.map((f) => ({
-      ...f,
-      tiers: f.tiers.map((t) => ({
-        ...t,
-        rates: t.rates.map((r) => {
-          const priced = priceProduct(rules, t.product_code, r.dealer_cost);
-          return {
-            ...r,
-            retail_price: priced.unpriced_reason ? null : priced.retail_price,
-            pricing_rule_id: priced.rule_id,
-            unpriced_reason: priced.unpriced_reason,
-          };
-        }),
-      })),
-    }));
+    // Priced per rate, in _shared/plan-prices.ts, which fni-session-save also
+    // uses to price the saved selections. One pricing, so the page and the
+    // save cannot disagree.
+    const pricedFamilies = priceFamilies(families, rules);
 
     // Catalog copy is keyed on the product code, which is the tier.
     const tiers = allTiers(pricedFamilies);
@@ -308,14 +294,10 @@ serve(async (req: Request) => {
     // Where this deal's payment comes from, if it has one. A cash deal -- no
     // lienholder -- has no payment, and the planner must not invent one from
     // whatever the financing columns happen to still hold.
-    const basis = resolvePaymentBasis({
-      tilaAmountFinanced: num(s.tila_amount_financed),
-      amountFinanced: num(s.amount_financed),
-      apr: num(s.apr),
-      interestRate: num(s.interest_rate),
-      termMonths: num(s.finance_term_total),
-      lienholderName: (s.lienholder_name as string | null) ?? null,
-    });
+    // Shared with fni-session-save, which measures the additional down payment
+    // against this same principal and cap.
+    const basis = sessionPaymentBasis(s as Record<string, unknown>);
+    const cap = sessionCap(s as Record<string, unknown>, basis);
 
     // ── Shape the response ──────────────────────────────────────────────
     // Field names here follow the build spec's vocabulary; the renaming from
@@ -373,6 +355,12 @@ serve(async (req: Request) => {
           // interface is gated on has_payment because of it.
           payment_basis: basis.kind,
           has_payment: basis.hasPayment,
+          // The finance company's maximum amount financed, and the down payment
+          // agreed on the deal. The planner holds what is financed to the
+          // maximum and adds anything past it to the money down; it never shows
+          // the maximum itself. Null on a cash deal.
+          max_amount_financed: cap,
+          agreed_down_payment: num(s.agreed_down_payment),
         },
 
         discovery: s.discovery,

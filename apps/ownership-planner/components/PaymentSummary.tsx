@@ -10,7 +10,7 @@
 // rounded per-product payments -- those drift a few cents, and a summary that
 // does not reconcile against the contract is worse than no summary.
 
-import { money } from "@/lib/money";
+import { money, toCents } from "@/lib/money";
 import type { PlanTotals } from "@/lib/money";
 
 export function PaymentBreakdown({ totals }: { totals: PlanTotals }) {
@@ -52,6 +52,60 @@ export function PlanCostOnly({
           <div className="is-total"><dt>Total</dt><dd>{money(total)}</dd></div>
         </dl>
       )}
+    </div>
+  );
+}
+
+/**
+ * What is due at signing, when the finance company's maximum matters.
+ *
+ * With an additional down payment: the agreed down payment, the additional
+ * one, and the total due at signing, with one plain sentence saying why. With
+ * none: the agreed down payment alone, and only if the deal has one. The
+ * maximum itself is never printed.
+ *
+ * `forPlan` is false when the vehicle alone is already past the maximum, so the
+ * additional amount is not all down to the protection chosen and must not be
+ * described as if it were.
+ */
+export function DownPaymentSummary({
+  agreed,
+  additional,
+  forPlan,
+}: {
+  agreed: number | null;
+  additional: number;
+  forPlan: boolean;
+}) {
+  if (!(additional > 0)) {
+    if (agreed === null) return null;
+    return (
+      <dl className="figure-split figure-split--down">
+        <div><dt>Agreed down payment</dt><dd>{money(agreed)}</dd></div>
+      </dl>
+    );
+  }
+
+  const total = toCents((agreed ?? 0) + additional);
+  return (
+    <div className="figures figures--down">
+      <dl className="figure-split figure-split--down">
+        {agreed !== null && (
+          <div><dt>Agreed down payment</dt><dd>{money(agreed)}</dd></div>
+        )}
+        <div>
+          <dt>
+            Additional down payment
+            {forPlan ? <small> (for the protection you have chosen)</small> : null}
+          </dt>
+          <dd>{money(additional)}</dd>
+        </div>
+        <div className="is-total"><dt>Total due at signing</dt><dd>{money(total)}</dd></div>
+      </dl>
+      <p className="fine">
+        Your finance company approved a set amount. Your plan goes past it by{" "}
+        {money(additional)}, so that amount is added to your money down.
+      </p>
     </div>
   );
 }

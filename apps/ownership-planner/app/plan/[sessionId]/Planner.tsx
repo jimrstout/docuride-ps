@@ -37,7 +37,14 @@ import type {
 } from "@/lib/types";
 import { num } from "@/lib/types";
 import { durationOf } from "@/lib/copy";
-import { money, planTotals, productPayment, toCents } from "@/lib/money";
+import {
+  additionalDownPayment,
+  money,
+  planTotals,
+  productDownImpact,
+  productPayment,
+  toCents,
+} from "@/lib/money";
 import { profileFor, relevanceScore } from "@/lib/profiles";
 import { apiPath } from "@/lib/paths";
 
@@ -54,6 +61,7 @@ import PlanSummary, { type PlanLine } from "@/components/PlanSummary";
 import CompletionState from "@/components/CompletionState";
 import {
   DealTerms,
+  DownPaymentSummary,
   PaymentBreakdown,
   PlanCostOnly,
 } from "@/components/PaymentSummary";
@@ -321,6 +329,15 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   const hasPayment = session.financials.has_payment === true;
   const isCash = session.financials.payment_basis === "cash";
 
+  // ── The finance company's maximum ───────────────────────────────────────
+  // Used in the arithmetic and never printed. Whatever the plan would finance
+  // past it is added to the money down instead. None on a cash deal.
+  const cap = isCash ? null : num(session.financials.max_amount_financed);
+  const agreedDown = isCash ? null : num(session.financials.agreed_down_payment);
+  // The vehicle alone already past the maximum: the additional amount is then
+  // not all down to the protection chosen, and is not described that way.
+  const baseOverCap = cap !== null && principal !== null && principal > cap;
+
   /** The tier in force for a family: the customer's, else the cheapest. */
   const tierOf = useCallback(
     (p: Presentable): PresentableTier =>
@@ -354,7 +371,33 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   /** What the plan costs, on every path. A cash deal has this and nothing else. */
   const planTotal = toCents(includedPrices.reduce((a, p) => a + p, 0));
 
-  const totals = hasPayment ? planTotals(principal!, includedPrices, rate!, term!) : null;
+  const totals = hasPayment
+    ? planTotals(principal!, includedPrices, rate!, term!, cap)
+    : null;
+
+  // Worked out without the rate, so a deal with no payment yet still shows it
+  // when the principal is known. The same figure planTotals returns, and the
+  // same one fni-session-save writes, from the same shared arithmetic.
+  const additionalDown =
+    isCash || principal === null ? 0 : additionalDownPayment(principal, planTotal, cap);
+
+  /** What including one family would add to the money down. */
+  const downImpactOf = useCallback(
+    (p: Presentable): number => {
+      const price = priceOf(p);
+      if (isCash || principal === null || cap === null || price === null) return 0;
+      const others = presentable
+        .filter((q) => q.family_code !== p.family_code && decisions[q.family_code] === "Included")
+        .map(priceOf)
+        .filter((n): n is number => n !== null);
+      return productDownImpact(principal, others, price, cap);
+    },
+    [isCash, principal, cap, presentable, decisions, priceOf]
+  );
+
+  const downSummary = isCash ? null : (
+    <DownPaymentSummary agreed={agreedDown} additional={additionalDown} forPlan={!baseOverCap} />
+  );
 
   // ── Persistence ─────────────────────────────────────────────────────────
   // Saved on every decision, not just at the end. This is what makes the
@@ -782,6 +825,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
             tierOf={tierOf}
             rateOf={rateOf}
             priceOf={priceOf}
+            downImpactOf={downImpactOf}
             hasPayment={hasPayment}
             rate={rate}
             term={term}
@@ -823,8 +867,14 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
             {totals ? (
               <>
                 <PaymentBreakdown totals={totals} />
+                {downSummary}
                 <p className="fine">
-                  Calculated from your financed amount of {money(principal!)} over{" "}
+                  {/* The amount is left out when the vehicle alone is past the
+                      finance company's maximum: what is financed is then that
+                      maximum, and the maximum is never shown. */}
+                  {baseOverCap
+                    ? "Calculated over "
+                    : <>Calculated from your financed amount of {money(principal!)} over{" "}</>}
                   {term} months at {rate}%
                   {session.financials.rate_source === "apr"
                     ? " annual percentage rate"
@@ -867,6 +917,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
             ) : (
               <>
                 <PlanCostOnly label="Added to your purchase" total={planTotal} lines={[]} />
+                {downSummary}
                 <p className="fine">
                   We can&apos;t show a monthly payment for this deal yet. The
                   financing terms haven&apos;t been finalized. The totals above are
@@ -905,6 +956,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
             {totals ? (
               <>
                 <PaymentBreakdown totals={totals} />
+                {downSummary}
                 <dl className="terms terms--inline">
                   <div>
                     <dt>{session.financials.rate_label ?? "Rate"} and term</dt>
@@ -915,6 +967,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
             ) : (
               <>
                 <PlanCostOnly label="Added to your purchase" total={planTotal} lines={[]} />
+                {downSummary}
                 <p className="fine">
                   {isCash
                     ? "Paid outright, so there is no monthly payment and no finance charge."
@@ -946,6 +999,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                   : " your credit approval or the terms of your sale"}
                 . Pricing was presented by this system rather than negotiated.
               </p>
+              {downSummary}
               <p className="ack-meta">
                 {ackState === "working" && "Preparing your record…"}
                 {ackState === "done" && "Saved and ready for signing."}
@@ -1002,6 +1056,7 @@ function FamilyScreen({
   tierOf,
   rateOf,
   priceOf,
+  downImpactOf,
   hasPayment,
   rate,
   term,
@@ -1020,6 +1075,7 @@ function FamilyScreen({
   tierOf: (p: Presentable) => PresentableTier;
   rateOf: (t: PresentableTier) => OfferRate | undefined;
   priceOf: (p: Presentable) => number | null;
+  downImpactOf: (p: Presentable) => number;
   hasPayment: boolean;
   rate: number | null;
   term: number | null;
@@ -1050,6 +1106,7 @@ function FamilyScreen({
           ? productPayment(price, rate, term)
           : null
       }
+      downImpact={downImpactOf(family)}
       disposition={decisions[family.family_code]}
       chosenOptions={options[code] ?? []}
       dealerGroupName={dealerGroupName}

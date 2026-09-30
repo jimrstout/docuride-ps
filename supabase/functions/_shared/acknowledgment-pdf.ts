@@ -8,6 +8,7 @@
 // rely on, and this is what makes asserting on it possible.
 
 import {
+  additionalDownPayment,
   monthlyPayment,
   planTotals,
   resolvePaymentBasis,
@@ -64,6 +65,14 @@ export interface AckInput {
   term_months: number | null;
   /** Blank means cash, which means there is no payment to state. */
   lienholder_name: string | null;
+  /**
+   * The finance company's maximum amount financed. The payment is worked out
+   * with it exactly as the planner screen does, so the signed figures match
+   * what was shown. Never printed. Ignored on a cash deal.
+   */
+  max_amount_financed?: number | null;
+  /** The down payment agreed on the deal. */
+  agreed_down_payment?: number | null;
 
   decisions: AckDecision[];
   /** Injected so the document is reproducible in tests. */
@@ -182,9 +191,20 @@ export async function renderAcknowledgment(
   const includedPrices = included.map((d) => d.customer_price ?? 0);
   const planTotal = toCents(includedPrices.reduce((a, p) => a + p, 0));
 
+  // The same maximum the planner applies, so the payment signed here is the
+  // payment the customer was shown. Anything past it is money down.
+  const cap = basis.kind === "cash" ? null : (input.max_amount_financed ?? null);
+  const agreedDown = basis.kind === "cash" ? null : (input.agreed_down_payment ?? null);
+
   const totals = basis.hasPayment
-    ? planTotals(basis.principal!, includedPrices, basis.ratePercent!, term!)
+    ? planTotals(basis.principal!, includedPrices, basis.ratePercent!, term!, cap)
     : null;
+
+  const additionalDown =
+    basis.kind === "cash" || basis.principal === null
+      ? 0
+      : additionalDownPayment(basis.principal, planTotal, cap);
+  const baseOverCap = cap !== null && basis.principal !== null && basis.principal > cap;
 
   // Every product presented, not only the ones included.
   line("PLANS PRESENTED", { size: 8, font: bold, gap: 8 });
@@ -215,6 +235,29 @@ export async function renderAcknowledgment(
     line(d.disposition, { size: 9, font: bold, color: isIncluded ? ink : grey, gap: 10 });
   }
 
+  // What is due at signing, the same lines the planner shows. Never on a cash
+  // deal, and the maximum itself is never printed.
+  function downPayment(): void {
+    if (additionalDown > 0) {
+      if (agreedDown !== null) pair("Agreed down payment", usd(agreedDown));
+      pair(
+        baseOverCap
+          ? "Additional down payment"
+          : "Additional down payment (for the protection you have chosen)",
+        usd(additionalDown)
+      );
+      pair("Total due at signing", usd(toCents((agreedDown ?? 0) + additionalDown)), true);
+      y -= 2;
+      paragraph(
+        `Your finance company approved a set amount. Your plan goes past it by ${usd(additionalDown)}, so that amount is added to your money down.`
+      );
+      y -= 8;
+    } else if (agreedDown !== null) {
+      pair("Agreed down payment", usd(agreedDown));
+      y -= 8;
+    }
+  }
+
   y -= 4;
   line("PAYMENT", { size: 8, font: bold, gap: 8 });
   rule();
@@ -228,6 +271,7 @@ export async function renderAcknowledgment(
     line(`${basis.rateLabel}: ${basis.ratePercent}%     Term: ${term} months`, {
       size: 9, color: grey, gap: 14,
     });
+    downPayment();
   } else if (basis.kind === "cash") {
     // A cash purchase has no payment to reconcile. The plans are an amount
     // added to the purchase, and stating it any other way would describe a loan
@@ -241,6 +285,7 @@ export async function renderAcknowledgment(
     y -= 2;
     paragraph("Financing terms were not finalized when this plan was prepared, so no payment is shown.");
     y -= 8;
+    downPayment();
   }
 
   y -= 4;

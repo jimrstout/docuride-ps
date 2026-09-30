@@ -159,6 +159,10 @@ serve(async (req: Request) => {
         interest_rate: numOr(s.interest_rate),
         term_months: numOr(s.finance_term_total),
         lienholder_name: (s.lienholder_name as string | null) ?? null,
+        // The planner applies the finance company's maximum to the payment,
+        // so the signed copy must too.
+        max_amount_financed: numOr(s.max_amount_financed),
+        agreed_down_payment: numOr(s.agreed_down_payment),
         decisions,
       }
     );

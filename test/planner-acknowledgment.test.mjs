@@ -212,3 +212,49 @@ test("a long list of products still puts the signature on a real page", async ()
   assert.equal(Number(out.signatureMapLine.split("|")[1]), out.page);
   assert.ok(out.page <= pages);
 });
+
+// ── The finance company's maximum, on the signed copy ─────────────────────
+//
+// The planner holds what is financed to the maximum and adds the excess to the
+// money down. The signed copy must say the same, or the customer signs a
+// payment they were not shown.
+
+test("the signed copy applies the maximum exactly as the planner does", async () => {
+  // TILA principal 13,930.94 plus 3,115.00 of plans is 17,045.94, which is
+  // 1,045.94 past a 16,000 maximum.
+  const capped = { ...BASE, max_amount_financed: 16000, agreed_down_payment: 1000 };
+  const out = await renderAcknowledgment(DEPS, capped);
+  const { planTotals } = await import("../apps/ownership-planner/lib/money.ts");
+  const screen = planTotals(13930.94, [2225, 890], 8.5165, 60, 16000);
+  assert.deepEqual(out.totals, screen);
+  assert.equal(out.totals.additionalDown, 1045.94);
+
+  const { raw } = await textOf(out.bytes);
+  assert.ok(raw.includes("Agreed down payment"));
+  assert.ok(raw.includes("Additional down payment (for the protection you have chosen)"));
+  assert.ok(raw.includes("Total due at signing"));
+  assert.ok(raw.includes("$2,045.94"), "1,000 agreed plus 1,045.94 additional");
+  assert.ok(!raw.includes("16,000"), "the maximum itself is never printed");
+});
+
+test("under the maximum the signed copy is unchanged, apart from the agreed down", async () => {
+  const plain = await renderAcknowledgment(DEPS, BASE);
+  const under = await renderAcknowledgment(DEPS, { ...BASE, max_amount_financed: 50000 });
+  assert.deepEqual(under.totals, plain.totals);
+  const { raw } = await textOf(under.bytes);
+  assert.ok(!raw.includes("Additional down payment"));
+
+  const withDown = await renderAcknowledgment(DEPS, { ...BASE, agreed_down_payment: 1000 });
+  const text = (await textOf(withDown.bytes)).raw;
+  assert.ok(text.includes("Agreed down payment"));
+  assert.ok(!text.includes("Total due at signing"));
+});
+
+test("a cash deal ignores the maximum", async () => {
+  const cash = await renderAcknowledgment(DEPS, {
+    ...BASE, lienholder_name: null, max_amount_financed: 100, agreed_down_payment: 500,
+  });
+  assert.equal(cash.totals, null);
+  const { raw } = await textOf(cash.bytes);
+  assert.ok(!raw.includes("down payment"));
+});

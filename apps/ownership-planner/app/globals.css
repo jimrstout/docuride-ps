@@ -324,6 +324,9 @@ button { cursor: pointer; }
   line-height: 1.1; margin-top: var(--s1);
 }
 .ps-price-month { display: block; font-size: var(--fs-base); color: var(--ink-70); margin-top: var(--s1); }
+/* Including this product would take the plan past the finance company's
+   maximum, so part of it becomes money down. Said under the price, plainly. */
+.ps-price-down { display: block; font-size: var(--fs-base); color: var(--copper-deep); margin-top: var(--s1); }
 .ps-price-term { display: block; font-size: var(--fs-xs); color: var(--ink-55); margin-top: var(--s2); }
 
 .ps-decide { border-top: var(--bw) solid var(--line); padding-top: var(--s2); }
@@ -723,6 +726,12 @@ button { cursor: pointer; }
 .figure-split dd { margin: 0; font-weight: 600; }
 .figure-split .is-total { border-top: var(--bw) solid var(--line); margin-top: var(--s1); padding-top: var(--s2); font-weight: 700; }
 .figure-split .is-total dt { color: var(--ink); font-weight: 700; }
+/* Money due at signing, under the payment. Its own block, so it reads as a
+   separate amount from the monthly figures above it. */
+.figures--down { display: block; }
+.figures--down .fine { margin: var(--s2) 0 0; }
+.figure-split--down { margin-top: var(--s3); }
+.figure-split--down dt small { display: block; font-size: var(--fs-xs); color: var(--ink-55); }
 
 /* ── Plan summary ────────────────────────────────────────────────────────── */
 .summary { list-style: none; margin: 0; padding: 0; }

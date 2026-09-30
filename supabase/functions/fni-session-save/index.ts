@@ -24,7 +24,11 @@
 //                  value stays as the fallback for older clients.
 //   dx1_photos   - cached VIN photo lookup result (optional; written by the
 //                  Next.js photo route, which holds the DX1 key)
-//   complete     - true when the customer has finished the plan
+//   complete     - true when the customer has finished the plan. On a
+//                  complete save the additional down payment is worked out
+//                  HERE, from the saved Included selections priced from the
+//                  stored quote, and written to sessions.additional_down_payment.
+//                  No price sent by the browser is used for it.
 //
 // Auth: FNI_WEBHOOK_SECRET via x-webhook-secret header or ?secret= query param.
 
@@ -32,6 +36,13 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { SESSION_MODES, isSessionMode } from "../_shared/session-mode.ts";
+import { normalizeOffer } from "../_shared/planner-offers.ts";
+import type { PricingRule } from "../_shared/planner-pricing.ts";
+import {
+  additionalDownForSelections,
+  priceFamilies,
+  type SavedSelection,
+} from "../_shared/plan-prices.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -49,6 +60,65 @@ type Disposition = (typeof DISPOSITIONS)[number];
 const STATUS_PRESENTING = "Presenting";
 const STATUS_SELECTED = "Products Selected";
 const TERMINAL = ["Finalized", "Written Back", "Cancelled"];
+
+// Every column the additional down payment is worked out from: the finance
+// figures the planner's principal comes from, the finance company's maximum,
+// and the tenant and store the pricing rules belong to.
+const SESSION_COLUMNS = [
+  "id", "status", "expires_at", "tenant_id", "store_id",
+  "tila_amount_financed", "amount_financed", "apr", "interest_rate",
+  "finance_term_total", "lienholder_name", "max_amount_financed",
+].join(", ");
+
+/**
+ * The additional down payment for the saved plan, priced on the server.
+ *
+ * The Included rows are read back after this save's upsert, so they are the
+ * plan as it now stands. Each is priced from the stored quote and the store's
+ * pricing rules through _shared/plan-prices.ts, the same pricing the planner is
+ * shown. A quote that is out of date prices nothing, and null is written rather
+ * than a guess or a browser figure.
+ */
+async function serverAdditionalDown(
+  supabase: ReturnType<typeof createClient>,
+  s: Record<string, unknown>
+): Promise<{ value: number | null; reason: string | null }> {
+  const { data: offerRow } = await supabase
+    .schema("fni")
+    .from("rated_offers")
+    .select("response_payload, out_of_date")
+    .eq("session_id", s.id as string)
+    .maybeSingle();
+  const offer = (offerRow ?? null) as { response_payload: unknown; out_of_date: boolean } | null;
+
+  const { data: ruleRows } = await supabase
+    .schema("fni")
+    .from("pricing_rules")
+    .select("*")
+    .eq("tenant_id", s.tenant_id as string)
+    .or(`store_id.eq.${s.store_id},store_id.is.null`)
+    .eq("active", true);
+
+  const { data: rows, error } = await supabase
+    .schema("fni")
+    .from("selected_products")
+    .select("provider_product_id, rate_unique_id, selected_options")
+    .eq("session_id", s.id as string)
+    .eq("disposition", "Included");
+  if (error) return { value: null, reason: `could not read selections: ${error.message}` };
+
+  const selections = (rows ?? []) as unknown as SavedSelection[];
+  const current = offer && offer.out_of_date !== true ? offer.response_payload : null;
+  if (selections.length > 0 && current === null) {
+    return { value: null, reason: "no current quote to price the selections from" };
+  }
+
+  const priced = priceFamilies(
+    current === null ? [] : normalizeOffer(current),
+    (ruleRows ?? []) as unknown as PricingRule[]
+  );
+  return additionalDownForSelections(s, priced, selections);
+}
 
 interface Decision {
   product_code?: string;
@@ -146,7 +216,7 @@ serve(async (req: Request) => {
     const { data: session, error: sessErr } = await supabase
       .schema("fni")
       .from("sessions")
-      .select("id, status, expires_at")
+      .select(SESSION_COLUMNS)
       .eq("id", sessionId)
       .maybeSingle();
 
@@ -252,6 +322,14 @@ serve(async (req: Request) => {
     if (body.complete === true) {
       if (s.status === "Initiated" || s.status === "Rated" || s.status === STATUS_PRESENTING) {
         patch.status = STATUS_SELECTED;
+      }
+
+      // ── The additional down payment, worked out here ─────────────────────
+      // Never from a figure the browser sent. See serverAdditionalDown.
+      const down = await serverAdditionalDown(supabase, session as Record<string, unknown>);
+      patch.additional_down_payment = down.value;
+      if (down.value === null) {
+        console.warn(`fni-session-save ${sessionId}: additional down not set (${down.reason})`);
       }
     } else if (s.status === "Initiated" || s.status === "Rated") {
       patch.status = STATUS_PRESENTING;

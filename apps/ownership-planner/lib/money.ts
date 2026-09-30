@@ -83,6 +83,30 @@ export interface PlanTotals {
   totalPayment: number;
   /** Sum of the included products' prices. */
   productTotal: number;
+  /**
+   * What is financed in total: principal plus products, held to the finance
+   * company's maximum when one is set. Without a maximum it is the full sum.
+   */
+  financedTotal: number;
+  /**
+   * The amount past the finance company's maximum, which the customer pays at
+   * signing instead of financing. Zero when there is no maximum or the plan is
+   * under it.
+   */
+  additionalDown: number;
+}
+
+/**
+ * How far principal plus products runs past the finance company's maximum.
+ * Zero with no maximum, or when under it. Rounded to cents.
+ */
+export function additionalDownPayment(
+  principal: number,
+  productTotal: number,
+  cap: number | null | undefined
+): number {
+  if (cap === null || cap === undefined || !Number.isFinite(cap)) return 0;
+  return toCents(Math.max(0, principal + productTotal - cap));
 }
 
 /**
@@ -97,7 +121,8 @@ export function planTotals(
   principal: number,
   includedPrices: number[],
   annualRatePercent: number,
-  months: number
+  months: number,
+  cap: number | null = null
 ): PlanTotals {
   // Rounded before it is financed, not after. Each product's price is a money
   // amount and the contract will carry it rounded, so the principal has to be
@@ -111,9 +136,20 @@ export function planTotals(
   // screen. Rounding each line independently lets 285.93 + 44.37 print beside a
   // total of 330.29, which is a penny out on the one screen the customer takes
   // home, and "close enough" is not a thing money does.
-  const vehiclePayment = toCents(monthlyPayment(principal, annualRatePercent, months));
+  //
+  // ── The finance company's maximum ─────────────────────────────────────────
+  // With a maximum set, nothing past it is financed: the vehicle and the plan
+  // are each held to it, and whatever runs over is paid at signing instead.
+  // With none, both are the full amounts and every figure is exactly as before.
+  const capped = cap !== null && cap !== undefined && Number.isFinite(cap);
+  const financedVehicle = capped ? Math.min(principal, cap) : principal;
+  const financedTotal = capped
+    ? Math.min(principal + productTotal, cap)
+    : principal + productTotal;
+
+  const vehiclePayment = toCents(monthlyPayment(financedVehicle, annualRatePercent, months));
   const totalPayment = toCents(
-    monthlyPayment(principal + productTotal, annualRatePercent, months)
+    monthlyPayment(financedTotal, annualRatePercent, months)
   );
 
   return {
@@ -121,7 +157,30 @@ export function planTotals(
     planPayment: toCents(totalPayment - vehiclePayment),
     totalPayment,
     productTotal,
+    financedTotal: toCents(financedTotal),
+    additionalDown: additionalDownPayment(principal, productTotal, cap),
   };
+}
+
+/**
+ * How much one product adds to the money down, if it is included.
+ *
+ * Measured the way planTotals measures it: the additional down with this
+ * product among the others, less the additional down without it. Zero while
+ * the plan stays under the finance company's maximum.
+ */
+export function productDownImpact(
+  principal: number,
+  otherPrices: number[],
+  price: number,
+  cap: number | null | undefined
+): number {
+  const without = toCents(otherPrices.reduce((a, p) => a + p, 0));
+  const withIt = toCents([...otherPrices, price].reduce((a, p) => a + p, 0));
+  return toCents(
+    additionalDownPayment(principal, withIt, cap) -
+      additionalDownPayment(principal, without, cap)
+  );
 }
 
 /**
