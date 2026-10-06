@@ -60,6 +60,12 @@ const nextConfig = {
         source: "/",
         headers: [{ key: "Cache-Control", value: "no-store, private" }],
       },
+      {
+        // The admin area: the session browser, wording and pricing, all behind
+        // the same sign-in cookie. Never served from a shared cache.
+        source: "/admin/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store, private" }],
+      },
     ];
   },
 };

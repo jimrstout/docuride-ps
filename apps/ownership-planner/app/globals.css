@@ -1470,3 +1470,48 @@ button { cursor: pointer; }
 .setting-preview--empty { background: var(--cream-2); }
 
 .settings-actions { display: flex; gap: var(--s3); }
+
+/* ── The admin area ───────────────────────────────────────────────────────
+   A desktop staff tool: a narrow menu down the left, one section at a time to
+   the right. Built from the console's own type and colour so Sessions, Wording
+   and anything added later read as one place. The menu comes from
+   lib/admin-sections.ts. */
+.admin {
+  display: grid; grid-template-columns: 13rem minmax(0, 1fr);
+  height: 100dvh; background: var(--shell);
+}
+.admin-side {
+  display: flex; flex-direction: column; gap: var(--s4);
+  padding: var(--s5) var(--s4);
+  border-right: var(--bw) solid var(--line); background: var(--paper);
+  overflow: auto;
+}
+.admin-brand {
+  margin: 0; font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: var(--track-wide); text-transform: uppercase; color: var(--copper-deep);
+}
+.admin-nav { display: flex; flex-direction: column; gap: 2px; }
+.admin-nav-link {
+  display: block; padding: var(--s2) var(--s3); border-radius: var(--r-sm);
+  font-size: var(--fs-base); color: var(--ink-70); text-decoration: none;
+  border-left: var(--bw-accent) solid transparent;
+}
+.admin-nav-link:hover { background: var(--cream-2); color: var(--ink); }
+.admin-nav-link.is-here {
+  color: var(--ink); font-weight: 700; background: var(--cream);
+  border-left-color: var(--copper);
+}
+.admin-who {
+  margin-top: auto; display: flex; flex-direction: column; align-items: flex-start;
+  gap: var(--s2); font-size: var(--fs-xs); color: var(--ink-55); overflow-wrap: anywhere;
+}
+.admin-main { overflow: auto; padding: var(--s5) var(--s6) var(--s8); }
+.admin-main > * { max-width: var(--content-wide); margin-left: auto; margin-right: auto; }
+.admin-head { margin-bottom: var(--s4); }
+.admin-head .console-title { margin: 0; }
+@media (max-width: 48rem) {
+  .admin { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; min-height: 100dvh; }
+  .admin-side { border-right: 0; border-bottom: var(--bw) solid var(--line); }
+  .admin-nav { flex-direction: row; flex-wrap: wrap; }
+  .admin-who { flex-direction: row; align-items: center; margin-top: 0; }
+}

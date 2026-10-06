@@ -70,7 +70,10 @@ test("no em or en dashes in the staff console either", () => {
   // House style, not just customer-facing style. The console is read by people
   // under time pressure with a customer beside them, which is not the moment for
   // a clause held open.
-  const STAFF = ["app/page.tsx", "app/settings", "app/verify", "app/console-actions.ts"];
+  const STAFF = [
+    "app/page.tsx", "app/settings", "app/admin", "components/admin",
+    "app/verify", "app/console-actions.ts", "lib/admin-sections.ts",
+  ];
   const offenders = [];
 
   for (const dir of STAFF) {

@@ -24,6 +24,11 @@ import {
   cleanCheckerName,
 } from "@/lib/checker";
 import { ratingInputsFrom } from "@/lib/verify-fields";
+import { ADMIN_HOME, safeAdminPath, withNotice } from "@/lib/admin-sections";
+
+// The admin area's two pages, as the actions below send people back to them.
+const SESSIONS = ADMIN_HOME;
+const WORDING = "/admin/wording";
 import {
   VERIFY_FLASH_COOKIE,
   VERIFY_FLASH_OPTIONS,
@@ -40,20 +45,23 @@ const EXTEND_HOURS = 24;
 export async function signIn(formData: FormData): Promise<void> {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
+  // The admin page they asked for, so signing in returns them to it. Only a
+  // path under /admin is accepted; anything else lands on Sessions.
+  const next = safeAdminPath(formData.get("next"));
 
-  if (!email || !password) redirect("/?denied=1");
+  if (!email || !password) redirect(withNotice(next, "denied"));
 
   let user: { user_id: string; email: string };
   try {
     user = await edge.adminAuth<{ user_id: string; email: string }>(email, password);
   } catch (err) {
-    if (err instanceof EdgeError && err.status === 429) redirect("/?slow=1");
-    if (err instanceof EdgeError && err.status === 401) redirect("/?denied=1");
+    if (err instanceof EdgeError && err.status === 429) redirect(withNotice(next, "slow"));
+    if (err instanceof EdgeError && err.status === 401) redirect(withNotice(next, "denied"));
     // A misconfigured secret and a Supabase outage both land here. Neither is
     // the operator's fault and neither is "wrong password", so they do not get
     // told it was.
     console.error("console sign-in failed:", err);
-    redirect("/?broken=1");
+    redirect(withNotice(next, "broken"));
   }
 
   const jar = await cookies();
@@ -63,13 +71,13 @@ export async function signIn(formData: FormData): Promise<void> {
     CONSOLE_COOKIE_OPTIONS
   );
 
-  redirect("/");
+  redirect(next);
 }
 
 export async function signOut(): Promise<void> {
   const jar = await cookies();
   jar.delete(CONSOLE_COOKIE);
-  redirect("/");
+  redirect(SESSIONS);
 }
 
 export async function extendSession(formData: FormData): Promise<void> {
@@ -77,22 +85,22 @@ export async function extendSession(formData: FormData): Promise<void> {
   // like any other, and the page having rendered the button is not evidence
   // that whoever called it was allowed to.
   const operator = await currentOperator();
-  if (!operator) redirect("/");
+  if (!operator) redirect(SESSIONS);
 
   const sessionId = String(formData.get("session_id") ?? "");
-  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
   try {
     await edge.adminExtend<{ expires_at: string }>(sessionId, EXTEND_HOURS);
   } catch (err) {
     console.error(`console extend failed for ${sessionId}:`, err);
-    redirect("/?extendfailed=1");
+    redirect(withNotice(SESSIONS, "extendfailed"));
   }
 
   // The list is the feedback: the row's expiry moves and the Expired mark
   // clears. Nothing else needs to be said.
-  revalidatePath("/");
-  redirect("/");
+  revalidatePath(SESSIONS);
+  redirect(SESSIONS);
 }
 
 
@@ -110,10 +118,10 @@ export async function extendSession(formData: FormData): Promise<void> {
  */
 export async function rateSession(formData: FormData): Promise<void> {
   const operator = await currentOperator();
-  if (!operator) redirect("/");
+  if (!operator) redirect(SESSIONS);
 
   const sessionId = String(formData.get("session_id") ?? "");
-  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
   try {
     await edge.adminRate<{ product_count?: number }>(sessionId);
@@ -126,8 +134,8 @@ export async function rateSession(formData: FormData): Promise<void> {
 
   // The Rating column is the feedback either way: it shows the new state and,
   // on a failure, the new reason.
-  revalidatePath("/");
-  redirect("/");
+  revalidatePath(SESSIONS);
+  redirect(SESSIONS);
 }
 
 
@@ -142,7 +150,7 @@ export async function rateSession(formData: FormData): Promise<void> {
  */
 export async function saveSettings(formData: FormData): Promise<void> {
   const operator = await currentOperator();
-  if (!operator) redirect("/settings");
+  if (!operator) redirect(WORDING);
 
   const name = String(formData.get("dealer_group_display_name") ?? "");
 
@@ -166,14 +174,14 @@ export async function saveSettings(formData: FormData): Promise<void> {
         typeof (err.body as { error?: unknown } | undefined)?.error === "string"
           ? String((err.body as { error: string }).error)
           : "That could not be saved.";
-      redirect(`/settings?refused=${encodeURIComponent(detail.slice(0, 300))}`);
+      redirect(`${WORDING}?refused=${encodeURIComponent(detail.slice(0, 300))}`);
     }
     console.error("console settings save failed:", err);
-    redirect("/settings?savefailed=1");
+    redirect(withNotice(WORDING, "savefailed"));
   }
 
-  revalidatePath("/settings");
-  redirect("/settings?saved=1");
+  revalidatePath(WORDING);
+  redirect(withNotice(WORDING, "saved"));
 }
 
 
@@ -208,7 +216,7 @@ export async function setCheckerName(formData: FormData): Promise<void> {
   if (name === "") jar.delete(CHECKER_COOKIE);
   else jar.set(CHECKER_COOKIE, name, CHECKER_COOKIE_OPTIONS);
 
-  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
   revalidatePath(`/verify/${sessionId}`);
   return backToVerify(sessionId, name === "" ? "whocleared" : "who");
 }
@@ -242,7 +250,7 @@ async function verifyAction(
   onOk: string | null = null
 ): Promise<never> {
   const sessionId = String(formData.get("session_id") ?? "");
-  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
   try {
     await edge.verifyAction<unknown>(build(sessionId));
@@ -258,7 +266,7 @@ async function verifyAction(
   }
 
   revalidatePath(`/verify/${sessionId}`);
-  revalidatePath("/");
+  revalidatePath(SESSIONS);
   return backToVerify(sessionId, onOk);
 }
 
@@ -280,7 +288,7 @@ export async function saveVerifyFields(formData: FormData): Promise<void> {
   if (who === "") {
     // The endpoint refuses an unnamed edit, and it is right to. Said here so the
     // person gets the sentence they need rather than the endpoint's.
-    if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+    if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
     return backToVerify(sessionId, "needname");
   }
 
@@ -327,7 +335,7 @@ export async function decodeVin(formData: FormData): Promise<void> {
   // sheet endpoint bundle the entire TecAssured client. It returns the decode
   // rather than the sheet, so the sheet is re-read the way any page load reads it.
   const sessionId = String(formData.get("session_id") ?? "");
-  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
   try {
     await edge.vinDecode<unknown>(sessionId);
@@ -357,7 +365,7 @@ export async function refreshFromCrm(formData: FormData): Promise<void> {
  */
 export async function verifyAndRate(formData: FormData): Promise<void> {
   const sessionId = String(formData.get("session_id") ?? "");
-  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
   const who = await checkerFor(formData);
   if (who === "") return backToVerify(sessionId, "needname");
@@ -401,7 +409,7 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
 
   revalidatePath(`/verify/${sessionId}`);
   revalidatePath(`/plan/${sessionId}`);
-  revalidatePath("/");
+  revalidatePath(SESSIONS);
 
   // ── Back to this screen, not into the presentation ─────────────────────
   //
@@ -426,10 +434,10 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
  */
 export async function voidContract(formData: FormData): Promise<void> {
   const operator = await currentOperator();
-  if (!operator) redirect("/");
+  if (!operator) redirect(SESSIONS);
 
   const sessionId = String(formData.get("session_id") ?? "");
-  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
   const contractNumber = String(formData.get("contract_number") ?? "").trim();
   if (!contractNumber) return backToVerify(sessionId, "refused", "No contract number was given.");
@@ -449,7 +457,7 @@ export async function voidContract(formData: FormData): Promise<void> {
   }
 
   revalidatePath(`/verify/${sessionId}`);
-  revalidatePath("/");
+  revalidatePath(SESSIONS);
   return backToVerify(sessionId, "voided", contractNumber);
 }
 
@@ -463,10 +471,10 @@ export async function voidContract(formData: FormData): Promise<void> {
  */
 export async function clearSubmitUnknown(formData: FormData): Promise<void> {
   const operator = await currentOperator();
-  if (!operator) redirect("/");
+  if (!operator) redirect(SESSIONS);
 
   const sessionId = String(formData.get("session_id") ?? "");
-  if (!UUID_RE.test(sessionId)) redirect("/?bad=1");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
   try {
     await edge.contractVoid<unknown>({
@@ -483,6 +491,6 @@ export async function clearSubmitUnknown(formData: FormData): Promise<void> {
   }
 
   revalidatePath(`/verify/${sessionId}`);
-  revalidatePath("/");
+  revalidatePath(SESSIONS);
   return backToVerify(sessionId, "cleared");
 }

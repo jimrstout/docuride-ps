@@ -10,7 +10,9 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+
+const require_fs = () => ({ readdirSync, statSync });
 import { cleanCheckerName } from "../apps/ownership-planner/lib/checker-name.ts";
 
 const src = (f) => readFileSync(new URL(f, import.meta.url), "utf8");
@@ -190,6 +192,28 @@ test("Open presentation is a named-target link to the plan, with no rel", () => 
 
 test("the plan route never redirects a customer to Verify", () => {
   assert.doesNotMatch(planPage, /\/verify\//);
+});
+
+test("nothing in the planner links to Verify or the admin area", () => {
+  // Every file under app/plan, not only the route: the planner must have no
+  // way back to a staff screen, and the admin area is one.
+  const { readdirSync, statSync } = require_fs();
+  const root = new URL("../apps/ownership-planner/app/plan/", import.meta.url);
+  const files = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const full = new URL(name, dir);
+      if (statSync(full).isDirectory()) walk(new URL(`${name}/`, dir));
+      else if (/\.(tsx?|mjs|js)$/.test(name)) files.push(full);
+    }
+  };
+  walk(root);
+  assert.ok(files.length >= 2, "found the planner's files");
+  for (const f of files) {
+    const text = readFileSync(f, "utf8");
+    assert.doesNotMatch(text, /["'`]\/admin/, `${f.pathname} must not link to /admin`);
+    assert.doesNotMatch(text, /["'`]\/verify\//, `${f.pathname} must not link to /verify`);
+  }
 });
 
 test("the planner still rates itself only once verified", () => {

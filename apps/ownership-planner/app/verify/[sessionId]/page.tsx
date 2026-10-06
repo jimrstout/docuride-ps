@@ -306,7 +306,7 @@ export default async function VerifyPage({
         <div>
           <p className="console-eyebrow">
             DocuRide PS
-            <Link className="console-back" href="/" prefetch={false}>
+            <Link className="console-back" href="/admin/sessions" prefetch={false}>
               Session browser
             </Link>
           </p>
@@ -465,7 +465,7 @@ export default async function VerifyPage({
             <p className="vfield-note">
               Clearing this needs a sign-in, because it is a statement that
               somebody looked at TecAssured.{" "}
-              <Link href="/" prefetch={false}>Sign in</Link> to clear it.
+              <Link href="/admin/sessions" prefetch={false}>Sign in</Link> to clear it.
             </p>
           )}
         </section>
@@ -526,7 +526,7 @@ export default async function VerifyPage({
                             </button>
                           </form>
                         ) : (
-                          <Link className="btn btn--quiet" href="/" prefetch={false}>
+                          <Link className="btn btn--quiet" href="/admin/sessions" prefetch={false}>
                             Sign in to void
                           </Link>
                         )}
