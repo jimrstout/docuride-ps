@@ -106,7 +106,9 @@ async function tenantRules(supabase: SupabaseClient, tenantId: string): Promise<
     .select(RULE_COLUMNS)
     .eq("tenant_id", tenantId);
   if (error) throw new Error(`Failed to read pricing rules: ${error.message}`);
-  return ((data ?? []) as Record<string, unknown>[]).map(asRule);
+  // The column list is built from a constant, so supabase-js cannot infer the
+  // row type from it; asRule reads each field explicitly instead.
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map(asRule);
 }
 
 /**
