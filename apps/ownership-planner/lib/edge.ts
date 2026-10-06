@@ -189,4 +189,15 @@ export const edge = {
 
   adminSaveSettings: <T>(body: Record<string, unknown>) =>
     call<T>("fni-admin-settings", { method: "POST", body }),
+
+  /** The Pricing section: one scope's rules, the preview and the gap check. */
+  adminPricing: <T>(query: Record<string, string>) =>
+    call<T>("fni-admin-settings", {
+      method: "GET",
+      query: { ...query, section: "pricing" },
+    }),
+
+  /** Save, delete or copy pricing rules. Checked and written by the function. */
+  adminSavePricing: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-admin-settings", { method: "POST", body: { ...body, section: "pricing" } }),
 };

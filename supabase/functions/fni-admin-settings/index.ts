@@ -1,11 +1,13 @@
 // fni-admin-settings/index.ts
 //
 // The settings the internal console can edit: the dealer group's customer-facing
-// name, and the copy templates that use it.
+// name, the copy templates that use it, and the pricing rules.
 //
 // Input:
 //   GET                          -> current settings, plus which templates exist
 //   POST { dealer_group_display_name?, templates? }
+//   GET  ?section=pricing        -> see pricing.ts
+//   POST { section: "pricing" }  -> see pricing.ts
 //
 // Auth: FNI_WEBHOOK_SECRET via x-webhook-secret header or ?secret= query param,
 // exactly as fni-admin-sessions. The browser never holds it; the console's
@@ -30,6 +32,7 @@ import {
   renderTemplate,
   validateTemplate,
 } from "../_shared/copy-templates.ts";
+import { readPricing, writePricing } from "./pricing.ts";
 
 /**
  * A sample deductible for the preview only.
@@ -151,6 +154,11 @@ serve(async (req: Request) => {
 
   try {
     if (req.method === "GET") {
+      if (url.searchParams.get("section") === "pricing") {
+        const tenant = await theTenant(supabase);
+        const reply = await readPricing(supabase, tenant.id, url.searchParams);
+        return json(reply.status, reply.body);
+      }
       return json(200, await readSettings(supabase));
     }
 
@@ -166,6 +174,14 @@ serve(async (req: Request) => {
     }
 
     const tenant = await theTenant(supabase);
+
+    // ── Pricing ──────────────────────────────────────────────────────
+    // Its own section of the request, so a pricing save can never also touch
+    // the wording, or the other way round.
+    if (body.section === "pricing") {
+      const reply = await writePricing(supabase, tenant.id, body);
+      return json(reply.status, reply.body);
+    }
 
     // ── The dealer group's customer-facing name ───────────────────────
     // Present-but-blank clears it, which is how an operator undoes a mistake.

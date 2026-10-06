@@ -26,9 +26,10 @@ import {
 import { ratingInputsFrom } from "@/lib/verify-fields";
 import { ADMIN_HOME, safeAdminPath, withNotice } from "@/lib/admin-sections";
 
-// The admin area's two pages, as the actions below send people back to them.
+// The admin area's pages, as the actions below send people back to them.
 const SESSIONS = ADMIN_HOME;
 const WORDING = "/admin/wording";
+const PRICING = "/admin/pricing";
 import {
   VERIFY_FLASH_COOKIE,
   VERIFY_FLASH_OPTIONS,
@@ -182,6 +183,96 @@ export async function saveSettings(formData: FormData): Promise<void> {
 
   revalidatePath(WORDING);
   redirect(withNotice(WORDING, "saved"));
+}
+
+
+// ── Pricing ─────────────────────────────────────────────────────────────
+//
+// Three writes: save one rule, delete one rule, copy a scope's rules. Every check
+// that can refuse them runs in fni-admin-settings, which says in plain English
+// what is wrong; that sentence comes back on the page as it is. The browser
+// never writes a rule: these actions send the form to the function, with the
+// signed-in operator's email, and the function writes.
+
+/** "all", or a store id. Anything else is All stores. */
+function pricingScope(formData: FormData, key = "scope"): string {
+  const v = String(formData.get(key) ?? "");
+  return UUID_RE.test(v) ? v : "all";
+}
+
+function pricingPage(scope: string, extra: Record<string, string> = {}): string {
+  const q = new URLSearchParams(scope === "all" ? extra : { scope, ...extra });
+  const s = q.toString();
+  return s ? `${PRICING}?${s}` : PRICING;
+}
+
+/** The function's own sentence for a refusal, or null if it was not one. */
+function refusal(err: unknown): string | null {
+  if (!(err instanceof EdgeError) || err.status !== 400) return null;
+  const detail = (err.body as { error?: unknown } | undefined)?.error;
+  return typeof detail === "string" ? detail.slice(0, 600) : "That could not be saved.";
+}
+
+async function pricingWrite(
+  formData: FormData,
+  body: Record<string, unknown>,
+  done: string
+): Promise<never> {
+  const operator = await currentOperator();
+  if (!operator) redirect(PRICING);
+
+  const scope = pricingScope(formData);
+  try {
+    await edge.adminSavePricing({ ...body, scope, updated_by: operator.email });
+  } catch (err) {
+    const why = refusal(err);
+    if (why !== null) redirect(pricingPage(scope, { refused: why }));
+    console.error("console pricing write failed:", err);
+    redirect(pricingPage(scope, { savefailed: "1" }));
+  }
+
+  revalidatePath(PRICING);
+  redirect(pricingPage(scope, { [done]: "1" }));
+}
+
+/** Add a rule, or save changes to one. */
+export async function savePricingRule(formData: FormData): Promise<void> {
+  const ruleId = String(formData.get("rule_id") ?? "");
+  await pricingWrite(
+    formData,
+    {
+      action: "save",
+      rule_id: UUID_RE.test(ruleId) ? ruleId : null,
+      rule: {
+        product_code: String(formData.get("product_code") ?? ""),
+        cost_floor: String(formData.get("cost_floor") ?? ""),
+        cost_ceiling: String(formData.get("cost_ceiling") ?? ""),
+        markup_percent: String(formData.get("markup_percent") ?? ""),
+        markup_min_dollars: String(formData.get("markup_min_dollars") ?? ""),
+        markup_max_dollars: String(formData.get("markup_max_dollars") ?? ""),
+        round_to: String(formData.get("round_to") ?? ""),
+        active: formData.get("active") === "on",
+      },
+    },
+    "saved"
+  );
+}
+
+export async function deletePricingRule(formData: FormData): Promise<void> {
+  await pricingWrite(
+    formData,
+    { action: "delete", rule_id: String(formData.get("rule_id") ?? "") },
+    "deleted"
+  );
+}
+
+/** Copy this scope's rules to a scope that has none. */
+export async function copyPricingRules(formData: FormData): Promise<void> {
+  await pricingWrite(
+    formData,
+    { action: "copy", to_scope: pricingScope(formData, "to_scope") },
+    "copied"
+  );
 }
 
 

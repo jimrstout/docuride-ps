@@ -13,6 +13,7 @@ export interface AdminSection {
 
 export const ADMIN_SECTIONS: readonly AdminSection[] = [
   { href: "/admin/sessions", label: "Sessions" },
+  { href: "/admin/pricing", label: "Pricing" },
   { href: "/admin/wording", label: "Wording" },
 ];
 

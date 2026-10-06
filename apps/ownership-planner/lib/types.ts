@@ -300,6 +300,59 @@ export interface ConsoleSettingsPayload {
   warnings?: string[];
 }
 
+// ── The Pricing section ───────────────────────────────────────────────────
+// Worked out by fni-admin-settings with the planner's own pricing functions.
+// The page only renders it.
+
+export type PricingStoreStatus =
+  | "Own rules"
+  | "Uses All stores"
+  | "No pricing: products will not be shown";
+
+export interface PricingRuleRow {
+  id: string;
+  store_id: string | null;
+  product_code: string | null;
+  /** Display name of the product, or null for All products. */
+  product_name: string | null;
+  cost_floor: number;
+  cost_ceiling: number;
+  markup_percent: number;
+  markup_min_dollars: number;
+  markup_max_dollars: number | null;
+  round_to: number;
+  active: boolean;
+  updated_at: string | null;
+  updated_by: string | null;
+  /** The rule in one plain sentence. */
+  summary: string;
+}
+
+export interface PricingPreviewRow {
+  cost: number;
+  price: number | null;
+  rule_id: string | null;
+  rule_from: "This store" | "All stores" | null;
+  rule_summary: string | null;
+  reason: string | null;
+}
+
+export interface PricingPayload {
+  stores: { id: string; name: string; status: PricingStoreStatus }[];
+  /** How many active rules All stores has. */
+  all_stores_active_rules: number;
+  scope: { store_id: string | null; name: string };
+  products: { code: string; name: string }[];
+  rules: PricingRuleRow[];
+  preview: {
+    product_code: string | null;
+    rows: PricingPreviewRow[];
+    typed: PricingPreviewRow | null;
+  };
+  gaps: { from: number; to: number; sentence: string }[];
+  copy_targets: { store_id: string | null; name: string; has_rules: boolean }[];
+}
+
 // ── The Verify step ───────────────────────────────────────────────────────
 // Staff-facing. None of this is ever rendered to a customer.
 
