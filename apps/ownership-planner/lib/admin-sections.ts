@@ -9,12 +9,14 @@
 export interface AdminSection {
   href: string;
   label: string;
+  /** Which of the menu's line icons to draw. See components/admin/Icon.tsx. */
+  icon: "sessions" | "pricing" | "wording";
 }
 
 export const ADMIN_SECTIONS: readonly AdminSection[] = [
-  { href: "/admin/sessions", label: "Sessions" },
-  { href: "/admin/pricing", label: "Pricing" },
-  { href: "/admin/wording", label: "Wording" },
+  { href: "/admin/sessions", label: "Sessions", icon: "sessions" },
+  { href: "/admin/pricing", label: "Pricing", icon: "pricing" },
+  { href: "/admin/wording", label: "Wording", icon: "wording" },
 ];
 
 /** Where the admin area opens, and where signing out lands. */
@@ -45,4 +47,16 @@ export function sectionFor(path: string): AdminSection | null {
 /** A path with one query parameter added, the way the old pages carried notices. */
 export function withNotice(path: string, key: string, value = "1"): string {
   return `${path}?${key}=${value}`;
+}
+
+/**
+ * Two letters for the operator's avatar, from their email. "jim.stout@x" is
+ * JS, "jim@x" is JI. Display only.
+ */
+export function initialsFor(email: string): string {
+  const local = email.split("@")[0] ?? "";
+  const parts = local.split(/[._\-+]+/).filter((p) => /[a-z0-9]/i.test(p));
+  const letters =
+    parts.length >= 2 ? parts[0][0] + parts[1][0] : (parts[0] ?? "").replace(/[^a-z0-9]/gi, "").slice(0, 2);
+  return (letters || "?").toUpperCase();
 }

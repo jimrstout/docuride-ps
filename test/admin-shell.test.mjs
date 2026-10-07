@@ -62,7 +62,7 @@ test("/admin/* shows the sign-in form when signed out, and returns to the page",
   // The layout checks once and, signed out, renders SignIn instead of the page.
   assert.match(layout, /const operator = await currentOperator\(\);\s*if \(!operator\) \{[\s\S]*?return <SignIn notice=\{[^}]+\} next=\{path\} \/>;/);
   assert.match(src("components/admin/SignIn.tsx"), /<input type="hidden" name="next" value=\{next\} \/>/);
-  assert.match(src("components/admin/SignIn.tsx"), /<form className="signin" action=\{signIn\}>/);
+  assert.match(src("components/admin/SignIn.tsx"), /<form className="ad-panel" action=\{signIn\}>/);
   // signIn sends them back to it.
   assert.match(actions, /const next = safeAdminPath\(formData\.get\("next"\)\);/);
   assert.match(actions, /CONSOLE_COOKIE_OPTIONS\s*\);\s*redirect\(next\);/);
@@ -96,8 +96,11 @@ test("signing in can only return to a page inside the admin area", () => {
 
 test("the menu renders from the one list in code", () => {
   assert.match(layout, /\{ADMIN_SECTIONS\.map\(\(s\) => \(/);
-  assert.match(layout, /DocuRide PS Admin/);
-  assert.match(layout, /<form action=\{signOut\} className="admin-who">\s*<span>\{operator\.email\}<\/span>/);
+  // The brand, and the signed-in email with Sign out beside it.
+  assert.match(src("components/admin/Parts.tsx"), /DocuRide <span>PS<\/span>[\s\S]*Administration/);
+  assert.match(layout, /<Brand \/>/);
+  assert.match(layout, /<span className="ad-side-email">\{operator\.email\}<\/span>\s*\{signOutForm\}/);
+  assert.match(layout, /<form action=\{signOut\}>/);
   assert.deepEqual(ADMIN_SECTIONS.map((s) => s.label).slice(0, 1), ["Sessions"]);
   assert.ok(ADMIN_SECTIONS.some((s) => s.label === "Wording"));
   // Only built sections: each one has a page.
@@ -120,7 +123,7 @@ test("the old pages keep no copy of their own", () => {
   assert.match(sessions, /extendSession/);
   assert.match(sessions, /rateSession/);
   const wording = src("app/admin/wording/page.tsx");
-  assert.match(wording, /<form action=\{saveSettings\} className="settings-form">/);
+  assert.match(wording, /<form action=\{saveSettings\} className="ad-form">/);
   assert.doesNotMatch(src("app/page.tsx"), /edge\.|currentOperator/);
   assert.doesNotMatch(src("app/settings/page.tsx"), /edge\.|currentOperator/);
 });

@@ -19,8 +19,10 @@
 import Link from "next/link";
 import { currentOperator } from "@/lib/admin-session";
 import { edge } from "@/lib/edge";
-import type { ConsoleListPayload, ConsoleSessionRow } from "@/lib/types";
+import type { ConsoleListPayload, ConsoleSessionRow, PricingPayload } from "@/lib/types";
 import { SIGN_IN_NOTICES } from "@/components/admin/SignIn";
+import { Badge, Notice, PageHead, type Tone } from "@/components/admin/Parts";
+import { SessionFilters, type FilterOption } from "@/components/admin/SessionFilters";
 import { extendSession, rateSession } from "@/app/console-actions";
 
 export const dynamic = "force-dynamic";
@@ -29,24 +31,48 @@ export const dynamic = "force-dynamic";
  *  not for auditing history -- that is the CRM's job. */
 const LIMIT = 25;
 
+/**
+ * Every status a session can have, as stored. The same list as the check
+ * constraint on fni.sessions.status, in the order a session moves through
+ * them, so the Status filter offers real values and nothing invented.
+ */
+const SESSION_STATUSES = [
+  "Initiated",
+  "Rated",
+  "Presenting",
+  "Products Selected",
+  "Agreement Created",
+  "Finalized",
+  "Written Back",
+  "Cancelled",
+] as const;
+
 // ── Formatting ────────────────────────────────────────────────────────────
 // Times render in UTC, labelled. Guessing the reader's timezone from the
 // server's would be wrong at least once a year, and quietly.
 
-const STAMP = new Intl.DateTimeFormat("en-GB", {
+const DAY = new Intl.DateTimeFormat("en-GB", {
   day: "2-digit",
   month: "short",
   year: "numeric",
+  timeZone: "UTC",
+});
+
+const CLOCK = new Intl.DateTimeFormat("en-GB", {
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
   timeZone: "UTC",
 });
 
-function stamp(iso: string): string {
+function day(iso: string): string {
   const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return "Not set";
-  return `${STAMP.format(t).replace(",", "")} UTC`;
+  return Number.isFinite(t) ? DAY.format(t) : "Not set";
+}
+
+function clock(iso: string): string {
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? `${CLOCK.format(t)} UTC` : "";
 }
 
 /**
@@ -73,7 +99,7 @@ function since(iso: string, now: number): string {
   return ago ? `${value} ${plural} ago` : `in ${value} ${plural}`;
 }
 
-/** Year, make, model, submodel — whichever of them the deal actually has. */
+/** Year, make, model, submodel: whichever of them the deal actually has. */
 function vehicle(row: ConsoleSessionRow): string {
   const parts = [row.year, row.make, row.model, row.submodel]
     .map((p) => (p === null || p === undefined ? "" : String(p).trim()))
@@ -81,30 +107,35 @@ function vehicle(row: ConsoleSessionRow): string {
   return parts.length > 0 ? parts.join(" ") : "Not set";
 }
 
+function statusTone(status: string | null): Tone {
+  if (status === "Presenting") return "good";
+  return "plain";
+}
+
 // ── Rating ────────────────────────────────────────────────────────────────
 //
 // The column that answers "the planner says plans aren't offered". The customer
 // sees one of two screens; staff see which of four states produced it.
 
-const RATING: Record<string, { label: string; tone: string; note: string }> = {
+const RATING: Record<string, { label: string; tone: Tone; note: string }> = {
   Rated: {
     label: "Rated",
-    tone: "tag--live",
+    tone: "good",
     note: "The customer has a menu.",
   },
   "Not Offered": {
     label: "Not offered",
-    tone: "tag--quiet",
+    tone: "plain",
     note: "The provider has no products for this machine. The customer is told so.",
   },
   Failed: {
     label: "Failed",
-    tone: "tag--expired",
+    tone: "warn",
     note: "Ours to fix. The customer sees a neutral message, not a refusal.",
   },
   Pending: {
     label: "Not asked yet",
-    tone: "tag--quiet",
+    tone: "plain",
     note: "No rate has been requested. Normal on a session opened moments ago.",
   },
 };
@@ -115,76 +146,90 @@ function Rating({ row, now }: { row: ConsoleSessionRow; now: number }) {
 
   return (
     <>
-      <span className={`tag ${meta.tone}`}>{meta.label}</span>
+      <Badge tone={meta.tone}>{meta.label}</Badge>
       {r.at ? <small>{since(r.at, now)}</small> : null}
       {/* The provider's own words, or the field nobody filled in. This is the
           whole point of the column, so it is shown rather than hidden behind a
           hover: a reason you have to discover is a reason nobody reads. */}
-      {r.detail ? <small className="cell-why">{r.detail}</small> : null}
+      {r.detail ? <small className="ad-why">{r.detail}</small> : null}
     </>
   );
 }
 
 // ── The list ──────────────────────────────────────────────────────────────
 
-function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
-  return (
-    <tr className={row.expired ? "is-expired" : undefined}>
-      <td className="cell-deal">{row.deal_number ?? "Not set"}</td>
+/** What the search box looks through, lower case. The VIN is not here: the
+ *  Edge Function never sends it to the console. */
+function searchText(row: ConsoleSessionRow): string {
+  return [row.deal_number, row.stock_number, vehicle(row), row.store_name]
+    .filter((v) => v !== null && v !== undefined)
+    .join(" ")
+    .toLowerCase();
+}
 
-      <td className="cell-vehicle">
-        <span className="cell-strong">{vehicle(row)}</span>
-        {row.stock_number ? (
-          <small>Stock {row.stock_number}</small>
-        ) : null}
+function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
+  const ratingState = row.rating?.state ?? "Pending";
+  return (
+    <tr
+      data-row=""
+      data-store={row.store_name ?? ""}
+      data-status={row.status ?? ""}
+      data-rating={ratingState}
+      data-search={searchText(row)}
+    >
+      <td className="ad-deal">{row.deal_number ?? "Not set"}</td>
+
+      <td>
+        <span className="ad-strong">{vehicle(row)}</span>
+        {row.stock_number ? <small>Stock {row.stock_number}</small> : null}
       </td>
 
       <td>{row.store_name ?? "Not set"}</td>
 
       <td>
-        <span className="cell-strong">{row.status ?? "Not set"}</span>
+        <Badge tone={statusTone(row.status)}>{row.status ?? "Not set"}</Badge>
         {row.mode ? <small>{row.mode}</small> : null}
       </td>
 
-      <td className="cell-when">
-        {stamp(row.created_at)}
-        <small>{since(row.created_at, now)}</small>
-      </td>
-
-      <td className="cell-rating">
+      <td>
         <Rating row={row} now={now} />
       </td>
 
-      <td className="cell-when">
-        {row.expired ? (
-          <span className="tag tag--expired">Expired</span>
-        ) : (
-          <span className="tag tag--live">Live</span>
-        )}
-        <small>{since(row.expires_at, now)}</small>
+      <td style={{ whiteSpace: "nowrap" }}>
+        {day(row.created_at)}
+        <small>{clock(row.created_at)}</small>
       </td>
 
-      <td className="cell-do">
-        <div className="cell-do-inner">
-          <Link className="btn btn--quiet" href={`/plan/${row.id}`} prefetch={false}>
+      <td style={{ whiteSpace: "nowrap" }}>
+        {row.expired ? (
+          <Badge tone="warn">Expired</Badge>
+        ) : (
+          <Badge tone="good">Active</Badge>
+        )}
+        <small>{row.expired ? "Extension available" : since(row.expires_at, now)}</small>
+      </td>
+
+      <td>
+        <div className="ad-actions">
+          <Link className="ad-btn ad-btn--secondary ad-btn--main" href={`/plan/${row.id}`} prefetch={false}>
             Open
           </Link>
           <form action={extendSession}>
             <input type="hidden" name="session_id" value={row.id} />
-            <button type="submit" className="btn btn--quiet">
+            <button type="submit" className="ad-btn ad-btn--secondary">
               +24h
             </button>
           </form>
           {/* Verify is where rating starts now, so it is the button that is
               always here. Rate on its own is for re-asking after a failure on a
               deal that is already verified. */}
-          <Link className="btn btn--quiet" href={`/verify/${row.id}`} prefetch={false}>
+          <Link className="ad-btn ad-btn--secondary" href={`/verify/${row.id}`} prefetch={false}>
             Verify
           </Link>
           {row.rating?.state === "Failed" ? (
             <form action={rateSession}>
               <input type="hidden" name="session_id" value={row.id} />
-              <button type="submit" className="btn btn--quiet">
+              <button type="submit" className="ad-btn ad-btn--secondary">
                 Rate
               </button>
             </form>
@@ -195,6 +240,23 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
   );
 }
 
+/**
+ * The stores the menu runs at, for the Store filter: those with an active
+ * TecAssured account, read the same way the Pricing page reads them. If that
+ * read fails, the stores that appear in the list stand in, so the filter
+ * still works.
+ */
+async function menuStores(rows: ConsoleSessionRow[]): Promise<FilterOption[]> {
+  try {
+    const pricing = await edge.adminPricing<PricingPayload>({ scope: "all" });
+    return pricing.stores.map((s) => ({ value: s.name, label: s.name }));
+  } catch (err) {
+    console.error("console store list failed:", err);
+    const names = [...new Set(rows.map((r) => r.store_name).filter((n): n is string => !!n))].sort();
+    return names.map((n) => ({ value: n, label: n }));
+  }
+}
+
 async function SessionList({ notice }: { notice: string | null }) {
   let payload: ConsoleListPayload;
   try {
@@ -202,69 +264,88 @@ async function SessionList({ notice }: { notice: string | null }) {
   } catch (err) {
     console.error("console list failed:", err);
     return (
-      <p className="console-empty">
-        The session list is unavailable right now. Try again shortly.
-      </p>
+      <>
+        <PageHead title="Sessions" subtitle="Ownership presentations opened from the CRM." />
+        <Notice tone="warn">The session list is unavailable right now. Try again shortly.</Notice>
+      </>
     );
   }
 
   const now = Date.parse(payload.as_of);
   const rows = payload.sessions;
+  const stores = await menuStores(rows);
 
   return (
     <>
-      <header className="admin-head">
-        <h1 className="console-title">Sessions</h1>
-      </header>
+      <PageHead title="Sessions" subtitle="Ownership presentations opened from the CRM." />
 
       {/* An extend or rate that could not be done says so here. These used to
           be read only by the sign-in form, so a signed-in operator never saw
           them. */}
-      {notice ? (
-        <p className="console-flash console-flash--bad" role="status">
-          {notice}
-        </p>
-      ) : null}
+      {notice ? <Notice tone="warn">{notice}</Notice> : null}
 
-      <p className="console-note">
-        The {rows.length === 1 ? "most recent session" : `${rows.length} most recent sessions`},
-        newest first. Times are UTC. Extending adds 24 hours from now, which
-        reopens a session that has already lapsed. Rating says whether the
-        customer has a menu, and why not when they do not. Verify is where you
-        check what a rate would be built from; nothing is rated until somebody
-        has.
-      </p>
+      <section className="ad-panel">
+        <SessionFilters
+          tableId="ad-sessions"
+          countId="ad-sessions-count"
+          stores={stores}
+          statuses={SESSION_STATUSES.map((s) => ({ value: s, label: s }))}
+          ratings={Object.entries(RATING).map(([value, r]) => ({ value, label: r.label }))}
+        />
 
-      {rows.length === 0 ? (
-        <p className="console-empty">
-          No planning sessions yet. One appears here as soon as a deal starts
-          one from the CRM.
+        {rows.length === 0 ? (
+          <p className="ad-empty">
+            No planning sessions yet. One appears here as soon as a deal starts
+            one from the CRM.
+          </p>
+        ) : (
+          <div className="ad-scroll">
+            <table className="ad-table" id="ad-sessions">
+              <thead>
+                <tr>
+                  <th scope="col">Deal #</th>
+                  <th scope="col">Vehicle</th>
+                  <th scope="col">Store</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Rating</th>
+                  <th scope="col">Created</th>
+                  <th scope="col">Expires</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <Row key={row.id} row={row} now={now} />
+                ))}
+                <tr data-none="" hidden>
+                  <td colSpan={8} className="ad-empty">
+                    No sessions match. Clear the search or a filter to see more.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <footer className="ad-panel-foot">
+          <span id="ad-sessions-count">
+            {rows.length} {rows.length === 1 ? "session" : "sessions"}
+          </span>
+          <span>Most recent first</span>
+        </footer>
+      </section>
+
+      <details className="ad-details">
+        <summary>Session timing and ratings</summary>
+        <p>
+          The list shows the {rows.length === 1 ? "most recent session" : `${rows.length} most recent sessions`},
+          newest first. Times are UTC. Extending adds 24 hours from now, which
+          reopens a session that has already lapsed. Rating says whether the
+          customer has a menu, and why not when they do not. Verify is where you
+          check what a rate would be built from; nothing is rated until somebody
+          has.
         </p>
-      ) : (
-        <div className="console-scroll">
-          <table className="console-table">
-            <thead>
-              <tr>
-                <th scope="col">Deal</th>
-                <th scope="col">Vehicle</th>
-                <th scope="col">Store</th>
-                <th scope="col">Status</th>
-                <th scope="col">Rating</th>
-                <th scope="col">Created</th>
-                <th scope="col">Expires</th>
-                <th scope="col">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <Row key={row.id} row={row} now={now} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      </details>
     </>
   );
 }

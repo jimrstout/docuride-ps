@@ -18,6 +18,7 @@ import { currentOperator } from "@/lib/admin-session";
 import { edge } from "@/lib/edge";
 import type { ConsoleSettingsPayload, ConsoleTemplateRow } from "@/lib/types";
 import { saveSettings } from "@/app/console-actions";
+import { Badge, Notice, PageHead } from "@/components/admin/Parts";
 
 export const dynamic = "force-dynamic";
 
@@ -32,14 +33,14 @@ const TEMPLATE_NOTES: Record<string, string> = {
 };
 
 function notice(params: Record<string, string | string[] | undefined>): {
-  tone: "ok" | "bad";
+  tone: "good" | "warn";
   text: string;
 } | null {
-  if (params.saved !== undefined) return { tone: "ok", text: "Saved." };
-  if (typeof params.refused === "string") return { tone: "bad", text: params.refused };
+  if (params.saved !== undefined) return { tone: "good", text: "Saved." };
+  if (typeof params.refused === "string") return { tone: "warn", text: params.refused };
   if (params.savefailed !== undefined) {
     return {
-      tone: "bad",
+      tone: "warn",
       text: "That could not be saved just now. Nothing was changed. Try again shortly.",
     };
   }
@@ -49,66 +50,68 @@ function notice(params: Record<string, string | string[] | undefined>): {
 function TemplateField({ row }: { row: ConsoleTemplateRow }) {
   const title = TEMPLATE_TITLES[row.template_key] ?? row.template_key;
   const isOverride = row.source === "Tenant";
+  const id = `template-${row.template_key.replace(/[^a-z0-9]+/gi, "-")}`;
 
   return (
-    <section className="setting">
-      <div className="setting-head">
-        <h2>{title}</h2>
-        <span className={`tag ${isOverride ? "tag--live" : "tag--quiet"}`}>
+    <section className="ad-panel">
+      <div className="ad-panel-head">
+        <h2>
+          <label htmlFor={id}>{title}</label>
+        </h2>
+        <Badge tone={isOverride ? "good" : "plain"}>
           {row.source === "Tenant" ? "Your wording" : row.source}
-        </span>
+        </Badge>
       </div>
+      <div className="ad-panel-body">
+        {TEMPLATE_NOTES[row.template_key] ? (
+          <p className="ad-help">{TEMPLATE_NOTES[row.template_key]}</p>
+        ) : null}
 
-      {TEMPLATE_NOTES[row.template_key] ? (
-        <p className="setting-note">{TEMPLATE_NOTES[row.template_key]}</p>
-      ) : null}
-
-      <label className="setting-field">
-        <span className="sr-only">{title} wording</span>
         <textarea
+          id={id}
           name={`template:${row.template_key}`}
           rows={3}
           defaultValue={row.body ?? ""}
           spellCheck
         />
-      </label>
 
-      <p className="setting-help">
-        Placeholders you can use:{" "}
-        {row.allowed_placeholders.map((p, i) => (
-          <span key={p}>
-            {i > 0 ? ", " : ""}
-            <code>{`{${p}}`}</code>
-          </span>
-        ))}
-        . The amount comes from the rate the customer chose, so leave it as a
-        placeholder and it stays correct if the amount changes.
-      </p>
+        <p className="ad-help">
+          Placeholders you can use:{" "}
+          {row.allowed_placeholders.map((p, i) => (
+            <span key={p}>
+              {i > 0 ? ", " : ""}
+              <code>{`{${p}}`}</code>
+            </span>
+          ))}
+          . The amount comes from the rate the customer chose, so leave it as a
+          placeholder and it stays correct if the amount changes.
+        </p>
 
-      {row.preview ? (
-        <p className="setting-preview">
-          <span>A customer reads</span>
-          <q>{row.preview}</q>
-          {row.preview_uses_sample_amount ? (
-            <small>Using $100 as an example amount.</small>
-          ) : null}
-        </p>
-      ) : (
-        <p className="setting-preview setting-preview--empty">
-          <span>A customer reads</span>
-          <em>
-            nothing. This line is left out until every placeholder has a value,
-            which usually means the dealer group name above is still empty.
-          </em>
-        </p>
-      )}
+        {row.preview ? (
+          <div className="ad-quote">
+            <span className="ad-quote-label">A customer reads</span>
+            <q>{row.preview}</q>
+            {row.preview_uses_sample_amount ? (
+              <span className="ad-help">Using $100 as an example amount.</span>
+            ) : null}
+          </div>
+        ) : (
+          <div className="ad-quote">
+            <span className="ad-quote-label">A customer reads</span>
+            <span className="ad-help">
+              Nothing. This line is left out until every placeholder has a value,
+              which usually means the dealer group name above is still empty.
+            </span>
+          </div>
+        )}
 
-      {isOverride && row.platform_default ? (
-        <p className="setting-help">
-          Clear the box and save to go back to the standard wording:{" "}
-          <q>{row.platform_default}</q>
-        </p>
-      ) : null}
+        {isOverride && row.platform_default ? (
+          <p className="ad-help">
+            Clear the box and save to go back to the standard wording:{" "}
+            <q>{row.platform_default}</q>
+          </p>
+        ) : null}
+      </div>
     </section>
   );
 }
@@ -122,9 +125,10 @@ async function Settings({ params }: {
   } catch (err) {
     console.error("console settings load failed:", err);
     return (
-      <p className="console-empty">
-        Wording is unavailable right now. Try again shortly.
-      </p>
+      <>
+        <PageHead title="Wording" subtitle="The words a customer reads in the planner." />
+        <Notice tone="warn">Wording is unavailable right now. Try again shortly.</Notice>
+      </>
     );
   }
 
@@ -132,36 +136,27 @@ async function Settings({ params }: {
 
   return (
     <>
-      <header className="admin-head">
-        <h1 className="console-title">Wording</h1>
-      </header>
+      <PageHead title="Wording" subtitle="The words a customer reads in the planner.">
+        <span className="ad-help">Editing {payload.tenant.name}</span>
+      </PageHead>
 
-      {flash ? (
-        <p
-          className={flash.tone === "ok" ? "console-flash" : "console-flash console-flash--bad"}
-          role="status"
-        >
-          {flash.text}
-        </p>
-      ) : null}
+      {flash ? <Notice tone={flash.tone}>{flash.text}</Notice> : null}
 
-      <p className="console-note">
-        These are the words a buyer reads. Editing {payload.tenant.name}.
-      </p>
-
-      <form action={saveSettings} className="settings-form">
-        <section className="setting">
-          <div className="setting-head">
-            <h2>Dealer group name</h2>
+      <form action={saveSettings} className="ad-form">
+        <section className="ad-panel">
+          <div className="ad-panel-head">
+            <h2>
+              <label htmlFor="dealer-group-name">Dealer group name</label>
+            </h2>
           </div>
-          <p className="setting-note">
-            How the group is named to a customer, for example ASP Group. This
-            appears in the planner and in any wording below that refers to the
-            group. It is not the administrative name.
-          </p>
-          <label className="setting-field">
-            <span className="sr-only">Dealer group name</span>
+          <div className="ad-panel-body">
+            <p className="ad-help">
+              How the group is named to a customer, for example ASP Group. This
+              appears in the planner and in any wording below that refers to the
+              group. It is not the administrative name.
+            </p>
             <input
+              id="dealer-group-name"
               type="text"
               name="dealer_group_display_name"
               defaultValue={payload.tenant.dealer_group_display_name ?? ""}
@@ -169,19 +164,19 @@ async function Settings({ params }: {
               autoComplete="off"
               placeholder="Not set"
             />
-          </label>
-          <p className="setting-help">
-            Leave it empty and any sentence that names the group is left out
-            rather than shown with a gap in it.
-          </p>
+            <p className="ad-help">
+              Leave it empty and any sentence that names the group is left out
+              rather than shown with a gap in it.
+            </p>
+          </div>
         </section>
 
         {payload.templates.map((row) => (
           <TemplateField key={row.template_key} row={row} />
         ))}
 
-        <div className="settings-actions">
-          <button type="submit" className="btn btn--go">
+        <div className="ad-form-actions">
+          <button type="submit" className="ad-btn ad-btn--primary">
             Save
           </button>
         </div>

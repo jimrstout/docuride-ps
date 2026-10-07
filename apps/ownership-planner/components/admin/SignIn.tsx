@@ -5,6 +5,7 @@
 // back to it, so a bookmark to /admin/wording still lands on Wording.
 
 import { signIn } from "@/app/console-actions";
+import { Brand, Notice } from "@/components/admin/Parts";
 
 /** What the sign-in actions redirect with, in words. */
 export const SIGN_IN_NOTICES: Record<string, string> = {
@@ -16,38 +17,48 @@ export const SIGN_IN_NOTICES: Record<string, string> = {
 };
 
 export function SignIn({ notice, next }: { notice: string | null; next: string }) {
+  // The admin shell without the section links: nobody signed in has anywhere
+  // to go yet.
   return (
-    <main className="console console--gate">
-      <form className="signin" action={signIn}>
-        <p className="console-eyebrow">DocuRide PS Admin</p>
-        <h1 className="signin-title">Sign in</h1>
-        <p className="signin-body">
-          Sign in with your DocuRide administrator account. The same email and
-          password as the admin site.
-        </p>
+    <div className="ad">
+      <aside className="ad-side">
+        <Brand />
+      </aside>
+      <div className="ad-body">
+        <main className="ad-gate">
+          <div className="ad-signin">
+            <form className="ad-panel" action={signIn}>
+              <div className="ad-panel-body">
+                <div>
+                  <h1>Sign in</h1>
+                  <p className="ad-help">
+                    Use your DocuRide administrator account. The same email and
+                    password as the admin site.
+                  </p>
+                </div>
 
-        {notice ? (
-          <p className="signin-notice" role="alert">
-            {notice}
-          </p>
-        ) : null}
+                {notice ? <Notice tone="warn">{notice}</Notice> : null}
 
-        <input type="hidden" name="next" value={next} />
+                <input type="hidden" name="next" value={next} />
 
-        <label className="signin-field">
-          <span>Email</span>
-          <input type="email" name="email" autoComplete="username" required autoFocus />
-        </label>
+                <label className="ad-field">
+                  <span>Email</span>
+                  <input type="email" name="email" autoComplete="username" required autoFocus />
+                </label>
 
-        <label className="signin-field">
-          <span>Password</span>
-          <input type="password" name="password" autoComplete="current-password" required />
-        </label>
+                <label className="ad-field">
+                  <span>Password</span>
+                  <input type="password" name="password" autoComplete="current-password" required />
+                </label>
 
-        <button type="submit" className="btn btn--go signin-submit">
-          Sign in
-        </button>
-      </form>
-    </main>
+                <button type="submit" className="ad-btn ad-btn--primary">
+                  Sign in
+                </button>
+              </div>
+            </form>
+          </div>
+        </main>
+      </div>
+    </div>
   );
 }

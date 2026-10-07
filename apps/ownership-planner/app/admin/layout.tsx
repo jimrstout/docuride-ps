@@ -9,12 +9,20 @@
 // sign-in form is, and signing in returns to that page. Each page also reads
 // the same cached answer before it fetches anything (see currentOperator), so
 // a signed-out request never causes a read of the data behind the page.
+//
+// ── The look ────────────────────────────────────────────────────────────
+// admin.css, imported here and only here. Its rules all sit under .ad, the
+// class on the root element below, so nothing of it reaches the planner or
+// Verify.
 
+import "./admin.css";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { currentOperator } from "@/lib/admin-session";
-import { ADMIN_SECTIONS, safeAdminPath, sectionFor } from "@/lib/admin-sections";
+import { ADMIN_SECTIONS, initialsFor, safeAdminPath, sectionFor } from "@/lib/admin-sections";
 import { SignIn, SIGN_IN_NOTICES } from "@/components/admin/SignIn";
+import { Brand } from "@/components/admin/Parts";
+import { Icon } from "@/components/admin/Icon";
 import { signOut } from "@/app/console-actions";
 
 export const dynamic = "force-dynamic";
@@ -32,31 +40,56 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const here = sectionFor(path);
 
+  // Shown twice: in the sidebar, and in the top bar on a phone, where the
+  // sidebar becomes a row of icons. CSS shows one of them.
+  const signOutForm = (
+    <form action={signOut}>
+      <button type="submit" className="ad-signout">
+        Sign out
+      </button>
+    </form>
+  );
+
   return (
-    <div className="admin">
-      <aside className="admin-side">
-        <p className="admin-brand">DocuRide PS Admin</p>
-        <nav className="admin-nav" aria-label="Admin sections">
+    <div className="ad">
+      <aside className="ad-side">
+        <Link href="/admin/sessions" prefetch={false} className="ad-brand-link">
+          <Brand />
+        </Link>
+        <nav className="ad-nav" aria-label="Admin sections">
           {ADMIN_SECTIONS.map((s) => (
             <Link
               key={s.href}
               href={s.href}
               prefetch={false}
-              className={s.href === here?.href ? "admin-nav-link is-here" : "admin-nav-link"}
+              className={s.href === here?.href ? "ad-nav-link is-here" : "ad-nav-link"}
               aria-current={s.href === here?.href ? "page" : undefined}
             >
-              {s.label}
+              <Icon name={s.icon} />
+              <span className="ad-nav-label">{s.label}</span>
             </Link>
           ))}
         </nav>
-        <form action={signOut} className="admin-who">
-          <span>{operator.email}</span>
-          <button type="submit" className="btn btn--quiet">
-            Sign out
-          </button>
-        </form>
+        <div className="ad-side-foot">
+          <span className="ad-side-email">{operator.email}</span>
+          {signOutForm}
+        </div>
       </aside>
-      <main className="admin-main">{children}</main>
+
+      <div className="ad-body">
+        <header className="ad-top">
+          <p className="ad-crumb">
+            Administration<span className="ad-slash" aria-hidden="true">/</span>
+            <strong>{here?.label ?? "Sessions"}</strong>
+          </p>
+          <div className="ad-me">
+            <span className="ad-avatar" aria-hidden="true">{initialsFor(operator.email)}</span>
+            <span className="ad-me-name">{operator.email}</span>
+            {signOutForm}
+          </div>
+        </header>
+        <main className="ad-main">{children}</main>
+      </div>
     </div>
   );
 }

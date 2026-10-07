@@ -119,7 +119,7 @@ test("the note about changes applying right away is at the top", () => {
   const at = page.indexOf("Changes apply right away, including to deals being presented now.");
   assert.ok(at > 0);
   assert.ok(at < page.indexOf("The menu runs at"));
-  assert.ok(at < page.indexOf("<nav className=\"price-scopes\""));
+  assert.ok(at < page.indexOf("<nav className=\"ad-seg\""));
 });
 
 // ── The table ───────────────────────────────────────────────────────────
