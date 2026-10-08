@@ -1,12 +1,13 @@
-/* app/globals.css — DocuRide PS component styles.
+/* app/globals.css: DocuRide PS component styles for the planner and Verify.
  *
- * Every value here comes from app/tokens.css. Nothing in this file hard-codes
- * a colour, a size or a space, so the system retunes from one place.
+ * Every value here comes from app/tokens.css, the house tokens the admin area
+ * shares. Nothing in this file hard-codes a colour, a size or a space, so the
+ * system retunes from one place.
  *
- * The reference is editorial print rather than a dashboard: square corners,
- * hairline rules, generous margin, a serif that does the talking and a sans
- * that does the work. Copper marks where you are and what you chose, and is
- * never a surface.
+ * The house style: the system font, white panels with a hairline border and
+ * soft corners on a pale ground, one dark navy element, uppercase labels, soft
+ * badges. Copper marks where you are, what you chose and the primary action,
+ * and is never a large surface.
  */
 
 /* ── Root ────────────────────────────────────────────────────────────────
@@ -19,7 +20,7 @@ html { font-size: 112.5%; }  /* 18px at a default browser setting */
 
 * { box-sizing: border-box; }
 
-html, body { margin: 0; min-height: 100%; background: var(--shell); }
+html, body { margin: 0; min-height: 100%; background: var(--page); }
 
 body {
   font-family: var(--font-sans);
@@ -27,6 +28,7 @@ body {
   line-height: var(--lh-body);
   color: var(--ink);
   -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
 }
 
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -34,7 +36,7 @@ button { cursor: pointer; }
 
 /* A showroom tablet is driven by keyboard and switch access as well as touch. */
 :where(button, a, input, [tabindex]):focus-visible {
-  outline: var(--bw-control) solid var(--copper);
+  outline: 2px solid var(--copper);
   outline-offset: 3px;
 }
 
@@ -43,214 +45,228 @@ button { cursor: pointer; }
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-/* ── Shared type roles ───────────────────────────────────────────────────── */
+/* ── Shared type roles ─────────────────────────────────────────────────────
+   The eyebrow is the house table heading: small, uppercase, spaced, copper.
+   Headings are the house sans at a heavier weight. */
 .eyebrow {
-  font-size: var(--fs-xs); letter-spacing: var(--track-wide);
-  text-transform: uppercase; font-weight: 700; color: var(--ink-55);
+  font-size: var(--fs-label); letter-spacing: var(--track-label);
+  text-transform: uppercase; font-weight: 600; color: var(--copper-ink);
   margin: 0 0 var(--s2);
 }
-.eyebrow--rule { color: var(--ink); display: flex; align-items: center; gap: var(--s2); }
-.eyebrow--rule::before {
-  content: ""; width: 1.275rem; height: 3px; background: var(--copper); flex: 0 0 auto;
-}
+.eyebrow--rule { display: flex; align-items: baseline; gap: var(--s2); margin-bottom: var(--s3); }
 
 .kicker {
-  font-family: var(--font-sans); font-size: var(--fs-xs);
-  letter-spacing: var(--track-wide); text-transform: uppercase;
-  font-weight: 800; color: var(--copper-deep); margin: 0 0 var(--s2);
+  font-size: var(--fs-xs); letter-spacing: var(--track-label);
+  text-transform: uppercase; font-weight: 600; color: var(--copper-ink);
+  margin: 0 0 var(--s1);
 }
 
 .display {
-  font-family: var(--font-serif); font-weight: 400;
+  font-weight: var(--fw-head);
   font-size: var(--fs-head); line-height: var(--lh-tight);
-  letter-spacing: -0.02em; margin: 0 0 var(--s3); max-width: 26ch;
+  letter-spacing: var(--track-head); margin: 0 0 var(--s3); max-width: 26ch;
 }
 .display--sm { font-size: var(--fs-head); max-width: 26ch; }
 
 .lede {
   font-size: var(--fs-base); line-height: var(--lh-body);
-  color: var(--ink-70); margin: 0 0 var(--s4); max-width: 60ch;
+  color: var(--ink-soft); margin: 0 0 var(--s4); max-width: 60ch;
 }
 .body {
   font-size: var(--fs-base); line-height: var(--lh-body);
-  color: var(--ink-70); margin: 0 0 var(--s4); max-width: 76ch;
+  color: var(--ink-soft); margin: 0 0 var(--s4); max-width: 76ch;
 }
 .body--close {
-  margin: 0; border-top: var(--bw) solid var(--line-soft); padding-top: var(--s3);
+  margin: 0; border-top: var(--bw) solid var(--line); padding-top: var(--s3);
   max-width: 88ch;
 }
 .fine {
-  font-size: var(--fs-xs); line-height: 1.4;
-  color: var(--ink-55); margin: var(--s3) 0 0; max-width: 88ch;
+  font-size: var(--fs-xs); line-height: 1.45;
+  color: var(--muted); margin: var(--s3) 0 0; max-width: 88ch;
 }
 
 .linkish {
-  background: none; border: 0; padding: var(--s1) 0;
-  font-size: var(--fs-xs); color: var(--copper-deep);
+  background: none; border: 0; padding: var(--s1) 0; min-height: var(--tap);
+  font-size: var(--fs-xs); font-weight: 600; color: var(--copper-ink);
   text-decoration: underline; text-underline-offset: 3px;
 }
 
-/* ── Shell ───────────────────────────────────────────────────────────────── */
-.app { background: var(--paper); display: flex; flex-direction: column; min-height: 100vh; }
+/* A drawn tick for a chosen box or a finished step. A stroke, not a symbol
+   character, so it renders the same on every machine. */
+.tick {
+  display: block; width: 0.7rem; height: 0.7rem;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6.5 4.8 9 10 3' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6.5 4.8 9 10 3' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
 
-
+/* ── Shell ─────────────────────────────────────────────────────────────────
+   A navy top bar with the brand on the left and the five steps in the middle,
+   like the admin area's sidebar turned on its side. */
+.app { background: var(--page); display: flex; flex-direction: column; min-height: 100vh; }
 
 .masthead {
   display: grid; grid-template-columns: auto 1fr auto; align-items: stretch;
-  background: var(--navy-900); color: var(--paper);
+  background: var(--nav); color: var(--panel);
 }
-.brand-name b { font-size: var(--fs-base); }
 .brand {
-  display: flex; align-items: center; gap: var(--s2);
-  padding: var(--s2) var(--s4);
-  border-right: var(--bw) solid var(--line-dark);
+  display: flex; flex-direction: column; justify-content: center;
+  padding: var(--s2) var(--s5);
+  border-right: var(--bw) solid var(--nav-line);
 }
-.brand-mark {
-  color: var(--copper); font-size: 1.7rem; letter-spacing: -0.6rem;
-  transform: rotate(180deg); display: inline-block; padding-right: 0.7rem;
+.brand-name {
+  display: block; font-weight: 800; font-size: var(--fs-title); line-height: 1.1;
+  letter-spacing: -0.02em; text-transform: uppercase; color: var(--panel);
 }
-.brand-name b {
-  display: block; font-family: var(--font-serif); font-size: var(--fs-title);
-  font-weight: 600; line-height: 1.1; letter-spacing: 0.01em;
-}
-.brand-name small {
-  display: block; font-size: var(--fs-xs); letter-spacing: var(--track-wide);
-  text-transform: uppercase; color: var(--ink-40); margin-top: 0.15rem;
+.brand-name span { color: var(--brand-ps); }
+.brand-sub {
+  display: block; margin-top: 0.15rem;
+  font-size: var(--fs-label); letter-spacing: 2px; text-transform: uppercase;
+  color: var(--nav-sub);
 }
 
 .strapline {
   margin: 0; align-self: center; padding: var(--s3) var(--s4);
-  border-left: var(--bw) solid var(--line-dark);
-  font-size: var(--fs-xs); letter-spacing: var(--track-wide);
-  text-transform: uppercase; line-height: 1.4; text-align: right;
-  color: var(--ink-40);
+  border-left: var(--bw) solid var(--nav-line);
+  font-size: var(--fs-label); letter-spacing: var(--track-label);
+  text-transform: uppercase; line-height: 1.5; text-align: right;
+  color: var(--nav-sub);
 }
 .strapline i {
   display: block; margin-top: var(--s1); margin-left: auto;
-  width: 1.87rem; height: 3px; background: var(--copper);
+  width: 1.87rem; height: 2px; background: var(--copper);
 }
 
-/* ── Progress ────────────────────────────────────────────────────────────── */
+/* ── Progress ──────────────────────────────────────────────────────────────
+   Number in a circle, label beside it. Done steps carry a tick, the current
+   step is white with a copper ring, steps ahead are quiet. */
 .stepper { display: flex; align-items: center; justify-content: center; padding: var(--s1) var(--s3); }
 .stepper ol { display: flex; list-style: none; margin: 0; padding: 0; }
+.stepper-compact { display: none; }
 .step { position: relative; display: flex; align-items: center; }
 .step > button, .step > span {
   display: flex; flex-direction: row; align-items: center; gap: var(--s2);
-  padding: 0 var(--s2); background: none; border: 0;
-  font-size: var(--fs-xs); line-height: 1.2; text-align: left;
-  color: var(--ink-40);
+  min-height: var(--tap); padding: 0 var(--s2); background: none; border: 0;
+  border-radius: var(--r-nav);
+  font-size: var(--fs-xs); font-weight: 500; line-height: 1.2; text-align: left;
+  color: var(--nav-text);
 }
 .step > button { cursor: pointer; }
+.step > button:hover { background: var(--nav-hover); color: var(--panel); }
 .step:not(:last-child)::after {
   content: ""; position: relative; display: block; align-self: center;
-  width: var(--s4); height: 1px; background: var(--line-dark);
+  width: var(--s4); height: 1px; background: var(--nav-line);
 }
 .step-n {
   flex: 0 0 auto; width: 1.556rem; height: 1.556rem; border-radius: 50%;
   display: grid; place-items: center; font-size: var(--fs-xs); font-weight: 700;
-  background: transparent; border: var(--bw) solid var(--line-dark);
-  color: var(--ink-40); position: relative; z-index: 2;
+  background: transparent; border: var(--bw) solid var(--nav-line);
+  color: var(--nav-text); position: relative; z-index: 2;
+  font-variant-numeric: tabular-nums;
 }
-.step--done > button { color: var(--paper); }
-.step--done .step-n { background: var(--navy-700); border-color: var(--navy-700); color: var(--paper); }
-/* Completed reads completed without relying on colour alone. */
-.step--done .step-n::after { content: "✓"; font-size: var(--fs-xs); }
-.step--done .step-n { font-size: 0; }
-.step--current > span { color: var(--paper); }
-.step--current .step-n { background: var(--paper); border-color: var(--paper); color: var(--navy-900); }
-.step--current .step-n::before {
-  content: ""; position: absolute; bottom: -0.28rem; left: 50%; margin-left: -0.15rem;
-  width: 0.3rem; height: 0.3rem; border-radius: 50%; background: var(--copper);
+.step--done > button { color: var(--nav-bright); }
+.step--done .step-n { background: var(--nav-raised); border-color: var(--nav-raised); color: var(--panel); }
+.step--current > span { color: var(--panel); font-weight: 600; }
+.step--current .step-n {
+  background: var(--panel); border-color: var(--panel); color: var(--nav);
+  box-shadow: 0 0 0 2px var(--nav), 0 0 0 4px var(--copper);
 }
 
 /* ── Frame: rail + stage ─────────────────────────────────────────────────── */
-.frame { display: grid; grid-template-columns: var(--rail) 1fr; flex: 1; }
+.frame { display: grid; grid-template-columns: var(--rail) 1fr; flex: 1; background: var(--page); }
 /* Between a laptop and a desk monitor the rail gives width back to the work,
    because a wrapped line of terms costs height and height is the budget. */
 @media (max-width: 1500px) { .frame { grid-template-columns: var(--rail-narrow) 1fr; } }
 .frame--full { grid-template-columns: 1fr; }
 
+/* "Your ride": one white panel down the left. */
 .rail {
-  background: var(--cream); border-right: var(--bw) solid var(--line);
+  background: var(--panel); border: var(--bw) solid var(--line);
+  border-radius: var(--r-md); box-shadow: var(--shadow-panel);
+  margin: var(--s4) 0 var(--s4) var(--s4);
   padding: var(--s4) var(--s4) var(--s5);
+  align-self: start;
 }
-.rail-photo, .plate { display: block; width: 100%; margin: var(--s2) 0 var(--s3); }
-.rail-photo { height: 9.35rem; object-fit: cover; background: var(--line-soft); }
-.plate {
-  padding: var(--s3); background: linear-gradient(150deg, var(--navy-800), var(--navy-700));
-  color: var(--paper);
-}
+.rail-photo, .plate { display: block; width: 100%; margin: var(--s2) 0 var(--s3); border-radius: var(--r-md); }
+.rail-photo { height: 9.35rem; object-fit: cover; background: var(--line); }
+/* The vehicle: the one dark element on the page. */
+.plate { padding: var(--s3) var(--s4); background: var(--nav); color: var(--panel); }
 .plate-year {
-  display: block; font-size: var(--fs-xs); letter-spacing: 0.2em; color: var(--ink-40);
+  display: block; font-size: var(--fs-label); letter-spacing: 2px; font-weight: 600;
+  color: var(--nav-sub); font-variant-numeric: tabular-nums;
 }
 .plate-name {
-  display: block; font-family: var(--font-serif); font-size: var(--fs-title);
-  line-height: 1.15; margin-top: 0;
+  display: block; font-size: var(--fs-title); font-weight: var(--fw-head);
+  letter-spacing: var(--track-head); line-height: 1.2; margin-top: var(--s1);
 }
 .plate-vin {
-  display: block; font-size: var(--fs-xs); letter-spacing: 0.06em;
-  color: var(--ink-40); margin-top: var(--s2); word-break: break-all;
+  display: block; font-size: var(--fs-label); letter-spacing: 0.06em;
+  color: var(--nav-text); margin-top: var(--s2); word-break: break-all;
 }
 
 .rail-name {
-  font-family: var(--font-serif); font-size: var(--fs-title); font-weight: 500;
-  line-height: 1.2; margin: 0;
+  font-size: var(--fs-title); font-weight: var(--fw-head); letter-spacing: var(--track-head);
+  line-height: 1.25; margin: 0;
 }
-.rail-facts { font-size: var(--fs-xs); color: var(--ink-55); margin: 0 0 var(--s3); }
+.rail-facts { font-size: var(--fs-xs); color: var(--muted); margin: var(--s1) 0 var(--s3); }
 
+/* The deal, as label and value rows. */
 .rail-deal {
-  margin: 0; padding: var(--s3) 0; border-top: var(--bw) solid var(--line);
-  display: grid; grid-template-columns: auto 1fr; gap: var(--s1) var(--s3);
+  margin: 0 0 var(--s3); padding: 0; border-top: var(--bw) solid var(--line);
+  display: grid; grid-template-columns: auto 1fr;
   font-size: var(--fs-xs); line-height: 1.35;
 }
-.rail-deal dt { color: var(--ink-55); }
-.rail-deal dd { margin: 0; text-align: right; font-weight: 700; }
-
-.rail-note {
-  font-size: var(--fs-xs); color: var(--ink-55); line-height: 1.35;
-  margin: 0; padding-top: var(--s2); border-top: var(--bw) solid var(--line);
+.rail-deal dt, .rail-deal dd { padding: var(--s2) 0; border-bottom: var(--bw) solid var(--line); }
+.rail-deal dt { color: var(--muted); padding-right: var(--s3); }
+.rail-deal dd {
+  margin: 0; text-align: right; font-weight: 600; color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 
-.railnav { margin-top: var(--s3); padding-top: var(--s3); border-top: var(--bw) solid var(--line); }
+.rail-note { font-size: var(--fs-xs); color: var(--muted); line-height: 1.45; margin: 0; }
+
+.railnav { margin-top: var(--s4); padding-top: var(--s3); border-top: var(--bw) solid var(--line); }
 .railnav ol { list-style: none; margin: 0; padding: 0; counter-reset: opt; }
-.railnav li + li { margin-top: var(--s1); }
+.railnav li + li { margin-top: 2px; }
 .railnav button {
-  display: flex; align-items: baseline; justify-content: space-between; gap: var(--s2);
-  width: 100%; text-align: left; background: none;
-  padding: var(--s1) var(--s2); font-size: var(--fs-xs); color: var(--ink-70);
-  line-height: 1.3; border: 0; border-left: var(--bw-accent) solid var(--line);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
+  width: 100%; min-height: var(--tap); text-align: left; background: none;
+  padding: var(--s1) var(--s3); font-size: var(--fs-xs); color: var(--ink-soft);
+  line-height: 1.3; border: 0; border-radius: var(--r-nav);
 }
+.railnav button:hover:not(:disabled) { background: var(--tint); color: var(--ink); }
 .railnav button:disabled { opacity: 0.55; cursor: default; }
-.railnav li.is-here button { border-left-color: var(--copper); color: var(--ink); font-weight: 700; }
+.railnav li.is-here button {
+  background: var(--tint); color: var(--ink); font-weight: 600;
+  box-shadow: inset 3px 0 var(--copper);
+}
 .railnav-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.railnav-state { flex: 0 0 auto; color: var(--ink-55); }
+.railnav-state { flex: 0 0 auto; color: var(--muted); font-weight: 500; }
 
-.rail-mood {
-  margin: var(--s4) 0 0; padding-top: var(--s3);
-  border-top: var(--bw-accent) solid var(--copper);
-}
-.rail-mood img { display: block; width: 100%; height: 7.65rem; object-fit: cover; margin-bottom: var(--s2); }
-.rail-mood figcaption {
-  font-family: var(--font-serif); font-size: var(--fs-title); font-style: italic;
-  color: var(--ink-70); line-height: var(--lh-heading);
-}
+.rail-mood { margin: var(--s4) 0 0; padding-top: var(--s3); border-top: var(--bw) solid var(--line); }
+.rail-mood img { display: block; width: 100%; height: 7.65rem; object-fit: cover; margin-bottom: var(--s2); border-radius: var(--r-md); }
+.rail-mood figcaption { font-size: var(--fs-base); font-weight: 500; color: var(--ink-soft); line-height: var(--lh-heading); }
 
-.stage { display: flex; flex-direction: column; min-width: 0; background: var(--paper); }
-.stage-inner {
-  flex: 1; padding: var(--s4) var(--s6) var(--s4);
-  background: linear-gradient(100deg, var(--paper) 0 62%, var(--cream) 100%);
+.stage { display: flex; flex-direction: column; min-width: 0; background: var(--page); }
+.stage-inner { flex: 1; padding: var(--s4) var(--s6) var(--s4); }
+/* Each step's content sits in one white panel. Inside it, a panel is an
+   inset card: bordered, without a second shadow. */
+.screen {
+  max-width: var(--content); background: var(--panel);
+  border: var(--bw) solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--shadow-panel); padding: var(--s4) var(--s5);
 }
-.screen { max-width: var(--content); }
+.screen .panel { box-shadow: none; }
 
 /* ── Ownership questions ─────────────────────────────────────────────────── */
-.question { border: 0; margin: 0 0 var(--s6); padding: 0; }
+.question { border: 0; margin: 0 0 var(--s5); padding: 0; }
 .question-legend { padding: 0; margin-bottom: var(--s4); }
 .question-title {
-  display: block; font-family: var(--font-serif); font-size: var(--fs-q);
-  line-height: var(--lh-heading); margin-bottom: var(--s1);
+  display: block; font-size: var(--fs-q); font-weight: var(--fw-head);
+  letter-spacing: var(--track-head); line-height: var(--lh-heading); margin-bottom: var(--s1);
 }
 .question-help {
-  display: block; font-size: var(--fs-xs); color: var(--ink-55);
+  display: block; font-size: var(--fs-xs); color: var(--muted);
   max-width: var(--measure); line-height: var(--lh-body);
 }
 
@@ -263,22 +279,22 @@ button { cursor: pointer; }
 .choice {
   display: flex; align-items: center; gap: var(--s3);
   text-align: left; width: 100%; min-height: 3.333rem;
-  padding: var(--s2) var(--s3);
-  background: var(--paper); color: inherit;
-  border: var(--bw-control) solid var(--line); border-radius: var(--r-md);
-  transition: border-color var(--dur) var(--ease);
+  padding: var(--s2) var(--s4);
+  background: var(--panel); color: inherit;
+  border: var(--bw) solid var(--line-strong); border-radius: var(--r-md);
+  transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
 }
+.choice:hover { border-color: var(--muted); }
 .choice-box {
   width: 1.222rem; height: 1.222rem; flex: 0 0 auto;
-  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
-  display: grid; place-items: center;
+  border: var(--bw) solid var(--line-strong); border-radius: var(--r-sm);
+  display: grid; place-items: center; color: var(--panel);
 }
 .choice-text { min-width: 0; }
 .choice b { display: block; font-size: var(--fs-base); line-height: 1.25; font-weight: 600; }
-.choice small { display: block; font-size: var(--fs-xs); color: var(--ink-55); line-height: 1.3; }
-.choice.is-chosen { border-color: var(--copper); background: var(--copper-tint); }
+.choice small { display: block; font-size: var(--fs-xs); color: var(--muted); line-height: 1.35; }
+.choice.is-chosen { border-color: var(--copper); background: var(--copper-wash); box-shadow: inset 0 0 0 1px var(--copper); }
 .choice.is-chosen .choice-box { background: var(--copper); border-color: var(--copper); }
-.choice.is-chosen .choice-box::after { content: "✓"; color: var(--paper); font-size: var(--fs-xs); }
 
 /* ── One product, one screen ─────────────────────────────────────────────
    Two columns so the terms can run full height beside a fixed side panel
@@ -288,50 +304,52 @@ button { cursor: pointer; }
 .ps-main { min-width: 0; }
 .ps-count {
   margin-left: auto; font-size: var(--fs-xs); letter-spacing: 0;
-  text-transform: none; font-weight: 600; color: var(--ink-55);
+  text-transform: none; font-weight: 600; color: var(--muted);
 }
 .pscreen .display { margin-bottom: var(--s1); max-width: 20ch; }
-.ps-goal { color: var(--copper-deep); }
+.ps-goal { color: var(--copper-ink); }
 .ps-purpose {
-  font-size: var(--fs-base); line-height: 1.4; color: var(--ink-70);
+  font-size: var(--fs-base); line-height: 1.45; color: var(--ink-soft);
   margin: 0 0 var(--s3); max-width: 90ch;
 }
 .ps-terms { margin: 0; columns: 2; column-gap: var(--s6); }
 .ps-terms > div { break-inside: avoid; margin-bottom: var(--s2); }
-.ps-terms dt {
-  font-size: var(--fs-title); font-weight: 600; font-family: var(--font-serif);
-  line-height: 1.25;
-}
-.ps-terms dd {
-  margin: 0; font-size: var(--fs-base); line-height: 1.4; color: var(--ink-70);
-}
+.ps-terms dt { font-size: var(--fs-base); font-weight: var(--fw-head); line-height: 1.3; }
+.ps-terms dd { margin: 0; font-size: var(--fs-base); line-height: 1.45; color: var(--ink-soft); }
 .ps-full {
-  display: block; margin-top: var(--s2); font-size: var(--fs-xs);
-  color: var(--copper-deep); text-underline-offset: 3px;
+  display: inline-flex; align-items: center; min-height: var(--tap); margin-top: var(--s1);
+  font-size: var(--fs-xs); font-weight: 600; color: var(--copper-ink); text-underline-offset: 3px;
 }
 
-.ps-side { display: flex; flex-direction: column; gap: var(--s3); }
+/* The side: price, then the choices it depends on, then the decision, in one
+   inset card. */
+.ps-side {
+  display: flex; flex-direction: column; gap: var(--s3);
+  background: var(--tint); border: var(--bw) solid var(--line);
+  border-radius: var(--r-md); padding: var(--s3);
+}
 .ps-price {
-  background: var(--cream); border-left: var(--bw-accent) solid var(--copper);
-  padding: var(--s2) var(--s3);
+  background: var(--panel); border: var(--bw) solid var(--line);
+  border-radius: var(--r-md); padding: var(--s3);
 }
 .ps-price-label {
-  display: block; font-size: var(--fs-xs); letter-spacing: var(--track-ui);
-  text-transform: uppercase; font-weight: 700; color: var(--ink-55);
+  display: block; font-size: var(--fs-label); letter-spacing: var(--track-label);
+  text-transform: uppercase; font-weight: 600; color: var(--muted);
 }
 .ps-price-total {
-  display: block; font-family: var(--font-serif); font-size: var(--fs-price);
-  line-height: 1.1; margin-top: var(--s1);
+  display: block; font-size: var(--fs-price); font-weight: var(--fw-head);
+  letter-spacing: var(--track-head); line-height: 1.1; margin-top: var(--s1);
+  font-variant-numeric: tabular-nums;
 }
-.ps-price-month { display: block; font-size: var(--fs-base); color: var(--ink-70); margin-top: var(--s1); }
+.ps-price-month { display: block; font-size: var(--fs-base); color: var(--ink-soft); margin-top: var(--s1); font-variant-numeric: tabular-nums; }
 /* Including this product would take the plan past the finance company's
    maximum, so part of it becomes money down. Said under the price, plainly. */
-.ps-price-down { display: block; font-size: var(--fs-base); color: var(--copper-deep); margin-top: var(--s1); }
-.ps-price-term { display: block; font-size: var(--fs-xs); color: var(--ink-55); margin-top: var(--s2); }
+.ps-price-down { display: block; font-size: var(--fs-base); color: var(--warn-fg); font-weight: 600; margin-top: var(--s1); }
+.ps-price-term { display: block; font-size: var(--fs-xs); color: var(--muted); margin-top: var(--s2); }
 
-.ps-decide { border-top: var(--bw) solid var(--line); padding-top: var(--s2); }
+.ps-decide { border-top: var(--bw) solid var(--line); padding-top: var(--s3); }
 .ps-decide-ask { margin: 0 0 var(--s2); font-size: var(--fs-base); font-weight: 600; }
-.ps-side .decision { flex-direction: column; align-items: stretch; gap: var(--s3); }
+.ps-side .decision { flex-direction: column; align-items: stretch; gap: var(--s2); }
 /* ── The neutral pair ─────────────────────────────────────────────────────
    Include and I'll manage this are drawn with equal weight. Neither is
    pre-selected, neither is styled as the default, and the one not taken is
@@ -340,18 +358,18 @@ button { cursor: pointer; }
 .decision-option {
   display: inline-flex; align-items: center; justify-content: center;
   min-height: var(--tap); min-width: 12rem; padding: var(--s2) var(--s4);
-  font-size: var(--fs-base); background: var(--paper); color: inherit;
-  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-md);
+  font-size: var(--fs-base); font-weight: 600; background: var(--panel); color: inherit;
+  border: var(--bw) solid var(--line-strong); border-radius: var(--r-control);
   transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
 }
+.decision-option:hover { border-color: var(--muted); }
 .decision-mark {
   width: 1.1rem; height: 1.1rem; flex: 0 0 auto; margin-right: var(--s2);
-  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
-  display: inline-grid; place-items: center;
+  border: var(--bw) solid var(--line-strong); border-radius: var(--r-sm);
+  display: inline-grid; place-items: center; color: var(--panel);
 }
-.decision-option.is-chosen { border-color: var(--copper); background: var(--copper-tint); }
+.decision-option.is-chosen { border-color: var(--copper); background: var(--copper-wash); box-shadow: inset 0 0 0 1px var(--copper); }
 .decision-option.is-chosen .decision-mark { background: var(--copper); border-color: var(--copper); }
-.decision-option.is-chosen .decision-mark::after { content: "✓"; color: var(--paper); font-size: var(--fs-xs); }
 
 /* ── The Verify step ─────────────────────────────────────────────────────
    A checking screen, not a form to fill in. Each field is one row: label,
@@ -367,26 +385,26 @@ button { cursor: pointer; }
   display: flex; flex-wrap: wrap; align-items: baseline;
   gap: var(--s2) var(--s6); margin: var(--s3) 0;
   padding: var(--s2) var(--s4);
-  background: var(--paper); border: var(--bw) solid var(--line);
+  background: var(--panel); border: var(--bw) solid var(--line);
   border-radius: var(--r-md);
 }
 .vstate > div { display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; }
 .vstate dt {
   font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em;
-  font-weight: 700; color: var(--ink-55);
+  font-weight: 700; color: var(--muted);
 }
 .vstate dd { margin: 0; font-size: var(--fs-base); display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; }
-.vstate dd small { font-size: var(--fs-xs); color: var(--ink-70); }
+.vstate dd small { font-size: var(--fs-xs); color: var(--ink-soft); }
 
-.vworkspace { background: var(--paper); border: var(--bw) solid var(--line); border-radius: var(--r-md); padding: var(--s4); }
-.vattention { grid-column: 1 / -1; background: var(--copper-tint); border-left: var(--bw-accent) solid var(--copper); padding: var(--s4); border-radius: var(--r-sm); }
+.vworkspace { background: var(--panel); border: var(--bw) solid var(--line); border-radius: var(--r-md); padding: var(--s4); }
+.vattention { grid-column: 1 / -1; background: var(--copper-wash); border-left: var(--bw-accent) solid var(--copper); padding: var(--s4); border-radius: var(--r-sm); }
 .vattention-head { display: flex; justify-content: space-between; align-items: end; flex-wrap: wrap; gap: var(--s2) var(--s5); margin-bottom: var(--s3); }
-.vattention-head h2, .vreference-intro h2 { font-family: var(--font-serif); font-size: var(--fs-title); margin: 0; }
-.vattention-head p, .vreference-intro p { margin: var(--s1) 0 0; color: var(--ink-70); font-size: var(--fs-base); }
-.vattention-kicker { font-family: var(--font-sans); font-size: var(--fs-xs) !important; font-weight: 700; letter-spacing: var(--track-ui); text-transform: uppercase; color: var(--copper-deep) !important; }
-.vattention-hint { font-size: var(--fs-xs); color: var(--ink-70); }
+.vattention-head h2, .vreference-intro h2 { font-family: var(--font-sans); font-size: var(--fs-title); margin: 0; }
+.vattention-head p, .vreference-intro p { margin: var(--s1) 0 0; color: var(--ink-soft); font-size: var(--fs-base); }
+.vattention-kicker { font-family: var(--font-sans); font-size: var(--fs-xs) !important; font-weight: 700; letter-spacing: var(--track-ui); text-transform: uppercase; color: var(--copper-ink) !important; }
+.vattention-hint { font-size: var(--fs-xs); color: var(--ink-soft); }
 .vattention-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2) var(--s5); }
-.vattention .vfield { background: var(--paper); padding: var(--s2); border: var(--bw) solid var(--line); border-left: var(--bw-accent) solid var(--copper); }
+.vattention .vfield { background: var(--panel); padding: var(--s2); border: var(--bw) solid var(--line); border-left: var(--bw-accent) solid var(--copper); }
 .vreference-intro { grid-column: 1 / -1; display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: var(--s2); border-bottom: var(--bw) solid var(--line); padding-bottom: var(--s2); }
 .vreference-intro p { max-width: 32rem; }
 @media (max-width: 65rem) { .vattention-fields { grid-template-columns: 1fr; } }
@@ -395,7 +413,7 @@ button { cursor: pointer; }
 .vsheet { display: grid; gap: var(--s4); margin: 0; }
 .vgroup { min-width: 0; }
 .vgroup-head {
-  font-family: var(--font-serif); font-size: var(--fs-title); font-weight: 600;
+  font-family: var(--font-sans); font-size: var(--fs-title); font-weight: 600;
   margin: 0 0 var(--s1); padding-bottom: var(--s1);
   border-bottom: var(--bw) solid var(--line);
 }
@@ -404,7 +422,7 @@ button { cursor: pointer; }
    there is something to do about, and never blocking. */
 .vgroup-warn {
   margin: var(--s2) 0 0; padding: var(--s2) var(--s3);
-  border-left: 3px solid var(--copper); background: var(--copper-tint);
+  border-left: 3px solid var(--copper); background: var(--copper-wash);
   font-size: var(--fs-xs); line-height: 1.4; color: var(--ink);
 }
 
@@ -452,7 +470,7 @@ button { cursor: pointer; }
 
 /* A required field with nothing in it. Copper rather than red: it is a thing to
    do, not an error somebody made. */
-.vfield.is-missing { border-left-color: var(--copper); background: var(--copper-tint); }
+.vfield.is-missing { border-left-color: var(--copper); background: var(--copper-wash); }
 
 /* ── The two states an edited field can show ─────────────────────────────
      changed  a quiet copper edge on the value box, and nothing else. The value
@@ -464,23 +482,23 @@ button { cursor: pointer; }
    not carry) looks like any other row. */
 .vfield.is-changed .vfield-control > input,
 .vfield.is-changed .vfield-control > select { border-left: 3px solid var(--copper); }
-.vfield.is-invalid { border-left-color: var(--copper-deep); background: var(--copper-tint); }
-.vfield.is-invalid input { border-color: var(--copper-deep); }
+.vfield.is-invalid { border-left-color: var(--copper-ink); background: var(--copper-wash); }
+.vfield.is-invalid input { border-color: var(--copper-ink); }
 
 .vfield-label { font-size: var(--fs-xs); font-weight: 700; line-height: 1.25; }
 .vfield-req {
   margin-left: 2px; border: 0; text-decoration: none;
-  font-weight: 700; color: var(--copper-deep);
+  font-weight: 700; color: var(--copper-ink);
 }
 .vfield-value { margin: 0; font-size: var(--fs-base); line-height: 1.3; overflow-wrap: anywhere; }
-.vfield-value em { color: var(--ink-55); }
+.vfield-value em { color: var(--muted); }
 .vfield input {
   width: 100%; min-height: 2rem;
   padding: 0 var(--s2); font-size: var(--fs-base);
   border: var(--bw) solid var(--line-strong); border-radius: var(--r-sm);
-  background: var(--paper); color: inherit;
+  background: var(--panel); color: inherit;
 }
-.vfield-note { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--ink-70); line-height: 1.35; }
+.vfield-note { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--ink-soft); line-height: 1.35; }
 
 /* Save, Decode, Discard, and the key to the asterisk, on one line. */
 .vtools {
@@ -510,7 +528,7 @@ button { cursor: pointer; }
 .note--panel form input[type="text"] {
   flex: 1 1 18rem; min-height: var(--tap);
   padding: var(--s2) var(--s3); font: inherit; font-size: var(--fs-base);
-  color: var(--ink); background: var(--paper);
+  color: var(--ink); background: var(--panel);
   border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
 }
 
@@ -522,25 +540,25 @@ button { cursor: pointer; }
   margin: 0 0 var(--s4); padding: var(--s3);
   border: var(--bw) solid var(--copper);
   border-left: var(--bw-accent) solid var(--copper);
-  border-radius: var(--r-md); background: var(--copper-tint);
+  border-radius: var(--r-md); background: var(--copper-wash);
 }
 .vgate-warn-say {
-  margin: 0 0 var(--s3); font-weight: 700; color: var(--copper-deep);
+  margin: 0 0 var(--s3); font-weight: 700; color: var(--copper-ink);
   font-size: var(--fs-base); line-height: var(--lh-body);
 }
 .vgate-warn-table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); }
 .vgate-warn-table th {
-  text-align: left; font-weight: 700; color: var(--ink-55);
+  text-align: left; font-weight: 700; color: var(--muted);
   letter-spacing: var(--track-ui); white-space: nowrap;
   padding: 0 var(--s3) var(--s2) 0;
   border-bottom: var(--bw) solid var(--copper);
 }
 .vgate-warn-table td {
   padding: var(--s2) var(--s3) var(--s2) 0; vertical-align: top;
-  border-bottom: var(--bw) solid var(--line-soft);
+  border-bottom: var(--bw) solid var(--line);
 }
 .vgate-warn-table tr:last-child td { border-bottom: 0; }
-.vgate-warn-table small { display: block; color: var(--ink-55); }
+.vgate-warn-table small { display: block; color: var(--muted); }
 .vgate-warn .vfield-note { margin-top: var(--s3); }
 
 @media (max-width: 34rem) {
@@ -555,27 +573,27 @@ button { cursor: pointer; }
   }
   .vgate-warn-table tr:last-child { border-bottom: 0; }
   .vgate-warn-table td { padding: 0; border-bottom: 0; }
-  .vgate-warn-table td::before { content: attr(data-label) ": "; color: var(--ink-55); }
+  .vgate-warn-table td::before { content: attr(data-label) ": "; color: var(--muted); }
 }
 
 /* "Somebody already did this." Above the button, quiet, and only when the
    session really was verified before. */
 .vgate-was {
   margin: 0 0 var(--s3); padding-bottom: var(--s3);
-  border-bottom: var(--bw) solid var(--line-soft);
-  font-size: var(--fs-xs); color: var(--ink-70); line-height: var(--lh-body);
+  border-bottom: var(--bw) solid var(--line);
+  font-size: var(--fs-xs); color: var(--ink-soft); line-height: var(--lh-body);
 }
 
 .vgate {
   margin: var(--s3) 0 var(--s4);
   padding: var(--s3) var(--s4);
   border: var(--bw) solid var(--line); border-left: var(--bw-accent) solid var(--copper);
-  border-radius: var(--r-md); background: var(--paper);
+  border-radius: var(--r-md); background: var(--panel);
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--s4); flex-wrap: wrap;
 }
 .vgate-say { margin: 0; flex: 1 1 22rem; font-size: var(--fs-base); line-height: var(--lh-body); }
-.vgate-say--blocked { color: var(--ink-70); }
+.vgate-say--blocked { color: var(--ink-soft); }
 .vgate .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
 
 /* The rating column. The reason wraps rather than truncating: it names a field
@@ -583,7 +601,7 @@ button { cursor: pointer; }
 .cell-rating { white-space: normal; max-width: 22rem; }
 .cell-why {
   display: block; margin-top: var(--s1);
-  font-size: var(--fs-xs); line-height: 1.35; color: var(--ink-70);
+  font-size: var(--fs-xs); line-height: 1.35; color: var(--ink-soft);
 }
 
 /* ── Which level, and on what terms ───────────────────────────────────────
@@ -596,7 +614,8 @@ button { cursor: pointer; }
    need the width; a term is two or three words and fits a chip. */
 .tiers, .rate-axis { border: 0; margin: 0; padding: 0; }
 .tiers legend, .rate-axis legend {
-  padding: 0 0 var(--s2); font-size: var(--fs-base); font-weight: 700;
+  padding: 0 0 var(--s2); font-size: var(--fs-label); font-weight: 600;
+  letter-spacing: var(--track-label); text-transform: uppercase; color: var(--muted);
 }
 .tiers-row { display: flex; flex-direction: column; gap: var(--s2); }
 
@@ -604,101 +623,106 @@ button { cursor: pointer; }
   display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
   min-height: var(--tap); padding: var(--s2) var(--s3);
   font-size: var(--fs-base); text-align: left;
-  background: var(--paper); color: inherit;
-  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-md);
+  background: var(--panel); color: inherit;
+  border: var(--bw) solid var(--line-strong); border-radius: var(--r-control);
   transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
 }
 .tier-name { min-width: 0; font-weight: 600; }
-.tier-price { flex: 0 0 auto; color: var(--ink-55); }
-.tier.is-on { border-color: var(--copper); background: var(--copper-tint); }
+.tier-price { flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tier.is-on { border-color: var(--copper); background: var(--copper-wash); box-shadow: inset 0 0 0 1px var(--copper); }
 .tier.is-on .tier-price { color: inherit; }
 
 .rates { display: flex; flex-direction: column; gap: var(--s3); }
 .rate-row { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .chip {
   min-height: var(--tap); padding: var(--s2) var(--s3);
-  font-size: var(--fs-base); background: var(--paper); color: inherit;
-  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-md);
+  font-size: var(--fs-base); background: var(--panel); color: inherit;
+  border: var(--bw) solid var(--line-strong); border-radius: var(--r-control);
   transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
 }
-.chip.is-on { border-color: var(--copper); background: var(--copper-tint); }
+.chip.is-on { border-color: var(--copper); background: var(--copper-wash); box-shadow: inset 0 0 0 1px var(--copper); font-weight: 600; }
 /* A length that this deductible is not offered at. Shown rather than removed,
    so the set of lengths does not change shape underneath the customer. */
-.chip:disabled { color: var(--ink-55); border-style: dashed; cursor: not-allowed; }
+.chip:disabled { color: var(--muted); border-style: dashed; cursor: not-allowed; }
 
 /* ── Product configuration ────────────────────────────────────────────────
    The options that change what a product costs sit with it, and each states
    its own cost: an option that silently adds to the total is the thing a
    customer discovers at signing. */
 .config { border: 0; margin: 0; padding: 0; }
-.config legend { padding: 0; font-size: var(--fs-base); font-weight: 700; }
+.config legend {
+  padding: 0; font-size: var(--fs-label); font-weight: 600;
+  letter-spacing: var(--track-label); text-transform: uppercase; color: var(--muted);
+}
 .config-row { display: flex; align-items: center; gap: var(--s2); min-height: var(--tap); }
 .config-row input { width: 1.333rem; height: 1.333rem; flex: 0 0 auto; accent-color: var(--copper); }
 .config-row label {
   font-size: var(--fs-base); line-height: 1.3; cursor: pointer;
-  flex: 1; display: flex; align-items: center; justify-content: space-between;
-  gap: var(--s2); min-height: var(--tap);
+  flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 0 var(--s2); min-height: var(--tap);
 }
 .config-label { min-width: 0; }
-.config-cost { color: var(--ink-55); flex: 0 0 auto; text-align: right; }
+.config-cost { color: var(--muted); flex: 0 0 auto; text-align: right; font-variant-numeric: tabular-nums; }
 
 .ps-side .decision-option { min-width: 0; width: 100%; }
 .ps-side .config { margin: 0; padding: 0; border: 0; }
 
 .goal-section { margin-bottom: var(--s6); scroll-margin-top: var(--s4); }
 .goal-head {
-  font-family: var(--font-serif); font-size: var(--fs-title); font-weight: 600;
+  font-size: var(--fs-label); font-weight: 600; letter-spacing: var(--track-label);
+  text-transform: uppercase; color: var(--muted);
   margin: 0 0 var(--s3); padding-bottom: var(--s2);
   border-bottom: var(--bw) solid var(--line);
   display: flex; align-items: baseline; gap: var(--s2);
 }
-.goal-head::before {
-  content: ""; width: 1.02rem; height: 3px; background: var(--copper); flex: 0 0 auto;
-}
 
 /* ── Notes ───────────────────────────────────────────────────────────────── */
 .note {
-  font-size: var(--fs-xs); color: var(--ink-70); line-height: var(--lh-body);
+  font-size: var(--fs-xs); color: var(--ink-soft); line-height: var(--lh-body);
   margin: var(--s4) 0 0; max-width: var(--measure);
 }
-/* A data problem the customer is being asked to help catch. Marked, not
-   alarming: copper rule, no red, no warning iconography. */
-.note--flag { border-left: var(--bw-accent) solid var(--copper); padding: var(--s2) 0 var(--s2) var(--s3); }
-.note--panel {
-  max-width: var(--content); background: var(--paper);
-  border: var(--bw) solid var(--line); border-left: var(--bw-accent) solid var(--copper);
-  border-radius: var(--r-md); padding: var(--s5); font-size: var(--fs-base);
+/* A data problem the customer is being asked to help catch. Marked in the
+   house attention colours, not alarming: no red, no warning iconography. */
+.note--flag {
+  background: var(--warn-bg); color: var(--warn-fg); border-radius: var(--r-control);
+  padding: var(--s2) var(--s3);
 }
-.note--panel h2 { font-family: var(--font-serif); font-size: var(--fs-title); font-weight: 500; margin: 0 0 var(--s3); }
-.note--panel p { margin: 0 0 var(--s3); color: var(--ink-70); }
+.note--panel {
+  max-width: var(--content); background: var(--tint);
+  border: var(--bw) solid var(--line); border-radius: var(--r-md);
+  padding: var(--s5); font-size: var(--fs-base);
+}
+.note--panel h2 { font-size: var(--fs-title); font-weight: var(--fw-head); letter-spacing: var(--track-head); margin: 0 0 var(--s3); }
+.note--panel p { margin: 0 0 var(--s3); color: var(--ink-soft); }
 .note--panel p:last-child { margin: 0; }
 
 /* ── Panels, figures, terms ──────────────────────────────────────────────── */
 .panel {
-  max-width: var(--content); background: var(--paper);
+  max-width: var(--content); background: var(--panel);
   border: var(--bw) solid var(--line); border-radius: var(--r-md);
-  box-shadow: var(--shadow-card); padding: var(--s3) var(--s4); margin-bottom: var(--s3);
+  box-shadow: var(--shadow-panel); padding: var(--s4); margin-bottom: var(--s3);
 }
 /* Side by side: stacked, the plan summary and its payment together ran to
    twice the height of a 768px viewport. */
 .review { display: grid; grid-template-columns: 1fr 21rem; gap: var(--s4); align-items: start; }
 .review .panel { margin: 0; max-width: none; }
 .done--split { display: grid; grid-template-columns: 21rem 1fr; gap: var(--s6); align-items: start; }
+/* The house table heading. */
 .panel-head {
-  font-size: var(--fs-xs); letter-spacing: var(--track-wide);
-  text-transform: uppercase; font-weight: 800; color: var(--ink-55);
-  margin: 0 0 var(--s3); padding-bottom: var(--s1);
-  border-bottom: var(--bw) solid var(--line-soft);
+  font-size: var(--fs-label); letter-spacing: var(--track-label);
+  text-transform: uppercase; font-weight: 600; color: var(--muted);
+  margin: 0 0 var(--s2); padding-bottom: var(--s2);
+  border-bottom: var(--bw) solid var(--line);
 }
 .panel-foot {
   margin: var(--s3) 0 0; padding-top: var(--s2);
-  border-top: var(--bw) solid var(--line-soft);
-  font-size: var(--fs-base); color: var(--ink-70); line-height: var(--lh-body);
+  border-top: var(--bw) solid var(--line);
+  font-size: var(--fs-base); color: var(--ink-soft); line-height: var(--lh-body);
 }
 .panel-foot--plain { border-top: 0; padding-top: 0; margin-top: var(--s2); }
 .panel--ack { text-align: left; margin-top: 0; }
-.panel--ack p { font-size: var(--fs-base); color: var(--ink-70); line-height: 1.4; margin: 0 0 var(--s2); }
-.ack-meta { font-size: var(--fs-xs); color: var(--ink-55); border-top: var(--bw) solid var(--line-soft); padding-top: var(--s3); }
+.panel--ack p { font-size: var(--fs-base); color: var(--ink-soft); line-height: 1.45; margin: 0 0 var(--s2); }
+.ack-meta { font-size: var(--fs-xs); color: var(--muted); border-top: var(--bw) solid var(--line); padding-top: var(--s3); }
 
 .terms {
   margin: 0 0 var(--s4); display: grid;
@@ -707,92 +731,117 @@ button { cursor: pointer; }
 /* A label that wraps ("Annual percentage rate") must not drop its own value
    below the other two, so each cell fills the row and pins its value down. */
 .terms > div { display: flex; flex-direction: column; justify-content: space-between; gap: var(--s1); }
-.terms dt { font-size: var(--fs-xs); letter-spacing: var(--track-ui); text-transform: uppercase; font-weight: 700; color: var(--ink-55); }
-.terms dd { margin: 0; font-family: var(--font-serif); font-size: var(--fs-title); line-height: var(--lh-heading); }
-.terms--inline { margin: var(--s4) 0 0; padding-top: var(--s3); border-top: var(--bw) solid var(--line-soft); }
+.terms dt { font-size: var(--fs-label); letter-spacing: var(--track-label); text-transform: uppercase; font-weight: 600; color: var(--muted); }
+.terms dd { margin: 0; font-size: var(--fs-title); font-weight: var(--fw-head); line-height: var(--lh-heading); font-variant-numeric: tabular-nums; }
+.terms--inline { margin: var(--s4) 0 0; padding-top: var(--s3); border-top: var(--bw) solid var(--line); }
 .terms--inline dd { font-size: var(--fs-title); }
 
 .figures { border-top: var(--bw) solid var(--line); padding-top: var(--s4); display: flex; flex-wrap: wrap; gap: var(--s5); justify-content: space-between; }
 .panel > .figures:first-child { border-top: 0; padding-top: 0; }
 .figure { margin: 0; }
-.figure-label { display: block; font-size: var(--fs-xs); letter-spacing: var(--track-ui); text-transform: uppercase; font-weight: 700; color: var(--ink-55); }
+.figure-label { display: block; font-size: var(--fs-label); letter-spacing: var(--track-label); text-transform: uppercase; font-weight: 600; color: var(--muted); }
 /* The payment is what the customer came for, so it is the largest thing on the
-   screen -- larger than the heading above it. */
-.figure-value { display: block; font-family: var(--font-serif); font-size: var(--fs-pay); font-weight: 500; line-height: 1.05; letter-spacing: -0.02em; }
+   screen, larger than the heading above it. */
+.figure-value {
+  display: block; font-size: var(--fs-pay); font-weight: var(--fw-head); line-height: 1.05;
+  letter-spacing: var(--track-head); font-variant-numeric: tabular-nums;
+}
 
-.figure-split { margin: 0; min-width: 18rem; font-size: var(--fs-base); }
-.figure-split > div { display: flex; justify-content: space-between; gap: var(--s4); padding: var(--s1) 0; }
-.figure-split dt { color: var(--ink-70); }
+.figure-split { margin: 0; min-width: 18rem; font-size: var(--fs-base); font-variant-numeric: tabular-nums; }
+.figure-split > div { display: flex; justify-content: space-between; gap: var(--s4); padding: var(--s2) 0; border-bottom: var(--bw) solid var(--line); }
+.figure-split > div:last-child { border-bottom: 0; }
+.figure-split dt { color: var(--ink-soft); }
 .figure-split dd { margin: 0; font-weight: 600; }
-.figure-split .is-total { border-top: var(--bw) solid var(--line); margin-top: var(--s1); padding-top: var(--s2); font-weight: 700; }
+.figure-split .is-total { border-top: var(--bw) solid var(--ink); border-bottom: 0; margin-top: 0; padding-top: var(--s2); font-weight: 700; }
 .figure-split .is-total dt { color: var(--ink); font-weight: 700; }
 /* Money due at signing, under the payment. Its own block, so it reads as a
    separate amount from the monthly figures above it. */
 .figures--down { display: block; }
 .figures--down .fine { margin: var(--s2) 0 0; }
 .figure-split--down { margin-top: var(--s3); }
-.figure-split--down dt small { display: block; font-size: var(--fs-xs); color: var(--ink-55); }
+.figure-split--down dt small { display: block; font-size: var(--fs-xs); color: var(--muted); }
 
 /* ── Plan summary ────────────────────────────────────────────────────────── */
 .summary { list-style: none; margin: 0; padding: 0; }
 .summary-line {
-  display: flex; justify-content: space-between; align-items: baseline;
-  gap: var(--s3); padding: var(--s1) 0; border-bottom: var(--bw) solid var(--line-soft);
+  display: flex; justify-content: space-between; align-items: center;
+  gap: var(--s3); padding: var(--s2) 0; border-bottom: var(--bw) solid var(--line);
 }
 .summary-line:last-child { border-bottom: 0; }
-.summary-what b { display: block; font-size: var(--fs-base); }
-.summary-what small { display: block; font-size: var(--fs-xs); color: var(--ink-55); }
-.summary-empty { font-size: var(--fs-base); color: var(--ink-70); margin: 0; }
+.summary-what b { display: block; font-size: var(--fs-base); font-weight: 600; }
+.summary-what small { display: block; font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.summary-empty { font-size: var(--fs-base); color: var(--ink-soft); margin: 0; }
 
-/* Both outcomes are legitimate, so both are stated plainly. Neither is red and
-   neither is called declined. */
-.tag { white-space: nowrap; font-size: var(--fs-xs); font-weight: 700; padding: var(--s1) var(--s2); border-radius: var(--r-sm); }
-.tag--in { background: var(--copper-tint); color: var(--copper-deep); border: var(--bw) solid var(--copper); }
-.tag--own { background: var(--cream); color: var(--ink-70); border: var(--bw) solid var(--line); }
+/* The house badge. Both plan outcomes are legitimate, so both are stated
+   plainly: Included in the good colours, managing it yourself in the neutral
+   ones. Neither is red and neither is called declined. */
+.tag {
+  display: inline-flex; align-items: center; gap: 0.4em; white-space: nowrap;
+  font-size: var(--fs-xs); font-weight: 600; line-height: 1;
+  padding: 0.35em 0.6em; border-radius: var(--r-sm);
+  background: var(--plain-bg); color: var(--plain-fg);
+}
+.tag::before { content: ""; width: 0.4em; height: 0.4em; border-radius: 50%; background: currentColor; flex: none; }
+.tag--in { background: var(--good-bg); color: var(--good-fg); }
+.tag--own { background: var(--plain-bg); color: var(--plain-fg); }
 
-/* ── Opening screen goals ────────────────────────────────────────────────── */
+/* ── Opening screen goals ──────────────────────────────────────────────────
+   Three equal panels. */
 .goals {
   list-style: none; margin: 0 0 var(--s4); padding: 0; max-width: 62rem;
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s4);
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s3);
 }
-.goals li { padding: 0 0 0 var(--s3); border-left: var(--bw-accent) solid var(--copper); margin: 0; }
-.goals b { display: block; font-family: var(--font-serif); font-size: var(--fs-title); font-weight: 500; line-height: 1.25; }
-.goals span { display: block; font-size: var(--fs-base); color: var(--ink-70); margin-top: var(--s1); line-height: 1.4; }
+.goals li {
+  margin: 0; padding: var(--s3) var(--s4);
+  background: var(--tint); border: var(--bw) solid var(--line); border-radius: var(--r-md);
+}
+.goals b { display: block; font-size: var(--fs-base); font-weight: var(--fw-head); letter-spacing: -0.01em; line-height: 1.3; }
+.goals span { display: block; font-size: var(--fs-xs); color: var(--ink-soft); margin-top: var(--s1); line-height: 1.45; }
 
 /* ── Completion ──────────────────────────────────────────────────────────── */
 .done { max-width: var(--content); }
-.done-mark { color: var(--copper); font-size: 1.7rem; letter-spacing: -0.6rem; transform: rotate(180deg); display: inline-block; margin: 0 0 var(--s2); }
-.done-head { font-family: var(--font-serif); font-size: var(--fs-head); font-weight: 400; line-height: var(--lh-tight); margin: 0 0 var(--s2); max-width: 20ch; }
-.done-sub { font-family: var(--font-serif); font-style: italic; font-size: var(--fs-title); color: var(--ink-70); margin: 0 0 var(--s4); }
+.done-mark {
+  display: inline-grid; place-items: center; width: 2.444rem; height: 2.444rem;
+  border-radius: 50%; background: var(--good-bg); color: var(--good-fg); margin: 0 0 var(--s3);
+}
+.done-mark svg { width: 1.222rem; height: 1.222rem; }
+.done-head { font-size: var(--fs-head); font-weight: var(--fw-head); letter-spacing: var(--track-head); line-height: var(--lh-tight); margin: 0 0 var(--s2); max-width: 20ch; }
+.done-sub { font-size: var(--fs-title); color: var(--ink-soft); margin: 0 0 var(--s4); }
 
-.arc { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: var(--s4); max-width: 46rem; }
-.arc li { border-top: 3px solid var(--line); padding-top: var(--s2); display: flex; flex-direction: column; gap: 0; }
-.arc-when { font-size: var(--fs-xs); letter-spacing: var(--track-wide); text-transform: uppercase; font-weight: 800; color: var(--ink-55); }
-.arc-what { font-size: var(--fs-xs); color: var(--ink-70); line-height: var(--lh-body); }
-.arc-now { border-top-color: var(--copper); border-top-width: 6px; }
-.arc-now .arc-when { color: var(--ink); }
-.arc-now .arc-what { font-family: var(--font-serif); font-size: var(--fs-title); color: var(--ink); line-height: var(--lh-heading); }
+.arc { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: var(--s3); max-width: 46rem; }
+.arc li { border-top: 2px solid var(--line); padding-top: var(--s2); display: flex; flex-direction: column; gap: 0; }
+.arc-when { font-size: var(--fs-label); letter-spacing: var(--track-label); text-transform: uppercase; font-weight: 600; color: var(--muted); }
+.arc-what { font-size: var(--fs-xs); color: var(--ink-soft); line-height: var(--lh-body); }
+.arc-now { border-top-color: var(--copper); }
+.arc-now .arc-when { color: var(--copper-ink); }
+.arc-now .arc-what { font-size: var(--fs-title); font-weight: 600; color: var(--ink); line-height: var(--lh-heading); }
 
-/* ── Actions ─────────────────────────────────────────────────────────────── */
+/* ── Actions ───────────────────────────────────────────────────────────────
+   A white bar along the bottom. The save status is a small muted line, and a
+   neutral badge once saved. The buttons are the house buttons at customer
+   size: never under 44px tall. */
 .actions {
   position: sticky; bottom: 0; z-index: 4;
   display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--s4);
   min-height: var(--actions-h);
-  padding: var(--s3) var(--s7); background: var(--paper);
+  padding: var(--s3) var(--s7); background: var(--panel);
   border-top: var(--bw) solid var(--line); box-shadow: var(--shadow-sticky);
 }
-.actions-status { margin: 0; text-align: center; font-size: var(--fs-xs); color: var(--ink-55); line-height: var(--lh-body); }
+.actions-status { margin: 0; text-align: center; font-size: var(--fs-xs); color: var(--muted); line-height: var(--lh-body); }
+.actions-status .tag { font-weight: 600; }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
   min-height: var(--tap); padding: var(--s2) var(--s5);
-  font-size: var(--fs-base); letter-spacing: var(--track-ui); font-weight: 700;
-  border-radius: var(--r-md); white-space: nowrap;
-  transition: background-color var(--dur) var(--ease);
+  font-size: var(--fs-base); letter-spacing: var(--track-ui); font-weight: 600;
+  border-radius: var(--r-control); white-space: nowrap; text-decoration: none;
+  transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
-.btn--go { background: var(--navy-900); color: var(--paper); border: var(--bw-control) solid var(--navy-900); }
-.btn--go:hover:not([disabled]) { background: var(--navy-800); }
+.btn svg { width: 1rem; height: 1rem; flex: none; }
+.btn--go { background: var(--copper); color: var(--panel); border: var(--bw) solid var(--copper); }
+.btn--go:hover:not([disabled]) { background: var(--copper-hover); border-color: var(--copper-hover); }
 .btn--go[disabled] { opacity: 0.4; cursor: not-allowed; }
-.btn--quiet { background: var(--paper); color: var(--ink); border: var(--bw-control) solid var(--line-strong); font-weight: 500; }
+.btn--quiet { background: var(--panel); color: var(--ink-soft); border: var(--bw) solid var(--line-strong); font-weight: 500; }
+.btn--quiet:hover:not([disabled]) { border-color: var(--muted); color: var(--ink); }
 
 /* ── Gate ────────────────────────────────────────────────────────────────── */
 .gate { display: grid; place-items: center; min-height: 50vh; padding: var(--s7) 0; }
@@ -801,14 +850,14 @@ button { cursor: pointer; }
 
 /* ── Colophon ────────────────────────────────────────────────────────────── */
 .colophon {
-  background: var(--navy-900); color: var(--paper);
+  background: var(--nav); color: var(--panel);
   display: grid; grid-template-columns: auto repeat(3, 1fr); align-items: center;
   gap: var(--s5); padding: var(--s5) var(--s5);
 }
 .colophon p { margin: 0; }
-.colophon b { display: block; font-size: var(--fs-xs); letter-spacing: var(--track-wide); text-transform: uppercase; }
-.colophon span, .colophon small { display: block; font-size: var(--fs-xs); color: var(--ink-40); margin-top: var(--s1); line-height: var(--lh-body); }
-.colophon-brand b { font-family: var(--font-serif); font-size: var(--fs-title); text-transform: none; letter-spacing: 0; }
+.colophon b { display: block; font-size: var(--fs-label); font-weight: 600; letter-spacing: var(--track-label); text-transform: uppercase; }
+.colophon span, .colophon small { display: block; font-size: var(--fs-xs); color: var(--nav-text); margin-top: var(--s1); line-height: var(--lh-body); }
+.colophon-brand b { font-size: var(--fs-title); font-weight: 800; text-transform: none; letter-spacing: -0.02em; }
 
 /* ── Narrower than a desk monitor ────────────────────────────────────────
    The brand panels give way before the type does, so the progress rail keeps
@@ -823,19 +872,25 @@ button { cursor: pointer; }
 }
 @media (max-width: 1024px) {
   .frame { grid-template-columns: var(--rail-narrow) 1fr; }
-  .step > button, .step > span { width: 6.2rem; }
-  .step:not(:last-child)::after { left: 4.2rem; width: 4rem; }
   .product-main { grid-template-columns: 1fr; gap: var(--s3); }
   .product-price { text-align: left; min-width: 0; }
   .price-term { margin-left: 0; max-width: none; }
 }
 
 /* Tablet: the rail stops being a column and becomes a card above the work,
-   because a 340px column beside a 380px stage helps nobody. */
+   because a 340px column beside a 380px stage helps nobody. The five steps
+   become one line saying which step this is. */
 @media (max-width: 900px) {
+  .masthead { grid-template-columns: auto 1fr; }
+  .stepper { justify-content: flex-end; padding: var(--s2) var(--s4); }
+  .stepper ol { display: none; }
+  .stepper-compact {
+    display: block; margin: 0; font-size: var(--fs-xs); font-weight: 600; color: var(--panel);
+  }
+  .stepper-compact span { color: var(--nav-text); font-weight: 500; }
   .frame { display: block; }
   .rail {
-    border-right: 0; border-bottom: var(--bw) solid var(--line);
+    margin: var(--s4) var(--s4) 0;
     padding: var(--s4) var(--s5);
     display: grid; grid-template-columns: 14rem 1fr; gap: var(--s3) var(--s5); align-items: start;
   }
@@ -845,8 +900,13 @@ button { cursor: pointer; }
   .rail-deal { border-top: 0; padding: 0; }
   .rail-note { border-top: 0; padding-top: 0; }
   .railnav { grid-column: 1 / -1; margin-top: var(--s3); }
-  .railnav ul { display: flex; flex-wrap: wrap; gap: var(--s2); }
+  .railnav ol { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: var(--s1) var(--s2); }
+  .railnav li { min-width: 0; }
   .railnav li + li { margin: 0; }
+  /* One column: the terms, then the price and the decision under them; the
+     plan, then its payment. Scoped to .stage so the landscape-tablet rules
+     later in the file, which keep two columns, do not win here. */
+  .stage .pscreen, .stage .review, .stage .done--split { grid-template-columns: 1fr; }
   /* The mood photograph is the first thing to go when space is short. */
   .rail-mood { display: none; }
   .arc { grid-template-columns: 1fr; gap: var(--s3); }
@@ -858,26 +918,20 @@ button { cursor: pointer; }
 /* Phone: only what the current decision needs. */
 @media (max-width: 650px) {
   .masthead { grid-template-columns: 1fr; }
-  .brand { border-right: 0; border-bottom: var(--bw) solid var(--line-dark); }
-  .stepper { padding: var(--s2) var(--s2); overflow-x: auto; }
-  .step > button, .step > span { width: 4.4rem; }
-  .step-label { display: none; }
-  .step:not(:last-child)::after { left: 3.2rem; width: 1.6rem; }
-  .rail { display: block; padding: var(--s4) var(--s3); }
+  .brand { border-right: 0; border-bottom: var(--bw) solid var(--nav-line); padding: var(--s2) var(--s3); }
+  .stepper { justify-content: flex-start; padding: var(--s2) var(--s3); }
+  .rail { display: block; margin: var(--s3) var(--s3) 0; padding: var(--s4) var(--s3); }
   .rail-photo { height: 6.8rem; margin: var(--s3) 0; }
   .plate { margin: var(--s3) 0; padding: var(--s3); }
   .plate-name { font-size: var(--fs-title); }
   .rail-note { display: none; }
   .rail-deal { grid-template-columns: 1fr auto; padding: var(--s3) 0 0; }
   .railnav { margin-top: var(--s3); padding-top: var(--s3); }
-  .railnav ul { display: flex; flex-wrap: wrap; gap: var(--s2); }
-  .railnav li + li { margin: 0; }
-  .railnav a {
-    min-height: 2.6rem; border-left: 0; border-bottom: var(--bw-control) solid var(--line);
-    padding: var(--s1) var(--s2);
-  }
-  .railnav a:hover, .railnav a:focus-visible { border-bottom-color: var(--copper); }
-  .stage-inner { padding: var(--s4) var(--s3) var(--s5); }
+  .railnav ol { grid-template-columns: 1fr; }
+  .ps-terms { columns: 1; }
+  .stage-inner { padding: var(--s3) var(--s3) var(--s5); }
+  .screen { padding: var(--s4); }
+  .goals { grid-template-columns: 1fr; }
   .display { font-size: var(--fs-head); }
   .display--sm { font-size: var(--fs-title); }
   .figures { display: block; }
@@ -900,11 +954,13 @@ button { cursor: pointer; }
    raised their browser font past what the budget assumed gets a scrollbar on
    that pane, which is recoverable. Clipping the Continue button is not. */
 @media (min-width: 1024px) {
-  html, body { height: 100%; overflow: hidden; }
+  /* Only a page that is the planner. The admin area and Verify scroll as
+     ordinary pages. */
+  html:has(body > .app), body:has(> .app) { height: 100%; overflow: hidden; }
   .app { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
   .masthead { flex: 0 0 auto; min-height: var(--masthead-h); }
   .frame { flex: 1 1 auto; min-height: 0; }
-  .rail { overflow: auto; }
+  .rail { overflow: auto; align-self: stretch; }
   .stage { min-height: 0; }
   .stage-inner { flex: 1 1 auto; min-height: 0; overflow: auto; }
   .actions { flex: 0 0 auto; position: static; box-shadow: none; }
@@ -917,6 +973,8 @@ button { cursor: pointer; }
    specificity, so source order is what makes them win. */
 @media (max-height: 820px) {
   .stage-inner { padding: var(--s2) var(--s6); }
+  .screen { padding: var(--s3) var(--s4); }
+  .eyebrow--rule { margin-bottom: var(--s1); }
   .rail { padding-bottom: var(--s3); }
   .railnav button { padding: 0.15rem var(--s2); }
   .ps-terms > div { margin-bottom: var(--s1); }
@@ -1013,7 +1071,7 @@ button { cursor: pointer; }
 .console {
   height: 100dvh;
   overflow: auto;
-  background: var(--shell);
+  background: var(--page);
   padding: var(--s6) var(--s5) var(--s8);
 }
 
@@ -1022,7 +1080,7 @@ button { cursor: pointer; }
 .console-eyebrow {
   font-size: var(--fs-xs); font-weight: 700;
   letter-spacing: var(--track-wide); text-transform: uppercase;
-  color: var(--copper-deep); margin-bottom: var(--s2);
+  color: var(--copper-ink); margin-bottom: var(--s2);
 }
 
 .console-head {
@@ -1032,13 +1090,13 @@ button { cursor: pointer; }
 }
 
 .console-title {
-  font-family: var(--font-serif); font-size: var(--fs-head);
+  font-family: var(--font-sans); font-size: var(--fs-head);
   line-height: var(--lh-heading); color: var(--ink);
 }
 
 .console-who {
   display: flex; align-items: center; gap: var(--s3);
-  font-size: var(--fs-xs); color: var(--ink-55);
+  font-size: var(--fs-xs); color: var(--muted);
   flex-wrap: wrap;
 }
 
@@ -1047,30 +1105,30 @@ button { cursor: pointer; }
    name on a record and not a sign-in, so it looks like a field and not a gate. */
 .vwho { display: flex; align-items: center; gap: var(--s2); }
 .vwho label {
-  font-size: var(--fs-xs); font-weight: 700; color: var(--ink-55);
+  font-size: var(--fs-xs); font-weight: 700; color: var(--muted);
   letter-spacing: var(--track-ui); white-space: nowrap;
 }
 .vwho input {
   width: 11rem; min-height: var(--tap);
   padding: 0 var(--s2); font: inherit; font-size: var(--fs-base);
-  color: var(--ink); background: var(--paper);
+  color: var(--ink); background: var(--panel);
   border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
 }
 
 .console-note,
 .console-empty {
   max-width: var(--content-wide); margin: 0 auto var(--s4);
-  font-size: var(--fs-xs); color: var(--ink-70); line-height: var(--lh-body);
+  font-size: var(--fs-xs); color: var(--ink-soft); line-height: var(--lh-body);
 }
 
 .console-empty {
-  background: var(--paper); border: var(--bw) solid var(--line);
-  border-radius: var(--r-md); padding: var(--s5); color: var(--ink-70);
+  background: var(--panel); border: var(--bw) solid var(--line);
+  border-radius: var(--r-md); padding: var(--s5); color: var(--ink-soft);
 }
 
 .console-scroll {
   max-width: var(--content-wide); margin: 0 auto;
-  background: var(--paper);
+  background: var(--panel);
   border: var(--bw) solid var(--line); border-radius: var(--r-md);
   /* The table keeps its column widths and scrolls sideways on a narrow screen
      rather than wrapping a deal number down three lines. */
@@ -1081,7 +1139,7 @@ button { cursor: pointer; }
 
 .console-table th {
   text-align: left; font-size: var(--fs-xs); font-weight: 700;
-  letter-spacing: var(--track-ui); color: var(--ink-55);
+  letter-spacing: var(--track-ui); color: var(--muted);
   padding: var(--s3) var(--s4);
   border-bottom: var(--bw-accent) solid var(--line);
   white-space: nowrap;
@@ -1089,19 +1147,19 @@ button { cursor: pointer; }
 
 .console-table td {
   padding: var(--s3) var(--s4);
-  border-bottom: var(--bw) solid var(--line-soft);
+  border-bottom: var(--bw) solid var(--line);
   vertical-align: top;
 }
 
 .console-table tr:last-child td { border-bottom: 0; }
-.console-table tbody tr:hover { background: var(--cream-2); }
+.console-table tbody tr:hover { background: var(--tint); }
 
 /* An expired session is still a perfectly good row to open — it is the one
    most likely to want extending. It is quieted, not struck out. */
-.console-table tr.is-expired td { color: var(--ink-55); }
+.console-table tr.is-expired td { color: var(--muted); }
 
 .console-table small {
-  display: block; font-size: var(--fs-xs); color: var(--ink-55);
+  display: block; font-size: var(--fs-xs); color: var(--muted);
   line-height: var(--lh-tight); margin-top: 2px;
 }
 
@@ -1131,8 +1189,8 @@ button { cursor: pointer; }
   padding: 2px var(--s2); border-radius: var(--r-sm);
 }
 
-.tag--live { background: var(--cream); color: var(--ink-70); border: var(--bw) solid var(--line); }
-.tag--expired { background: var(--copper-tint); color: var(--copper-deep); border: var(--bw) solid var(--copper); }
+.tag--live { background: var(--tint); color: var(--ink-soft); border: var(--bw) solid var(--line); }
+.tag--expired { background: var(--copper-wash); color: var(--copper-ink); border: var(--bw) solid var(--copper); }
 
 /* ── Settings ──────────────────────────────────────────────────────────────
    The same plain operator surface as the session browser. One column, because
@@ -1155,13 +1213,13 @@ button { cursor: pointer; }
 .console-flash {
   margin-bottom: var(--s5); padding: var(--s3) var(--s4);
   font-size: var(--fs-xs); color: var(--ink);
-  background: var(--cream); border-left: var(--bw-accent) solid var(--copper);
+  background: var(--tint); border-left: var(--bw-accent) solid var(--copper);
   border-radius: var(--r-sm);
 }
 
 .console-flash--bad {
-  background: var(--copper-tint); color: var(--copper-deep);
-  border-left-color: var(--copper-deep);
+  background: var(--copper-wash); color: var(--copper-ink);
+  border-left-color: var(--copper-ink);
 }
 
 /* ── Verify: the console chrome, tightened ───────────────────────────────
@@ -1183,7 +1241,7 @@ button { cursor: pointer; }
 }
 .console-back {
   font-weight: 500; text-transform: none; letter-spacing: normal;
-  color: var(--ink-70); text-decoration: underline;
+  color: var(--ink-soft); text-decoration: underline;
 }
 .console-back:hover { color: var(--ink); }
 
@@ -1201,7 +1259,7 @@ button { cursor: pointer; }
 .console--verify .vstate .tag { border-radius: 999px; }
 .vworkspace { background: transparent; border: 0; border-radius: 0; padding: 0; }
 .vattention {
-  background: var(--paper); border: var(--bw) solid var(--line-soft);
+  background: var(--panel); border: var(--bw) solid var(--line);
   border-left: 0; border-radius: var(--r-md); padding: var(--s5) var(--s6);
   box-shadow: 0 5px 24px rgba(11, 26, 36, 0.035);
 }
@@ -1212,7 +1270,7 @@ button { cursor: pointer; }
 .vattention .vfield {
   display: grid; grid-template-columns: minmax(0, 1fr) auto;
   align-content: start; align-items: end; column-gap: var(--s3); row-gap: var(--s1);
-  border: 0; border-bottom: var(--bw) solid var(--line-soft);
+  border: 0; border-bottom: var(--bw) solid var(--line);
   border-radius: 0; background: transparent; padding: 0 0 var(--s3);
 }
 .vattention .vfield-label { grid-column: 1; grid-row: 1; font-size: var(--fs-base); }
@@ -1220,7 +1278,7 @@ button { cursor: pointer; }
 .vattention .vfield > .tag {
   grid-column: 2; grid-row: 2; align-self: center;
   border: 0; background: transparent; padding: 0;
-  font-size: var(--fs-xs); font-weight: 600; color: var(--copper-deep);
+  font-size: var(--fs-xs); font-weight: 600; color: var(--copper-ink);
 }
 .vattention .vfield-note { grid-column: 1 / -1; margin: 0; }
 .vattention .vfield input {
@@ -1233,16 +1291,16 @@ button { cursor: pointer; }
 .console--verify .vgroup-head { font-size: var(--fs-title); border: 0; margin-bottom: var(--s2); }
 .console--verify .vgroup-fields { gap: 0; }
 .console--verify .vgroup .vfield {
-  border: 0; border-bottom: var(--bw) solid var(--line-soft);
+  border: 0; border-bottom: var(--bw) solid var(--line);
   background: transparent; border-radius: 0; padding: var(--s2) 0;
 }
-.console--verify .vgroup .vfield-label { font-weight: 600; color: var(--ink-70); }
+.console--verify .vgroup .vfield-label { font-weight: 600; color: var(--ink-soft); }
 .console--verify .vgroup .vfield > .tag {
   border: 0; background: transparent; padding: 0;
-  font-size: var(--fs-xs); font-weight: 500; color: var(--ink-55);
+  font-size: var(--fs-xs); font-weight: 500; color: var(--muted);
 }
-.console--verify .vgroup .vfield.is-invalid > .tag { color: var(--copper-deep); }
-.console--verify .vgroup .vfield input { background: var(--cream-2); border-color: var(--line-soft); }
+.console--verify .vgroup .vfield.is-invalid > .tag { color: var(--copper-ink); }
+.console--verify .vgroup .vfield input { background: var(--tint); border-color: var(--line); }
 .console--verify .vtools { margin-top: var(--s5); border: 0; padding: 0; }
 .console--verify .vgate { border-radius: var(--r-md); }
 @media (max-width: 65rem) {
@@ -1267,7 +1325,7 @@ button { cursor: pointer; }
   .vattention-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2) var(--s5); }
   .vattention .vfield {
     grid-template-columns: minmax(0, 1fr); gap: 2px;
-    padding: 0 0 var(--s2); border-bottom-color: var(--line-soft);
+    padding: 0 0 var(--s2); border-bottom-color: var(--line);
   }
   .vattention .vfield-label { font-size: var(--fs-xs); }
   .vattention .vfield-control { grid-column: 1; }
@@ -1287,25 +1345,25 @@ button { cursor: pointer; }
 .vworkspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
 .vattention {
   min-width: 0; box-shadow: none; padding: var(--s3);
-  border: var(--bw) solid var(--line); background: var(--paper);
+  border: var(--bw) solid var(--line); background: var(--panel);
 }
-.vattention h2 { font-family: var(--font-serif); font-size: var(--fs-title); margin: 0 0 var(--s2); }
+.vattention h2 { font-family: var(--font-sans); font-size: var(--fs-title); margin: 0 0 var(--s2); }
 .vattention-kicker { margin: 0 0 2px !important; }
 .vattention-links { display: grid; gap: 0; }
 .vattention-links a {
   display: flex; justify-content: space-between; gap: var(--s2);
-  padding: var(--s2) 0; border-bottom: var(--bw) solid var(--line-soft);
+  padding: var(--s2) 0; border-bottom: var(--bw) solid var(--line);
   color: var(--ink); text-decoration: none; font-size: var(--fs-xs);
 }
 .vattention-links a:hover span { text-decoration: underline; }
-.vattention-links small { color: var(--ink-55); white-space: nowrap; }
-.vattention-item { padding: var(--s1) 0; border-bottom: var(--bw) solid var(--line-soft); }
+.vattention-links small { color: var(--muted); white-space: nowrap; }
+.vattention-item { padding: var(--s1) 0; border-bottom: var(--bw) solid var(--line); }
 .vattention-item-head { display: flex; justify-content: space-between; gap: var(--s1); font-size: var(--fs-xs); }
 .vattention-item-head a { display: inline; padding: 0; border: 0; font-weight: 600; }
 .vattention-item input {
   width: 100%; min-height: 1.8rem; margin-top: 2px; padding: 0 var(--s2);
   border: var(--bw) solid var(--line-strong); border-radius: var(--r-sm);
-  background: var(--paper); font-size: var(--fs-base);
+  background: var(--panel); font-size: var(--fs-base);
 }
 .vattention-actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
 .vsheet { min-width: 0; }
@@ -1332,7 +1390,7 @@ button { cursor: pointer; }
     column-gap: var(--s1); min-height: 2rem;
   }
   .console--verify .vgroup .vfield > .tag { font-size: var(--fs-xs); }
-  .console--verify .vgroup .vfield.is-missing { background: var(--copper-tint); border-left: 2px solid var(--copper); padding-left: var(--s1); }
+  .console--verify .vgroup .vfield.is-missing { background: var(--copper-wash); border-left: 2px solid var(--copper); padding-left: var(--s1); }
   .console--verify .vgroup .vfield.is-missing > .tag,
   .console--verify .vgroup .vfield.is-invalid > .tag { display: none; }
   .console--verify .vgroup .vfield-note { display: none; }
@@ -1343,6 +1401,6 @@ button { cursor: pointer; }
 
 /* Verify's quiet tag. */
 .tag--quiet {
-  background: var(--cream-2); color: var(--ink-55);
+  background: var(--tint); color: var(--muted);
   border: var(--bw) solid var(--line);
 }

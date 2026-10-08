@@ -17,6 +17,7 @@ export default function ActionFooter({
   nextDisabled,
   showNext = true,
   status,
+  saved = false,
 }: {
   onBack: () => void;
   backLabel?: string;
@@ -28,18 +29,22 @@ export default function ActionFooter({
       button that does nothing is worse here than no button at all. */
   showNext?: boolean;
   status?: React.ReactNode;
+  /** The status is the saved confirmation, shown as a neutral badge. */
+  saved?: boolean;
 }) {
   return (
     <div className="actions">
       {showBack ? (
         <button type="button" className="btn btn--quiet" onClick={onBack}>
-          <span aria-hidden="true">←</span> {backLabel}
+          <Arrow back /> {backLabel}
         </button>
       ) : (
         <span />
       )}
 
-      <p className="actions-status" role="status" aria-live="polite">{status}</p>
+      <p className="actions-status" role="status" aria-live="polite">
+        {saved && status ? <span className="tag">{status}</span> : status}
+      </p>
 
       {showNext ? (
         <button
@@ -48,11 +53,21 @@ export default function ActionFooter({
           onClick={onNext}
           disabled={nextDisabled}
         >
-          {nextLabel} <span aria-hidden="true">→</span>
+          {nextLabel} <Arrow />
         </button>
       ) : (
         <span />
       )}
     </div>
+  );
+}
+
+/** A line arrow for Back and Continue. Drawn, not a symbol character. */
+function Arrow({ back = false }: { back?: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      {back ? <path d="M13 8H3M7 4 3 8l4 4" /> : <path d="M3 8h10M9 4l4 4-4 4" />}
+    </svg>
   );
 }

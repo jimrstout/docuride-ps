@@ -1,14 +1,16 @@
-/* app/tokens.css — the DocuRide PS design token layer.
+/* app/tokens.css: the DocuRide PS house tokens.
  *
- * Every colour, size, space, rule, radius, shadow, content width and
- * breakpoint the interface uses is declared here and nowhere else. Component
- * rules in globals.css reference these and never hard-code a value, so the
- * system can be retuned in one place.
+ * One set for every screen: the customer planner, Verify and the admin area.
+ * Every colour, font, radius and shadow they use is declared here and
+ * nowhere else, so the house style retunes from one place. The look is the
+ * one the admin area set: navy, copper used sparingly, the system font, white
+ * panels on a pale ground, soft badges.
  *
  * ── On the type scale ───────────────────────────────────────────────────
- * Sizes are rem against a 112.5% root, so 1rem is 18px at a default browser
- * setting and larger for anyone who has raised theirs. The px in each comment
- * is what it computes to at that default.
+ * The planner's sizes are rem against a 112.5% root, so 1rem is 18px at a
+ * default browser setting and larger for anyone who has raised theirs. The px
+ * in each comment is what it computes to at that default. The admin area sets
+ * its own px sizes and does not use this scale.
  *
  * The root carries the base size and must never appear in a later selector
  * list that also matches html: `html, body { font-size: 1rem }` wins on source
@@ -16,85 +18,88 @@
  * initial 16px, so the root silently pins itself back and every rem in the
  * file lands 11% short. See the rule in globals.css.
  *
- * The per-element sizes below are a measured specification, not a ratio, and
- * they are the floor: this is read by buyers who are often older, standing, at
- * arm's length, on a showroom tablet.
+ * The per-element sizes below are a measured specification and they are the
+ * floor: this is read by buyers who are often older, standing, at arm's
+ * length, on a showroom tablet.
  *
  * ── One screen, one viewport ────────────────────────────────────────────
- * Every screen from 1024x768 up has to fit inside the viewport with the
- * Back/Continue bar visible and nothing scrolled. That is what sets this
- * scale: the sizes below are the largest that let the longest screen -- a
- * product with seven terms and two configurable options -- fit in the 640px
- * left over at 768px tall once the masthead and the control bar are taken out.
- *
- * Phones are exempt and scroll normally.
- *
- * ── The earlier 15% pass ────────────────────────────────────────────────
- * Every type and space token was multiplied by 0.85 and then clamped up where
- * a stated minimum bound it. A single root change would have been tidier and
- * was not available: 19px of product description scales to 16.2px, under the
- * 17px floor, so the floors have to be applied per token.
- *
- * Three tokens are floor-bound rather than scaled, and two pairs merged as a
- * result. --fs-note (15px) and --fs-xs (16px) both floor at 14, and --fs-sm
- * (18px) and --fs-base (19px) both floor at 17, so --fs-note and --fs-sm are
- * gone and their users moved to the survivor. That is the floors overriding
- * the ratio, which is what a floor is for.
- *
- * The root deliberately did not move. It stays at 112.5% so 1rem is still
- * 18px and still follows the reader's own browser setting.
+ * Every planner screen from 1024x768 up has to fit inside the viewport with
+ * the Back/Continue bar visible and nothing scrolled. Phones are exempt and
+ * scroll normally.
  */
 
 :root {
   /* ── Colour ───────────────────────────────────────────────────────────
-     Dark navy and warm white carry the interface. Copper is an accent and is
-     never a surface: it marks the current step, a selected decision, a rule
-     under a heading. Nothing here is a warning colour -- a customer choosing
-     to manage something themselves is not an error state. */
-  --navy-900: #0b1a24;   /* deepest, for the shell header and footer */
-  --navy-800: #102630;   /* panels on dark */
-  --navy-700: #1b3947;   /* raised on dark */
-  --ink:      #0d202b;   /* body text */
-  --ink-70:   #3f4c54;   /* secondary text */
-  --ink-55:   #5a666e;   /* muted text, labels */
-  --ink-40:   #8a959c;   /* quiet text on dark */
+     Ink on a pale ground, white panels, one dark navy. Copper is an accent
+     and is never a large surface: the current step, an eyebrow label, the
+     primary action, a chosen decision. */
+  --ink:         #172536;  /* text */
+  --ink-soft:    #475565;  /* secondary text, labels, quiet buttons */
+  --muted:       #77818d;  /* muted text */
+  --line:        #e4e7eb;  /* borders and rules */
+  --line-strong: #c9ced4;  /* a control's border on hover */
+  --line-quiet:  #c0c7ce;  /* a breadcrumb's slash, an empty status dot */
 
-  --paper:    #ffffff;
-  --cream:    #f7f4ed;   /* warm white, the editorial ground */
-  --cream-2:  #fbfaf6;   /* a shade up from cream, for inset rows */
-  --shell:    #eef1f1;   /* outside the application frame */
+  --page:  #f7f8fa;        /* the ground every screen sits on */
+  --panel: #ffffff;        /* panels */
+  --tint:  #fafbfc;        /* table headings, inset rows */
+  --wash:  #fcfcfd;        /* an open form inside a panel */
+  --code-bg: #f1f3f5;      /* a placeholder name shown as code */
+  --track: #eceff3;        /* the segmented control's track */
 
-  --copper:      #bd5b2b;
-  --copper-deep: #a04f24; /* copper that has to pass contrast on white */
-  --copper-tint: #fdf6f2; /* the wash behind a chosen decision */
+  --copper:       #b87333; /* accent and primary buttons */
+  --copper-hover: #a6662b;
+  --copper-ink:   #985f2f; /* copper text that has to pass contrast on white */
+  --copper-edge:  #d6c3b1; /* the border of a copper-tinted button */
+  --copper-edge-hover: #c7a688;
+  --copper-ink-hover:  #7d4d24;
+  --copper-wash:  #fdfaf7; /* the wash behind a chosen decision */
 
-  --line:        #d9dcdd; /* standard rule */
-  --line-soft:   #e6e9ea; /* rule inside a card */
-  --line-strong: #b9c2c6; /* control border */
-  --line-dark:   #2c4653; /* rule on navy */
+  --nav:        #132232;   /* the dark surface: sidebar, top bar, vehicle block */
+  --nav-raised: #273748;   /* raised on dark: the active menu item */
+  --nav-line:   #3c4a58;   /* rules and borders on dark */
+  --nav-line-hover: #5a6876;
+  --nav-hover:  rgba(255, 255, 255, 0.05); /* a menu item under the pointer */
+  --nav-text:   #a8b6c4;   /* text on dark */
+  --nav-sub:    #91a0ae;   /* small text on dark */
+  --nav-faint:  #96a6b5;   /* the quietest text on dark */
+  --nav-bright: #dce4eb;   /* a light control label on dark */
+  --brand-ps:   #d79760;   /* the PS in the brand */
+
+  /* Badges and notices: good, neutral and attention. */
+  --good-bg:  #edf7f0;  --good-fg:  #33724c;
+  --plain-bg: #eff3f7;  --plain-fg: #4a627b;
+  --warn-bg:  #fbf1e8;  --warn-fg:  #aa6935;
+  --warn-edge:   #efd9c5;  /* an attention panel's border */
+  --warn-panel:  #fffbf7;  /* an attention panel's ground */
+  --warn-stripe: #f5e3d2;  /* the second colour of a striped gap */
+
+  --avatar-bg: #efe4d9;  --avatar-fg: #925b2b;
 
   /* ── Type ─────────────────────────────────────────────────────────────
-     Two roles, kept strictly apart. The serif carries headings, vehicle
-     names, emotional statements and money. The sans carries navigation,
-     labels, body copy, controls and anything technical. */
-  --font-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
-  --font-sans: Inter, "Segoe UI", Arial, sans-serif;
+     One family, the system's own. Headings are the same sans at a heavier
+     weight with slightly tightened spacing; there is no serif. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --fw-head: 650;
+  --track-head: -0.025em;  /* headings */
+  --track-label: 1px;      /* uppercase labels and eyebrows */
 
-  --fs-xs:    0.778rem;  /* 14px -- meta, notes, chrome. The floor. */
-  --fs-base:  0.889rem;  /* 16px -- body, card descriptions, buttons, labels */
-  --fs-title: 1rem;      /* 18px -- card titles */
-  --fs-q:     1.222rem;  /* 22px -- section questions */
-  --fs-price: 1.556rem;  /* 28px -- a product's price */
-  --fs-head:  1.778rem;  /* 32px -- the screen headline */
-  --fs-pay:   2.444rem;  /* 44px -- the payment. The largest number anywhere. */
+  --fs-xs:    0.778rem;  /* 14px: meta, notes, chrome. The floor. */
+  --fs-base:  0.889rem;  /* 16px: body, card descriptions, buttons, labels */
+  --fs-title: 1rem;      /* 18px: card titles */
+  --fs-q:     1.222rem;  /* 22px: section questions */
+  --fs-price: 1.556rem;  /* 28px: a product's price */
+  --fs-head:  1.778rem;  /* 32px: the screen headline */
+  --fs-pay:   2.444rem;  /* 44px: the payment. The largest number anywhere. */
+  --fs-label: 0.611rem;  /* 11px: uppercase eyebrows and table headings */
 
   --lh-tight: 1.2;
   --lh-heading: 1.25;
-  --lh-body: 1.65;
+  --lh-body: 1.6;
   --lh-roomy: 1.8;
 
-  --track-wide: 0.12em;  /* overlines and eyebrows */
-  --track-ui: 0.08em;    /* buttons */
+  --track-wide: 0.12em;  /* overlines */
+  --track-ui: 0.02em;    /* buttons */
 
   /* ── Space ────────────────────────────────────────────────────────────
      One scale. "Generous" is then consistent rather than decided per rule. */
@@ -119,20 +124,20 @@
   --actions-h:  4rem;      /* 72px -- a 48px control plus its padding */
 
   /* ── Borders, radii, shadows ──────────────────────────────────────────
-     Restrained by intent. The reference is editorial print, not a dashboard:
-     square corners, hairline rules, and shadow only where an element genuinely
-     sits above the page. */
+     A hairline border, soft corners and a shadow you only just notice. */
   --bw: 1px;
-  --bw-control: 2px;
-  --bw-accent: 4px;
+  --bw-control: 1px;
+  --bw-accent: 3px;
 
   --r-none: 0;
-  --r-sm: 2px;      /* checkbox */
-  --r-md: 3px;      /* card, panel */
+  --r-sm: 4px;       /* badges, checkboxes, small buttons */
+  --r-control: 5px;  /* inputs and buttons */
+  --r-nav: 6px;      /* menu items */
+  --r-md: 8px;       /* panels and cards */
 
-  --shadow-card: 0 1px 2px rgb(13 32 43 / 4%);
-  --shadow-raised: 0 2px 10px rgb(13 32 43 / 8%);
-  --shadow-sticky: 0 -1px 0 var(--line), 0 -8px 20px rgb(13 32 43 / 4%);
+  --shadow-panel: 0 1px 2px rgba(23, 37, 54, 0.03);
+  --shadow-raised: 0 1px 3px rgba(23, 37, 54, 0.12);
+  --shadow-sticky: 0 -1px 0 var(--line);
 
   /* ── Layout ───────────────────────────────────────────────────────────
      --measure is a reading width in characters; --content is the working

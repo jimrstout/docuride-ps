@@ -15,12 +15,15 @@
 
 import type { PlannerSession } from "@/lib/types";
 import { PHOTOGRAPHY_READY, type VehicleProfile } from "@/lib/profiles";
+import { money } from "@/lib/money";
 
 export default function VehicleContext({
   session,
   profile,
   photo,
   vehicleName,
+  agreedDown = null,
+  additionalDown = 0,
   children,
 }: {
   session: PlannerSession;
@@ -28,6 +31,12 @@ export default function VehicleContext({
   /** A real photograph of this unit, or null. Never a substitute. */
   photo: string | null;
   vehicleName: string;
+  /** The deal's agreed down payment, or null on a cash deal or when there is none. */
+  agreedDown?: number | null;
+  /** What the plan adds to the money down because it passes the finance
+   *  company's maximum. Zero when it does not. The same figure the payment
+   *  step shows. */
+  additionalDown?: number;
   /** Contextual navigation for the current step, when there is any. */
   children?: React.ReactNode;
 }) {
@@ -69,12 +78,15 @@ export default function VehicleContext({
       <h2 className="rail-name">{vehicleName || "Your vehicle"}</h2>
       {facts.length > 0 && <p className="rail-facts">{facts.join(" · ")}</p>}
 
-      {(f.finance_type || f.term_months !== null || f.rate_used !== null) && (
+      {(f.finance_type || f.term_months !== null || f.rate_used !== null ||
+        agreedDown !== null || additionalDown > 0) && (
         <dl className="rail-deal">
           {f.finance_type && (<><dt>Type</dt><dd>{f.finance_type}</dd></>)}
           {f.term_months !== null && (<><dt>Term</dt><dd>{f.term_months} months</dd></>)}
           {f.rate_used !== null && (<><dt>{f.rate_label ?? "Rate"}</dt><dd>{f.rate_used}%</dd></>)}
           {f.lienholder_name && (<><dt>Lender</dt><dd>{f.lienholder_name}</dd></>)}
+          {agreedDown !== null && (<><dt>Agreed down payment</dt><dd>{money(agreedDown)}</dd></>)}
+          {additionalDown > 0 && (<><dt>Additional down payment</dt><dd>{money(additionalDown)}</dd></>)}
         </dl>
       )}
 

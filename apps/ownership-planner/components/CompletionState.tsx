@@ -21,7 +21,12 @@ export default function CompletionState({
   return (
     <div className="done done--split">
       <div>
-        <p className="done-mark" aria-hidden="true">⌃⌃</p>
+        <p className="done-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
+            strokeLinecap="round" strokeLinejoin="round" focusable="false">
+            <path d="M5 12.5 10 17 19 7" />
+          </svg>
+        </p>
         <h1 className="done-head">You bought something worth owning.</h1>
         <p className="done-sub">Let&apos;s help you own it well.</p>
 

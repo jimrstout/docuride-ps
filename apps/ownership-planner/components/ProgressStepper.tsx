@@ -44,7 +44,7 @@ export default function ProgressStepper({
                   onClick={() => onGo(i)}
                   aria-label={`Go back to ${label}`}
                 >
-                  <span className="step-n" aria-hidden="true">{s.n}</span>
+                  <StepNumber n={s.n} done={state === "done"} />
                   <span className="step-label">{s.label}</span>
                 </button>
               ) : (
@@ -52,7 +52,7 @@ export default function ProgressStepper({
                   {...(state === "current" ? { "aria-current": "step" } : {})}
                   aria-label={label}
                 >
-                  <span className="step-n" aria-hidden="true">{s.n}</span>
+                  <StepNumber n={s.n} done={state === "done"} />
                   <span className="step-label" aria-hidden="true">{s.label}</span>
                 </span>
               )}
@@ -60,6 +60,20 @@ export default function ProgressStepper({
           );
         })}
       </ol>
+      {/* On a tablet or a phone the five steps do not fit, so the bar says
+          which one this is instead. The stylesheet shows one or the other. */}
+      <p className="stepper-compact">
+        Step {steps[current].n} of {steps.length}: <span>{steps[current].label}</span>
+      </p>
     </nav>
+  );
+}
+
+/** The step's number, or a drawn tick once the step is done. */
+function StepNumber({ n, done }: { n: number; done: boolean }) {
+  return (
+    <span className="step-n" aria-hidden="true">
+      {done ? <span className="tick" /> : n}
+    </span>
   );
 }

@@ -30,11 +30,10 @@ export default function AppShell({
     <div className="app">
       <header className="masthead">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">⌃⌃</span>
           <span className="brand-name">
-            <b>DocuRide PS</b>
-            <small>Protection &amp; Support</small>
+            DocuRide <span>PS</span>
           </span>
+          <span className="brand-sub">Protection &amp; Support</span>
         </div>
 
         {stepper}

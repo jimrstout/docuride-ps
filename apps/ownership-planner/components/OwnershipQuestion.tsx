@@ -36,7 +36,7 @@ export default function OwnershipQuestion({
               aria-pressed={on}
               onClick={() => onToggle(o.value)}
             >
-              <span className="choice-box" aria-hidden="true" />
+              <span className="choice-box" aria-hidden="true">{on ? <span className="tick" /> : null}</span>
               <span className="choice-text">
                 <b>{o.label}</b>
                 <small>{o.hint}</small>

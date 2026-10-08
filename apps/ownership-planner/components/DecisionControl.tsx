@@ -84,7 +84,7 @@ export default function DecisionControl({
             onClick={() => onChange(o.d)}
             onKeyDown={(e) => onKeyDown(e, i)}
           >
-            <span className="decision-mark" aria-hidden="true" />
+            <span className="decision-mark" aria-hidden="true">{on ? <span className="tick" /> : null}</span>
             {o.label}
           </button>
         );

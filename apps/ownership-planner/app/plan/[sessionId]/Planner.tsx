@@ -644,6 +644,8 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
       profile={profile}
       photo={photos[0] ?? null}
       vehicleName={vehicleName}
+      agreedDown={agreedDown}
+      additionalDown={additionalDown}
     >
       {step === 1 && presentable.length > 0 && (
         <nav className="railnav" aria-label="Your options">
@@ -696,6 +698,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
           showNext={at < screens.length - 1}
           nextDisabled={undecidedHere}
           status={status}
+          saved={status !== null && saveState === "saved" && !undecidedHere}
         />
       }
     >
