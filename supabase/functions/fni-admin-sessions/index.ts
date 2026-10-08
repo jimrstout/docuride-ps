@@ -148,8 +148,11 @@ async function list(url: URL): Promise<Response> {
     const { data: offers } = await supabase
       .schema("fni")
       .from("rated_offers")
-      .select("session_id, state, error_detail, product_count, rated_at")
-      .in("session_id", sessionIds);
+      // The TecAssured provider's attempt per session, one row each. Rating
+      // per provider comes with Part 4 of docs/multi-provider.md.
+      .select("session_id, state, error_detail, product_count, rated_at, provider:providers!inner(adapter)")
+      .in("session_id", sessionIds)
+      .eq("provider.adapter", "TecAssured");
 
     for (const o of (offers ?? []) as unknown as Record<string, unknown>[]) {
       rating.set(String(o.session_id), {

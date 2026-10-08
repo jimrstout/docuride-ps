@@ -37,6 +37,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { SESSION_MODES, isSessionMode } from "../_shared/session-mode.ts";
 import { normalizeOffer } from "../_shared/planner-offers.ts";
+import { offerRowsFor, tecAssuredProviderId } from "../_shared/provider-rows.ts";
 import type { PricingRule } from "../_shared/planner-pricing.ts";
 import {
   additionalDownForSelections,
@@ -83,13 +84,10 @@ async function serverAdditionalDown(
   supabase: ReturnType<typeof createClient>,
   s: Record<string, unknown>
 ): Promise<{ value: number | null; reason: string | null }> {
-  const { data: offerRow } = await supabase
-    .schema("fni")
-    .from("rated_offers")
-    .select("response_payload, out_of_date")
-    .eq("session_id", s.id as string)
-    .maybeSingle();
-  const offer = (offerRow ?? null) as { response_payload: unknown; out_of_date: boolean } | null;
+  // Every provider's current quote. One that is out of date prices nothing.
+  const offers = (await offerRowsFor(supabase, s.id as string)).filter(
+    (o) => o.out_of_date !== true && o.response_payload !== null && o.provider?.adapter === "TecAssured"
+  );
 
   const { data: ruleRows } = await supabase
     .schema("fni")
@@ -102,25 +100,30 @@ async function serverAdditionalDown(
   const { data: rows, error } = await supabase
     .schema("fni")
     .from("selected_products")
-    .select("provider_product_id, rate_unique_id, selected_options")
+    .select("provider_id, provider_product_id, rate_unique_id, selected_options")
     .eq("session_id", s.id as string)
     .eq("disposition", "Included");
   if (error) return { value: null, reason: `could not read selections: ${error.message}` };
 
   const selections = (rows ?? []) as unknown as SavedSelection[];
-  const current = offer && offer.out_of_date !== true ? offer.response_payload : null;
-  if (selections.length > 0 && current === null) {
+  if (selections.length > 0 && offers.length === 0) {
     return { value: null, reason: "no current quote to price the selections from" };
   }
 
   const priced = priceFamilies(
-    current === null ? [] : normalizeOffer(current),
+    offers.flatMap((o) =>
+      normalizeOffer(o.response_payload, o.provider ? { id: o.provider.id, name: o.provider.name } : null)
+    ),
     (ruleRows ?? []) as unknown as PricingRule[]
   );
   return additionalDownForSelections(s, priced, selections);
 }
 
 interface Decision {
+  /** Who the product is from. A planner tab opened before providers existed
+   *  does not send it, and gets the TecAssured provider, which was the only
+   *  one then. */
+  provider_id?: string | null;
   product_code?: string;
   product_type?: string;
   product_name?: string;
@@ -249,12 +252,29 @@ serve(async (req: Request) => {
       }
     });
 
+    // Each decision names its provider. One that names none is a TecAssured
+    // product from a planner opened before providers existed.
+    const fallbackProvider = decisions.some((d) => !d.provider_id)
+      ? await tecAssuredProviderId(supabase, (session as unknown as { tenant_id: string }).tenant_id)
+      : null;
+    const providerOf = (d: Decision): string | null =>
+      d.provider_id && UUID_RE.test(String(d.provider_id)) ? String(d.provider_id) : fallbackProvider;
+    decisions.forEach((d, i) => {
+      if (d.provider_id && !UUID_RE.test(String(d.provider_id))) {
+        problems.push(`decisions[${i}]: provider_id is not a provider`);
+      } else if (providerOf(d) === null) {
+        problems.push(`decisions[${i}]: no provider for this product`);
+      }
+    });
+
     // Two decisions for the same product in one payload would make the upsert
-    // order-dependent, and the customer's real answer ambiguous.
-    const codes = decisions.map((d) => String(d.product_code ?? ""));
-    const dupes = codes.filter((c, i) => c !== "" && codes.indexOf(c) !== i);
+    // order-dependent, and the customer's real answer ambiguous. Two providers
+    // may use one product code, so the provider is part of what is the same.
+    const codes = decisions.map((d) => `${providerOf(d)}:${String(d.product_code ?? "")}`);
+    const dupes = codes.filter((c, i) => !c.endsWith(":") && codes.indexOf(c) !== i);
     if (dupes.length > 0) {
-      problems.push(`duplicate product_code in one payload: ${[...new Set(dupes)].join(", ")}`);
+      const named = [...new Set(dupes)].map((c) => c.slice(c.indexOf(":") + 1));
+      problems.push(`duplicate product_code in one payload: ${named.join(", ")}`);
     }
 
     if (problems.length > 0) {
@@ -273,6 +293,7 @@ serve(async (req: Request) => {
         const included = d.disposition === "Included";
         return {
           session_id: sessionId,
+          provider_id: providerOf(d),
           provider_product_id: String(d.product_code),
           product_type: d.product_type ?? String(d.product_code),
           product_name: d.product_name ?? String(d.product_code),
@@ -299,7 +320,7 @@ serve(async (req: Request) => {
       const { error: upsertErr } = await supabase
         .schema("fni")
         .from("selected_products")
-        .upsert(rows, { onConflict: "session_id,provider_product_id" });
+        .upsert(rows, { onConflict: "session_id,provider_id,provider_product_id" });
 
       if (upsertErr) {
         throw new Error(`Failed to save decisions: ${upsertErr.message}`);

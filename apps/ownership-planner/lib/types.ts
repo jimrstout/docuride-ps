@@ -63,10 +63,16 @@ export interface OfferTier {
  */
 export interface OfferFamily {
   family_code: string;
+  /** Who offered it, from fni.providers. */
+  provider_id: string | null;
+  provider_name: string | null;
   tiers: OfferTier[];
 }
 
 export interface CatalogEntry {
+  /** Two providers may use one product code, so copy is keyed by both. */
+  provider_id: string | null;
+  category: string | null;
   product_code: string;
   display_name: string;
   goal: string;
@@ -88,6 +94,7 @@ export interface CatalogEntry {
 }
 
 export interface Selection {
+  provider_id: string | null;
   provider_product_id: string;
   disposition: Disposition;
   retail_price: string | number | null;

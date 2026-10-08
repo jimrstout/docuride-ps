@@ -43,6 +43,8 @@ export interface PresentableTier {
 /** One screen: a family, its showable tiers, and the copy for whichever is chosen. */
 export interface Presentable {
   family_code: string;
+  /** Who offers it. Every decision saved for it names this provider. */
+  provider_id: string | null;
   tiers: PresentableTier[];
 }
 

@@ -207,10 +207,11 @@ test("the save takes no price from the browser", () => {
   const start = save.indexOf("async function serverAdditionalDown(");
   const fn = save.slice(start, save.indexOf("\n}\n", start));
   assert.doesNotMatch(fn, /body\.|decisions|customer_price|retail_price/);
-  assert.match(fn, /\.from\("rated_offers"\)/);
+  // Every provider's stored quote, read on the server (0021: one row each).
+  assert.match(fn, /offerRowsFor\(supabase, s\.id as string\)/);
   assert.match(fn, /\.from\("pricing_rules"\)/);
   assert.match(fn, /\.eq\("disposition", "Included"\)/);
-  assert.match(fn, /offer\.out_of_date !== true/);
+  assert.match(fn, /o\.out_of_date !== true/);
   assert.match(save, /if \(body\.complete === true\) \{[\s\S]*?patch\.additional_down_payment = down\.value;/);
 });
 

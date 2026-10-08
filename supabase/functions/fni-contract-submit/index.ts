@@ -53,6 +53,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { offerRowsFor, tecAssuredRow } from "../_shared/provider-rows.ts";
 import {
   buildSubmitQuote,
   str,
@@ -237,14 +238,11 @@ serve(async (req: Request) => {
     lockHeld = true;
 
     // ── Step 2: Load the rated offer ───────────────────────────────────
-    const { data: ratedOffer, error: offerErr } = await supabase
-      .schema("fni")
-      .from("rated_offers")
-      .select("*")
-      .eq("session_id", session_id)
-      .single();
+    // The TecAssured provider's attempt: this is the Through API submit, and
+    // TecAssured is the provider it goes to.
+    const ratedOffer = tecAssuredRow(await offerRowsFor(supabase, session_id));
 
-    if (offerErr || !ratedOffer) {
+    if (!ratedOffer) {
       return await refuse(400, { error: "No rated offer found for this session. Rate the vehicle first." });
     }
 
@@ -530,12 +528,13 @@ serve(async (req: Request) => {
     }
 
     // ── Step 8: The customer's choices ─────────────────────────────────
-    // Upserted on (session_id, provider_product_id), the same key the planner's
+    // Upserted on (session_id, provider_id, provider_product_id), the same key the planner's
     // autosave uses, so a product the customer already decided on is updated
     // rather than duplicated.
     const now = new Date().toISOString();
     const selectedRows = resolved.map((r) => ({
       session_id,
+      provider_id: store.providerId,
       provider_product_id: r.providerProductId,
       product_type: r.productType,
       product_name: r.productName,
@@ -555,7 +554,7 @@ serve(async (req: Request) => {
     const { data: selectedSaved, error: selErr } = await supabase
       .schema("fni")
       .from("selected_products")
-      .upsert(selectedRows, { onConflict: "session_id,provider_product_id" })
+      .upsert(selectedRows, { onConflict: "session_id,provider_id,provider_product_id" })
       .select("id, provider_product_id");
 
     if (selErr || !selectedSaved) {
@@ -612,6 +611,7 @@ serve(async (req: Request) => {
 
       productRows.push({
         agreement_id: agreement.id,
+        provider_id: store.providerId,
         selected_product_id: selectedProductId,
         product_type: r.productType,
         product_name: r.productName,

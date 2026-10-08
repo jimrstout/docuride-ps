@@ -15,6 +15,8 @@ export interface PricingRule {
   id: string;
   tenant_id: string;
   store_id: string | null;
+  /** Null, or absent on rules written before providers, means any provider. */
+  provider_id?: string | null;
   product_code: string | null;
   cost_floor: number;
   cost_ceiling: number;
@@ -44,10 +46,16 @@ export function roundTo(value: number, step: number): number {
 }
 
 /**
- * Resolution order, most specific first:
+ * Resolution order, most specific first.
+ *
+ * The provider comes first: a rule for this product's provider beats a rule
+ * for any provider. Within each of those, as before:
  *   1. exact product_code for the store
  *   2. catch-all band for the store (product_code null)
  *   3. tenant default (store_id null), exact code then catch-all
+ *
+ * A rule for a different provider never applies. A rule with no provider is
+ * what every rule was before providers existed, so none changes meaning.
  *
  * Within each tier the band must contain the cost. Bands are treated as
  * [floor, ceiling) so adjacent bands do not both match at the boundary.
@@ -55,16 +63,24 @@ export function roundTo(value: number, step: number): number {
 export function resolveRule(
   rules: PricingRule[],
   productCode: string,
-  dealerCost: number
+  dealerCost: number,
+  providerId: string | null = null
 ): PricingRule | null {
   const inBand = (r: PricingRule) =>
     r.active && dealerCost >= r.cost_floor && dealerCost < r.cost_ceiling;
+  const anyProvider = (r: PricingRule) => (r.provider_id ?? null) === null;
+  const thisProvider = (r: PricingRule) =>
+    providerId !== null && (r.provider_id ?? null) === providerId;
 
-  const tiers: ((r: PricingRule) => boolean)[] = [
+  const levels: ((r: PricingRule) => boolean)[] = [
     (r) => r.store_id !== null && r.product_code === productCode,
     (r) => r.store_id !== null && r.product_code === null,
     (r) => r.store_id === null && r.product_code === productCode,
     (r) => r.store_id === null && r.product_code === null,
+  ];
+  const tiers: ((r: PricingRule) => boolean)[] = [
+    ...levels.map((level) => (r: PricingRule) => thisProvider(r) && level(r)),
+    ...levels.map((level) => (r: PricingRule) => anyProvider(r) && level(r)),
   ];
 
   for (const tier of tiers) {
@@ -96,7 +112,8 @@ export function resolveRule(
 export function priceProduct(
   rules: PricingRule[],
   productCode: string,
-  dealerCost: number | null | undefined
+  dealerCost: number | null | undefined,
+  providerId: string | null = null
 ): PricedResult {
   if (
     dealerCost === null ||
@@ -111,7 +128,7 @@ export function priceProduct(
     };
   }
 
-  const rule = resolveRule(rules, productCode, dealerCost);
+  const rule = resolveRule(rules, productCode, dealerCost, providerId);
   if (!rule) {
     return {
       retail_price: 0,

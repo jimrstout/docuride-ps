@@ -97,7 +97,16 @@ export interface NormalizedTier {
 /** One decision for the customer: which tier of this family, or none. */
 export interface NormalizedFamily {
   family_code: string;
+  /** Who offered it. Null only on a family built before providers existed. */
+  provider_id: string | null;
+  provider_name: string | null;
   tiers: NormalizedTier[];
+}
+
+/** The provider a quote came from, stamped onto every family read from it. */
+export interface OfferProvider {
+  id: string;
+  name: string;
 }
 
 // ── Reading the provider's values ────────────────────────────────────────
@@ -233,7 +242,10 @@ function tierFloor(tier: NormalizedTier): number {
  * Silver, Gold, Platinum. A product with no rates at all is dropped, because
  * there is nothing to sell and nothing to price.
  */
-export function normalizeOffer(payload: unknown): NormalizedFamily[] {
+export function normalizeOffer(
+  payload: unknown,
+  provider: OfferProvider | null = null
+): NormalizedFamily[] {
   const byFamily = new Map<string, NormalizedTier[]>();
 
   for (const raw of productsIn(payload)) {
@@ -247,6 +259,8 @@ export function normalizeOffer(payload: unknown): NormalizedFamily[] {
   return [...byFamily.entries()]
     .map(([family_code, tiers]) => ({
       family_code,
+      provider_id: provider?.id ?? null,
+      provider_name: provider?.name ?? null,
       tiers: tiers.sort((a, b) => tierFloor(a) - tierFloor(b)),
     }))
     .sort((a, b) => a.family_code.localeCompare(b.family_code));
