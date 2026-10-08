@@ -520,7 +520,7 @@ test("recording any rate attempt clears out_of_date", () => {
     "utf8"
   );
   const fn = between(rate, "async function recordAttempt(", "\n}\n");
-  const row = between(fn, ".upsert(", '{ onConflict: "session_id" }');
+  const row = between(fn, ".upsert(", '{ onConflict: "session_id,provider_id" }');
   assert.match(row, /out_of_date: false,/);
   // One upsert serves every state, so no state can skip it.
   assert.doesNotMatch(fn, /if \(state ===|switch \(state\)/);

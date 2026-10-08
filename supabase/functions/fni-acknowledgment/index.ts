@@ -116,12 +116,13 @@ serve(async (req: Request) => {
 
     const { data: catRows } = await supabase
       .schema("fni").from("product_catalog")
-      .select("product_code, display_name, coverage_duration")
+      .select("provider_id, product_code, display_name, coverage_duration")
       .eq("tenant_id", s.tenant_id as string);
 
+    // Keyed by provider and code: two providers may use one product code.
     const copy = new Map<string, { name: string; duration: string | null }>();
     for (const c of (catRows ?? []) as Record<string, unknown>[]) {
-      copy.set(c.product_code as string, {
+      copy.set(`${c.provider_id as string}:${c.product_code as string}`, {
         name: c.display_name as string,
         duration: (c.coverage_duration as string) ?? null,
       });
@@ -129,7 +130,7 @@ serve(async (req: Request) => {
 
     const decisions: AckDecision[] = ((rows ?? []) as Record<string, unknown>[]).map((d) => {
       const code = d.provider_product_id as string;
-      const c = copy.get(code);
+      const c = copy.get(`${d.provider_id as string}:${code}`);
       return {
         product_code: code,
         product_name: c?.name ?? (d.product_name as string) ?? code,

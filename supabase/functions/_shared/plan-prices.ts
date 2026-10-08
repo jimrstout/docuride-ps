@@ -38,7 +38,8 @@ export function priceFamilies(
     tiers: f.tiers.map((t) => ({
       ...t,
       rates: t.rates.map((r) => {
-        const priced = priceProduct(rules, t.product_code, r.dealer_cost);
+        // The provider's own rules first, then rules for any provider.
+        const priced = priceProduct(rules, t.product_code, r.dealer_cost, f.provider_id);
         return {
           ...r,
           retail_price: priced.unpriced_reason ? null : priced.retail_price,
@@ -72,9 +73,12 @@ export function customerPriceFor(
   priced: NormalizedFamily[],
   productCode: string,
   rateUniqueId: string | null,
-  chosenOptions: string[]
+  chosenOptions: string[],
+  providerId: string | null = null
 ): number | null {
   for (const f of priced) {
+    // Two providers may use the same product code; a selection names its own.
+    if (providerId !== null && f.provider_id !== null && f.provider_id !== providerId) continue;
     const tier = f.tiers.find((t) => t.product_code === productCode);
     if (!tier) continue;
     const rate = rateUniqueId
@@ -121,6 +125,8 @@ export function sessionCap(s: Record<string, unknown>, basis: PaymentBasis): num
 
 /** One saved Included selection, as selected_products holds it. */
 export interface SavedSelection {
+  /** Who the product is from. Absent on a selection read before providers. */
+  provider_id?: string | null;
   provider_product_id: string;
   rate_unique_id: string | null;
   selected_options: unknown;
@@ -145,7 +151,9 @@ export function additionalDownForSelections(
     const chosen = Array.isArray(sel.selected_options)
       ? (sel.selected_options as unknown[]).map(String)
       : [];
-    const price = customerPriceFor(priced, sel.provider_product_id, sel.rate_unique_id, chosen);
+    const price = customerPriceFor(
+      priced, sel.provider_product_id, sel.rate_unique_id, chosen, sel.provider_id ?? null
+    );
     if (price === null) {
       return {
         value: null,

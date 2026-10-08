@@ -172,7 +172,8 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   // ── What can actually be shown ──────────────────────────────────────────
   const copyByCode = useMemo(() => {
     const m = new Map<string, CatalogEntry>();
-    for (const c of initial.catalog ?? []) m.set(c.product_code, c);
+    // Keyed by provider and product code: two providers may use one code.
+    for (const c of initial.catalog ?? []) m.set(`${c.provider_id ?? ""}:${c.product_code}`, c);
     return m;
   }, [initial.catalog]);
 
@@ -189,7 +190,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
       const tiers: PresentableTier[] = [];
 
       for (const tier of family.tiers) {
-        const copy = copyByCode.get(tier.product_code);
+        const copy = copyByCode.get(`${family.provider_id ?? ""}:${tier.product_code}`);
         const sellable = tier.rates.filter((r) => r.retail_price !== null);
         const fromPrice = sellable.length > 0
           ? Math.min(...sellable.map((r) => r.retail_price as number))
@@ -228,7 +229,9 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
         tiers.push({ tier: { ...tier, rates: sellable }, copy, fromPrice });
       }
 
-      if (tiers.length > 0) ok.push({ family_code: family.family_code, tiers });
+      if (tiers.length > 0) {
+        ok.push({ family_code: family.family_code, provider_id: family.provider_id ?? null, tiers });
+      }
     }
 
     // Discovery reorders. It never removes. A family is scored by whichever of
@@ -427,6 +430,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                   : rate.retail_price + surchargeCost(rate, chosen);
 
               return {
+                provider_id: p.provider_id,
                 product_code: t.tier.product_code,
                 product_type: t.tier.product_type,
                 product_name: t.copy.display_name,

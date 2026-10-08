@@ -25,6 +25,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { offerRowsFor, tecAssuredAccount, tecAssuredRow } from "../_shared/provider-rows.ts";
 import { getRecord } from "../_shared/zoho.ts";
 import { crmRatingFields } from "../_shared/crm-fields.ts";
 import {
@@ -209,14 +210,7 @@ async function requiredFor(
     };
   }
 
-  const { data: account } = await supabase
-    .schema("fni")
-    .from("store_provider_accounts")
-    .select("id")
-    .eq("store_id", storeId)
-    .eq("provider", "TecAssured")
-    .eq("active", true)
-    .maybeSingle();
+  const account = await tecAssuredAccount(supabase, storeId);
 
   if (!account) {
     return {
@@ -262,14 +256,11 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
   );
   const sheet = buildVerification(s as unknown as VerificationSource, properties, edits);
 
-  const { data: offerRow } = await supabase
-    .schema("fni")
-    .from("rated_offers")
-    .select("state, product_count, out_of_date, rated_at, error_detail")
-    .eq("session_id", s.id as string)
-    .maybeSingle();
+  // The TecAssured provider's attempt. Rating per provider is shown from
+  // Part 4 of docs/multi-provider.md.
+  const offerRow = tecAssuredRow(await offerRowsFor(supabase, s.id as string));
 
-  const offer = (offerRow ?? null) as Record<string, unknown> | null;
+  const offer = (offerRow ?? null) as unknown as Record<string, unknown> | null;
 
   const [duplicates, contracts] = await Promise.all([
     duplicateVinSessions(supabase, s),

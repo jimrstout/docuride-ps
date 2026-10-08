@@ -48,6 +48,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient, EndpointNotFoundError } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { tecAssuredProviderId } from "../_shared/provider-rows.ts";
 import { allTiers, normalizeOffer } from "../_shared/planner-offers.ts";
 import {
   parseRequiredProperties,
@@ -67,6 +68,7 @@ interface RateRequest {
 
 interface SessionRow {
   id: string;
+  tenant_id: string;
   credential_id: string | null;
   store_id: string;
   status: string;
@@ -120,6 +122,7 @@ type AttemptState = "Rated" | "Not Offered" | "Failed";
 async function recordAttempt(
   supabase: SupabaseClient,
   sessionId: string,
+  providerId: string | null,
   state: AttemptState,
   fields: {
     request?: unknown;
@@ -128,12 +131,20 @@ async function recordAttempt(
     error?: string;
   } = {}
 ): Promise<void> {
+  // One attempt per provider per session (0021). Without a provider there is
+  // no row to write it to; that only happens when the tenant has no TecAssured
+  // provider at all, which is said in the response instead.
+  if (providerId === null) {
+    console.error(`RATE_ATTEMPT_NOT_RECORDED session=${sessionId} state=${state}: no provider`);
+    return;
+  }
   const { error } = await supabase
     .schema("fni")
     .from("rated_offers")
     .upsert(
       {
         session_id: sessionId,
+        provider_id: providerId,
         state,
         request_payload: fields.request ?? null,
         response_payload: fields.response ?? null,
@@ -148,7 +159,7 @@ async function recordAttempt(
         // Verify never offered Open presentation again.
         out_of_date: false,
       },
-      { onConflict: "session_id" }
+      { onConflict: "session_id,provider_id" }
     );
 
   // A failure to record a failure must not become the thing the caller sees, so
@@ -188,6 +199,10 @@ serve(async (req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
+  // The provider this attempt is recorded against. Set once the session is
+  // read, and in scope for the catch below, which records failures too.
+  let providerId: string | null = null;
+
   try {
     // ── Step 1: Load session ───────────────────────────────────────────
     const { data: session, error: sessErr } = await supabase
@@ -200,6 +215,10 @@ serve(async (req: Request) => {
     if (sessErr || !session) return json(404, { error: `Session ${session_id} not found` });
 
     const sess = session as SessionRow;
+    providerId = await tecAssuredProviderId(supabase, sess.tenant_id);
+    if (providerId === null) {
+      return json(400, { error: "This dealer group has no active TecAssured provider to rate with." });
+    }
 
     const terminalStatuses = ["Finalized", "Written Back", "Cancelled"];
     if (terminalStatuses.includes(sess.status)) {
@@ -280,7 +299,7 @@ serve(async (req: Request) => {
       // A body type DocuRide cannot map to a TecAssured vehicle type. Not the
       // customer's business and not "not offered": it is a gap in our mapping
       // or a blank Sold_1_Body_Type on the deal, and a person has to close it.
-      await recordAttempt(supabase, session_id, "Failed", {
+      await recordAttempt(supabase, session_id, providerId, "Failed", {
         error:
           "No TecAssured vehicle type for this unit. The deal's body type is " +
           "either blank or not in BODY_TYPE_MAP (_shared/vehicle-types.ts), so " +
@@ -315,7 +334,7 @@ serve(async (req: Request) => {
           : `Could not determine what TecAssured needs to rate a ${vtype}: ` +
             (err instanceof Error ? err.message : String(err));
 
-      await recordAttempt(supabase, session_id, "Failed", { error: detail });
+      await recordAttempt(supabase, session_id, providerId, "Failed", { error: detail });
       return json(502, { error: detail });
     }
 
@@ -323,7 +342,7 @@ serve(async (req: Request) => {
       // The dealer answered and had nothing. Not a fault: this Dealer ID does
       // not sell this vehicle type, which is the one case where "plans are not
       // offered on this machine" is a true thing to tell a customer.
-      await recordAttempt(supabase, session_id, "Not Offered", {
+      await recordAttempt(supabase, session_id, providerId, "Not Offered", {
         response: { requiredproperties: [], vtype, dealer_code: dealerCode },
       });
       return json(400, {
@@ -385,7 +404,7 @@ serve(async (req: Request) => {
         // The provider's own words first, then what we know we left out, since
         // that is nearly always the cause and the two together are the whole
         // answer to "why didn't this rate".
-        await recordAttempt(supabase, session_id, "Failed", {
+        await recordAttempt(supabase, session_id, providerId, "Failed", {
           request: ratePayload,
           response: offerResponse,
           error:
@@ -418,7 +437,7 @@ serve(async (req: Request) => {
     // Zero products from a request the provider accepted is the honest "not
     // offered": it asked for nothing more and returned nothing. Anything else
     // that produced no products came back as an error above.
-    await recordAttempt(supabase, session_id, productCount > 0 ? "Rated" : "Not Offered", {
+    await recordAttempt(supabase, session_id, providerId, productCount > 0 ? "Rated" : "Not Offered", {
       request: ratePayload,
       response: offerResponse,
       productCount,
@@ -459,7 +478,7 @@ serve(async (req: Request) => {
     // A timeout, a dropped connection, a malformed response. Recorded so the
     // planner shows neutral copy rather than inferring "not offered" from the
     // absence of a quote.
-    await recordAttempt(supabase, session_id, "Failed", {
+    await recordAttempt(supabase, session_id, providerId, "Failed", {
       error: `Rating failed: ${message}`,
     });
 

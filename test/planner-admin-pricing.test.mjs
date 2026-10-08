@@ -92,8 +92,10 @@ test("the page checks the operator before it fetches, like every admin page", ()
 
 // ── Stores ─────────────────────────────────────────────────────────────
 
-test("stores come from active TecAssured accounts, and none are named in code", () => {
-  assert.match(handler, /\.from\("store_provider_accounts"\)[\s\S]*?\.eq\("provider", "TecAssured"\)[\s\S]*?\.eq\("active", true\)/);
+test("stores come from active provider accounts, and none are named in code", () => {
+  // Since 0021, any active account with an active provider, not only TecAssured.
+  assert.match(handler, /\.from\("store_provider_accounts"\)[\s\S]*?providers!inner\(active\)[\s\S]*?\.eq\("active", true\)[\s\S]*?\.eq\("provider\.active", true\)/);
+  assert.doesNotMatch(handler, /\.eq\("provider", "TecAssured"\)/);
   for (const name of ["Parkersburg", "Charleston", "Huntington", "New Martinsville"]) {
     for (const [file, src] of [["page", page], ["handler", handler], ["shared", shared]]) {
       assert.doesNotMatch(src, new RegExp(name), `${name} in ${file}`);
@@ -220,9 +222,9 @@ test("active rules for the same store and product cannot overlap, but may touch"
   assert.deepEqual(check({ cost_floor: "0", cost_ceiling: "350" }, PKB, "p1"), []);
 });
 
-test("store rules only for stores with an active TecAssured account", () => {
+test("store rules only for stores with an active provider account", () => {
   const [why] = validateRule(fields().fields, "store-closed", [], null, ACTIVE);
-  assert.equal(why, "That store does not have an active TecAssured account, so it cannot have its own pricing.");
+  assert.equal(why, "That store has no active provider account, so it cannot have its own pricing.");
   assert.deepEqual(validateRule(fields().fields, null, [], null, ACTIVE), []);
 });
 
@@ -264,7 +266,7 @@ test("copying refuses a target that already has rules", () => {
     /^That already has rules\./);
   assert.equal(copyRefusal(HTN, PKB, rules, ACTIVE), "There are no rules here to copy.");
   assert.equal(copyRefusal(PKB, PKB, rules, ACTIVE), "Choose a different place to copy these rules to.");
-  assert.match(copyRefusal(PKB, "store-closed", rules, ACTIVE), /active TecAssured account/);
+  assert.match(copyRefusal(PKB, "store-closed", rules, ACTIVE), /no active provider account/);
   assert.match(page, /<span>Copy these rules to\.\.\.<\/span>/);
 });
 

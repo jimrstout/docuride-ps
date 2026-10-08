@@ -149,7 +149,9 @@ serve(async (_req: Request) => {
         .from("store_provider_accounts")
         .select("*")
         .eq("credential_id", cred.id)
-        .eq("active", true);
+        .eq("active", true)
+        // An account the health check probes needs a Dealer ID to probe with.
+        .not("dealer_code", "is", null);
 
       if (acctErr) {
         console.error(`Failed to list mappings for ${cred.id}: ${acctErr.message}`);
@@ -175,6 +177,9 @@ serve(async (_req: Request) => {
       }
 
       for (const acct of accounts) {
+        // The read above excludes accounts with no Dealer ID; this keeps the
+        // type honest about it.
+        if (!acct.dealer_code) continue;
         const start = Date.now();
         let apiOk = false;
         let error: string | null = null;

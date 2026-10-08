@@ -38,6 +38,7 @@
 // fni-contract-submit -- were brought in alongside this rewrite, so a clean
 // checkout can now deploy all of them.
 
+import { tecAssuredAccount, type StoreProviderAccount } from "./provider-rows.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -58,15 +59,9 @@ export interface TecAssuredCredentials {
   updated_at: string;
 }
 
-/** One store's identity on an account. */
-export interface StoreProviderAccount {
-  id: string;
-  store_id: string;
-  credential_id: string;
-  provider: string;
-  dealer_code: string;
-  active: boolean;
-}
+// One store's account with a provider, and the provider embedded in it, are
+// defined with the read that returns them in provider-rows.ts.
+export type { StoreProviderAccount, AccountProvider } from "./provider-rows.ts";
 
 export interface LoginRequestResponse { nonce: string; digest: string; salt: string; }
 export interface LoginAssertionResponse { fullName: string; sessionId: string; identifier: number; }
@@ -78,6 +73,9 @@ export interface StoreClient {
   credentials: TecAssuredCredentials;
   account: StoreProviderAccount;
   dealerCode: string;
+  /** The provider this account is with, as fni.providers names it. */
+  providerId: string;
+  providerName: string;
 }
 
 // ─── Hex utilities ───────────────────────────────────────────────────────
@@ -525,29 +523,22 @@ export function resetSessionCache(): void {
  */
 export async function createTecAssuredClient(
   storeId: string,
-  supabase: SupabaseClient,
-  provider = "TecAssured"
+  supabase: SupabaseClient
 ): Promise<StoreClient> {
-  const { data: account, error: accErr } = await supabase
-    .schema("fni")
-    .from("store_provider_accounts")
-    .select("*")
-    .eq("store_id", storeId)
-    .eq("provider", provider)
-    .eq("active", true)
-    .maybeSingle();
-
-  if (accErr) {
-    throw new Error(`Failed to read ${provider} mapping for store ${storeId}: ${accErr.message}`);
-  }
-  if (!account) {
+  const acct = await tecAssuredAccount(supabase, storeId);
+  if (!acct) {
     throw new Error(
-      `Store ${storeId} has no active ${provider} mapping. ` +
-        `Add a row to fni.store_provider_accounts with this store's Dealer ID.`
+      `Store ${storeId} has no active TecAssured account. ` +
+        `Add one in fni.store_provider_accounts with this store's Dealer ID.`
     );
   }
-
-  const acct = account as unknown as StoreProviderAccount;
+  const provider = acct.provider.name;
+  if (!acct.credential_id || !acct.dealer_code) {
+    throw new Error(
+      `Store ${storeId}'s ${provider} account has no login or no Dealer ID, ` +
+        `so ${provider} cannot be called for it.`
+    );
+  }
 
   const { data: cred, error: credErr } = await supabase
     .schema("fni")
@@ -573,8 +564,12 @@ export async function createTecAssuredClient(
     credentials,
     account: acct,
     dealerCode: acct.dealer_code,
+    providerId: acct.provider_id,
+    providerName: provider,
   };
 }
+
+
 
 /**
  * The client for an account, with no store and therefore no Dealer ID.

@@ -30,6 +30,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getRecord, ZohoRecord } from "../_shared/zoho.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { tecAssuredAccount } from "../_shared/provider-rows.ts";
 import { vtypeForBodyType } from "../_shared/vehicle-types.ts";
 import { crmRatingFields } from "../_shared/crm-fields.ts";
 import {
@@ -432,14 +433,7 @@ async function ratingInputsChanged(
   let properties: string[] = [];
 
   if (typeof vtype === "string" && vtype.trim() !== "") {
-    const { data: account } = await supabase
-      .schema("fni")
-      .from("store_provider_accounts")
-      .select("id")
-      .eq("store_id", session.store_id as string)
-      .eq("provider", "TecAssured")
-      .eq("active", true)
-      .maybeSingle();
+    const account = await tecAssuredAccount(supabase, session.store_id as string);
 
     if (account) {
       const cached = await readRateProperties(
@@ -558,17 +552,10 @@ serve(async (req: Request) => {
     // store that has no provider mapping yet -- the deal snapshot is captured,
     // and rating is what will refuse. has_credentials in the response is how
     // the caller learns which it got.
-    const { data: acctRow } = await supabase
-      .schema("fni")
-      .from("store_provider_accounts")
-      .select("credential_id, dealer_code")
-      .eq("store_id", storeRow.id)
-      .eq("provider", "TecAssured")
-      .eq("active", true)
-      .maybeSingle();
+    const acctRow = await tecAssuredAccount(supabase, storeRow.id);
 
-    const credentialId = (acctRow?.credential_id as string | undefined) ?? null;
-    const dealerCode = (acctRow?.dealer_code as string | undefined) ?? null;
+    const credentialId = acctRow?.credential_id ?? null;
+    const dealerCode = acctRow?.dealer_code ?? null;
 
     // ── Step 6: Create the session ─────────────────────────────────────
     const sessionData = mapSession(
