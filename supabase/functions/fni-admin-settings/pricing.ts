@@ -33,7 +33,7 @@ import {
 } from "../_shared/pricing-admin.ts";
 
 const RULE_COLUMNS =
-  "id, tenant_id, store_id, product_code, cost_floor, cost_ceiling, markup_percent, " +
+  "id, tenant_id, store_id, provider_id, product_code, cost_floor, cost_ceiling, markup_percent, " +
   "markup_max_dollars, markup_min_dollars, round_to, active, updated_at, updated_by";
 
 /** The answer to a pricing request: a status and a body. index.ts sends it. */
@@ -59,6 +59,7 @@ function asRule(r: Record<string, unknown>): StoredRule {
     id: String(r.id),
     tenant_id: String(r.tenant_id),
     store_id: (r.store_id as string | null) ?? null,
+    provider_id: (r.provider_id as string | null) ?? null,
     product_code: (r.product_code as string | null) ?? null,
     cost_floor: n(r.cost_floor)!,
     cost_ceiling: n(r.cost_ceiling)!,
@@ -73,17 +74,18 @@ function asRule(r: Record<string, unknown>): StoredRule {
 }
 
 /**
- * Stores with an active TecAssured account, by name. The menu runs only at
- * these, so they are the only stores the page lists and the only ones a
- * store-specific rule can be saved for. Nothing here names a store.
+ * Stores with at least one active account with an active provider, by name.
+ * The menu runs only at these, so they are the only stores the page lists and
+ * the only ones a store-specific rule can be saved for. Nothing here names a
+ * store.
  */
 async function menuStores(supabase: SupabaseClient, tenantId: string): Promise<Store[]> {
   const { data: accounts, error } = await supabase
     .schema("fni")
     .from("store_provider_accounts")
-    .select("store_id")
-    .eq("provider", "TecAssured")
-    .eq("active", true);
+    .select("store_id, provider:providers!inner(active)")
+    .eq("active", true)
+    .eq("provider.active", true);
   if (error) throw new Error(`Failed to read store accounts: ${error.message}`);
 
   const ids = [...new Set((accounts ?? []).map((a) => String((a as { store_id: string }).store_id)))];
@@ -154,7 +156,7 @@ function readScope(raw: unknown, stores: Store[]): { storeId: string | null } | 
   if (raw === undefined || raw === null || raw === "" || raw === "all") return { storeId: null };
   const id = String(raw);
   if (!stores.some((s) => s.id === id)) {
-    return { error: "That store does not have an active TecAssured account, so it cannot have its own pricing." };
+    return { error: "That store has no active provider account, so it cannot have its own pricing." };
   }
   return { storeId: id };
 }
@@ -310,6 +312,7 @@ export async function writePricing(
       .map((r) => ({
         tenant_id: tenantId,
         store_id: to.storeId,
+        provider_id: r.provider_id ?? null,
         product_code: r.product_code,
         cost_floor: r.cost_floor,
         cost_ceiling: r.cost_ceiling,

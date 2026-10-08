@@ -164,7 +164,7 @@ export function validateRule(
 
   if (storeId !== null && !activeStoreIds.has(storeId)) {
     errors.push(
-      "That store does not have an active TecAssured account, so it cannot have its own pricing."
+      "That store has no active provider account, so it cannot have its own pricing."
     );
   }
 
@@ -199,7 +199,7 @@ export function copyRefusal(
 ): string | null {
   if (fromStoreId === toStoreId) return "Choose a different place to copy these rules to.";
   if (toStoreId !== null && !activeStoreIds.has(toStoreId)) {
-    return "That store does not have an active TecAssured account, so it cannot have its own pricing.";
+    return "That store has no active provider account, so it cannot have its own pricing.";
   }
   if (!rules.some((r) => r.store_id === fromStoreId)) return "There are no rules here to copy.";
   if (rules.some((r) => r.store_id === toStoreId)) {

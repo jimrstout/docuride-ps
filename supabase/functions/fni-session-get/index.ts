@@ -25,6 +25,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { allTiers, normalizeOffer, NormalizedFamily } from "../_shared/planner-offers.ts";
+import { offerRowsFor, tecAssuredRow } from "../_shared/provider-rows.ts";
 import { PricingRule } from "../_shared/planner-pricing.ts";
 import { priceFamilies, sessionCap, sessionPaymentBasis } from "../_shared/plan-prices.ts";
 import { modeLabel } from "../_shared/session-mode.ts";
@@ -173,15 +174,12 @@ serve(async (req: Request) => {
       }
     }
 
-    // ── Rated offer (one row per session, not many) ─────────────────────
-    const { data: offerRow } = await supabase
-      .schema("fni")
-      .from("rated_offers")
-      .select("*")
-      .eq("session_id", sessionId)
-      .maybeSingle();
-
-    const offerRaw = (offerRow ?? null) as Record<string, unknown> | null;
+    // ── Rated offer ─────────────────────────────────────────────────────
+    // One row per provider since 0021. Until rating spans providers (Part 4
+    // of docs/multi-provider.md) the menu comes from the TecAssured attempt,
+    // exactly as before; its provider is now stamped on every family.
+    const offerRow = tecAssuredRow(await offerRowsFor(supabase, sessionId));
+    const offerRaw = (offerRow ?? null) as unknown as Record<string, unknown> | null;
 
     // ── A superseded quote is not a quote ─────────────────────────────────
     // A refresh that moved a rating input, or a fresh verification, marks the
@@ -192,8 +190,11 @@ serve(async (req: Request) => {
     const superseded = offerRaw?.out_of_date === true;
     const offer = superseded ? null : offerRaw;
 
-    const families: NormalizedFamily[] = offer
-      ? normalizeOffer(offer.response_payload)
+    const families: NormalizedFamily[] = offer && offerRow?.provider
+      ? normalizeOffer(offer.response_payload, {
+          id: offerRow.provider.id,
+          name: offerRow.provider.name,
+        })
       : [];
 
     // ── Pricing rules, then price each offered product ──────────────────
@@ -253,6 +254,7 @@ serve(async (req: Request) => {
         .from("product_catalog_presentable")
         .select("*")
         .eq("tenant_id", s.tenant_id as string)
+        .eq("provider_id", offerRow?.provider_id ?? "")
         .in("product_code", codes)
         .or(`store_id.eq.${s.store_id},store_id.is.null`);
 
@@ -405,7 +407,7 @@ serve(async (req: Request) => {
         verified_at: s.verified_at ?? null,
       },
 
-      // One object, or null. rated_offers is unique on session_id.
+      // One object, or null: the TecAssured provider's attempt.
       offer: offer
         ? {
             rated_at: offer.rated_at,

@@ -50,12 +50,20 @@ serve(async (_req: Request) => {
     const { data: acctRows, error: acctErr } = await supabase
       .schema("fni")
       .from("store_provider_accounts")
-      .select("*")
-      .eq("active", true);
+      // Only accounts with the TecAssured provider have a login and a Dealer
+      // ID to ask with. A Price Sheet provider's account has neither.
+      .select("*, provider:providers!inner(adapter)")
+      .eq("active", true)
+      .eq("provider.adapter", "TecAssured")
+      .not("credential_id", "is", null)
+      .not("dealer_code", "is", null);
 
     if (acctErr) throw new Error(`Failed to fetch store mappings: ${acctErr.message}`);
 
-    const accounts = (acctRows ?? []) as unknown as StoreProviderAccount[];
+    const accounts = (acctRows ?? []) as unknown as (StoreProviderAccount & {
+      credential_id: string;
+      dealer_code: string;
+    })[];
     if (accounts.length === 0) {
       return json(200, {
         message: "No active store mappings configured",
@@ -67,7 +75,7 @@ serve(async (_req: Request) => {
     }
 
     // Group by credential so each login happens once.
-    const byCredential = new Map<string, StoreProviderAccount[]>();
+    const byCredential = new Map<string, typeof accounts>();
     for (const acct of accounts) {
       const list = byCredential.get(acct.credential_id) ?? [];
       list.push(acct);
