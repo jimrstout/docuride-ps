@@ -371,239 +371,6 @@ button { cursor: pointer; }
 .decision-option.is-chosen { border-color: var(--copper); background: var(--copper-wash); box-shadow: inset 0 0 0 1px var(--copper); }
 .decision-option.is-chosen .decision-mark { background: var(--copper); border-color: var(--copper); }
 
-/* ── The Verify step ─────────────────────────────────────────────────────
-   A checking screen, not a form to fill in. Each field is one row: label,
-   value, source chip. The eye runs down the right-hand edge looking for
-   "Missing", which is the whole job, so the chip keeps its own column.
-
-   The whole sheet fits on one desktop screen (1920 by 1080 with browser
-   chrome). The first version gave every field a card with its explanation
-   printed underneath, and ran to three screens. Explanations now live in the
-   row's tooltip and come out only on a field that is missing or unreadable. */
-
-.vstate {
-  display: flex; flex-wrap: wrap; align-items: baseline;
-  gap: var(--s2) var(--s6); margin: var(--s3) 0;
-  padding: var(--s2) var(--s4);
-  background: var(--panel); border: var(--bw) solid var(--line);
-  border-radius: var(--r-md);
-}
-.vstate > div { display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; }
-.vstate dt {
-  font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em;
-  font-weight: 700; color: var(--muted);
-}
-.vstate dd { margin: 0; font-size: var(--fs-base); display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; }
-.vstate dd small { font-size: var(--fs-xs); color: var(--ink-soft); }
-
-.vworkspace { background: var(--panel); border: var(--bw) solid var(--line); border-radius: var(--r-md); padding: var(--s4); }
-.vattention { grid-column: 1 / -1; background: var(--copper-wash); border-left: var(--bw-accent) solid var(--copper); padding: var(--s4); border-radius: var(--r-sm); }
-.vattention-head { display: flex; justify-content: space-between; align-items: end; flex-wrap: wrap; gap: var(--s2) var(--s5); margin-bottom: var(--s3); }
-.vattention-head h2, .vreference-intro h2 { font-family: var(--font-sans); font-size: var(--fs-title); margin: 0; }
-.vattention-head p, .vreference-intro p { margin: var(--s1) 0 0; color: var(--ink-soft); font-size: var(--fs-base); }
-.vattention-kicker { font-family: var(--font-sans); font-size: var(--fs-xs) !important; font-weight: 700; letter-spacing: var(--track-ui); text-transform: uppercase; color: var(--copper-ink) !important; }
-.vattention-hint { font-size: var(--fs-xs); color: var(--ink-soft); }
-.vattention-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s2) var(--s5); }
-.vattention .vfield { background: var(--panel); padding: var(--s2); border: var(--bw) solid var(--line); border-left: var(--bw-accent) solid var(--copper); }
-.vreference-intro { grid-column: 1 / -1; display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: var(--s2); border-bottom: var(--bw) solid var(--line); padding-bottom: var(--s2); }
-.vreference-intro p { max-width: 32rem; }
-@media (max-width: 65rem) { .vattention-fields { grid-template-columns: 1fr; } }
-
-/* The sheet. One column until there is room for three. */
-.vsheet { display: grid; gap: var(--s4); margin: 0; }
-.vgroup { min-width: 0; }
-.vgroup-head {
-  font-family: var(--font-sans); font-size: var(--fs-title); font-weight: 600;
-  margin: 0 0 var(--s1); padding-bottom: var(--s1);
-  border-bottom: var(--bw) solid var(--line);
-}
-.vgroup-fields { display: grid; gap: 2px; }
-/* A plain warning under the Financial group. Copper, like the other things
-   there is something to do about, and never blocking. */
-.vgroup-warn {
-  margin: var(--s2) 0 0; padding: var(--s2) var(--s3);
-  border-left: 3px solid var(--copper); background: var(--copper-wash);
-  font-size: var(--fs-xs); line-height: 1.4; color: var(--ink);
-}
-
-@media (min-width: 75rem) {
-  /* Vehicle is the long group and the one that matters, so it gets two of the
-     three columns and lays its fields out in two. That keeps both rows of the
-     grid about the same height, which is what gets the sheet onto one screen. */
-  .vsheet {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-areas:
-      "attention attention attention"
-      "intro intro intro"
-      "deal   vehicle  vehicle"
-      "money  customer .";
-    align-items: start;
-    column-gap: var(--s6);
-    row-gap: var(--s3);
-  }
-  .vgroup--deal     { grid-area: deal; }
-  .vgroup--vehicle  { grid-area: vehicle; }
-  .vgroup--money    { grid-area: money; }
-  .vgroup--customer { grid-area: customer; }
-  .vattention { grid-area: attention; }
-  .vreference-intro { grid-area: intro; }
-  /* Newspaper columns rather than a grid, so a field with a note under it
-     does not stretch the field beside it. Reads down, then across. */
-  .vgroup--vehicle .vgroup-fields { display: block; columns: 2; column-gap: var(--s6); }
-  .vgroup--vehicle .vfield { break-inside: avoid; margin-bottom: 2px; }
-}
-
-/* One field. Label, value, chip; anything said about it runs underneath,
-   lined up with the value. */
-.vfield {
-  display: grid;
-  grid-template-columns: minmax(8rem, 13rem) minmax(0, 1fr);
-  align-items: center; column-gap: var(--s3);
-  padding: 2px var(--s2);
-  border-left: var(--bw-accent) solid transparent;
-  border-radius: var(--r-sm);
-}
-/* The Missing marker sits under the label, so the value box gets the full
-   width and every row lines up. */
-.vfield > .tag { grid-column: 1; grid-row: 2; justify-self: start; }
-.vfield-note { grid-column: 2 / -1; }
-
-/* A required field with nothing in it. Copper rather than red: it is a thing to
-   do, not an error somebody made. */
-.vfield.is-missing { border-left-color: var(--copper); background: var(--copper-wash); }
-
-/* ── The two states an edited field can show ─────────────────────────────
-     changed  a quiet copper edge on the value box, and nothing else. The value
-              was changed away from what the CRM deal says; the details are in
-              the warning above Confirm.
-     invalid  copper on copper, the same weight as a missing required field,
-              because the person's figure is not in force.
-   An edit that is neither (typed into an empty field, or a field the CRM does
-   not carry) looks like any other row. */
-.vfield.is-changed .vfield-control > input,
-.vfield.is-changed .vfield-control > select { border-left: 3px solid var(--copper); }
-.vfield.is-invalid { border-left-color: var(--copper-ink); background: var(--copper-wash); }
-.vfield.is-invalid input { border-color: var(--copper-ink); }
-
-.vfield-label { font-size: var(--fs-xs); font-weight: 700; line-height: 1.25; }
-.vfield-req {
-  margin-left: 2px; border: 0; text-decoration: none;
-  font-weight: 700; color: var(--copper-ink);
-}
-.vfield-value { margin: 0; font-size: var(--fs-base); line-height: 1.3; overflow-wrap: anywhere; }
-.vfield-value em { color: var(--muted); }
-.vfield input {
-  width: 100%; min-height: 2rem;
-  padding: 0 var(--s2); font-size: var(--fs-base);
-  border: var(--bw) solid var(--line-strong); border-radius: var(--r-sm);
-  background: var(--panel); color: inherit;
-}
-.vfield-note { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--ink-soft); line-height: 1.35; }
-
-/* Save, Decode, Discard, and the key to the asterisk, on one line. */
-.vtools {
-  display: flex; align-items: center; flex-wrap: wrap; gap: var(--s3);
-  margin: var(--s3) 0 0; padding-top: var(--s3);
-  border-top: var(--bw) solid var(--line);
-}
-.vtools form { margin: 0; }
-.vtools .vfield-note { margin: 0; flex: 1 1 20rem; }
-
-/* On a tablet the rows keep a full tap target; on a phone the label goes
-   above the value rather than squeezing it. */
-@media (pointer: coarse) {
-  .vfield input { min-height: var(--tap); border-width: var(--bw-control); }
-}
-@media (max-width: 34rem) {
-  .vfield { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; padding: var(--s2); }
-  .vfield-label { grid-column: 1; }
-  .vfield > .tag { grid-column: 2; grid-row: 1; }
-  .vfield-control, .vfield-note { grid-column: 1 / -1; }
-}
-
-/* The one form inside a note panel: clearing Submit Status Unknown. A text box
-   and a button on one line, wrapping on a phone rather than shrinking the box
-   to nothing. */
-.note--panel form { display: flex; gap: var(--s3); flex-wrap: wrap; align-items: center; }
-.note--panel form input[type="text"] {
-  flex: 1 1 18rem; min-height: var(--tap);
-  padding: var(--s2) var(--s3); font: inherit; font-size: var(--fs-base);
-  color: var(--ink); background: var(--panel);
-  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
-}
-
-/* ── Values that no longer match the CRM deal ────────────────────────────
-   Inside the gate panel and above the button, because it is the last thing to
-   read before verifying. It does not disable anything: staff can verify, and
-   this stays up until the deal is corrected. */
-.vgate-warn {
-  margin: 0 0 var(--s4); padding: var(--s3);
-  border: var(--bw) solid var(--copper);
-  border-left: var(--bw-accent) solid var(--copper);
-  border-radius: var(--r-md); background: var(--copper-wash);
-}
-.vgate-warn-say {
-  margin: 0 0 var(--s3); font-weight: 700; color: var(--copper-ink);
-  font-size: var(--fs-base); line-height: var(--lh-body);
-}
-.vgate-warn-table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); }
-.vgate-warn-table th {
-  text-align: left; font-weight: 700; color: var(--muted);
-  letter-spacing: var(--track-ui); white-space: nowrap;
-  padding: 0 var(--s3) var(--s2) 0;
-  border-bottom: var(--bw) solid var(--copper);
-}
-.vgate-warn-table td {
-  padding: var(--s2) var(--s3) var(--s2) 0; vertical-align: top;
-  border-bottom: var(--bw) solid var(--line);
-}
-.vgate-warn-table tr:last-child td { border-bottom: 0; }
-.vgate-warn-table small { display: block; color: var(--muted); }
-.vgate-warn .vfield-note { margin-top: var(--s3); }
-
-@media (max-width: 34rem) {
-  /* The four columns stop being a table and become four labelled lines, so a
-     deal number and a price are never squeezed into three characters each. */
-  .vgate-warn-table thead { display: none; }
-  .vgate-warn-table, .vgate-warn-table tbody, .vgate-warn-table tr, .vgate-warn-table td {
-    display: block; width: 100%;
-  }
-  .vgate-warn-table tr {
-    padding: var(--s2) 0; border-bottom: var(--bw) solid var(--copper);
-  }
-  .vgate-warn-table tr:last-child { border-bottom: 0; }
-  .vgate-warn-table td { padding: 0; border-bottom: 0; }
-  .vgate-warn-table td::before { content: attr(data-label) ": "; color: var(--muted); }
-}
-
-/* "Somebody already did this." Above the button, quiet, and only when the
-   session really was verified before. */
-.vgate-was {
-  margin: 0 0 var(--s3); padding-bottom: var(--s3);
-  border-bottom: var(--bw) solid var(--line);
-  font-size: var(--fs-xs); color: var(--ink-soft); line-height: var(--lh-body);
-}
-
-.vgate {
-  margin: var(--s3) 0 var(--s4);
-  padding: var(--s3) var(--s4);
-  border: var(--bw) solid var(--line); border-left: var(--bw-accent) solid var(--copper);
-  border-radius: var(--r-md); background: var(--panel);
-  display: flex; align-items: center; justify-content: space-between;
-  gap: var(--s4); flex-wrap: wrap;
-}
-.vgate-say { margin: 0; flex: 1 1 22rem; font-size: var(--fs-base); line-height: var(--lh-body); }
-.vgate-say--blocked { color: var(--ink-soft); }
-.vgate .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
-
-/* The rating column. The reason wraps rather than truncating: it names a field
-   or quotes the provider, and half of either is no use to anybody. */
-.cell-rating { white-space: normal; max-width: 22rem; }
-.cell-why {
-  display: block; margin-top: var(--s1);
-  font-size: var(--fs-xs); line-height: 1.35; color: var(--ink-soft);
-}
-
 /* ── Which level, and on what terms ───────────────────────────────────────
    Both sit ABOVE the price, because they are what the price depends on. A
    customer who presses "5 years" and sees the figure move understands the
@@ -1056,351 +823,319 @@ button { cursor: pointer; }
   .masthead { grid-template-columns: auto 1fr; }
 }
 
-/* ── The internal session browser ──────────────────────────────────────────
-   Deliberately after the viewport tiers above. Those pin html and body to the
-   viewport with overflow hidden, because no planner screen may ever scroll —
-   and a list of sessions must. Rather than unpick a rule the planner's whole
-   layout now depends on, the console brings its own scroller: the page still
-   does not scroll, the console inside it does. Nothing above this line
-   changes, and the planner is unaffected.
+/* ── Verify ────────────────────────────────────────────────────────────────
+   A staff screen opened from the CRM, in the house style without the admin
+   sidebar: a white top bar with the breadcrumb and who is checking, the deal's
+   state as badges, the four groups as white panels of label and value rows,
+   and the gate at the bottom. The page scrolls as an ordinary page.
 
-   This is an operator's tool, not a buyer's, so it is plain on purpose: one
-   surface, one rule weight, no atmosphere. It still reads from the same tokens,
-   so it cannot drift away from the product it belongs to. */
+   A checking screen, not a form to fill in. The eye runs down the rows looking
+   for Missing, which is the whole job. Explanations live in each row's
+   tooltip and come out only on a field that is missing or unreadable. */
 
-.console {
-  height: 100dvh;
-  overflow: auto;
-  background: var(--page);
-  padding: var(--s6) var(--s5) var(--s8);
+.vh { min-height: 100vh; background: var(--page); }
+
+.vh-top {
+  position: sticky; top: 0; z-index: 5;
+  min-height: 65px; display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: var(--s2) var(--s4);
+  padding: var(--s2) 32px; background: var(--panel); border-bottom: var(--bw) solid var(--line);
 }
-
-.console--gate { display: grid; place-items: center; padding: var(--s5); }
-
-.console-eyebrow {
-  font-size: var(--fs-xs); font-weight: 700;
-  letter-spacing: var(--track-wide); text-transform: uppercase;
-  color: var(--copper-ink); margin-bottom: var(--s2);
-}
-
-.console-head {
-  display: flex; flex-wrap: wrap; align-items: flex-end;
-  justify-content: space-between; gap: var(--s4);
-  max-width: var(--content-wide); margin: 0 auto var(--s4);
-}
-
-.console-title {
-  font-family: var(--font-sans); font-size: var(--fs-head);
-  line-height: var(--lh-heading); color: var(--ink);
-}
-
-.console-who {
-  display: flex; align-items: center; gap: var(--s3);
+.vh-crumb {
+  margin: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s1) var(--s3);
   font-size: var(--fs-xs); color: var(--muted);
-  flex-wrap: wrap;
 }
+.vh-crumb strong { color: var(--ink); font-weight: 600; }
+.vh-slash { color: var(--line-quiet); margin: 0 0.35em; }
+.console-back {
+  font-size: var(--fs-xs); font-weight: 500; color: var(--muted);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.console-back:hover { color: var(--ink); }
+.console-who { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.console-who form { margin: 0; }
 
-/* Who is checking this deal. Sits where the signed-in operator's email used to,
-   because it occupies the same place in a person's head: this is me. It is a
-   name on a record and not a sign-in, so it looks like a field and not a gate. */
+/* Who is checking this deal. A name on a record and not a sign-in, so it
+   looks like a field and not a gate. */
 .vwho { display: flex; align-items: center; gap: var(--s2); }
 .vwho label {
-  font-size: var(--fs-xs); font-weight: 700; color: var(--muted);
-  letter-spacing: var(--track-ui); white-space: nowrap;
-}
-.vwho input {
-  width: 11rem; min-height: var(--tap);
-  padding: 0 var(--s2); font: inherit; font-size: var(--fs-base);
-  color: var(--ink); background: var(--panel);
-  border: var(--bw-control) solid var(--line-strong); border-radius: var(--r-sm);
+  font-size: var(--fs-label); font-weight: 600; letter-spacing: var(--track-label);
+  text-transform: uppercase; color: var(--muted); white-space: nowrap;
 }
 
-.console-note,
-.console-empty {
-  max-width: var(--content-wide); margin: 0 auto var(--s4);
-  font-size: var(--fs-xs); color: var(--ink-soft); line-height: var(--lh-body);
+/* The house input, for every box on the page. */
+.vh input[type="text"], .vh select {
+  min-height: 2.25rem; padding: 0 var(--s3);
+  font: inherit; font-size: var(--fs-xs); color: var(--ink);
+  background: var(--panel); border: var(--bw) solid var(--line); border-radius: var(--r-control);
+}
+.vh input[type="text"]:focus, .vh select:focus { outline: none; border-color: var(--copper); }
+.vwho input { width: 11rem; }
+
+/* Buttons on this page run a size down from the customer screens; a tablet
+   gets the full tap target back, below. */
+.vh .btn { min-height: 2.25rem; padding: var(--s1) var(--s4); font-size: var(--fs-xs); }
+.vh .btn--quiet { border-color: var(--line); }
+.vh .vgate .btn { min-height: var(--tap); padding: var(--s2) var(--s5); font-size: var(--fs-base); }
+@media (pointer: coarse) {
+  .vh .btn, .vh input[type="text"], .vh select { min-height: var(--tap); }
 }
 
+.console { background: var(--page); padding: var(--s5) var(--s5) var(--s8); }
+.console--verify {
+  max-width: 1480px; margin: 0 auto; padding: var(--s4) 32px var(--s8);
+  display: grid; gap: var(--s3);
+}
+.console-empty, .console-note { margin: 0; font-size: var(--fs-xs); color: var(--ink-soft); line-height: var(--lh-body); }
 .console-empty {
   background: var(--panel); border: var(--bw) solid var(--line);
-  border-radius: var(--r-md); padding: var(--s5); color: var(--ink-soft);
+  border-radius: var(--r-md); padding: var(--s5);
 }
 
-.console-scroll {
-  max-width: var(--content-wide); margin: 0 auto;
-  background: var(--panel);
-  border: var(--bw) solid var(--line); border-radius: var(--r-md);
-  /* The table keeps its column widths and scrolls sideways on a narrow screen
-     rather than wrapping a deal number down three lines. */
-  overflow-x: auto;
+/* Notices: saved and the like in the neutral colours, anything that needs
+   doing in the attention colours. */
+.console-flash, .vh-notice {
+  margin: 0; justify-self: start; max-width: 100%;
+  padding: var(--s2) var(--s3); border-radius: var(--r-control);
+  font-size: var(--fs-xs); font-weight: 600; line-height: 1.45;
+  background: var(--plain-bg); color: var(--plain-fg);
+}
+.console-flash--bad, .vh-notice--warn { background: var(--warn-bg); color: var(--warn-fg); }
+.console-flash a { color: inherit; }
+
+/* The house badge's colour variants. */
+.tag--live, .tag--good { background: var(--good-bg); color: var(--good-fg); }
+.tag--expired, .tag--warn { background: var(--warn-bg); color: var(--warn-fg); }
+.tag--quiet { background: var(--plain-bg); color: var(--plain-fg); }
+
+/* ── Where this session stands ── */
+.vstate {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--s2) var(--s6); margin: 0;
+}
+.vstate > div { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.vstate dt {
+  font-size: var(--fs-label); text-transform: uppercase; letter-spacing: var(--track-label);
+  font-weight: 600; color: var(--muted);
+}
+.vstate dd { margin: 0; font-size: var(--fs-xs); font-weight: 600; display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.vstate dd small { font-size: var(--fs-xs); font-weight: 400; color: var(--muted); }
+
+/* ── The workspace: what is missing, then the sheet ── */
+.vworkspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
+
+.vattention {
+  min-width: 0; padding: var(--s3) var(--s4);
+  background: var(--panel); border: var(--bw) solid var(--warn-edge);
+  border-radius: var(--r-md); box-shadow: var(--shadow-panel);
+}
+.vattention-kicker {
+  margin: 0 0 2px; font-size: var(--fs-label); font-weight: 600;
+  letter-spacing: var(--track-label); text-transform: uppercase; color: var(--warn-fg);
+}
+.vattention h2 { font-size: var(--fs-base); font-weight: var(--fw-head); margin: 0 0 var(--s2); }
+.vattention-links { display: grid; gap: 0; }
+.vattention-item { padding: var(--s2) 0; border-bottom: var(--bw) solid var(--line); }
+.vattention-item-head { display: flex; justify-content: space-between; gap: var(--s1); font-size: var(--fs-xs); }
+.vattention-item-head a { color: var(--ink); font-weight: 600; text-decoration: none; }
+.vattention-item-head a:hover { text-decoration: underline; }
+.vattention-item-head small { color: var(--muted); white-space: nowrap; }
+.vattention-item input { width: 100%; margin-top: var(--s1); }
+.vattention-actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+
+/* The sheet. One column until there is room for three. */
+.vsheet { display: grid; gap: var(--s3); margin: 0; min-width: 0; }
+.vgroup {
+  min-width: 0; background: var(--panel); border: var(--bw) solid var(--line);
+  border-radius: var(--r-md); box-shadow: var(--shadow-panel); overflow: hidden;
+}
+/* The house table heading. */
+.vgroup-head {
+  margin: 0; padding: var(--s2) var(--s4);
+  font-size: var(--fs-label); font-weight: 600; letter-spacing: var(--track-label);
+  text-transform: uppercase; color: var(--muted);
+  background: var(--tint); border-bottom: var(--bw) solid var(--line);
+}
+.vgroup-fields { display: grid; gap: 0; }
+/* A plain warning under the Financial group, in the attention colours, and
+   never blocking. */
+.vgroup-warn {
+  margin: var(--s3) var(--s4); padding: var(--s2) var(--s3); border-radius: var(--r-control);
+  background: var(--warn-bg); color: var(--warn-fg);
+  font-size: var(--fs-xs); font-weight: 600; line-height: 1.45;
 }
 
-.console-table { width: 100%; border-collapse: collapse; font-size: var(--fs-base); }
-
-.console-table th {
-  text-align: left; font-size: var(--fs-xs); font-weight: 700;
-  letter-spacing: var(--track-ui); color: var(--muted);
-  padding: var(--s3) var(--s4);
-  border-bottom: var(--bw-accent) solid var(--line);
-  white-space: nowrap;
-}
-
-.console-table td {
-  padding: var(--s3) var(--s4);
+/* One field: label and value, one row. Anything said about it runs
+   underneath, lined up with the value. */
+.vfield {
+  display: grid;
+  grid-template-columns: minmax(8rem, 13rem) minmax(0, 1fr);
+  align-items: center; column-gap: var(--s3); row-gap: 2px;
+  min-height: 2.5rem; padding: var(--s1) var(--s4);
   border-bottom: var(--bw) solid var(--line);
-  vertical-align: top;
+  border-left: 2px solid transparent;
+  scroll-margin-top: 80px;
 }
+.vgroup-fields .vfield:last-child { border-bottom: 0; }
+.vfield:target { outline: 2px solid var(--copper); outline-offset: -2px; }
+/* The Missing marker sits under the label, so the value box gets the full
+   width and every row lines up. */
+.vfield > .tag { grid-column: 1; grid-row: 2; justify-self: start; }
+.vfield-note { grid-column: 2 / -1; }
 
+/* A required field with nothing in it: an attention badge and a tinted row.
+   Not red: it is a thing to do, not an error somebody made. */
+.vfield.is-missing { border-left-color: var(--warn-fg); background: var(--warn-bg); }
+
+/* ── The two states an edited field can show ─────────────────────────────
+     changed  a quiet copper edge on the value box, and nothing else. The value
+              was changed away from what the CRM deal says; the details are in
+              the warning above Confirm.
+     invalid  the attention treatment, the same weight as a missing required
+              field, because the person's figure is not in force.
+   An edit that is neither (typed into an empty field, or a field the CRM does
+   not carry) looks like any other row. */
+.vfield.is-changed .vfield-control > input,
+.vfield.is-changed .vfield-control > select { border-left: 3px solid var(--copper); }
+.vfield.is-invalid { border-left-color: var(--warn-fg); background: var(--warn-bg); }
+.vfield.is-invalid input { border-color: var(--warn-fg); }
+
+.vfield-label { font-size: var(--fs-xs); font-weight: 600; color: var(--ink-soft); line-height: 1.25; }
+.vfield-req { margin-left: 2px; border: 0; text-decoration: none; font-weight: 700; color: var(--copper-ink); }
+.vfield-value { margin: 0; font-size: var(--fs-xs); font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.vfield-value em { color: var(--muted); font-weight: 400; }
+.vfield-control input, .vfield-control select { width: 100%; }
+.vfield-note { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--ink-soft); line-height: 1.35; }
+
+/* Save, Decode, Discard, and the key, under the sheet. */
+.vtools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2) var(--s3); margin: 0; }
+.vtools form { margin: 0; }
+
+/* The key, folded away like the Sessions page's note. */
+.vh-details { flex: 1 1 100%; font-size: var(--fs-xs); color: var(--muted); }
+.vh-details summary { cursor: pointer; font-weight: 600; color: var(--ink-soft); width: max-content; max-width: 100%; }
+.vh-details p { margin: var(--s2) 0 0; max-width: 90ch; line-height: var(--lh-body); }
+
+/* The one form inside a note panel: clearing Submit Status Unknown. */
+.vh .note--panel {
+  max-width: none; background: var(--warn-panel); border: var(--bw) solid var(--warn-edge);
+}
+.vh .note--panel h2 { color: var(--warn-fg); font-size: var(--fs-base); }
+.note--panel form { display: flex; gap: var(--s3); flex-wrap: wrap; align-items: center; }
+.note--panel form input[type="text"] { flex: 1 1 18rem; }
+.vh .note--flag { margin: 0; max-width: none; background: var(--plain-bg); color: var(--plain-fg); font-weight: 600; }
+
+/* Contracts already on the deal: the house table. */
+.console-scroll {
+  background: var(--panel); border: var(--bw) solid var(--line);
+  border-radius: var(--r-md); box-shadow: var(--shadow-panel); overflow-x: auto;
+}
+.console-table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); }
+.console-table th {
+  text-align: left; white-space: nowrap; padding: var(--s2) var(--s4);
+  background: var(--tint); border-bottom: var(--bw) solid var(--line);
+  font-size: var(--fs-label); font-weight: 600; letter-spacing: var(--track-label);
+  text-transform: uppercase; color: var(--muted);
+}
+.console-table td { padding: var(--s3) var(--s4); border-bottom: var(--bw) solid var(--line); vertical-align: top; }
 .console-table tr:last-child td { border-bottom: 0; }
-.console-table tbody tr:hover { background: var(--tint); }
-
-/* An expired session is still a perfectly good row to open — it is the one
-   most likely to want extending. It is quieted, not struck out. */
-.console-table tr.is-expired td { color: var(--muted); }
-
-.console-table small {
-  display: block; font-size: var(--fs-xs); color: var(--muted);
-  line-height: var(--lh-tight); margin-top: 2px;
-}
-
+.console-table small { display: block; font-size: var(--fs-xs); color: var(--muted); margin-top: 2px; }
 .cell-strong { font-weight: 600; color: var(--ink); }
-.cell-deal { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.cell-deal { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--copper-ink); white-space: nowrap; }
 .cell-vehicle { min-width: 14rem; }
-.cell-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cell-do { white-space: nowrap; }
-
 .cell-do form { display: flex; }
-
 /* Inside the cell, not on it: a td set to flex stops being a table cell and
    takes the row's bottom rule with it. */
 .cell-do-inner { display: flex; gap: var(--s2); justify-content: flex-end; }
 
-.cell-do .btn {
-  min-height: var(--tap); padding: var(--s2) var(--s4);
-  font-size: var(--fs-xs); font-weight: 600;
-  /* Open is an anchor and Extend is a submit button, because one navigates and
-     the other writes. They have to look like one pair regardless. */
-  text-decoration: none;
-}
-
-.tag {
-  display: inline-block; font-size: var(--fs-xs); font-weight: 700;
-  letter-spacing: var(--track-ui);
-  padding: 2px var(--s2); border-radius: var(--r-sm);
-}
-
-.tag--live { background: var(--tint); color: var(--ink-soft); border: var(--bw) solid var(--line); }
-.tag--expired { background: var(--copper-wash); color: var(--copper-ink); border: var(--bw) solid var(--copper); }
-
-/* ── Settings ──────────────────────────────────────────────────────────────
-   The same plain operator surface as the session browser. One column, because
-   every field here is a sentence and a sentence wants a measure, not a grid.
-   The preview is the point of the screen: it is the only place anyone sees the
-   wording as a customer will, so it is set in the buyer's face rather than the
-   operator's. */
-
-.console-tabs {
-  display: flex; align-items: center; gap: var(--s3);
-  margin-bottom: var(--s5);
-}
-
-.console-tab-here {
-  font-size: var(--fs-xs); font-weight: 700;
-  color: var(--ink); padding: var(--s2) var(--s3);
-  border-bottom: var(--bw-accent) solid var(--copper);
-}
-
-.console-flash {
-  margin-bottom: var(--s5); padding: var(--s3) var(--s4);
-  font-size: var(--fs-xs); color: var(--ink);
-  background: var(--tint); border-left: var(--bw-accent) solid var(--copper);
-  border-radius: var(--r-sm);
-}
-
-.console-flash--bad {
-  background: var(--copper-wash); color: var(--copper-ink);
-  border-left-color: var(--copper-ink);
-}
-
-/* ── Verify: the console chrome, tightened ───────────────────────────────
-   The verify sheet has to fit one desktop screen, so its header loses the
-   tab row (the title already says where you are) and the headline drops a
-   size. Scoped to this page; the browser and settings keep their spacing. */
-.console--verify { padding: var(--s3) var(--s5) var(--s2); }
-.console--verify .console-head { max-width: none; margin-bottom: var(--s2); align-items: center; }
-.console--verify .console-title { font-size: var(--fs-q); }
-.console--verify .console-eyebrow { margin-bottom: 2px; display: flex; gap: var(--s4); align-items: baseline; }
-.console--verify .console-flash { margin-bottom: var(--s3); }
-/* Desktop controls on this page run a size down from the tablet tap target.
-   A coarse pointer (a tablet) gets the full target back, below. */
-.console--verify .btn { min-height: 2.25rem; padding: var(--s1) var(--s4); }
-.console--verify .vwho input { min-height: 2.25rem; }
-.console--verify .vgate .btn--go { min-height: var(--tap); padding: var(--s2) var(--s5); }
-@media (pointer: coarse) {
-  .console--verify .btn, .console--verify .vwho input { min-height: var(--tap); }
-}
-.console-back {
-  font-weight: 500; text-transform: none; letter-spacing: normal;
-  color: var(--ink-soft); text-decoration: underline;
-}
-.console-back:hover { color: var(--ink); }
-
-/* Verify: a quiet work surface. Missing values are collected above the
-   reference details, with spacing and type doing the grouping. */
-.console--verify { padding: var(--s5) clamp(var(--s4), 3vw, var(--s8)) var(--s8); }
-.console--verify .console-head { margin-bottom: var(--s5); }
-.console--verify .console-title { font-size: var(--fs-head); }
-.console--verify .vstate {
-  background: transparent; border: 0; border-bottom: var(--bw) solid var(--line);
-  border-radius: 0; padding: 0 0 var(--s4); margin: 0 0 var(--s5);
-  gap: var(--s3) var(--s6);
-}
-.console--verify .vstate > div { gap: var(--s1) var(--s2); }
-.console--verify .vstate .tag { border-radius: 999px; }
-.vworkspace { background: transparent; border: 0; border-radius: 0; padding: 0; }
-.vattention {
+/* ── The gate ── */
+.vgate {
+  margin: 0; padding: var(--s4);
   background: var(--panel); border: var(--bw) solid var(--line);
-  border-left: 0; border-radius: var(--r-md); padding: var(--s5) var(--s6);
-  box-shadow: 0 5px 24px rgba(11, 26, 36, 0.035);
+  border-radius: var(--r-md); box-shadow: var(--shadow-panel);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s3) var(--s4); flex-wrap: wrap;
 }
-.vattention-head { align-items: center; margin-bottom: var(--s5); }
-.vattention-head h2 { font-size: var(--fs-q); }
-.vattention-kicker { letter-spacing: var(--track-wide); }
-.vattention-fields { gap: var(--s4) var(--s7); }
-.vattention .vfield {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto;
-  align-content: start; align-items: end; column-gap: var(--s3); row-gap: var(--s1);
-  border: 0; border-bottom: var(--bw) solid var(--line);
-  border-radius: 0; background: transparent; padding: 0 0 var(--s3);
-}
-.vattention .vfield-label { grid-column: 1; grid-row: 1; font-size: var(--fs-base); }
-.vattention .vfield-control { grid-column: 1; grid-row: 2; }
-.vattention .vfield > .tag {
-  grid-column: 2; grid-row: 2; align-self: center;
-  border: 0; background: transparent; padding: 0;
-  font-size: var(--fs-xs); font-weight: 600; color: var(--copper-ink);
-}
-.vattention .vfield-note { grid-column: 1 / -1; margin: 0; }
-.vattention .vfield input {
-  min-height: 2.5rem; border: var(--bw) solid var(--line-strong);
-  border-radius: var(--r-sm); padding: var(--s1) var(--s3);
-}
-.vattention .vfield input:focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; }
-.vreference-intro { margin-top: var(--s5); padding-bottom: var(--s3); }
-.vreference-intro h2 { font-size: var(--fs-q); }
-.console--verify .vgroup-head { font-size: var(--fs-title); border: 0; margin-bottom: var(--s2); }
-.console--verify .vgroup-fields { gap: 0; }
-.console--verify .vgroup .vfield {
-  border: 0; border-bottom: var(--bw) solid var(--line);
-  background: transparent; border-radius: 0; padding: var(--s2) 0;
-}
-.console--verify .vgroup .vfield-label { font-weight: 600; color: var(--ink-soft); }
-.console--verify .vgroup .vfield > .tag {
-  border: 0; background: transparent; padding: 0;
-  font-size: var(--fs-xs); font-weight: 500; color: var(--muted);
-}
-.console--verify .vgroup .vfield.is-invalid > .tag { color: var(--copper-ink); }
-.console--verify .vgroup .vfield input { background: var(--tint); border-color: var(--line); }
-.console--verify .vtools { margin-top: var(--s5); border: 0; padding: 0; }
-.console--verify .vgate { border-radius: var(--r-md); }
-@media (max-width: 65rem) {
-  .vattention { padding: var(--s4); }
-  .vattention-fields { gap: var(--s3); }
+.vgate-say { margin: 0; flex: 1 1 22rem; font-size: var(--fs-base); line-height: var(--lh-body); }
+.vgate-say--blocked { color: var(--ink-soft); }
+.vgate .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.vgate > .vfield-note { flex: 1 1 100%; margin: 0; }
+.vgate-open { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; flex: 1 1 100%; }
+.vgate-open .vfield-note { margin: 0; }
+
+/* "Somebody already did this." Quiet, and only when the session really was
+   verified before. */
+.vgate-was {
+  flex: 1 1 100%; margin: 0; padding-bottom: var(--s3);
+  border-bottom: var(--bw) solid var(--line);
+  font-size: var(--fs-xs); color: var(--ink-soft); line-height: var(--lh-body);
 }
 
-/* Dense desktop Verify workspace: the operator can scan the deal without
-   scrolling through oversized controls and repeated "Missing" labels. */
-@media (min-width: 75rem) {
-  .console--verify { padding: var(--s2) var(--s5) var(--s5); }
-  .console--verify .console-head { margin-bottom: var(--s2); }
-  .console--verify .console-title { font-size: var(--fs-q); }
-  .console--verify .vstate { margin-bottom: var(--s3); padding-bottom: var(--s2); }
-  .console--verify .vstate dd small { display: none; }
-  .vattention { padding: var(--s3) var(--s4); box-shadow: none; }
-  .vattention-head { margin-bottom: var(--s2); }
-  .vattention-head h2 { font-size: var(--fs-title); }
-  .vattention-head p:not(.vattention-kicker) { display: none; }
-  .vattention-kicker { margin: 0 !important; }
-  .vattention-actions { display: flex; gap: var(--s2); }
-  .vattention-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s2) var(--s5); }
-  .vattention .vfield {
-    grid-template-columns: minmax(0, 1fr); gap: 2px;
-    padding: 0 0 var(--s2); border-bottom-color: var(--line);
-  }
-  .vattention .vfield-label { font-size: var(--fs-xs); }
-  .vattention .vfield-control { grid-column: 1; }
-  .vattention .vfield input { min-height: 2rem; padding: 0 var(--s2); }
-  .vattention .vfield > .tag, .vattention .vfield-note { display: none; }
-  .vreference-intro { margin-top: var(--s3); padding-bottom: var(--s1); }
-  .vreference-intro h2 { font-size: var(--fs-title); }
-  .vreference-intro > p, .vreference-intro .vattention-kicker { display: none; }
-  .vsheet { row-gap: var(--s2); column-gap: var(--s5); }
-  .console--verify .vgroup-head { margin-bottom: 0; }
-  .console--verify .vgroup .vfield { padding: 2px 0; }
-  .console--verify .vgroup .vfield input { min-height: 1.8rem; }
-  .console--verify .vtools { margin-top: var(--s3); }
+/* ── Values that no longer match the CRM deal ────────────────────────────
+   Inside the gate and above the button, because it is the last thing to read
+   before verifying. It does not disable anything: staff can verify, and this
+   stays up until the deal is corrected. */
+.vgate-warn {
+  flex: 1 1 100%; margin: 0; padding: var(--s3) var(--s4);
+  background: var(--warn-panel); border: var(--bw) solid var(--warn-edge); border-radius: var(--r-md);
 }
+.vgate-warn-say { margin: 0 0 var(--s3); font-weight: 600; color: var(--warn-fg); font-size: var(--fs-xs); line-height: var(--lh-body); }
+.vgate-warn-table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); background: var(--panel); border: var(--bw) solid var(--line); border-radius: var(--r-control); }
+.vgate-warn-table th {
+  text-align: left; white-space: nowrap; padding: var(--s2) var(--s3);
+  background: var(--tint); border-bottom: var(--bw) solid var(--line);
+  font-size: var(--fs-label); font-weight: 600; letter-spacing: var(--track-label);
+  text-transform: uppercase; color: var(--muted);
+}
+.vgate-warn-table td { padding: var(--s2) var(--s3); vertical-align: top; border-bottom: var(--bw) solid var(--line); }
+.vgate-warn-table tr:last-child td { border-bottom: 0; }
+.vgate-warn-table small { display: block; color: var(--muted); }
+.vgate-warn .vfield-note { margin-top: var(--s3); }
 
-/* Permanent field locations, with a compact navigation rail for gaps. */
-.vworkspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
-.vattention {
-  min-width: 0; box-shadow: none; padding: var(--s3);
-  border: var(--bw) solid var(--line); background: var(--panel);
-}
-.vattention h2 { font-family: var(--font-sans); font-size: var(--fs-title); margin: 0 0 var(--s2); }
-.vattention-kicker { margin: 0 0 2px !important; }
-.vattention-links { display: grid; gap: 0; }
-.vattention-links a {
-  display: flex; justify-content: space-between; gap: var(--s2);
-  padding: var(--s2) 0; border-bottom: var(--bw) solid var(--line);
-  color: var(--ink); text-decoration: none; font-size: var(--fs-xs);
-}
-.vattention-links a:hover span { text-decoration: underline; }
-.vattention-links small { color: var(--muted); white-space: nowrap; }
-.vattention-item { padding: var(--s1) 0; border-bottom: var(--bw) solid var(--line); }
-.vattention-item-head { display: flex; justify-content: space-between; gap: var(--s1); font-size: var(--fs-xs); }
-.vattention-item-head a { display: inline; padding: 0; border: 0; font-weight: 600; }
-.vattention-item input {
-  width: 100%; min-height: 1.8rem; margin-top: 2px; padding: 0 var(--s2);
-  border: var(--bw) solid var(--line-strong); border-radius: var(--r-sm);
-  background: var(--panel); font-size: var(--fs-base);
-}
-.vattention-actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
-.vsheet { min-width: 0; }
-.vfield { scroll-margin-top: var(--s5); }
-.vfield:target { outline: 2px solid var(--copper); outline-offset: 2px; }
+/* ── Wide screens: what is missing down the left, three panels beside it ── */
 @media (min-width: 75rem) {
-  .vworkspace { grid-template-columns: 14rem minmax(0, 1fr); align-items: start; column-gap: var(--s4); }
+  .vworkspace { grid-template-columns: 15rem minmax(0, 1fr); align-items: start; column-gap: var(--s3); }
   .vworkspace:not(:has(.vattention)) { grid-template-columns: 1fr; }
-  .vattention { grid-column: 1; grid-row: 1 / span 2; position: sticky; top: var(--s3); }
+  .vattention { grid-column: 1; grid-row: 1 / span 2; position: sticky; top: 80px; }
   .vattention-actions { flex-direction: column; }
   .vattention-actions .btn { width: 100%; }
   .vsheet {
     grid-column: 2; grid-row: 1;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-areas: "deal vehicle customer" "money vehicle customer";
-    column-gap: var(--s4); row-gap: var(--s3);
+    align-items: start;
   }
   .vworkspace:not(:has(.vattention)) .vsheet { grid-column: 1; }
-  .vgroup--vehicle .vgroup-fields { display: grid; columns: auto; }
-  .vgroup--vehicle .vfield { margin-bottom: 0; }
-  .console--verify .vgroup-head { padding-bottom: var(--s1); border-bottom: var(--bw) solid var(--line); }
+  .vgroup--deal     { grid-area: deal; }
+  .vgroup--vehicle  { grid-area: vehicle; }
+  .vgroup--money    { grid-area: money; }
+  .vgroup--customer { grid-area: customer; }
   .console--verify .vgroup .vfield {
     grid-template-columns: minmax(6.5rem, 42%) minmax(0, 1fr);
-    column-gap: var(--s1); min-height: 2rem;
+    column-gap: var(--s2);
   }
-  .console--verify .vgroup .vfield > .tag { font-size: var(--fs-xs); }
-  .console--verify .vgroup .vfield.is-missing { background: var(--copper-wash); border-left: 2px solid var(--copper); padding-left: var(--s1); }
-  .console--verify .vgroup .vfield.is-missing > .tag,
-  .console--verify .vgroup .vfield.is-invalid > .tag { display: none; }
-  .console--verify .vgroup .vfield-note { display: none; }
-  .console--verify .vgroup .vfield input { min-height: 1.7rem; }
+  .console--verify .vgroup .vfield.is-missing { background: var(--warn-bg); border-left: 2px solid var(--warn-fg); }
   .vtools { grid-column: 2; grid-row: 2; }
   .vworkspace:not(:has(.vattention)) .vtools { grid-column: 1; }
 }
 
-/* Verify's quiet tag. */
-.tag--quiet {
-  background: var(--tint); color: var(--muted);
-  border: var(--bw) solid var(--line);
+/* A phone: the label goes above the value rather than squeezing it, and the
+   CRM table becomes labelled lines. */
+@media (max-width: 34rem) {
+  /* Three rows on a phone, so it scrolls away rather than staying pinned. */
+  .vh-top { position: static; padding: var(--s2) var(--s3); }
+  .console--verify { padding: var(--s3) var(--s3) var(--s7); }
+  .vfield { grid-template-columns: minmax(0, 1fr) auto; padding: var(--s2) var(--s3); }
+  .vfield-label { grid-column: 1; }
+  .vfield > .tag { grid-column: 2; grid-row: 1; }
+  .vfield-control, .vfield-note { grid-column: 1 / -1; }
+  .vgate-warn-table thead { display: none; }
+  .vgate-warn-table, .vgate-warn-table tbody, .vgate-warn-table tr, .vgate-warn-table td {
+    display: block; width: 100%;
+  }
+  .vgate-warn-table tr { padding: var(--s2) var(--s3); border-bottom: var(--bw) solid var(--line); }
+  .vgate-warn-table tr:last-child { border-bottom: 0; }
+  .vgate-warn-table td { padding: 0; border-bottom: 0; }
+  .vgate-warn-table td::before { content: attr(data-label) ": "; color: var(--muted); }
 }

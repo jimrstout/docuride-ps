@@ -51,8 +51,8 @@ test("the source column is gone and rows keep two columns", () => {
 
 test("Missing keeps its treatment", () => {
   assert.match(fieldFn, /: field\.missing \? "is-missing"/);
-  assert.match(css, /\.vfield\.is-missing \{ border-left-color: var\(--copper\); background: var\(--copper-wash\); \}/);
-  assert.match(css, /\.console--verify \.vgroup \.vfield\.is-missing \{ background: var\(--copper-wash\); border-left: 2px solid var\(--copper\);/);
+  assert.match(css, /\.vfield\.is-missing \{ border-left-color: var\(--warn-fg\); background: var\(--warn-bg\); \}/);
+  assert.match(css, /\.console--verify \.vgroup \.vfield\.is-missing \{ background: var\(--warn-bg\); border-left: 2px solid var\(--warn-fg\);/);
 });
 
 test("a value changed away from the CRM gets only a copper edge on its box", () => {
@@ -68,8 +68,8 @@ test("a value changed away from the CRM gets only a copper edge on its box", () 
 test("invalid edits keep their error treatment", () => {
   assert.match(fieldFn, /field\.invalid \? "is-invalid"/);
   assert.match(fieldFn, /aria-invalid=\{field\.invalid \? true : undefined\}/);
-  assert.match(css, /\.vfield\.is-invalid \{ border-left-color: var\(--copper-ink\); background: var\(--copper-wash\); \}/);
-  assert.match(css, /\.vfield\.is-invalid input \{ border-color: var\(--copper-ink\); \}/);
+  assert.match(css, /\.vfield\.is-invalid \{ border-left-color: var\(--warn-fg\); background: var\(--warn-bg\); \}/);
+  assert.match(css, /\.vfield\.is-invalid input \{ border-color: var\(--warn-fg\); \}/);
 });
 
 test("the CRM warning panel and the decode line are unchanged", () => {

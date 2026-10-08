@@ -254,11 +254,13 @@ export default async function VerifyPage({
     if (err instanceof EdgeError && err.status === 404) notFound();
     console.error("verify sheet failed:", err);
     return (
-      <main className="console">
-        <p className="console-empty">
-          This session could not be loaded right now. Try again shortly.
-        </p>
-      </main>
+      <div className="vh">
+        <main className="console">
+          <p className="console-empty">
+            This session could not be loaded right now. Try again shortly.
+          </p>
+        </main>
+      </div>
     );
   }
 
@@ -300,19 +302,27 @@ export default async function VerifyPage({
   const byGroup = (g: FieldGroup) => sheet.fields.filter((f) => f.group === g);
   const attention = sheet.fields.filter((f) => f.missing || f.invalid);
 
+  // The rating's badge: Rated is good; Out of date and Failed need doing; the
+  // rest (Not Offered, Pending) are neutral.
+  const ratingTone =
+    sheet.rating.out_of_date || sheet.rating.state === "Failed" ? "tag--warn"
+    : sheet.rating.state === "Rated" ? "tag--good"
+    : "tag--quiet";
+
   return (
-    <main className="console console--verify">
-      <header className="console-head">
-        <div>
-          <p className="console-eyebrow">
-            DocuRide PS
-            <Link className="console-back" href="/admin/sessions" prefetch={false}>
-              Session browser
-            </Link>
-          </p>
-          <h1 className="console-title">
-            Verify deal {sheet.session.deal_number ?? "(no number)"}
-          </h1>
+    <div className="vh">
+      {/* The house top bar, without the admin sidebar: Verify is opened from
+          the CRM and is not part of the signed-in admin area. */}
+      <header className="vh-top">
+        <div className="vh-crumb">
+          <h1 className="sr-only">Verify deal {sheet.session.deal_number ?? "(no number)"}</h1>
+          <span aria-hidden="true">
+            Verify<span className="vh-slash">/</span>
+            <strong>Deal {sheet.session.deal_number ?? "(no number)"}</strong>
+          </span>
+          <Link className="console-back" href="/admin/sessions" prefetch={false}>
+            Session browser
+          </Link>
         </div>
         <div className="console-who">
           {/* Who is checking this deal. One box, once per device, remembered in a
@@ -343,430 +353,435 @@ export default async function VerifyPage({
         </div>
       </header>
 
-      {flash ? (
-        <p
-          className={flash.tone === "ok" ? "console-flash" : "console-flash console-flash--bad"}
-          role="status"
-        >
-          {flash.text}
-        </p>
-      ) : null}
-
-      {/* ── Where this session stands ──────────────────────────────────── */}
-      <dl className="vstate">
-        <div>
-          <dt>Vehicle</dt>
-          <dd>
-            {sheet.session.vehicle || "Not set"}
-            {sheet.session.stock_number ? <small>Stock {sheet.session.stock_number}</small> : null}
-          </dd>
-        </div>
-        <div>
-          <dt>Deal type</dt>
-          <dd>{sheet.session.deal_type ?? "Not set"}</dd>
-        </div>
-        <div>
-          <dt>Verification</dt>
-          <dd>
-            <span className={`tag ${verified ? "tag--live" : "tag--expired"}`}>
-              {sheet.verification.state}
-            </span>
-            {verified ? (
-              <small>
-                {sheet.verification.verified_by}, {stamp(sheet.verification.verified_at)}
-              </small>
-            ) : (
-              <small>The customer sees a neutral message until this is done.</small>
-            )}
-          </dd>
-        </div>
-        <div>
-          <dt>Rating</dt>
-          <dd>
-            <span className="tag tag--quiet">
-              {sheet.rating.out_of_date ? "Out of date" : sheet.rating.state}
-            </span>
-            <small>
-              {sheet.rating.state === "Rated"
-                ? `${sheet.rating.product_count} products, ${stamp(sheet.rating.rated_at)}`
-                : sheet.rating.detail ?? "No rate yet."}
-            </small>
-          </dd>
-        </div>
-      </dl>
-
-      {sheet.session.is_test ? (
-        <p className="note note--flag">
-          This is a test session. It has no CRM deal behind it, so Refresh has
-          nothing to pull.
-        </p>
-      ) : null}
-
-      {sheet.not_ready_reason ? (
-        <p className="console-flash console-flash--bad" role="alert">
-          {sheet.not_ready_reason}
-        </p>
-      ) : null}
-
-      {sheet.unmapped_properties.length > 0 ? (
-        <p className="console-flash console-flash--bad" role="alert">
-          TecAssured is asking for {sheet.unmapped_properties.join(", ")}, which
-          this screen has no field for. Nothing can be verified until it does.
-        </p>
-      ) : null}
-
-      {/* ── Another open deal on this machine ──────────────────────────── */}
-      {/* A warning, not a block. Two deals on one VIN is sometimes a mistake
-          and sometimes a deal being re-written after the first fell through,
-          and nothing here can tell the difference. Staff can, once they can see
-          the other deal, which is what the link is for. */}
-      {sheet.duplicate_vin ? (
-        <p className="console-flash console-flash--bad" role="alert">
-          {sheet.duplicate_vin.message}{" "}
-          {sheet.duplicate_vin.sessions.map((other, i) => (
-            <span key={other.id}>
-              {i > 0 ? " " : ""}
-              <Link href={`/verify/${other.id}`} prefetch={false}>
-                Open deal {other.deal_number ?? "(no number)"}
-              </Link>
-              {" "}({other.status})
-            </span>
-          ))}
-        </p>
-      ) : null}
-
-      {/* ── A submit whose outcome nobody knows ─────────────────────────── */}
-      {/* Nothing clears this on a timer, because a timer would be guessing that
-          no contract was created, and that guess is how one deal ends up with
-          two of the same contract. It takes a person saying they looked. */}
-      {sheet.submit_state === "Submit Status Unknown" ? (
-        <section className="note note--panel">
-          <h2>Submit Status Unknown</h2>
-          <p>
-            A submit reached TecAssured and never came back, so we do not know
-            whether it created contracts. Nothing has been retried and nothing
-            will be. Check the deal in TecAssured. If contracts were created,
-            void the ones that should not stand, then clear this.
-          </p>
-          {sheet.submit_detail ? <p><small>{sheet.submit_detail}</small></p> : null}
-          {operator ? (
-          <form action={clearSubmitUnknown}>
-            <input type="hidden" name="session_id" value={sheet.session.id} />
-            <input
-              type="text"
-              name="note"
-              placeholder="What you found in TecAssured (optional)"
-            />
-            <button type="submit" className="btn btn--quiet">
-              I have checked TecAssured
-            </button>
-          </form>
-          ) : (
-            <p className="vfield-note">
-              Clearing this needs a sign-in, because it is a statement that
-              somebody looked at TecAssured.{" "}
-              <Link href="/admin/sessions" prefetch={false}>Sign in</Link> to clear it.
-            </p>
-          )}
-        </section>
-      ) : null}
-
-      {/* ── Paperwork that already stands ───────────────────────────────── */}
-      {/* Here because this is where staff land when CRM sends a deal through a
-          second time. A product with a live contract cannot be submitted again,
-          and voiding is the only way to change that, so the two live together. */}
-      {sheet.contracts.length > 0 ? (
-        <>
-          <p className="console-note">
-            Contracts already submitted on this deal:{" "}
-            {sheet.contracts
-              .map((c) => c.contract_number ?? "number not returned")
-              .join(", ")}
-            . A product with a live contract cannot be submitted again. Void it
-            first if the customer has changed their mind.
-          </p>
-          <div className="console-scroll">
-            <table className="console-table">
-              <thead>
-                <tr>
-                  <th scope="col">Contract</th>
-                  <th scope="col">Product</th>
-                  <th scope="col">Status</th>
-                  <th scope="col" />
-                </tr>
-              </thead>
-              <tbody>
-                {sheet.contracts.map((c) => (
-                  <tr key={`${c.provider_product_id}-${c.contract_number}`}>
-                    <td className="cell-deal">{c.contract_number ?? "Not returned"}</td>
-                    <td className="cell-vehicle">{c.product_name ?? c.provider_product_id}</td>
-                    <td>
-                      <span className="tag tag--quiet">{c.status}</span>
-                    </td>
-                    <td className="cell-do">
-                      <div className="cell-do-inner">
-                        {/* Void is the one thing on this screen that still needs
-                            a sign-in. It calls TecAssured and cancels real
-                            paperwork, which is not something a session link
-                            should authorise. The contract is still listed either
-                            way, because knowing it exists is what stops somebody
-                            trying to submit it again. */}
-                        {!c.contract_number ? (
-                          <small>No number to void by. Ask TecAssured.</small>
-                        ) : operator ? (
-                          <form action={voidContract}>
-                            <input type="hidden" name="session_id" value={sheet.session.id} />
-                            <input
-                              type="hidden"
-                              name="contract_number"
-                              value={c.contract_number}
-                            />
-                            <button type="submit" className="btn btn--quiet">
-                              Void
-                            </button>
-                          </form>
-                        ) : (
-                          <Link className="btn btn--quiet" href="/admin/sessions" prefetch={false}>
-                            Sign in to void
-                          </Link>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      ) : null}
-
-      {sheet.changed_inputs && sheet.changed_inputs.length > 0 ? (
-        <p className="console-flash console-flash--bad" role="alert">
-          CRM changed {sheet.changed_inputs.length}{" "}
-          {sheet.changed_inputs.length === 1 ? "rating input" : "rating inputs"}, so
-          this deal needs verifying again and the old rates are out of date.
-        </p>
-      ) : null}
-
-      {/* Put work that blocks verification ahead of the reference sheet. Each
-          field appears in exactly one place so edits cannot conflict. */}
-      <div className="vworkspace">
-      {attention.length > 0 ? (
-        <aside className="vattention" aria-labelledby="vattention-title">
-          <p className="vattention-kicker">To complete</p>
-          <h2 id="vattention-title">{attention.length} required {attention.length === 1 ? "field" : "fields"}</h2>
-          <VerifySidebarFields fields={attention.map((f) => ({
-            key: f.key, label: f.label, group: f.group, value: f.value,
-          }))} />
-          <div className="vattention-actions">
-            {attention.some((f) => f.key === "engine.ccs" || f.key === "fuel.type") ? (
-              <button type="submit" form="vin-decode" className="btn btn--quiet" title="Decoding reloads this page. Save any other edits first.">Decode VIN</button>
-            ) : null}
-            <button type="submit" form="vsheet" className="btn btn--go">Save changes</button>
-          </div>
-        </aside>
-      ) : null}
-
-      {/* Each field keeps its permanent location in the review sheet. */}
-      <form action={saveVerifyFields} id="vsheet" className="vsheet">
-        <input type="hidden" name="session_id" value={sheet.session.id} />
-
-        {GROUPS.map(({ group, blurb }) => {
-          const fields = byGroup(group);
-          if (fields.length === 0) return null;
-          return (
-            <section className={`vgroup vgroup--${group.toLowerCase()}`} key={group}>
-              <h2 className="vgroup-head" title={blurb}>{group === "Money" ? "Financial" : group}</h2>
-              <div className="vgroup-fields">
-                {fields.map((f) => (
-                  <Field key={f.key} field={f} />
-                ))}
-              </div>
-              {/* Over the finance company's maximum before any product is
-                  added. Said plainly, and it does not block Confirm. */}
-              {group === "Money" && sheet.over_cap_warning ? (
-                <p className="vgroup-warn" role="status">{sheet.over_cap_warning}</p>
-              ) : null}
-            </section>
-          );
-        })}
-      </form>
-
-      {/* ── The tools ──────────────────────────────────────────────────── */}
-      {/* One row. Save belongs to the sheet form through its form attribute, so
-          it can sit here without Decode and Discard being nested inside that
-          form. They stay separate forms on purpose: a VIN decode is not a save
-          and must not post half-typed values, and Discard throws work away. */}
-      <div className="vtools">
-        <button type="submit" form="vsheet" className="btn btn--quiet">
-          Save changes
-        </button>
-
-        <form
-          id="vin-decode"
-          action={decodeVin}
-          title="Asks TecAssured what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed. Verify also does this once on its own, the first time it opens."
-        >
-          <input type="hidden" name="session_id" value={sheet.session.id} />
-          <button type="submit" className="btn btn--quiet">
-            Decode the VIN
-          </button>
-        </form>
-
-        {decodeDidNotAnswer(sheet) ? (
-          <p className="vfield-note">
-            The automatic VIN decode did not answer. Press Decode the VIN to try again.
+      <main className="console console--verify">
+        {flash ? (
+          <p
+            className={flash.tone === "ok" ? "console-flash" : "console-flash console-flash--bad"}
+            role="status"
+          >
+            {flash.text}
           </p>
         ) : null}
 
-        {sheet.edited.some((f) => f.in_crm) ? (
+        {/* ── Where this session stands ──────────────────────────────────── */}
+        <dl className="vstate">
+          <div>
+            <dt>Vehicle</dt>
+            <dd>
+              {sheet.session.vehicle || "Not set"}
+              {sheet.session.stock_number ? <small>Stock {sheet.session.stock_number}</small> : null}
+            </dd>
+          </div>
+          <div>
+            <dt>Deal type</dt>
+            <dd>{sheet.session.deal_type ?? "Not set"}</dd>
+          </div>
+          <div>
+            <dt>Verification</dt>
+            <dd>
+              <span className={`tag ${verified ? "tag--good" : "tag--warn"}`}>
+                {sheet.verification.state}
+              </span>
+              {verified ? (
+                <small>
+                  {sheet.verification.verified_by}, {stamp(sheet.verification.verified_at)}
+                </small>
+              ) : (
+                <small>The customer sees a neutral message until this is done.</small>
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt>Rating</dt>
+            <dd>
+              <span className={`tag ${ratingTone}`}>
+                {sheet.rating.out_of_date ? "Out of date" : sheet.rating.state}
+              </span>
+              <small>
+                {sheet.rating.state === "Rated"
+                  ? `${sheet.rating.product_count} products, ${stamp(sheet.rating.rated_at)}`
+                  : sheet.rating.detail ?? "No rate yet."}
+              </small>
+            </dd>
+          </div>
+        </dl>
+
+        {sheet.session.is_test ? (
+          <p className="note note--flag">
+            This is a test session. It has no CRM deal behind it, so Refresh has
+            nothing to pull.
+          </p>
+        ) : null}
+
+        {sheet.not_ready_reason ? (
+          <p className="console-flash console-flash--bad" role="alert">
+            {sheet.not_ready_reason}
+          </p>
+        ) : null}
+
+        {sheet.unmapped_properties.length > 0 ? (
+          <p className="console-flash console-flash--bad" role="alert">
+            TecAssured is asking for {sheet.unmapped_properties.join(", ")}, which
+            this screen has no field for. Nothing can be verified until it does.
+          </p>
+        ) : null}
+
+        {/* ── Another open deal on this machine ──────────────────────────── */}
+        {/* A warning, not a block. Two deals on one VIN is sometimes a mistake
+            and sometimes a deal being re-written after the first fell through,
+            and nothing here can tell the difference. Staff can, once they can see
+            the other deal, which is what the link is for. */}
+        {sheet.duplicate_vin ? (
+          <p className="console-flash console-flash--bad" role="alert">
+            {sheet.duplicate_vin.message}{" "}
+            {sheet.duplicate_vin.sessions.map((other, i) => (
+              <span key={other.id}>
+                {i > 0 ? " " : ""}
+                <Link href={`/verify/${other.id}`} prefetch={false}>
+                  Open deal {other.deal_number ?? "(no number)"}
+                </Link>
+                {" "}({other.status})
+              </span>
+            ))}
+          </p>
+        ) : null}
+
+        {/* ── A submit whose outcome nobody knows ─────────────────────────── */}
+        {/* Nothing clears this on a timer, because a timer would be guessing that
+            no contract was created, and that guess is how one deal ends up with
+            two of the same contract. It takes a person saying they looked. */}
+        {sheet.submit_state === "Submit Status Unknown" ? (
+          <section className="note note--panel">
+            <h2>Submit Status Unknown</h2>
+            <p>
+              A submit reached TecAssured and never came back, so we do not know
+              whether it created contracts. Nothing has been retried and nothing
+              will be. Check the deal in TecAssured. If contracts were created,
+              void the ones that should not stand, then clear this.
+            </p>
+            {sheet.submit_detail ? <p><small>{sheet.submit_detail}</small></p> : null}
+            {operator ? (
+            <form action={clearSubmitUnknown}>
+              <input type="hidden" name="session_id" value={sheet.session.id} />
+              <input
+                type="text"
+                name="note"
+                placeholder="What you found in TecAssured (optional)"
+              />
+              <button type="submit" className="btn btn--quiet">
+                I have checked TecAssured
+              </button>
+            </form>
+            ) : (
+              <p className="vfield-note">
+                Clearing this needs a sign-in, because it is a statement that
+                somebody looked at TecAssured.{" "}
+                <Link href="/admin/sessions" prefetch={false}>Sign in</Link> to clear it.
+              </p>
+            )}
+          </section>
+        ) : null}
+
+        {/* ── Paperwork that already stands ───────────────────────────────── */}
+        {/* Here because this is where staff land when CRM sends a deal through a
+            second time. A product with a live contract cannot be submitted again,
+            and voiding is the only way to change that, so the two live together. */}
+        {sheet.contracts.length > 0 ? (
+          <>
+            <p className="console-note">
+              Contracts already submitted on this deal:{" "}
+              {sheet.contracts
+                .map((c) => c.contract_number ?? "number not returned")
+                .join(", ")}
+              . A product with a live contract cannot be submitted again. Void it
+              first if the customer has changed their mind.
+            </p>
+            <div className="console-scroll">
+              <table className="console-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Contract</th>
+                    <th scope="col">Product</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {sheet.contracts.map((c) => (
+                    <tr key={`${c.provider_product_id}-${c.contract_number}`}>
+                      <td className="cell-deal">{c.contract_number ?? "Not returned"}</td>
+                      <td className="cell-vehicle">{c.product_name ?? c.provider_product_id}</td>
+                      <td>
+                        <span className="tag tag--quiet">{c.status}</span>
+                      </td>
+                      <td className="cell-do">
+                        <div className="cell-do-inner">
+                          {/* Void is the one thing on this screen that still needs
+                              a sign-in. It calls TecAssured and cancels real
+                              paperwork, which is not something a session link
+                              should authorise. The contract is still listed either
+                              way, because knowing it exists is what stops somebody
+                              trying to submit it again. */}
+                          {!c.contract_number ? (
+                            <small>No number to void by. Ask TecAssured.</small>
+                          ) : operator ? (
+                            <form action={voidContract}>
+                              <input type="hidden" name="session_id" value={sheet.session.id} />
+                              <input
+                                type="hidden"
+                                name="contract_number"
+                                value={c.contract_number}
+                              />
+                              <button type="submit" className="btn btn--quiet">
+                                Void
+                              </button>
+                            </form>
+                          ) : (
+                            <Link className="btn btn--quiet" href="/admin/sessions" prefetch={false}>
+                              Sign in to void
+                            </Link>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
+
+        {sheet.changed_inputs && sheet.changed_inputs.length > 0 ? (
+          <p className="console-flash console-flash--bad" role="alert">
+            CRM changed {sheet.changed_inputs.length}{" "}
+            {sheet.changed_inputs.length === 1 ? "rating input" : "rating inputs"}, so
+            this deal needs verifying again and the old rates are out of date.
+          </p>
+        ) : null}
+
+        {/* Put work that blocks verification ahead of the reference sheet. Each
+            field appears in exactly one place so edits cannot conflict. */}
+        <div className="vworkspace">
+        {attention.length > 0 ? (
+          <aside className="vattention" aria-labelledby="vattention-title">
+            <p className="vattention-kicker">To complete</p>
+            <h2 id="vattention-title">{attention.length} required {attention.length === 1 ? "field" : "fields"}</h2>
+            <VerifySidebarFields fields={attention.map((f) => ({
+              key: f.key, label: f.label, group: f.group, value: f.value,
+            }))} />
+            <div className="vattention-actions">
+              {attention.some((f) => f.key === "engine.ccs" || f.key === "fuel.type") ? (
+                <button type="submit" form="vin-decode" className="btn btn--quiet" title="Decoding reloads this page. Save any other edits first.">Decode VIN</button>
+              ) : null}
+              <button type="submit" form="vsheet" className="btn btn--quiet">Save changes</button>
+            </div>
+          </aside>
+        ) : null}
+
+        {/* Each field keeps its permanent location in the review sheet. */}
+        <form action={saveVerifyFields} id="vsheet" className="vsheet">
+          <input type="hidden" name="session_id" value={sheet.session.id} />
+
+          {GROUPS.map(({ group, blurb }) => {
+            const fields = byGroup(group);
+            if (fields.length === 0) return null;
+            return (
+              <section className={`vgroup vgroup--${group.toLowerCase()}`} key={group}>
+                <h2 className="vgroup-head" title={blurb}>{group === "Money" ? "Financial" : group}</h2>
+                <div className="vgroup-fields">
+                  {fields.map((f) => (
+                    <Field key={f.key} field={f} />
+                  ))}
+                </div>
+                {/* Over the finance company's maximum before any product is
+                    added. Said plainly, and it does not block Confirm. */}
+                {group === "Money" && sheet.over_cap_warning ? (
+                  <p className="vgroup-warn" role="status">{sheet.over_cap_warning}</p>
+                ) : null}
+              </section>
+            );
+          })}
+        </form>
+
+        {/* ── The tools ──────────────────────────────────────────────────── */}
+        {/* One row. Save belongs to the sheet form through its form attribute, so
+            it can sit here without Decode and Discard being nested inside that
+            form. They stay separate forms on purpose: a VIN decode is not a save
+            and must not post half-typed values, and Discard throws work away. */}
+        <div className="vtools">
+          <button type="submit" form="vsheet" className="btn btn--quiet">
+            Save changes
+          </button>
+
           <form
-            action={discardEdits}
-            title="Puts the CRM deal back in charge of every field it carries. Engine size, factory warranty and fuel type are kept, since the CRM does not carry them and there would be nothing to reload them from."
+            id="vin-decode"
+            action={decodeVin}
+            title="Asks TecAssured what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed. Verify also does this once on its own, the first time it opens."
           >
             <input type="hidden" name="session_id" value={sheet.session.id} />
             <button type="submit" className="btn btn--quiet">
-              Discard my edits and reload from CRM
+              Decode the VIN
             </button>
           </form>
-        ) : null}
 
-        <p className="vfield-note">
-          * TecAssured asks for this. Hover a field to see where its value comes
-          from. Clearing a box puts the original value back. Nothing is written
-          back to the CRM.
-          {sheet.vin_decode_at ? ` VIN last decoded ${stamp(sheet.vin_decode_at)}.` : ""}
-        </p>
-      </div>
-      </div>
-
-      {/* ── The gate ───────────────────────────────────────────────────── */}
-      <form action={verifyAndRate} className="vgate">
-        <input type="hidden" name="session_id" value={sheet.session.id} />
-
-        {/* ── Values that no longer match the deal ──────────────────────────
-            Above the button, on purpose, and it does not disable it: the person
-            at the desk can see the machine and the paperwork, so their figure is
-            the one to rate on. It stays here until the CRM deal is brought into
-            line and the sheet is refreshed, which is the only thing that clears
-            it. */}
-        {sheet.crm_warning ? (
-          <div className="vgate-warn" role="alert">
-            <p className="vgate-warn-say">{sheet.crm_warning}</p>
-            <table className="vgate-warn-table">
-              <thead>
-                <tr>
-                  <th scope="col">Field</th>
-                  <th scope="col">CRM deal</th>
-                  <th scope="col">This session</th>
-                  <th scope="col">Changed by</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sheet.crm_mismatches.map((m) => (
-                  <tr key={m.key}>
-                    <td data-label="Field">{m.label}</td>
-                    <td data-label="CRM deal">{m.crm_value ?? "Not set"}</td>
-                    <td data-label="This session" className="cell-strong">
-                      {m.edited_value ?? "Not set"}
-                    </td>
-                    <td data-label="Changed by">
-                      {m.edited_by}
-                      <small>{stamp(m.edited_at)}</small>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="vfield-note">
-              You can still verify and rate. The rate will use this session's
-              values. Nothing is sent back to the CRM.
+          {decodeDidNotAnswer(sheet) ? (
+            <p className="vh-notice vh-notice--warn" role="status">
+              The automatic VIN decode did not answer. Press Decode the VIN to try again.
             </p>
-          </div>
-        ) : null}
+          ) : null}
 
-        {/* Previously verified, and this is a fresh launch from CRM. The values
-            below are the ones that were approved, and saying so is the
-            difference between "check this again" and "somebody already did
-            this". */}
-        {verified ? (
-          <p className="vgate-was">
-            Verified by <b>{sheet.verification.verified_by ?? "unknown"}</b> on{" "}
-            {stamp(sheet.verification.verified_at)}. The values below are what
-            was verified.
-          </p>
-        ) : null}
-
-        {sheet.ready ? (
-          <p className="vgate-say">
-            Every field TecAssured asks for has a value. Confirming records your
-            name, the time, and each value with its source, and asks for the
-            rate.
-          </p>
-        ) : (
-          <p className="vgate-say vgate-say--blocked">
-            {sheet.invalid.length > 0 ? (
-              <>
-                These changes could not be read, so they are not in force:{" "}
-                <b>{sheet.invalid.map((f) => f.label).join(", ")}</b>. Correct them
-                above, or clear the box to go back to the original.
-              </>
-            ) : sheet.missing.length > 0 ? (
-              <>
-                Still needed before this can be verified:{" "}
-                <b>{sheet.missing.map((f) => f.label).join(", ")}</b>.
-              </>
-            ) : (
-              <>This deal cannot be verified yet.</>
-            )}
-          </p>
-        )}
-
-        {/* The name travels with the button, so typing it and confirming in one
-            motion works. The action writes it back to the cookie. */}
-        <input type="hidden" name="checker_name" value={checker} />
-
-        <button
-          type="submit"
-          className={presentable ? "btn btn--quiet" : "btn btn--go"}
-          disabled={!sheet.ready || checker === ""}
-        >
-          Confirm and Continue
-        </button>
-
-        <p className="vfield-note">
-          {checker === ""
-            ? "Put your name in the Checked by box at the top before confirming."
-            : `Confirming as ${checker}. This screen stays open afterwards.`}
-        </p>
-
-        {/* ── Open presentation ──────────────────────────────────────────
-            A plain link into its own tab. The target is NAMED, so pressing it
-            again reloads the same customer tab rather than opening another.
-            No rel="noopener" or rel="noreferrer": either one forces a new tab
-            every time and defeats that reuse. It is the same site, so there is
-            no opener risk, and the site already sends no referrer.
-
-            A tab opened this way has no history, so the customer cannot press
-            Back into this screen, and the planner has no link of any kind to
-            it. Shown only once the session is verified and its rates are
-            current. */}
-        {presentable ? (
-          <div className="vgate-open">
-            <a
-              className="btn btn--go"
-              href={`/plan/${sessionId}`}
-              target={`docuride-plan-${sessionId}`}
+          {sheet.edited.some((f) => f.in_crm) ? (
+            <form
+              action={discardEdits}
+              title="Puts the CRM deal back in charge of every field it carries. Engine size, factory warranty and fuel type are kept, since the CRM does not carry them and there would be nothing to reload them from."
             >
-              Open presentation
-            </a>
-            <p className="vfield-note">
-              Opens in its own tab. Close that tab when you are done. This screen
-              stays open for changes.
+              <input type="hidden" name="session_id" value={sheet.session.id} />
+              <button type="submit" className="btn btn--quiet">
+                Discard my edits and reload from CRM
+              </button>
+            </form>
+          ) : null}
+
+          <details className="vh-details">
+            <summary>How this sheet works</summary>
+            <p>
+              * TecAssured asks for this. Hover a field to see where its value comes
+              from. Clearing a box puts the original value back. Nothing is written
+              back to the CRM.
+              {sheet.vin_decode_at ? ` VIN last decoded ${stamp(sheet.vin_decode_at)}.` : ""}
             </p>
-          </div>
-        ) : null}
-      </form>
-    </main>
+          </details>
+        </div>
+        </div>
+
+        {/* ── The gate ───────────────────────────────────────────────────── */}
+        <form action={verifyAndRate} className="vgate">
+          <input type="hidden" name="session_id" value={sheet.session.id} />
+
+          {/* ── Values that no longer match the deal ──────────────────────────
+              Above the button, on purpose, and it does not disable it: the person
+              at the desk can see the machine and the paperwork, so their figure is
+              the one to rate on. It stays here until the CRM deal is brought into
+              line and the sheet is refreshed, which is the only thing that clears
+              it. */}
+          {sheet.crm_warning ? (
+            <div className="vgate-warn" role="alert">
+              <p className="vgate-warn-say">{sheet.crm_warning}</p>
+              <table className="vgate-warn-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Field</th>
+                    <th scope="col">CRM deal</th>
+                    <th scope="col">This session</th>
+                    <th scope="col">Changed by</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sheet.crm_mismatches.map((m) => (
+                    <tr key={m.key}>
+                      <td data-label="Field">{m.label}</td>
+                      <td data-label="CRM deal">{m.crm_value ?? "Not set"}</td>
+                      <td data-label="This session" className="cell-strong">
+                        {m.edited_value ?? "Not set"}
+                      </td>
+                      <td data-label="Changed by">
+                        {m.edited_by}
+                        <small>{stamp(m.edited_at)}</small>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="vfield-note">
+                You can still verify and rate. The rate will use this session's
+                values. Nothing is sent back to the CRM.
+              </p>
+            </div>
+          ) : null}
+
+          {/* Previously verified, and this is a fresh launch from CRM. The values
+              below are the ones that were approved, and saying so is the
+              difference between "check this again" and "somebody already did
+              this". */}
+          {verified ? (
+            <p className="vgate-was">
+              Verified by <b>{sheet.verification.verified_by ?? "unknown"}</b> on{" "}
+              {stamp(sheet.verification.verified_at)}. The values below are what
+              was verified.
+            </p>
+          ) : null}
+
+          {sheet.ready ? (
+            <p className="vgate-say">
+              Every field TecAssured asks for has a value. Confirming records your
+              name, the time, and each value with its source, and asks for the
+              rate.
+            </p>
+          ) : (
+            <p className="vgate-say vgate-say--blocked">
+              {sheet.invalid.length > 0 ? (
+                <>
+                  These changes could not be read, so they are not in force:{" "}
+                  <b>{sheet.invalid.map((f) => f.label).join(", ")}</b>. Correct them
+                  above, or clear the box to go back to the original.
+                </>
+              ) : sheet.missing.length > 0 ? (
+                <>
+                  Still needed before this can be verified:{" "}
+                  <b>{sheet.missing.map((f) => f.label).join(", ")}</b>.
+                </>
+              ) : (
+                <>This deal cannot be verified yet.</>
+              )}
+            </p>
+          )}
+
+          {/* The name travels with the button, so typing it and confirming in one
+              motion works. The action writes it back to the cookie. */}
+          <input type="hidden" name="checker_name" value={checker} />
+
+          <button
+            type="submit"
+            className="btn btn--go"
+            disabled={!sheet.ready || checker === ""}
+          >
+            Confirm and Continue
+          </button>
+
+          <p className="vfield-note">
+            {checker === ""
+              ? "Put your name in the Checked by box at the top before confirming."
+              : `Confirming as ${checker}. This screen stays open afterwards.`}
+          </p>
+
+          {/* ── Open presentation ──────────────────────────────────────────
+              A plain link into its own tab. The target is NAMED, so pressing it
+              again reloads the same customer tab rather than opening another.
+              No rel="noopener" or rel="noreferrer": either one forces a new tab
+              every time and defeats that reuse. It is the same site, so there is
+              no opener risk, and the site already sends no referrer.
+
+              A tab opened this way has no history, so the customer cannot press
+              Back into this screen, and the planner has no link of any kind to
+              it. Shown only once the session is verified and its rates are
+              current. */}
+          {presentable ? (
+            <div className="vgate-open">
+              <a
+                className="btn btn--go"
+                href={`/plan/${sessionId}`}
+                target={`docuride-plan-${sessionId}`}
+              >
+                Open presentation
+              </a>
+              <p className="vfield-note">
+                Opens in its own tab. Close that tab when you are done. This screen
+                stays open for changes.
+              </p>
+            </div>
+          ) : null}
+        </form>
+      </main>
+    </div>
   );
 }
