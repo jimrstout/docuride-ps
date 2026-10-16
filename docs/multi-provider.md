@@ -244,12 +244,30 @@ traffic is one test session today, so the window is acceptable.
 
 ---
 
-## 8. Decisions to review
+## 8. Decisions
+
+Reviewed and accepted with Part 1:
 
 - **Catalog uniqueness** keeps the store column, so a store can still carry its
-  own copy of a product (Parkersburg has five demo rows like this).
+  own copy of a product (Parkersburg has five demo rows like this). For the
+  tenant's own rows it is (tenant, provider, product code), as planned.
 - **The five Parkersburg demo catalog rows** (VSC, TW, KEY, GAP, PPM) are not
   TecAssured products. They are backfilled to Riders Advantage like everything
   else and given the nearest category (KEY and GAP as Other).
-- **Deploys** depend on the workflow's `SUPABASE_ACCESS_TOKEN`, which Supabase
-  is currently rejecting. See the report for Part 1.
+- **Polaris ORV matches every "Polaris" make.** Narrowing it to ATV and UTV is
+  the job of menu templates (Part 3) and price sheet eligibility (Part 5), not
+  of the provider.
+- **Migrations and deploys go out back to back.** The old functions read the
+  old columns, so each migration is applied immediately before the deploy of
+  the functions that need it, and the short window between them is accepted.
+
+### Open items
+
+- **A store account's login is not checked against its provider.** Before
+  Part 1, a foreign key on (credential_id, provider) made sure a store
+  account's TecAssured login was a TecAssured login. Migration 0021 replaces
+  the provider text with provider_id and drops that key, so nothing in the
+  database now ties a Connected account's login to its provider. Every login
+  today is TecAssured, so nothing is wrong yet. A provider-aware check must be
+  restored no later than Part 6, and before any screen lets staff create or
+  edit store accounts.
