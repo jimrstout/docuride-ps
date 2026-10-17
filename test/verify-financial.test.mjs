@@ -81,7 +81,8 @@ test("the down payment maps from Sold_1_Down_Payment", () => {
 
 test("creation, reopen and Refresh all fill it through the shared mapping", () => {
   const start = src("../supabase/functions/fni-session-start/index.ts");
-  const mapSession = start.slice(start.indexOf("function mapSession("), start.indexOf("function json("));
+  const map = src("../supabase/functions/_shared/session-map.ts");
+  const mapSession = map.slice(map.indexOf("function mapSession("));
   assert.match(mapSession, /const crm = crmRatingFields\(record/);
   assert.match(mapSession, /agreed_down_payment: crm\.agreed_down_payment,/);
 

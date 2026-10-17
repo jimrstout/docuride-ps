@@ -14,12 +14,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { crmRatingFields } from "../supabase/functions/_shared/crm-fields.ts";
 
-// fni-session-start cannot be imported: it pulls `serve` from deno.land and
-// Node's loader will not fetch over https. So mapSession is compared
-// structurally, on the one thing that can silently go wrong -- which Zoho field
-// feeds which column. A value-level test of that function belongs to Deno.
+// mapSession lives in _shared/session-map.ts. It is compared structurally here,
+// on the one thing that can silently go wrong -- which Zoho field feeds which
+// column. test/crm-snapshot-allow-list.test.mjs calls it for its values.
 const SESSION_START = readFileSync(
-  new URL("../supabase/functions/fni-session-start/index.ts", import.meta.url),
+  new URL("../supabase/functions/_shared/session-map.ts", import.meta.url),
   "utf8"
 );
 
@@ -150,7 +149,7 @@ test("mapSession fills the corrected finance columns from crmRatingFields", () =
   // Creation, reopen and Refresh all derive these three one way. A session
   // created without them showed Term and APR as Missing on Verify.
   const body = SESSION_START.match(/function mapSession\([\s\S]*?\n}\n/);
-  assert.ok(body, "mapSession not found in fni-session-start");
+  assert.ok(body, "mapSession not found in _shared/session-map.ts");
   assert.match(body[0], /crmRatingFields\(record\b/, "mapSession must call crmRatingFields");
   for (const column of ["interest_rate", "tila_amount_financed", "finance_term_total"]) {
     assert.match(
