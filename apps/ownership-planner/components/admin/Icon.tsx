@@ -23,6 +23,23 @@ const PATHS: Record<AdminSection["icon"], React.ReactNode> = {
   ),
   // Lines of text.
   wording: <path d="M4 6h16M4 10.5h16M4 15h10M4 19.5h7" />,
+  // Two buildings: the providers behind the products.
+  providers: <path d="M3 21V9l6-4v16M9 21V5l12 4v12M3 21h18M13 12h4M13 16h4" />,
+  // Stacked cards: a menu's slots.
+  menus: (
+    <>
+      <rect x="4" y="3" width="16" height="5" rx="1.5" />
+      <rect x="4" y="10" width="16" height="5" rx="1.5" />
+      <path d="M4 19.5h10" />
+    </>
+  ),
+  // A sheet with a folded corner and rows.
+  sheets: (
+    <>
+      <path d="M6 3h9l4 4v14H6Z" />
+      <path d="M15 3v4h4M9 12h7M9 15.5h7M9 19h4" />
+    </>
+  ),
 };
 
 export function Icon({ name }: { name: AdminSection["icon"] }) {

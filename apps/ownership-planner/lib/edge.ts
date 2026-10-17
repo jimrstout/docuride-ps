@@ -200,4 +200,30 @@ export const edge = {
   /** Save, delete or copy pricing rules. Checked and written by the function. */
   adminSavePricing: <T>(body: Record<string, unknown>) =>
     call<T>("fni-admin-settings", { method: "POST", body: { ...body, section: "pricing" } }),
+
+  /** The Providers section: every provider, its stores and its sheets. */
+  adminProviders: <T>() =>
+    call<T>("fni-admin-settings", { method: "GET", query: { section: "providers" } }),
+
+  adminSaveProviders: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-admin-settings", { method: "POST", body: { ...body, section: "providers" } }),
+
+  /** The Menus section: every menu template with its slots. */
+  adminTemplates: <T>() =>
+    call<T>("fni-admin-settings", { method: "GET", query: { section: "templates" } }),
+
+  adminSaveTemplates: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-admin-settings", { method: "POST", body: { ...body, section: "templates" } }),
+
+  /** Price sheets: one provider's list, or one sheet with its rates. */
+  priceSheets: <T>(query: Record<string, string>) =>
+    call<T>("fni-price-sheets", { method: "GET", query }),
+
+  /** Upload, correct, leave out, publish, retire. Checked by the function. */
+  priceSheetWrite: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-price-sheets", { method: "POST", body }),
+
+  /** Read a sheet with Claude. Answers at once; the read runs in the background. */
+  priceSheetParse: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-price-sheet-parse", { method: "POST", body }),
 };

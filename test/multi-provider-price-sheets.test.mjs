@@ -96,7 +96,7 @@ test("the instructions say never to guess, and name the provider", () => {
   const p = systemPrompt("BRP", ["Can-Am", "Sea-Doo"]);
   assert.match(p, /This sheet is from BRP, whose program covers Can-Am, Sea-Doo\./);
   assert.match(p, /Never guess/);
-  assert.doesNotMatch(p, /—/);
+  assert.doesNotMatch(p, /\u2014/);
 });
 
 test("CSV goes in chunks with the header on each, so nothing is cut", () => {

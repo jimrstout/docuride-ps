@@ -8,6 +8,10 @@
 //   POST { dealer_group_display_name?, templates? }
 //   GET  ?section=pricing        -> see pricing.ts
 //   POST { section: "pricing" }  -> see pricing.ts
+//   GET  ?section=providers      -> see providers.ts
+//   POST { section: "providers" }-> see providers.ts
+//   GET  ?section=templates      -> see templates.ts
+//   POST { section: "templates" }-> see templates.ts
 //
 // Auth: FNI_WEBHOOK_SECRET via x-webhook-secret header or ?secret= query param,
 // exactly as fni-admin-sessions. The browser never holds it; the console's
@@ -33,6 +37,8 @@ import {
   validateTemplate,
 } from "../_shared/copy-templates.ts";
 import { readPricing, writePricing } from "./pricing.ts";
+import { readProviders, writeProviders } from "./providers.ts";
+import { readTemplates, writeTemplates } from "./templates.ts";
 
 /**
  * A sample deductible for the preview only.
@@ -154,9 +160,13 @@ serve(async (req: Request) => {
 
   try {
     if (req.method === "GET") {
-      if (url.searchParams.get("section") === "pricing") {
+      const section = url.searchParams.get("section");
+      if (section === "pricing" || section === "providers" || section === "templates") {
         const tenant = await theTenant(supabase);
-        const reply = await readPricing(supabase, tenant.id, url.searchParams);
+        const reply =
+          section === "pricing" ? await readPricing(supabase, tenant.id, url.searchParams)
+          : section === "providers" ? await readProviders(supabase, tenant.id)
+          : await readTemplates(supabase, tenant.id);
         return json(reply.status, reply.body);
       }
       return json(200, await readSettings(supabase));
@@ -180,6 +190,14 @@ serve(async (req: Request) => {
     // the wording, or the other way round.
     if (body.section === "pricing") {
       const reply = await writePricing(supabase, tenant.id, body);
+      return json(reply.status, reply.body);
+    }
+    if (body.section === "providers") {
+      const reply = await writeProviders(supabase, tenant.id, body);
+      return json(reply.status, reply.body);
+    }
+    if (body.section === "templates") {
+      const reply = await writeTemplates(supabase, tenant.id, body);
       return json(reply.status, reply.body);
     }
 

@@ -39,6 +39,13 @@ export function safeFileName(name: string): string {
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/**
+ * Where an uploaded file lives: provider id, sheet id, safe file name. A path
+ * the browser reports back is held to this shape and to its provider, so it
+ * cannot name another provider's file or anything outside the bucket's layout.
+ */
+export const UPLOADED_PATH = /^([0-9a-f-]{36})\/([0-9a-f-]{36})\/([A-Za-z0-9._-]{1,120})$/i;
+
 export interface UploadFields {
   provider_id: string;
   name: string;
@@ -47,7 +54,10 @@ export interface UploadFields {
   file_name: string;
   file_type: string;
   mime: string;
-  bytes: Uint8Array;
+  /** The file itself, when it came in the request. */
+  bytes: Uint8Array | null;
+  /** Where the browser already put it, when it went straight to Storage. */
+  file_path: string | null;
   uploaded_by: string;
 }
 
@@ -85,15 +95,25 @@ export function parseUpload(body: Record<string, unknown>): { fields: UploadFiel
   const file_name = text("file_name");
   const kind = fileTypeFor(file_name);
   if (!kind) errors.push("The file must be a PDF, an Excel workbook (XLSX or XLS) or a CSV.");
-  const bytes = decodeBase64(text("file_base64"));
-  if (!bytes || bytes.length === 0) errors.push("The file is empty or did not arrive.");
-  else if (bytes.length > MAX_FILE_BYTES) errors.push("The file is larger than 20 MB.");
 
-  if (errors.length > 0 || !kind || !bytes) return { errors };
+  // Either the browser already put the file in Storage and says where, or the
+  // file comes in the request. The path must be this provider's.
+  const path = text("file_path");
+  let bytes: Uint8Array | null = null;
+  if (path !== "") {
+    const m = path.match(UPLOADED_PATH);
+    if (!m || m[1].toLowerCase() !== provider_id.toLowerCase()) errors.push("The uploaded file could not be found.");
+  } else {
+    bytes = decodeBase64(text("file_base64"));
+    if (!bytes || bytes.length === 0) errors.push("The file is empty or did not arrive.");
+    else if (bytes.length > MAX_FILE_BYTES) errors.push("The file is larger than 20 MB.");
+  }
+
+  if (errors.length > 0 || !kind) return { errors };
   return {
     fields: {
       provider_id, name, effective_from, effective_to, file_name,
-      file_type: kind.type, mime: kind.mime, bytes, uploaded_by,
+      file_type: kind.type, mime: kind.mime, bytes, file_path: path === "" ? null : path, uploaded_by,
     },
   };
 }

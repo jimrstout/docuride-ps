@@ -12,8 +12,11 @@
 //
 // GET  ?provider_id=...          sheets for one provider (or every provider)
 // GET  ?sheet_id=...             one sheet with its rates
+// POST { action: "upload_url", provider_id, file_name }
+//        a one-time signed URL the browser uploads the file to directly, so a
+//        large sheet never passes through the admin area's server
 // POST { action: "upload", provider_id, name, effective_from, effective_to,
-//        file_name, file_base64, uploaded_by }
+//        file_name, file_path | file_base64, uploaded_by }
 // POST { action: "edit_rate", rate_id, edited_by, ...fields }
 // POST { action: "leave_out", rate_id, reason, edited_by }
 // POST { action: "include", rate_id, edited_by }
@@ -23,7 +26,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
-import { BUCKET, parseRateEdit, parseUpload, safeFileName } from "../_shared/price-sheet-admin.ts";
+import { BUCKET, fileTypeFor, parseRateEdit, parseUpload, safeFileName } from "../_shared/price-sheet-admin.ts";
 import { checkRates, datesOverlap, publishRefusal, type CheckedRate } from "../_shared/price-sheet-checks.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -119,10 +122,24 @@ async function upload(supabase: SupabaseClient, body: Record<string, unknown>): 
     return json(400, { error: `${p.name} is rated through its API, so it has no price sheets.` });
   }
 
-  const id = crypto.randomUUID();
-  const path = `${p.id}/${id}/${safeFileName(f.file_name)}`;
-  const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, f.bytes, { contentType: f.mime, upsert: false });
-  if (upErr) return json(502, { error: `The file could not be stored: ${upErr.message}` });
+  let id: string;
+  let path: string;
+  if (f.file_path) {
+    // Already in the bucket: the browser uploaded it to a signed URL. It must
+    // actually be there before a sheet points at it.
+    path = f.file_path;
+    id = path.split("/")[1];
+    const folder = path.split("/").slice(0, 2).join("/");
+    const { data: found } = await supabase.storage.from(BUCKET).list(folder, { search: path.split("/")[2] });
+    if (!found || found.length === 0) return json(400, { error: "The uploaded file could not be found. Upload it again." });
+  } else {
+    id = crypto.randomUUID();
+    path = `${p.id}/${id}/${safeFileName(f.file_name)}`;
+    const { error: upErr } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, f.bytes!, { contentType: f.mime, upsert: false });
+    if (upErr) return json(502, { error: `The file could not be stored: ${upErr.message}` });
+  }
 
   const { error } = await supabase.schema("fni").from("price_sheets").insert({
     id,
@@ -140,6 +157,23 @@ async function upload(supabase: SupabaseClient, body: Record<string, unknown>): 
   });
   if (error) return json(500, { error: `The sheet could not be saved: ${error.message}` });
   return json(200, { sheet: await loadSheet(supabase, id) });
+}
+
+/** A one-time URL the browser uploads one file to, straight into the bucket. */
+async function uploadUrl(supabase: SupabaseClient, body: Record<string, unknown>): Promise<Response> {
+  const providerId = text(body.provider_id);
+  const fileName = text(body.file_name);
+  if (!UUID_RE.test(providerId)) return json(400, { error: "Choose the provider this sheet is from." });
+  if (!fileTypeFor(fileName)) return json(400, { error: "The file must be a PDF, an Excel workbook (XLSX or XLS) or a CSV." });
+  const { data: provider } = await supabase.schema("fni").from("providers").select("id, name, kind").eq("id", providerId).maybeSingle();
+  const p = provider as { id: string; name: string; kind: string } | null;
+  if (!p) return json(404, { error: "That provider does not exist." });
+  if (p.kind !== "Price Sheet") return json(400, { error: `${p.name} is rated through its API, so it has no price sheets.` });
+
+  const path = `${p.id}/${crypto.randomUUID()}/${safeFileName(fileName)}`;
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(path);
+  if (error || !data) return json(502, { error: `An upload could not be started: ${error?.message ?? "no URL"}` });
+  return json(200, { file_path: path, signed_url: data.signedUrl });
 }
 
 async function publish(supabase: SupabaseClient, body: Record<string, unknown>): Promise<Response> {
@@ -222,6 +256,9 @@ serve(async (req: Request) => {
     }
 
     switch (body.action) {
+      case "upload_url":
+        return await uploadUrl(supabase, body);
+
       case "upload":
         return await upload(supabase, body);
 

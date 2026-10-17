@@ -10,12 +10,15 @@ export interface AdminSection {
   href: string;
   label: string;
   /** Which of the menu's line icons to draw. See components/admin/Icon.tsx. */
-  icon: "sessions" | "pricing" | "wording";
+  icon: "sessions" | "pricing" | "wording" | "providers" | "menus" | "sheets";
 }
 
 export const ADMIN_SECTIONS: readonly AdminSection[] = [
   { href: "/admin/sessions", label: "Sessions", icon: "sessions" },
   { href: "/admin/pricing", label: "Pricing", icon: "pricing" },
+  { href: "/admin/providers", label: "Providers", icon: "providers" },
+  { href: "/admin/menus", label: "Menus", icon: "menus" },
+  { href: "/admin/price-sheets", label: "Price sheets", icon: "sheets" },
   { href: "/admin/wording", label: "Wording", icon: "wording" },
 ];
 
