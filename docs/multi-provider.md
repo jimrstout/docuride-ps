@@ -1,7 +1,7 @@
 # DocuRide PS: many F&I providers
 
-Status: kept current as the parts land. Part 1 (providers) and Part 2 (adapters)
-are live.
+Status: kept current as the parts land. Parts 1 (providers), 2 (adapters) and 3
+(menu templates) are live.
 
 DocuRide PS was built around one F&I vendor: Riders Advantage, rated and
 contracted through the TecAssured API. This document describes how it becomes a
@@ -77,6 +77,12 @@ updated_by.
 Match" or "Side by Side"), and the ordered list of eligible product ids.
 
 `sessions.menu_template_id` records the template matched at rating time.
+
+Built in Part 3 as migration 0023. Conditions are stored in the words people
+read: deal types "Loan" and "Cash" (sessions.finance_type), conditions "New"
+and "Used", makes as written. A slot's products are catalog ids of the
+tenant's own rows, not a store's copy, so a store override of a product's
+wording never drops it from a menu.
 
 ### Price sheets (Part 5)
 
@@ -202,7 +208,18 @@ Slots:
 - A slot with no offers is hidden from the customer and listed for staff on
   Verify.
 
-Open questions are recorded in section 8.
+Today's family screen, with its tier buttons (Bronze, Silver, Gold, Platinum),
+is a Side by Side slot. So "All deals" seeds five Side by Side slots, one per
+TecAssured family, in the catalog's display order: Maintenance, Mechanical
+Protection, Tire and Wheel, Theft, Battery. Best Match is for templates that
+prefer one provider's product and fall back to another's.
+
+An offered product that no slot of the matched template names is not shown:
+the template decides the menu. "All deals" names all eleven, so nothing changes.
+
+The rules live in `_shared/menu-templates.ts` (pure, tested) and the reads in
+`_shared/menu-template-rows.ts`. Rating starts recording the matched template
+in Part 4; the planner starts rendering slots in Part 7.
 
 ---
 
