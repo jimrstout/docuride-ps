@@ -1,7 +1,7 @@
 # DocuRide PS: many F&I providers
 
 Status: kept current as the parts land. Parts 1 (providers), 2 (adapters), 3
-(menu templates) and 4 (rating across providers) are live.
+(menu templates), 4 (rating across providers) and 5 (price sheets) are live.
 
 DocuRide PS was built around one F&I vendor: Riders Advantage, rated and
 contracted through the TecAssured API. This document describes how it becomes a
@@ -283,6 +283,29 @@ migration 0024 adding `sessions.rated_provider_ids`:
    sheet for overlapping dates.
 
 Model, tokens and duration are recorded. The key is never logged or returned.
+
+Built in Part 5 as migration 0025 and two functions:
+
+- `fni-price-sheets` (admin): list, open, upload, correct a rate, leave a rate
+  out, publish, retire. `fni-price-sheet-parse` reads one sheet with Claude.
+  Both take the shared secret; only the admin area's server calls them, after
+  its operator sign-in, and every write names the operator.
+- The parse answers at once (Parsing) and reads in the background, because a
+  long sheet takes longer than a request should wait. The page shows Parsed or
+  Parse Failed with notes when it is done.
+- Structured outputs (`output_config.format` with the schema in
+  `_shared/price-sheet-extract.ts`) constrain the answer, not a forced tool:
+  Sonnet 5.5 refuses forced tool use. When the model is one that accepts it,
+  the request asks for the server-side refusal fallback (`fallbacks: "default"`).
+  A refusal or an answer too long for one reading is said in plain English; a
+  CSV piece too dense is halved and read again.
+- Nothing is deleted. A misread rate is **left out** with a reason: kept as the
+  record, never offered, and not counted against publishing. A sheet is read
+  once; to read it again, upload it again. A replaced sheet is Retired.
+- A rate that names no make takes the provider's makes. The checks still flag a
+  rate that would be offered on every brand.
+- The sheet in force for a deal is the Published one whose dates cover the sale
+  date (today when the deal has none).
 
 ---
 

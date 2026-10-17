@@ -88,3 +88,11 @@ verify_jwt = false
 
 [functions.fni-refresh-vehicle-types]
 verify_jwt = false
+
+# ── Price sheets (multi-provider Part 5) ─────────────────────────────────────
+# Called only by the admin area's server, with the shared secret.
+[functions.fni-price-sheets]
+verify_jwt = false
+
+[functions.fni-price-sheet-parse]
+verify_jwt = false
