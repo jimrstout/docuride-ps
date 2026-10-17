@@ -36,7 +36,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { SESSION_MODES, isSessionMode } from "../_shared/session-mode.ts";
-import { normalizeOffer } from "../_shared/planner-offers.ts";
+import { currentRows, familiesFromRows, type RatingRow } from "../_shared/rating-summary.ts";
 import { offerRowsFor, tecAssuredProviderId } from "../_shared/provider-rows.ts";
 import type { PricingRule } from "../_shared/planner-pricing.ts";
 import {
@@ -69,6 +69,7 @@ const SESSION_COLUMNS = [
   "id", "status", "expires_at", "tenant_id", "store_id",
   "tila_amount_financed", "amount_financed", "apr", "interest_rate",
   "finance_term_total", "lienholder_name", "max_amount_financed",
+  "rated_provider_ids",
 ].join(", ");
 
 /**
@@ -84,10 +85,11 @@ async function serverAdditionalDown(
   supabase: ReturnType<typeof createClient>,
   s: Record<string, unknown>
 ): Promise<{ value: number | null; reason: string | null }> {
-  // Every provider's current quote. One that is out of date prices nothing.
-  const offers = (await offerRowsFor(supabase, s.id as string)).filter(
-    (o) => o.out_of_date !== true && o.response_payload !== null && o.provider?.adapter === "TecAssured"
-  );
+  // Every provider of the latest rating. One that is out of date prices nothing.
+  const offers = currentRows(
+    (await offerRowsFor(supabase, s.id as string)) as unknown as RatingRow[],
+    s.rated_provider_ids as string[] | null
+  ).filter((o) => o.out_of_date !== true && o.state === "Rated" && o.response_payload !== null);
 
   const { data: ruleRows } = await supabase
     .schema("fni")
@@ -111,9 +113,7 @@ async function serverAdditionalDown(
   }
 
   const priced = priceFamilies(
-    offers.flatMap((o) =>
-      normalizeOffer(o.response_payload, o.provider ? { id: o.provider.id, name: o.provider.name } : null)
-    ),
+    familiesFromRows(offers),
     (ruleRows ?? []) as unknown as PricingRule[]
   );
   return additionalDownForSelections(s, priced, selections);

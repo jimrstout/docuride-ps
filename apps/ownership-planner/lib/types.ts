@@ -432,7 +432,11 @@ export interface VerifySheet {
     out_of_date: boolean;
     rated_at: string | null;
     detail: string | null;
+    /** One line per provider the latest rating covered, in plain English. */
+    providers?: { name: string; state: string; line: string }[];
   };
+  /** The menu template this deal matches. Null when the dealer group has none. */
+  menu_template?: { name: string } | null;
   vin_decode: Record<string, unknown> | null;
   vin_decode_at: string | null;
   /** When a decode last started, successful or not. The page decodes on its

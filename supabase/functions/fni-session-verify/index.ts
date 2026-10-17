@@ -25,7 +25,11 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
-import { offerRowsFor, tecAssuredAccount, tecAssuredRow } from "../_shared/provider-rows.ts";
+import { offerRowsFor, tecAssuredAccount } from "../_shared/provider-rows.ts";
+import { currentRows, ratingSummary, type RatingRow } from "../_shared/rating-summary.ts";
+import { menuFor, ratingDeal } from "../_shared/rate-session.ts";
+import { priceSheetRequiredInputs } from "../_shared/adapters/price-sheet.ts";
+import { publishedSheetFor } from "../_shared/price-sheet-rows.ts";
 import { getRecord } from "../_shared/zoho.ts";
 import { crmRatingFields } from "../_shared/crm-fields.ts";
 import {
@@ -109,6 +113,8 @@ const COLUMNS = [
   "expires_at", "submit_state", "submit_detail",
   // The staff layer over the CRM's figures. Migration 0016.
   "staff_edits",
+  // Which providers the latest rating covered. Multi-provider Part 4.
+  "rated_provider_ids",
 ].join(",");
 
 async function loadSession(
@@ -249,18 +255,38 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
   // wrong list against the right vehicle.
   const edited = applyStaffEdits(s, edits, editTargetFor);
 
-  const { properties, reason } = await requiredFor(
-    supabase,
-    s.store_id as string,
-    edited.vehicle_type_code
+  // ── Which providers this deal's menu needs, and what each asks for ─────
+  // The template is matched on the edited values, exactly as rating will
+  // match it, and Verify asks for the union of the inputs of the providers its
+  // slots need: TecAssured's required properties when Riders Advantage is on
+  // the menu, and whatever each Price Sheet provider's Published sheet tests.
+  const deal = ratingDeal({ ...edited, store_id: s.store_id });
+  const menu = await menuFor(supabase, s.tenant_id as string, deal);
+  const needsTecAssured = menu.providers.some((p) => p.adapter === "TecAssured");
+
+  const { properties: taProperties, reason: taReason } = needsTecAssured
+    ? await requiredFor(supabase, s.store_id as string, edited.vehicle_type_code)
+    : { properties: [] as string[], reason: null };
+
+  const sheetInputs = await Promise.all(
+    menu.providers
+      .filter((p) => p.kind === "Price Sheet")
+      .map(async (p) => {
+        const { sheet, rates } = await publishedSheetFor(supabase, p.id, deal.sale_date);
+        return sheet ? priceSheetRequiredInputs(rates) : [];
+      })
   );
+  const properties = [...new Set([...taProperties, ...sheetInputs.flat()])];
+  const reason = taReason;
   const sheet = buildVerification(s as unknown as VerificationSource, properties, edits);
 
-  // The TecAssured provider's attempt. Rating per provider is shown from
-  // Part 4 of docs/multi-provider.md.
-  const offerRow = tecAssuredRow(await offerRowsFor(supabase, s.id as string));
-
-  const offer = (offerRow ?? null) as unknown as Record<string, unknown> | null;
+  // ── The rating, per provider ──────────────────────────────────────────
+  const summary = ratingSummary(
+    currentRows(
+      (await offerRowsFor(supabase, s.id as string)) as unknown as RatingRow[],
+      s.rated_provider_ids as string[] | null
+    )
+  );
 
   const [duplicates, contracts] = await Promise.all([
     duplicateVinSessions(supabase, s),
@@ -285,15 +311,18 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
       verified_at: s.verified_at ?? null,
       verified_by: s.verified_by ?? null,
     },
-    rating: offer
-      ? {
-          state: String(offer.state ?? "Rated"),
-          product_count: offer.product_count ?? 0,
-          out_of_date: offer.out_of_date === true,
-          rated_at: offer.rated_at ?? null,
-          detail: offer.state === "Failed" ? (offer.error_detail ?? null) : null,
-        }
-      : { state: "Pending", product_count: 0, out_of_date: false, rated_at: null, detail: null },
+    // One status across providers, so the page's badge and its gate read as
+    // before, and a line per provider: "Riders Advantage: Rated, 11 products."
+    rating: {
+      state: summary.state,
+      product_count: summary.product_count,
+      out_of_date: summary.out_of_date,
+      rated_at: summary.rated_at,
+      detail: summary.state === "Rated" ? null : summary.detail,
+      providers: summary.providers.map((p) => ({ name: p.name, state: p.state, line: p.line })),
+    },
+    // The template the deal matches now. Rating records it on the session.
+    menu_template: menu.template ? { name: menu.template.name } : null,
     vin_decode: s.vin_decode ?? null,
     vin_decode_at: s.vin_decode_at ?? null,
     vin_decode_attempted_at: s.vin_decode_attempted_at ?? null,

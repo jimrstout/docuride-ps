@@ -186,8 +186,9 @@ test("every write names its provider and every upsert key includes it", () => {
   const submit = read("supabase/functions/fni-contract-submit/index.ts");
   assert.match(submit, /onConflict: "session_id,provider_id,provider_product_id"/);
   assert.equal((submit.match(/provider_id: store\.providerId,/g) ?? []).length, 2);
-  const rate = read("supabase/functions/fni-rate-vehicle/index.ts");
-  assert.match(rate, /provider_id: providerId,/);
+  // Rating records one row per provider (Part 4), in _shared/rate-session.ts.
+  const rate = read("supabase/functions/_shared/rate-session.ts");
+  assert.match(rate, /provider_id: o\.provider\.id,/);
   assert.match(rate, /onConflict: "session_id,provider_id"/);
   // The planner sends the provider with every decision.
   assert.match(read("apps/ownership-planner/app/plan/[sessionId]/Planner.tsx"), /provider_id: p\.provider_id,/);
