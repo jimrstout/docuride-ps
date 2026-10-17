@@ -78,9 +78,6 @@ details.blob{background:var(--paper-2);border:1px solid var(--rule);border-radiu
 details.blob > summary{cursor:pointer;padding:11px 14px;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);display:flex;align-items:center;gap:10px}
 details.blob[open] > summary{border-bottom:1px solid var(--rule)}
 details.blob .tag{color:var(--ink-3);letter-spacing:0;text-transform:none;font-size:11.5px}
-.blobtools{padding:10px 14px 0}
-.blobtools button{background:none;border:1px solid var(--rule);border-radius:4px;padding:4px 9px;font-family:var(--mono);font-size:11px;color:var(--ink-2)}
-pre{font-family:var(--mono);font-size:12px;line-height:1.45;background:var(--paper);border:1px solid var(--rule-2);border-radius:4px;padding:12px;margin:10px 14px 14px;overflow-x:auto;white-space:pre}
 </style>
 </head>
 <body>
@@ -160,7 +157,9 @@ const DETAIL_GROUPS = [
   ["Unit",     ["stock_number","vin","unit_year","unit_make","unit_model"]],
   ["Meta",     ["zoho_modified_time","created_at","updated_at","tenant_id"]],
 ];
-const JSONB_COLS = ["dealership","tila","financials","trades","raw"];
+const JSONB_COLS = ["dealership","tila","financials","trades"];
+// Read by name, never "*": the raw column is not shown on this page.
+const DETAIL_COLS = ["id", ...DETAIL_GROUPS.flatMap(([, cols]) => cols), ...JSONB_COLS].join(", ");
 
 // detectSessionInUrl puts #access_token=... in the hash on a recovery or
 // invite link. Only a uuid is a deal id, so auth fragments never route.
@@ -267,8 +266,7 @@ async function loadList(){
 
 /**
  * One jsonb column as a collapsed <details>: flat key/value rows one level
- * deep, nested objects and arrays pretty-printed inside their own row, plus a
- * toggle for the whole blob.
+ * deep, nested objects and arrays pretty-printed inside their own row.
  */
 function blobSection(name, value){
   const d = el("details","blob");
@@ -282,20 +280,6 @@ function blobSection(name, value){
     ? (isArr ? "empty array" : "empty")
     : `${entries.length} ${isArr ? "item" : "key"}${entries.length === 1 ? "" : "s"}`));
   d.appendChild(s);
-
-  const tools = el("div","blobtools");
-  const btn = el("button",null,"raw JSON");
-  tools.appendChild(btn);
-  d.appendChild(tools);
-
-  const pre = el("pre", null, JSON.stringify(value === undefined ? null : value, null, 2));
-  pre.style.display = "none";
-  d.appendChild(pre);
-  btn.onclick = () => {
-    const on = pre.style.display === "none";
-    pre.style.display = on ? "block" : "none";
-    btn.textContent = on ? "hide raw JSON" : "raw JSON";
-  };
 
   if (entries.length){
     const kv = el("div","kv");
@@ -313,7 +297,7 @@ async function loadDetail(id){
   $("detailSub").textContent = "";
   body.appendChild(el("div","empty","Loading…"));
 
-  const { data, error } = await sb.from("deals").select("*").eq("id", id).single();
+  const { data, error } = await sb.from("deals").select(DETAIL_COLS).eq("id", id).single();
   clear(body);
   if (error){
     $("detailTitle").textContent = "Not found";
