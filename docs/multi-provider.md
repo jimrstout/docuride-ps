@@ -1,6 +1,7 @@
 # DocuRide PS: many F&I providers
 
-Status: design, kept current as the parts land. Part 1 is the first to be built.
+Status: kept current as the parts land. Part 1 (providers) and Part 2 (adapters)
+are live.
 
 DocuRide PS was built around one F&I vendor: Riders Advantage, rated and
 contracted through the TecAssured API. This document describes how it becomes a
@@ -119,11 +120,19 @@ interface NormalizedOffer {
   dealer_cost: number | null;
   suggested_retail: number | null;
   maximum_price: number | null; // a cap the provider enforces at submit
+  provider_markup: number;     // TecAssured's markup inside its maximum; 0 otherwise
   options: SurchargeOption[];
   eligibility_notes: string[];
   rate_key: string;            // what contracts this exact offer
+  source: { product, rate };   // the provider's own objects, for the record only
 }
 ```
+
+Built in Part 2 as `_shared/normalized-offer.ts`. Two fields were added to the
+planned shape: `provider_markup`, because TecAssured's maximum is cost plus its
+markup and the planner already shows both, and `source`, because a selection
+records the provider's rate object verbatim as its rate snapshot. Pricing and
+the screens read neither.
 
 The planner still decides one family at a time (Platinum, Gold, Silver and
 Bronze are tiers of one decision). `groupOffers` folds normalized offers back
@@ -144,6 +153,14 @@ interface ProviderAdapter {
 }
 ```
 
+Built in Part 2 under `_shared/adapters/`: `types.ts` (the interface, with
+inputs named the way Verify names them: "make", "new.used", "engine.ccs"),
+`tecassured.ts` and `tecassured-offers.ts`, and `price-sheet.ts`.
+`normalizeOffer` is now `groupOffers(tecAssuredOffers(quote))`, and a test holds
+its output on a recorded quote to the byte against the code before Part 2.
+fni-rate-vehicle moves onto the adapters in Part 4, when rating runs per
+provider.
+
 - **TecAssured** wraps the existing client. What it sends and receives does not
   change; it only maps the response to normalized offers, with `rate_key` being
   the provider's `rateUnique`.
@@ -151,7 +168,12 @@ interface ProviderAdapter {
   odometer, engine size, sale date and in-service date, but only those its
   Published sheet uses for eligibility. Rating filters the sheet's rows to the
   ones whose eligibility matches the deal. With no Published sheet the failure
-  reads "No price sheet published for BRP."
+  reads "No price sheet published for BRP." and is recorded as Failed, because
+  it is a setup gap staff can close, not a statement that nothing is offered.
+  Rows that match nothing are Not Offered. Eligibility checks make, model
+  contains, model years, vehicle type, New or Used, model years old at the sale
+  date, odometer, engine size, and months in service. A field a row tests that
+  the deal does not carry fails that row.
 
 ---
 
@@ -232,11 +254,14 @@ Model, tokens and duration are recorded. The key is never logged or returned.
 |---|---|---|
 | 1 | 0021 providers | Nothing. Every row is backfilled to Riders Advantage. |
 | 2 | none | Nothing. TecAssured offers pass through the adapter unchanged. |
-| 3 | 0022 menu templates | Nothing. "All deals" reproduces today's menu. |
+| 3 | 0023 menu templates | Nothing. "All deals" reproduces today's menu. |
 | 4 | none, or a small one | Rating writes one row per provider; only Riders Advantage has offers. |
-| 5 | 0023 price sheets | Nothing until a sheet is published and a template uses its products. |
+| 5 | 0024 price sheets | Nothing until a sheet is published and a template uses its products. |
 | 6 | none | Admin pages only. |
-| 7 | 0024 OEM contracts | Planner renders slots; TecAssured contracts as today. |
+| 7 | 0025 OEM contracts | Planner renders slots; TecAssured contracts as today. |
+
+0022 went to the public.deals.raw allow list, which shipped between Parts 1
+and 2, so the later numbers moved up by one.
 
 Each migration is applied immediately before the push that deploys the
 functions that need it, because the old functions read the old columns. Live
