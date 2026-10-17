@@ -539,6 +539,23 @@ button { cursor: pointer; }
 .summary-what small { display: block; font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .summary-empty { font-size: var(--fs-base); color: var(--ink-soft); margin: 0; }
 
+/* ── The decision record on the last screen ───────────────────────────────
+   One group per product screen, under the same goal and "Option 2 of 5" the
+   customer saw there, then the totals in the Payment Plan step's figures. */
+.record { margin: var(--s3) 0; }
+.record-group { margin-bottom: var(--s3); }
+.record-head {
+  display: flex; justify-content: space-between; gap: var(--s3);
+  font-size: var(--fs-label); font-weight: 600; color: var(--copper-ink);
+  text-transform: uppercase; letter-spacing: var(--track-label);
+  border-bottom: var(--bw) solid var(--ink); padding-bottom: var(--s1);
+}
+.panel--ack .record-head { margin: 0; font-size: var(--fs-label); color: var(--copper-ink); line-height: 1.2; }
+.record-price { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.record-price b { display: block; font-size: var(--fs-base); font-weight: 700; color: var(--ink); }
+.record-price small { display: block; font-size: var(--fs-xs); color: var(--good-fg); font-weight: 600; }
+.record-totals { min-width: 0; margin-top: var(--s2); }
+
 /* The house badge. Both plan outcomes are legitimate, so both are stated
    plainly: Included in the good colours, managing it yourself in the neutral
    ones. Neither is red and neither is called declined. */
