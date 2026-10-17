@@ -46,6 +46,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { describeContract, type ContractRef } from "../_shared/duplicates.ts";
+import { isRecorded } from "../_shared/oem-contracts.ts";
 
 const ACTION_VOID = "Void";
 const ACTION_CLEAR = "Clear Submit Status Unknown";
@@ -186,15 +187,16 @@ serve(async (req: Request) => {
     const { data: rows, error: rowErr } = await supabase
       .schema("fni")
       .from("agreement_products")
-      .select("id, provider_product_id, contract_number, product_name, status")
+      .select("id, provider_product_id, contract_number, product_name, status, recorded_by")
       .in("agreement_id", agreementIds)
       .eq("contract_number", contractNumber);
 
     if (rowErr) return json(500, { error: rowErr.message });
 
-    const row = (rows ?? [])[0] as
-      | (ContractRef & { id: string })
-      | undefined;
+    // A recorded OEM contract and a TecAssured one could share a number. The
+    // TecAssured one is the one this function voids; see below for the other.
+    const found = (rows ?? []) as (ContractRef & { id: string; recorded_by: string | null })[];
+    const row = found.find((r) => !isRecorded(r)) ?? found[0];
 
     if (!row) {
       return json(404, {
@@ -211,6 +213,19 @@ serve(async (req: Request) => {
         already_voided: true,
         contract_number: contractNumber,
         message: `${describeContract(row)} was already voided. Nothing was sent to TecAssured.`,
+      });
+    }
+
+    // A recorded OEM contract was never at TecAssured. Calling it to void one
+    // would at best fail and at worst void a different contract of the same
+    // number, so this refuses and names the place it is voided instead.
+    if (isRecorded(row)) {
+      return json(400, {
+        error:
+          `${describeContract(row)} is an OEM contract recorded by staff. Void it under OEM contracts ` +
+          `on Verify, with a reason. Nothing was sent to TecAssured.`,
+        contract_number: contractNumber,
+        recorded: true,
       });
     }
 

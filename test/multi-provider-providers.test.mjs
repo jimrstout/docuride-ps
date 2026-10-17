@@ -191,7 +191,8 @@ test("every write names its provider and every upsert key includes it", () => {
   assert.match(rate, /provider_id: o\.provider\.id,/);
   assert.match(rate, /onConflict: "session_id,provider_id"/);
   // The planner sends the provider with every decision.
-  assert.match(read("apps/ownership-planner/app/plan/[sessionId]/Planner.tsx"), /provider_id: p\.provider_id,/);
+  // A tier names its own provider when a menu slot mixes providers (Part 7).
+  assert.match(read("apps/ownership-planner/app/plan/[sessionId]/Planner.tsx"), /provider_id: t\.tier\.provider_id \?\? p\.provider_id,/);
   // A stored quote is read per provider, on the server.
   assert.match(read("supabase/functions/_shared/provider-rows.ts"), /\.from\("rated_offers"\)\s*\.select\(`\*, \$\{PROVIDER_EMBED\}`\)/);
 });

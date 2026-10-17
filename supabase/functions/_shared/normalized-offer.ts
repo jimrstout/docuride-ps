@@ -66,6 +66,13 @@ export interface NormalizedTier {
   product_type: string;
   rates: RateVariant[];
   raw: Record<string, unknown>;
+  /**
+   * Who offered this tier, when it differs from its family's: a Side by Side
+   * menu slot can put two providers' products in one decision. Absent
+   * otherwise, so a family read from one quote is exactly what it always was.
+   */
+  provider_id?: string | null;
+  provider_name?: string | null;
 }
 
 /** One decision for the customer: which tier of this family, or none. */

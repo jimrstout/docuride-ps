@@ -102,6 +102,7 @@ confidence, and a flag with its reason.
 A "Recorded by Staff" product is contracted in the OEM's own portal. Staff
 record the contract number and upload the contract PDF on Verify; the agreement
 product is then Recorded, and Void marks it Voided with a reason and a name.
+See section 10.
 
 ---
 
@@ -379,3 +380,66 @@ Three sections join the admin area, in the house style and the shared layout:
 
 Every write goes through fni-admin-settings (Providers, Menus) or
 fni-price-sheets (Price sheets) with the operator's email.
+
+## 10. Planner and contracts (Part 7)
+
+**The menu is the template's slots.** Rating records the template a deal
+matched. fni-session-get resolves its slots against what was offered and turns
+each shown slot into one decision, in the slot's order:
+
+- A slot whose tiers all come from one family is that family, cut to those
+  tiers. "All deals" (one family per slot) gives back exactly the families the
+  planner always showed, which a test holds.
+- A Side by Side slot that gathers tiers from more than one family or provider
+  becomes one decision of its own (family code `slot-<position>`), its tiers
+  cheapest first, each tier naming its provider. Prices, the provider's maximum,
+  copy and the saved selection all follow the tier's provider.
+- A slot nothing was offered for is not shown to the customer. Verify lists it
+  under Menu with the reason ("Theft: none of its 2 products got an offer for
+  this deal, so it is not shown.").
+
+**Product copy is found by provider and code.** Two providers may share a
+product code, so the catalog is indexed by both. A row with no provider keeps
+its old key.
+
+**OEM products join the catalog when their sheet is published.** Publishing
+adds a catalog row for each product the sheet offers that the provider does not
+have yet: name, category and a starting goal, and no customer wording. Without
+wording the product is not presentable, so the planner withholds it and says so
+in its coverage log. Staff write the wording under Providers, Product wording.
+Nothing writes it for them.
+
+**OEM contracts are recorded by staff** (migration 0027, fni-oem-contracts).
+Verify lists the customer's OEM selections under OEM contracts. Staff write the
+contract on the OEM's own system, then type its number and upload the signed
+contract (PDF, JPG or PNG), which the browser puts straight into the private
+oem-contracts bucket. The record is an fni.agreement_products row with status
+Live and recorded_by set, shown as "Recorded", so the one-live-contract rule
+holds. Voiding a record needs a reason and changes the row only.
+
+**Nothing about an OEM contract reaches TecAssured.**
+
+- fni-contract-submit holds back any selection from a Recorded by Staff
+  provider before it takes the lock, and reports it as `recorded_by_staff`. If
+  that leaves nothing, it refuses and sends nothing.
+- Its duplicate check reads only this provider's API contracts, so a recorded
+  OEM contract with the same product code never blocks a Riders Advantage one.
+- fni-contract-void refuses a recorded contract before it opens a TecAssured
+  client, and points to OEM contracts on Verify.
+
+### Part 7 decisions
+
+- **A new OEM product's goal** starts from its category, as the Riders
+  Advantage catalog pairs them: Mechanical Protection and Maintenance are Keep
+  ownership manageable, Theft is Keep the asset valuable, everything else Keep
+  ownership enjoyable. Staff change it with the wording.
+- **Catalog rows from a sheet are only ever added.** A product already in the
+  catalog keeps its name and wording; a failure to add is said on publish and
+  publishing again adds what is missing.
+- **A recorded contract opens the deal's agreement as a Draft** if there is
+  none, and never changes an existing agreement's status, which belongs to the
+  API submit's paperwork.
+- **Recording and voiding need an admin sign-in,** like Void for TecAssured
+  contracts: they are paperwork, not a customer decision.
+- **The signed contract is required** to record. A ten-minute link to it is
+  shown on Verify.

@@ -39,7 +39,7 @@ export function priceFamilies(
       ...t,
       rates: t.rates.map((r) => {
         // The provider's own rules first, then rules for any provider.
-        const priced = priceProduct(rules, t.product_code, r.dealer_cost, f.provider_id);
+        const priced = priceProduct(rules, t.product_code, r.dealer_cost, t.provider_id ?? f.provider_id);
         return {
           ...r,
           retail_price: priced.unpriced_reason ? null : priced.retail_price,
@@ -78,8 +78,11 @@ export function customerPriceFor(
 ): number | null {
   for (const f of priced) {
     // Two providers may use the same product code; a selection names its own.
-    if (providerId !== null && f.provider_id !== null && f.provider_id !== providerId) continue;
-    const tier = f.tiers.find((t) => t.product_code === productCode);
+    const tier = f.tiers.find(
+      (t) =>
+        t.product_code === productCode &&
+        (providerId === null || (t.provider_id ?? f.provider_id) === null || (t.provider_id ?? f.provider_id) === providerId)
+    );
     if (!tier) continue;
     const rate = rateUniqueId
       ? tier.rates.find((r) => r.rate_unique_id === rateUniqueId)

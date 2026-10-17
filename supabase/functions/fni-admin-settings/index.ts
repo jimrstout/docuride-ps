@@ -12,6 +12,8 @@
 //   POST { section: "providers" }-> see providers.ts
 //   GET  ?section=templates      -> see templates.ts
 //   POST { section: "templates" }-> see templates.ts
+//   GET  ?section=wording        -> see wording.ts
+//   POST { section: "wording" }  -> see wording.ts
 //
 // Auth: FNI_WEBHOOK_SECRET via x-webhook-secret header or ?secret= query param,
 // exactly as fni-admin-sessions. The browser never holds it; the console's
@@ -39,6 +41,7 @@ import {
 import { readPricing, writePricing } from "./pricing.ts";
 import { readProviders, writeProviders } from "./providers.ts";
 import { readTemplates, writeTemplates } from "./templates.ts";
+import { readWording, writeWording } from "./wording.ts";
 
 /**
  * A sample deductible for the preview only.
@@ -161,6 +164,11 @@ serve(async (req: Request) => {
   try {
     if (req.method === "GET") {
       const section = url.searchParams.get("section");
+      if (section === "wording") {
+        const tenant = await theTenant(supabase);
+        const reply = await readWording(supabase, tenant.id, url.searchParams.get("provider_id") ?? "");
+        return json(reply.status, reply.body);
+      }
       if (section === "pricing" || section === "providers" || section === "templates") {
         const tenant = await theTenant(supabase);
         const reply =
@@ -198,6 +206,10 @@ serve(async (req: Request) => {
     }
     if (body.section === "templates") {
       const reply = await writeTemplates(supabase, tenant.id, body);
+      return json(reply.status, reply.body);
+    }
+    if (body.section === "wording") {
+      const reply = await writeWording(supabase, tenant.id, body);
       return json(reply.status, reply.body);
     }
 

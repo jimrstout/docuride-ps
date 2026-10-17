@@ -26,6 +26,8 @@
 
 export interface CatalogRow {
   product_code: string;
+  /** Two providers may use one product code, so a row is found by both. */
+  provider_id?: string | null;
   display_name?: string | null;
   store_id?: string | null;
   is_presentable?: boolean;
@@ -34,6 +36,12 @@ export interface CatalogRow {
 export interface RatedProductRef {
   product_code: string;
   product_name: string;
+  provider_id?: string | null;
+}
+
+/** How a catalog row is found: by provider and code, or by code alone. */
+export function catalogKey(providerId: string | null | undefined, code: string): string {
+  return providerId ? `${providerId}:${code}` : code;
 }
 
 export interface CatalogCoverage {
@@ -56,9 +64,10 @@ export function indexCatalog(rows: CatalogRow[]): Map<string, CatalogRow> {
   for (const row of rows) {
     const code = row.product_code;
     if (!code) continue;
-    const existing = byCode.get(code);
+    const key = catalogKey(row.provider_id, code);
+    const existing = byCode.get(key);
     if (!existing || (existing.store_id === null && row.store_id !== null)) {
-      byCode.set(code, row);
+      byCode.set(key, row);
     }
   }
   return byCode;
@@ -81,7 +90,7 @@ export function classifyCoverage(
       continue;
     }
 
-    const row = byCode.get(p.product_code);
+    const row = byCode.get(catalogKey(p.provider_id, p.product_code)) ?? byCode.get(p.product_code);
     if (!row) {
       unmatched.push({ product_code: p.product_code, product_name: p.product_name });
       continue;

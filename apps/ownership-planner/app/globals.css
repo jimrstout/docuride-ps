@@ -940,6 +940,14 @@ button { cursor: pointer; }
 /* One line per provider under the rating, when the menu needs more than one. */
 .vproviders { flex-basis: 100%; list-style: none; margin: var(--s1) 0 0; padding: 0; font-size: var(--fs-xs); color: var(--muted); }
 .vproviders li { margin: 0; line-height: 1.35; }
+/* OEM contracts on Verify: recorded by staff, never sent. Multi-provider Part 7. */
+.voem { margin: var(--s4) 0; }
+.voem h2 { font-size: var(--fs-head); margin: 0 0 var(--s1); }
+.voem-list { list-style: none; margin: var(--s2) 0 0; padding: 0; display: grid; gap: var(--s3); }
+.voem-list > li { border: 1px solid var(--line); border-radius: 8px; padding: var(--s3); }
+.voem-head { margin: 0 0 var(--s2); display: flex; flex-wrap: wrap; gap: var(--s1); align-items: baseline; }
+.oem-record { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: flex-end; }
+.oem-record label { display: grid; gap: 2px; font-size: var(--fs-xs); color: var(--muted); }
 
 /* ── The workspace: what is missing, then the sheet ── */
 .vworkspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); }

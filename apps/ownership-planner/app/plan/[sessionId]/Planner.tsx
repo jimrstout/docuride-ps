@@ -192,7 +192,8 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
       const tiers: PresentableTier[] = [];
 
       for (const tier of family.tiers) {
-        const copy = copyByCode.get(`${family.provider_id ?? ""}:${tier.product_code}`);
+        // A tier names its own provider when a menu slot mixes providers.
+        const copy = copyByCode.get(`${tier.provider_id ?? family.provider_id ?? ""}:${tier.product_code}`);
         const sellable = tier.rates.filter((r) => r.retail_price !== null);
         const fromPrice = sellable.length > 0
           ? Math.min(...sellable.map((r) => r.retail_price as number))
@@ -432,7 +433,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                   : rate.retail_price + surchargeCost(rate, chosen);
 
               return {
-                provider_id: p.provider_id,
+                provider_id: t.tier.provider_id ?? p.provider_id,
                 product_code: t.tier.product_code,
                 product_type: t.tier.product_type,
                 product_name: t.copy.display_name,

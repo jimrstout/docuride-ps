@@ -3,7 +3,8 @@
 // Reading menu templates, their slots and the catalog rows their slots name.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import type { MenuTemplate, SlotProduct, TemplateSlot } from "./menu-templates.ts";
+import { resolveSlots, type MenuTemplate, type ResolvedSlot, type SlotProduct, type TemplateSlot } from "./menu-templates.ts";
+import type { NormalizedFamily } from "./normalized-offer.ts";
 
 /** A tenant's templates with their slots. */
 export async function templatesFor(
@@ -50,4 +51,26 @@ export async function slotCatalog(
     out.set(r.id, { provider_id: r.provider_id, product_code: r.product_code });
   }
   return out;
+}
+
+/**
+ * A template's slots, resolved against what was offered. Null when the
+ * template has no slots (or there is no template), which means the menu is
+ * every offered family, as it was before templates.
+ */
+export async function resolvedSlotsFor(
+  supabase: SupabaseClient,
+  templateId: string | null,
+  offered: NormalizedFamily[]
+): Promise<ResolvedSlot[] | null> {
+  if (!templateId) return null;
+  const { data, error } = await supabase
+    .schema("fni")
+    .from("menu_template_slots")
+    .select("id, template_id, position, title, category, mode, product_ids")
+    .eq("template_id", templateId);
+  if (error) throw new Error(`Failed to read the menu's slots: ${error.message}`);
+  const slots = (data ?? []) as unknown as TemplateSlot[];
+  if (slots.length === 0) return null;
+  return resolveSlots(slots, offered, await slotCatalog(supabase, slots.flatMap((sl) => sl.product_ids)));
 }

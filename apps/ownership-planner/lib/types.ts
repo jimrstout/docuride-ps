@@ -51,6 +51,9 @@ export interface OfferTier {
   product_type: string;
   rates: OfferRate[];
   raw: Record<string, unknown>;
+  /** Set when a menu slot puts two providers' products in one decision. */
+  provider_id?: string | null;
+  provider_name?: string | null;
 }
 
 /**
@@ -437,6 +440,10 @@ export interface VerifySheet {
   };
   /** The menu template this deal matches. Null when the dealer group has none. */
   menu_template?: { name: string } | null;
+  /** Menu slots hidden from the customer on this deal, with why, for staff. */
+  hidden_slots?: { title: string; note: string | null }[];
+  /** The customer's OEM selections, whose contracts staff record here. */
+  oem_contracts?: OemContractSelection[];
   vin_decode: Record<string, unknown> | null;
   vin_decode_at: string | null;
   /** When a decode last started, successful or not. The page decodes on its
@@ -615,3 +622,53 @@ export interface PriceSheetRateRow {
   edited_by: string | null;
 }
 
+
+/** Providers, Product wording: one catalog product and its customer wording. */
+export interface WordingProductRow {
+  id: string;
+  provider_id: string;
+  product_code: string;
+  display_name: string;
+  category: string;
+  goal: string;
+  what_it_accomplishes: string | null;
+  what_it_covers: string | null;
+  coverage_duration: string | null;
+  what_it_excludes: string | null;
+  deductible_note: string | null;
+  how_to_use: string | null;
+  transferable: boolean | null;
+  transfer_note: string | null;
+  future_value_note: string | null;
+  full_terms_url: string | null;
+  active: boolean;
+  updated_at: string;
+  /** What it still needs before the planner shows it. Empty when it is ready. */
+  missing: string[];
+}
+
+/** A recorded OEM contract, as Verify lists it. */
+export interface OemRecordedContract {
+  contract_number: string;
+  /** "Recorded" while it stands, "Voided" after. */
+  state: string;
+  recorded_by: string;
+  recorded_at: string;
+  voided_by: string | null;
+  voided_at: string | null;
+  void_reason: string | null;
+  filename: string | null;
+  /** A ten-minute link to the signed contract. */
+  document_url: string | null;
+}
+
+/** One OEM product the customer chose, and the contract recorded for it. */
+export interface OemContractSelection {
+  selected_product_id: string;
+  provider_name: string;
+  product_name: string;
+  term_months: number | null;
+  customer_price: number | null;
+  contract: OemRecordedContract | null;
+  voided: OemRecordedContract[];
+}
