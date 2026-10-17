@@ -10,10 +10,10 @@
  *   Sold_1_*          -> financials
  *   Trade_1..3_*      -> trades (array, empty trades dropped)
  *
- * The record also lands in `raw`, minus the identity fields listed in
- * REDACTED_FIELDS below, so a field we did not think to promote is still
- * queryable via the gin index and a later migration can promote it without a
- * re-sync.
+ * `raw` holds only the fields named in RAW_FIELDS below. It used to hold the
+ * whole record minus a list of fields to drop, which left employer, proof of
+ * income and the credit application in every deal, readable by anyone who can
+ * sign in. Nothing reads a field out of `raw` today, so the list is minimal.
  *
  * Zoho field API names are case-sensitive (CLAUDE.md). Every name below was
  * verified against getFields for the DocuRide module.
@@ -79,36 +79,30 @@ export const PROMOTED_COLUMNS: Record<string, keyof DealRow> = {
 };
 
 /**
- * Fields dropped on the way into `raw`.
+ * The fields `raw` may hold, and nothing else.
  *
- * `raw` exists so an "off a penny" argument becomes a diff, and none of these
- * are money fields — but deals_read grants select on the whole row to every
- * user in the tenant, so mirroring them would put SSNs and dates of birth in
- * front of anyone who can log in. Keeping them out of Postgres entirely is
- * cheaper than guarding them once they are in (MIGRATION_PATH.md §6).
+ * An allow list, never a list of fields to drop: a sensitive field added to the
+ * CRM later is left out without anybody having to remember it exists. Nothing
+ * in this repository, the database or the DocuRide DC functions reads a field
+ * out of `raw` (checked 2026-10-17), so it keeps only what identifies the
+ * record and when it last changed. The money fields are kept, uncut, in the
+ * tila and financials columns; the deal's identity is in the promoted columns.
  *
- * Zoho remains the system of record for these until there is a table with
- * tighter RLS to hold them. The DL_Upload fields are attachment references,
- * which resolve to a scan of the licence, so they go too. Credit scores are
- * FCRA-regulated and nothing in Phase 1 reads them.
+ * Adding a field: name the code that reads it, and keep it out of the kinds
+ * test/deals-raw-allow-list.test.mjs refuses.
  */
-const REDACTED_FIELDS = new Set([
-  "Buyer_SSN",
-  "Co_Buyer_SSN",
-  "Buyer_DOB",
-  "Co_Buyer_DOB",
-  "Buyer_DL_Number",
-  "Co_Buyer_DL_Number",
-  "Buyer_DL_Upload",
-  "Co_Buyer_DL_Upload",
-  "Buyer_Credit_Score",
-  "Co_Buyer_Credit_Score",
-]);
+export const RAW_FIELDS: readonly string[] = [
+  // The Zoho record id. Also zoho_id; kept so raw names its own record.
+  "id",
+  // When Zoho last changed the record. Also zoho_modified_time.
+  "Modified_Time",
+];
 
-function redact(record: ZohoRecord): ZohoRecord {
+/** The part of a record `raw` may hold: the allowed fields that are present. */
+export function rawFields(record: ZohoRecord): ZohoRecord {
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(record)) {
-    if (!REDACTED_FIELDS.has(k)) out[k] = v;
+  for (const key of RAW_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(record, key)) out[key] = record[key];
   }
   return out as ZohoRecord;
 }
@@ -195,6 +189,6 @@ export function mapDeal(record: ZohoRecord, tenantId: string): DealRow {
     financials: group(record, "Sold_1_"),
     trades: mapTrades(record),
 
-    raw: redact(record),
+    raw: rawFields(record),
   };
 }
