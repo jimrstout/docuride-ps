@@ -167,3 +167,14 @@ test("the closure ignores remote imports", () => {
 test("_shared is not mistaken for a function", () => {
   assert.ok(!functionSlugs().includes("_shared"));
 });
+
+test("a push of several commits is diffed from the commit before the first of them", () => {
+  const wf = readFileSync(new URL("../.github/workflows/deploy-edge-functions.yml", import.meta.url), "utf8");
+  // A depth of 2 held only the last commit, so a rebase merge of a two-commit
+  // pull request diffed one commit and deployed nothing.
+  assert.match(wf, /fetch-depth: 0/);
+  assert.doesNotMatch(wf, /fetch-depth: [1-9]/);
+  // The last-commit fallback is only for a branch's first push.
+  assert.match(wf, /if \[ "\$BEFORE" = "0{40}" \]; then\s+git diff --name-only HEAD~1 HEAD/);
+  assert.match(wf, /elif ! git diff --name-only "\$BEFORE" "\$SHA" > \/tmp\/changed\.txt; then[\s\S]*?exit 1/);
+});

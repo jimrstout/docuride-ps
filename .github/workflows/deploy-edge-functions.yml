@@ -50,8 +50,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          # Needed to diff against the previous commit on a push.
-          fetch-depth: 2
+          # The whole history, so a push of several commits (a rebase merge
+          # of a multi-commit pull request) is diffed from the commit before
+          # the first of them. With a depth of 2 only the last commit was
+          # there, and the earlier ones' functions were silently skipped.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v5
         with:
@@ -102,9 +105,16 @@ jobs:
           else
             # Everything this push touched, including shared modules, resolved
             # through each function's import graph.
-            # BEFORE is all-zeros on a branch's first push, so fall back.
-            if ! git diff --name-only "$BEFORE" "$SHA" > /tmp/changed.txt 2>/dev/null; then
+            # BEFORE is all-zeros on a branch's first push, so fall back to
+            # the last commit then, and only then. Any other failure to diff
+            # stops the run: guessing from the last commit alone is how a
+            # merge of several commits once deployed nothing.
+            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
               git diff --name-only HEAD~1 HEAD > /tmp/changed.txt
+            elif ! git diff --name-only "$BEFORE" "$SHA" > /tmp/changed.txt; then
+              echo "::error::Could not work out what changed since ${BEFORE}. Deploy by hand" \
+                   "with the functions input."
+              exit 1
             fi
             echo "Changed files:"
             sed "s/^/  /" /tmp/changed.txt
