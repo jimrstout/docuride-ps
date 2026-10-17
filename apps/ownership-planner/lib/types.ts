@@ -485,3 +485,133 @@ export interface VerifySheet {
   /** Present on a discard response: the edits that were thrown away. */
   discarded_edits?: string[];
 }
+
+// ── The admin area's Providers, Menus and Price sheets sections ─────────
+
+export interface ProviderStoreRow {
+  store_id: string;
+  name: string;
+  dealer_code: string | null;
+  active: boolean;
+}
+
+export interface ProviderRow {
+  id: string;
+  name: string;
+  kind: "Connected" | "Price Sheet";
+  adapter: string | null;
+  contract_method: "Through API" | "Recorded by Staff";
+  makes: string[];
+  active: boolean;
+  notes: string | null;
+  updated_at: string;
+  updated_by: string | null;
+  stores: ProviderStoreRow[];
+  sheets: { name: string; status: string }[];
+}
+
+export interface ProvidersPayload {
+  stores: { id: string; name: string }[];
+  providers: ProviderRow[];
+}
+
+export interface TemplateSlotRow {
+  id: string;
+  template_id: string;
+  position: number;
+  title: string;
+  category: string | null;
+  mode: "Best Match" | "Side by Side";
+  product_ids: string[];
+}
+
+export interface TemplateRow {
+  id: string;
+  name: string;
+  description: string | null;
+  store_ids: string[];
+  deal_types: string[];
+  vehicle_types: string[];
+  conditions: string[];
+  makes: string[];
+  priority: number;
+  active: boolean;
+  updated_at: string;
+  updated_by: string | null;
+  conditions_line: string;
+  slots: TemplateSlotRow[];
+}
+
+export interface CatalogProductRow {
+  id: string;
+  provider_id: string;
+  provider_name: string;
+  code: string;
+  name: string;
+  category: string;
+}
+
+export interface TemplatesPayload {
+  stores: { id: string; name: string }[];
+  products: CatalogProductRow[];
+  vehicle_types: string[];
+  templates: TemplateRow[];
+}
+
+export interface PriceSheetRow {
+  id: string;
+  provider_id: string;
+  name: string;
+  effective_from: string;
+  effective_to: string | null;
+  status: "Draft" | "Published" | "Retired";
+  file_name: string;
+  file_type: string;
+  parse_status: "Not Parsed" | "Parsing" | "Parsed" | "Parse Failed";
+  parse_notes: string | null;
+  model: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  parse_seconds: number | string | null;
+  parsed_at: string | null;
+  uploaded_by: string;
+  uploaded_at: string;
+  published_by: string | null;
+  published_at: string | null;
+  retired_at: string | null;
+  retired_reason: string | null;
+}
+
+export interface PriceSheetRateRow {
+  id: string;
+  product_code: string;
+  product_name: string;
+  family_code: string | null;
+  plan: string | null;
+  category: string | null;
+  makes: string[];
+  model_contains: string[];
+  year_min: number | null;
+  year_max: number | null;
+  vehicle_types: string[];
+  conditions: string[];
+  max_age_years: number | null;
+  max_odometer: number | null;
+  engine_cc_min: number | null;
+  engine_cc_max: number | null;
+  max_months_in_service: number | null;
+  term_months: number | null;
+  term_miles: number | null;
+  deductible: number | string | null;
+  dealer_cost: number | string | null;
+  suggested_retail: number | string | null;
+  source_ref: string | null;
+  confidence: "High" | "Medium" | "Low";
+  model_note: string | null;
+  flagged: boolean;
+  flag_reason: string | null;
+  left_out: boolean;
+  left_out_reason: string | null;
+  edited_by: string | null;
+}
+

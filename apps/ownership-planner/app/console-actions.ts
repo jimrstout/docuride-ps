@@ -585,3 +585,254 @@ export async function clearSubmitUnknown(formData: FormData): Promise<void> {
   revalidatePath(SESSIONS);
   return backToVerify(sessionId, "cleared");
 }
+
+// ── Providers, Menus and Price sheets (multi-provider Part 6) ────────────
+//
+// The same shape as Pricing: each action checks the operator, sends the write
+// to its function with the operator's email, and comes back to the page with
+// either the function's own sentence for a refusal or a saved notice. Nothing
+// here deletes: providers and menus are switched off, rates left out, sheets
+// retired.
+
+const PROVIDERS = "/admin/providers";
+const MENUS = "/admin/menus";
+const SHEETS = "/admin/price-sheets";
+
+/** A path with query parameters added, keeping any it already had. */
+function withQuery(path: string, add: Record<string, string>): string {
+  const [base, query = ""] = path.split("?");
+  const q = new URLSearchParams(query);
+  for (const [k, v] of Object.entries(add)) q.set(k, v);
+  const s = q.toString();
+  return s ? `${base}?${s}` : base;
+}
+
+/** The function's own sentence for a refusal (400, 404 or 409), or null. */
+function refusedWith(err: unknown): string | null {
+  if (!(err instanceof EdgeError) || ![400, 404, 409].includes(err.status)) return null;
+  const detail = (err.body as { error?: unknown } | undefined)?.error;
+  return typeof detail === "string" ? detail.slice(0, 600) : "That could not be saved.";
+}
+
+async function adminWrite(
+  back: string,
+  write: (by: string) => Promise<unknown>,
+  done: string,
+  next?: (result: unknown) => string
+): Promise<never> {
+  const operator = await currentOperator();
+  if (!operator) redirect(back);
+
+  let result: unknown;
+  try {
+    result = await write(operator.email);
+  } catch (err) {
+    const why = refusedWith(err);
+    if (why !== null) redirect(withQuery(back, { refused: why }));
+    console.error(`admin write failed (${back}):`, err);
+    redirect(withQuery(back, { savefailed: "1" }));
+  }
+  revalidatePath(back.split("?")[0]);
+  redirect(next ? next(result) : withQuery(back, { [done]: "1" }));
+}
+
+const field = (fd: FormData, k: string) => String(fd.get(k) ?? "");
+
+// ── Providers ──
+
+export async function saveProvider(fd: FormData): Promise<void> {
+  await adminWrite(PROVIDERS, (by) =>
+    edge.adminSaveProviders({
+      action: "save",
+      provider_id: field(fd, "provider_id"),
+      name: field(fd, "name"),
+      makes: field(fd, "makes"),
+      notes: field(fd, "notes"),
+      active: fd.get("active") === "on",
+      updated_by: by,
+    }), "saved");
+}
+
+export async function addProvider(fd: FormData): Promise<void> {
+  await adminWrite(PROVIDERS, (by) =>
+    edge.adminSaveProviders({
+      action: "add",
+      name: field(fd, "name"),
+      makes: field(fd, "makes"),
+      notes: field(fd, "notes"),
+      updated_by: by,
+    }), "added");
+}
+
+export async function setProviderStores(fd: FormData): Promise<void> {
+  await adminWrite(PROVIDERS, (by) =>
+    edge.adminSaveProviders({
+      action: "stores",
+      provider_id: field(fd, "provider_id"),
+      store_ids: fd.getAll("store_ids").map(String),
+      updated_by: by,
+    }), "saved");
+}
+
+// ── Menus ──
+
+export async function saveTemplate(fd: FormData): Promise<void> {
+  const templateId = field(fd, "template_id");
+  await adminWrite(
+    templateId ? `${MENUS}?template=${templateId}` : MENUS,
+    (by) =>
+      edge.adminSaveTemplates({
+        action: "save",
+        template_id: templateId || undefined,
+        name: field(fd, "name"),
+        description: field(fd, "description"),
+        store_ids: fd.getAll("store_ids").map(String),
+        deal_types: fd.getAll("deal_types").map(String),
+        vehicle_types: fd.getAll("vehicle_types").map(String),
+        conditions: fd.getAll("conditions").map(String),
+        makes: field(fd, "makes"),
+        priority: field(fd, "priority"),
+        active: fd.get("active") === "on",
+        updated_by: by,
+      }),
+    "saved",
+    (r) => `${MENUS}?template=${(r as { template_id: string }).template_id}&saved=1`
+  );
+}
+
+/**
+ * A slot's products, in the order typed beside them. A product with no number
+ * is not in the slot. Ties keep the catalog's order.
+ */
+function slotProducts(fd: FormData): string[] {
+  return [...fd.entries()]
+    .filter(([k, v]) => k.startsWith("order_") && String(v).trim() !== "")
+    .map(([k, v], i) => ({ id: k.slice(6), n: Number(String(v).trim()), i }))
+    .filter((p) => Number.isFinite(p.n))
+    .sort((a, b) => a.n - b.n || a.i - b.i)
+    .map((p) => p.id);
+}
+
+export async function saveSlot(fd: FormData): Promise<void> {
+  const templateId = field(fd, "template_id");
+  const slotId = field(fd, "slot_id");
+  await adminWrite(`${MENUS}?template=${templateId}`, (by) =>
+    edge.adminSaveTemplates({
+      action: slotId ? "save_slot" : "add_slot",
+      template_id: templateId,
+      slot_id: slotId || undefined,
+      title: field(fd, "title"),
+      category: field(fd, "category"),
+      mode: field(fd, "mode"),
+      product_ids: slotProducts(fd),
+      updated_by: by,
+    }), "saved");
+}
+
+export async function moveSlot(fd: FormData): Promise<void> {
+  const templateId = field(fd, "template_id");
+  await adminWrite(`${MENUS}?template=${templateId}`, (by) =>
+    edge.adminSaveTemplates({
+      action: "move_slot",
+      slot_id: field(fd, "slot_id"),
+      direction: field(fd, "direction"),
+      updated_by: by,
+    }), "moved");
+}
+
+// ── Price sheets ──
+
+/**
+ * A one-time URL the browser uploads the file to, straight into the private
+ * bucket, so a large sheet never passes through this server. Returned, not
+ * redirected: the upload form calls this, then submits createPriceSheet.
+ */
+export async function priceSheetUploadUrl(
+  providerId: string,
+  fileName: string
+): Promise<{ file_path: string; signed_url: string } | { error: string }> {
+  const operator = await currentOperator();
+  if (!operator) return { error: "Sign in again to upload." };
+  try {
+    return await edge.priceSheetWrite<{ file_path: string; signed_url: string }>({
+      action: "upload_url",
+      provider_id: providerId,
+      file_name: fileName,
+    });
+  } catch (err) {
+    return { error: refusedWith(err) ?? "An upload could not be started just now. Try again shortly." };
+  }
+}
+
+/** Record an uploaded sheet, then start reading it. */
+export async function createPriceSheet(fd: FormData): Promise<void> {
+  const operator = await currentOperator();
+  if (!operator) redirect(SHEETS);
+  let sheetId = "";
+  try {
+    const made = await edge.priceSheetWrite<{ sheet: { id: string } }>({
+      action: "upload",
+      provider_id: field(fd, "provider_id"),
+      name: field(fd, "name"),
+      effective_from: field(fd, "effective_from"),
+      effective_to: field(fd, "effective_to"),
+      file_name: field(fd, "file_name"),
+      file_path: field(fd, "file_path"),
+      uploaded_by: operator.email,
+    });
+    sheetId = made.sheet.id;
+  } catch (err) {
+    const why = refusedWith(err);
+    redirect(withQuery(SHEETS, why ? { refused: why } : { savefailed: "1" }));
+  }
+
+  // Reading starts straight away. A refusal here (no key, say) is recorded on
+  // the sheet and shown on its page, so it is not an upload failure.
+  try {
+    await edge.priceSheetParse({ sheet_id: sheetId, requested_by: operator.email });
+  } catch (err) {
+    console.error(`price sheet parse did not start for ${sheetId}:`, err);
+  }
+  revalidatePath(SHEETS);
+  redirect(`${SHEETS}/${sheetId}?uploaded=1`);
+}
+
+const sheetPage = (fd: FormData) => `${SHEETS}/${field(fd, "sheet_id")}`;
+
+export async function parsePriceSheet(fd: FormData): Promise<void> {
+  await adminWrite(sheetPage(fd), (by) =>
+    edge.priceSheetParse({ sheet_id: field(fd, "sheet_id"), requested_by: by }), "reading");
+}
+
+const RATE_FIELDS = [
+  "product_code", "product_name", "family_code", "plan", "category", "makes", "model_contains",
+  "year_min", "year_max", "vehicle_types", "conditions", "max_age_years", "max_odometer",
+  "engine_cc_min", "engine_cc_max", "max_months_in_service", "term_months", "term_miles",
+  "deductible", "dealer_cost", "suggested_retail",
+];
+
+export async function editSheetRate(fd: FormData): Promise<void> {
+  const fields = Object.fromEntries(RATE_FIELDS.filter((k) => fd.has(k)).map((k) => [k, field(fd, k)]));
+  await adminWrite(sheetPage(fd), (by) =>
+    edge.priceSheetWrite({ action: "edit_rate", rate_id: field(fd, "rate_id"), edited_by: by, ...fields }), "saved");
+}
+
+export async function leaveOutRate(fd: FormData): Promise<void> {
+  await adminWrite(sheetPage(fd), (by) =>
+    edge.priceSheetWrite({ action: "leave_out", rate_id: field(fd, "rate_id"), reason: field(fd, "reason"), edited_by: by }), "leftout");
+}
+
+export async function includeRate(fd: FormData): Promise<void> {
+  await adminWrite(sheetPage(fd), (by) =>
+    edge.priceSheetWrite({ action: "include", rate_id: field(fd, "rate_id"), edited_by: by }), "saved");
+}
+
+export async function publishSheet(fd: FormData): Promise<void> {
+  await adminWrite(sheetPage(fd), (by) =>
+    edge.priceSheetWrite({ action: "publish", sheet_id: field(fd, "sheet_id"), published_by: by }), "published");
+}
+
+export async function retireSheet(fd: FormData): Promise<void> {
+  await adminWrite(sheetPage(fd), (by) =>
+    edge.priceSheetWrite({ action: "retire", sheet_id: field(fd, "sheet_id"), reason: field(fd, "reason"), retired_by: by }), "retired");
+}

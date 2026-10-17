@@ -1,7 +1,8 @@
 # DocuRide PS: many F&I providers
 
 Status: kept current as the parts land. Parts 1 (providers), 2 (adapters), 3
-(menu templates), 4 (rating across providers) and 5 (price sheets) are live.
+(menu templates), 4 (rating across providers), 5 (price sheets) and 6 (admin
+sections) are live.
 
 DocuRide PS was built around one F&I vendor: Riders Advantage, rated and
 contracted through the TecAssured API. This document describes how it becomes a
@@ -347,13 +348,34 @@ Reviewed and accepted with Part 1:
   old columns, so each migration is applied immediately before the deploy of
   the functions that need it, and the short window between them is accepted.
 
-### Open items
+### Closed items
 
-- **A store account's login is not checked against its provider.** Before
-  Part 1, a foreign key on (credential_id, provider) made sure a store
-  account's TecAssured login was a TecAssured login. Migration 0021 replaces
-  the provider text with provider_id and drops that key, so nothing in the
-  database now ties a Connected account's login to its provider. Every login
-  today is TecAssured, so nothing is wrong yet. A provider-aware check must be
-  restored no later than Part 6, and before any screen lets staff create or
-  edit store accounts.
+- **A store account's login is checked against its provider again,** restored in Part 6 by migration 0026 before
+  any screen edits store accounts. A trigger on fni.store_provider_accounts
+  refuses a Connected provider's account without a login and a Dealer ID, or
+  with a login for another adapter, and a Price Sheet provider's account with a
+  login. The migration checked the existing rows first; all four passed.
+
+## 9. Admin sections (Part 6)
+
+Three sections join the admin area, in the house style and the shared layout:
+
+- **Providers**: every provider, how it is rated, its makes, the stores that
+  sell it and its price sheets. A provider added here is a Price Sheet provider
+  whose contracts are recorded by staff; one rated through an API needs code. A
+  Price Sheet provider's stores are ticked here. A Connected provider's store
+  accounts carry a login and a Dealer ID and are shown, not edited. Nothing is
+  deleted: a provider is switched off.
+- **Menus**: every template, what it matches in plain English ("New, Can-Am,
+  at Parkersburg"), its priority and its slots. A slot's products are numbered in
+  the order they are preferred. Slots move up and down. A slot with no products
+  is not shown; a menu is switched off rather than removed.
+- **Price sheets**: per provider, the sheets with their status and reading;
+  upload a sheet; open one to review it rate by rate (what it fits, term, money,
+  where it was read from, how sure, flagged or ready), correct a rate, leave one
+  out with a reason, publish, or retire. The file goes from the browser straight
+  into the private bucket through a one-time signed URL, because a sheet can be
+  bigger than the admin area's server takes in one request.
+
+Every write goes through fni-admin-settings (Providers, Menus) or
+fni-price-sheets (Price sheets) with the operator's email.

@@ -80,7 +80,8 @@ const fields = (over = {}) => {
 // ── The menu ────────────────────────────────────────────────────────────
 
 test("Pricing is listed between Sessions and Wording", () => {
-  assert.deepEqual(ADMIN_SECTIONS.map((s) => s.label), ["Sessions", "Pricing", "Wording"]);
+  // Providers, Menus and Price sheets joined in multi-provider Part 6.
+  assert.deepEqual(ADMIN_SECTIONS.map((s) => s.label), ["Sessions", "Pricing", "Providers", "Menus", "Price sheets", "Wording"]);
   assert.equal(ADMIN_SECTIONS[1].href, "/admin/pricing");
 });
 
@@ -238,7 +239,7 @@ test("the server checks every write, and the browser writes nothing", () => {
   // Routed through the same function and the same secret as Wording.
   assert.match(index, /if \(!authorized\(req, url\)\) return json\(401/);
   assert.match(index, /if \(body\.section === "pricing"\) \{\s*const reply = await writePricing\(supabase, tenant\.id, body\);/);
-  assert.match(index, /searchParams\.get\("section"\) === "pricing"/);
+  assert.match(index, /section === "pricing" \? await readPricing\(supabase, tenant\.id, url\.searchParams\)/);
   // The page is a server component with no fetch of its own.
   assert.doesNotMatch(page, /"use client"/);
   assert.doesNotMatch(page, /fetch\(/);
