@@ -27,6 +27,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { currentRows, ratingSummary, type RatingRow } from "../_shared/rating-summary.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -46,6 +47,8 @@ const LIST_COLUMNS = [
   "stock_number",
   "created_at",
   "expires_at",
+  // Which providers the latest rating covered. Multi-provider Part 4.
+  "rated_provider_ids",
 ].join(",");
 
 const DEFAULT_LIMIT = 25;
@@ -148,17 +151,25 @@ async function list(url: URL): Promise<Response> {
     const { data: offers } = await supabase
       .schema("fni")
       .from("rated_offers")
-      // The TecAssured provider's attempt per session, one row each. Rating
-      // per provider comes with Part 4 of docs/multi-provider.md.
-      .select("session_id, state, error_detail, product_count, rated_at, provider:providers!inner(adapter)")
-      .in("session_id", sessionIds)
-      .eq("provider.adapter", "TecAssured");
+      // Every provider's attempt per session, summed the way Verify sums them.
+      .select("session_id, provider_id, state, error_detail, product_count, rated_at, out_of_date, provider:providers(id, name, kind, adapter)")
+      .in("session_id", sessionIds);
 
-    for (const o of (offers ?? []) as unknown as Record<string, unknown>[]) {
-      rating.set(String(o.session_id), {
-        state: String(o.state ?? "Rated"),
-        detail: (o.error_detail as string | null) ?? null,
-        at: (o.rated_at as string | null) ?? null,
+    const bySession = new Map<string, RatingRow[]>();
+    // The quotes themselves are not read: a summary needs states and counts.
+    for (const o of (offers ?? []) as unknown as (Omit<RatingRow, "response_payload"> & { session_id: string })[]) {
+      const list = bySession.get(o.session_id) ?? [];
+      list.push({ ...o, response_payload: null });
+      bySession.set(o.session_id, list);
+    }
+    for (const sess of sessions) {
+      const rows = bySession.get(String(sess.id));
+      if (!rows) continue;
+      const summary = ratingSummary(currentRows(rows, sess.rated_provider_ids as string[] | null));
+      rating.set(String(sess.id), {
+        state: summary.state,
+        detail: summary.state === "Rated" ? null : summary.detail,
+        at: summary.rated_at,
       });
     }
   }

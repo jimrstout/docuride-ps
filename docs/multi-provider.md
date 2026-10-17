@@ -1,7 +1,7 @@
 # DocuRide PS: many F&I providers
 
-Status: kept current as the parts land. Parts 1 (providers), 2 (adapters) and 3
-(menu templates) are live.
+Status: kept current as the parts land. Parts 1 (providers), 2 (adapters), 3
+(menu templates) and 4 (rating across providers) are live.
 
 DocuRide PS was built around one F&I vendor: Riders Advantage, rated and
 contracted through the TecAssured API. This document describes how it becomes a
@@ -239,6 +239,27 @@ presentation appears when at least one provider rated and none is out of date.
 
 Changing a rating input marks every provider's row out of date. The maximum
 amount financed is not a rating input and does not.
+
+Built in Part 4 as `_shared/rate-session.ts`, called by fni-rate-vehicle, with
+migration 0024 adding `sessions.rated_provider_ids`:
+
+- The session records the matched template (`menu_template_id`) and the
+  providers this rating covered (`rated_provider_ids`). The menu, the save and
+  Verify read only those providers' rows, so a provider an earlier rating needed
+  (before the deal's make was corrected, say) can neither add products nor hold
+  the menu back as out of date. Its row stays as a record.
+- With no template at all, the TecAssured provider alone is rated, as before.
+- A TecAssured row keeps the provider's quote, read back the way it always was.
+  Any other provider's row keeps its normalized offers: a snapshot of the sheet
+  as rated, so a sheet republished later cannot change a price already shown.
+- The one-line status reads Rated when any provider rated, Not Offered only when
+  every provider said so (the only state a customer is told "not offered"
+  for), and Failed otherwise. One provider out of date holds back the whole
+  menu, as one quote did before.
+- fni-rate-vehicle answers callers as before: `product_count` on success, an
+  error naming each provider's outcome otherwise. The login and Dealer ID are
+  copied to the session only when TecAssured answered.
+- Contracts still go to TecAssured only; Recorded by Staff contracts are Part 7.
 
 ---
 

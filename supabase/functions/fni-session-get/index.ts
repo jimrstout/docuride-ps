@@ -24,8 +24,14 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
-import { allTiers, normalizeOffer, NormalizedFamily } from "../_shared/planner-offers.ts";
-import { offerRowsFor, tecAssuredRow } from "../_shared/provider-rows.ts";
+import { allTiers, NormalizedFamily } from "../_shared/planner-offers.ts";
+import { offerRowsFor } from "../_shared/provider-rows.ts";
+import {
+  currentRows,
+  familiesFromRows,
+  ratingSummary,
+  type RatingRow,
+} from "../_shared/rating-summary.ts";
 import { PricingRule } from "../_shared/planner-pricing.ts";
 import { priceFamilies, sessionCap, sessionPaymentBasis } from "../_shared/plan-prices.ts";
 import { modeLabel } from "../_shared/session-mode.ts";
@@ -174,28 +180,27 @@ serve(async (req: Request) => {
       }
     }
 
-    // ── Rated offer ─────────────────────────────────────────────────────
-    // One row per provider since 0021. Until rating spans providers (Part 4
-    // of docs/multi-provider.md) the menu comes from the TecAssured attempt,
-    // exactly as before; its provider is now stamped on every family.
-    const offerRow = tecAssuredRow(await offerRowsFor(supabase, sessionId));
-    const offerRaw = (offerRow ?? null) as unknown as Record<string, unknown> | null;
+    // ── Rated offers ────────────────────────────────────────────────────
+    // One row per provider. The latest rating names its providers in
+    // sessions.rated_provider_ids, and only their rows make the menu, so a
+    // provider an earlier rating needed and this one did not is not shown.
+    const rows = currentRows(
+      (await offerRowsFor(supabase, sessionId)) as unknown as RatingRow[],
+      s.rated_provider_ids as string[] | null
+    );
+    const summary = ratingSummary(rows);
 
     // ── A superseded quote is not a quote ─────────────────────────────────
     // A refresh that moved a rating input, or a fresh verification, marks the
-    // old quote out of date rather than deleting it: it was a real price once
-    // and the record of it matters. But it is not the answer to the current
-    // question, so nothing downstream may treat it as one -- the customer must
-    // not be shown prices built on inputs that have since changed.
-    const superseded = offerRaw?.out_of_date === true;
-    const offer = superseded ? null : offerRaw;
+    // old quotes out of date rather than deleting them: they were real prices
+    // once and the record of them matters. But they are not the answer to the
+    // current question, so nothing downstream may treat them as one -- the
+    // customer must not be shown prices built on inputs that have since
+    // changed. One provider out of date holds back the whole menu.
+    const superseded = summary.out_of_date;
 
-    const families: NormalizedFamily[] = offer && offerRow?.provider
-      ? normalizeOffer(offer.response_payload, {
-          id: offerRow.provider.id,
-          name: offerRow.provider.name,
-        })
-      : [];
+    const families: NormalizedFamily[] = superseded ? [] : familiesFromRows(rows);
+    const offeredProviders = [...new Set(families.map((f) => f.provider_id).filter((p): p is string => !!p))];
 
     // ── Pricing rules, then price each offered product ──────────────────
     const { data: ruleRows } = await supabase
@@ -254,7 +259,7 @@ serve(async (req: Request) => {
         .from("product_catalog_presentable")
         .select("*")
         .eq("tenant_id", s.tenant_id as string)
-        .eq("provider_id", offerRow?.provider_id ?? "")
+        .in("provider_id", offeredProviders)
         .in("product_code", codes)
         .or(`store_id.eq.${s.store_id},store_id.is.null`);
 
@@ -389,11 +394,9 @@ serve(async (req: Request) => {
       // `detail` is written for a staff member and must not be rendered to a
       // customer. The planner's server layer logs it and drops it.
       offer_status: {
-        state: superseded ? "Superseded" : offer ? String(offer.state ?? "Rated") : "Pending",
-        detail: offer && offer.state === "Failed"
-          ? ((offer.error_detail as string | null) ?? null)
-          : null,
-        attempted_at: offerRaw ? offerRaw.rated_at : null,
+        state: superseded ? "Superseded" : summary.state,
+        detail: !superseded && summary.state === "Failed" ? summary.detail : null,
+        attempted_at: summary.rated_at,
       },
 
       // ── Has a person checked the inputs? ────────────────────────────────
@@ -407,11 +410,11 @@ serve(async (req: Request) => {
         verified_at: s.verified_at ?? null,
       },
 
-      // One object, or null: the TecAssured provider's attempt.
-      offer: offer
+      // One object, or null: every current provider's offers, together.
+      offer: !superseded && rows.length > 0
         ? {
-            rated_at: offer.rated_at,
-            product_count: offer.product_count,
+            rated_at: summary.rated_at,
+            product_count: summary.product_count,
             // Families, each with tiers, each tier with its rates. One decision
             // per family rather than one per product: Platinum, Gold, Silver and
             // Bronze are tiers of the same thing, and asking a customer to

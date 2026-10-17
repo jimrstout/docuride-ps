@@ -490,9 +490,16 @@ test("the required-properties lookup follows an edited vehicle type", () => {
 });
 
 test("the rate request is built from the edited session", () => {
-  assert.match(rateFn, /buildRateRequest\(required, rateSource as unknown as RateSource/);
+  // The edited source is handed to rateSession, and the TecAssured adapter
+  // builds the request from exactly that (Part 4, docs/multi-provider.md).
   assert.match(rateFn, /const rateSource = applyStaffEdits\(/);
-  assert.doesNotMatch(rateFn, /buildRateRequest\(required, sess\b/);
+  assert.match(rateFn, /rateSession\(\s*supabase,\s*\{[^}]*\},\s*rateSource\s*\)/);
+  const adapter = readFileSync(
+    new URL("../supabase/functions/_shared/adapters/tecassured.ts", import.meta.url),
+    "utf8"
+  );
+  assert.match(adapter, /buildRateRequest\(props, rateSource as unknown as RateSource/);
+  assert.doesNotMatch(adapter + rateFn, /buildRateRequest\([a-z]+, sess\b/);
 });
 
 test("the overrides parameter no longer writes over the CRM's columns", () => {

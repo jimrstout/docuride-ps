@@ -44,20 +44,20 @@
 // contract says it was rated under. So the value is copied into the session at
 // the moment it is sent, not joined back through the mapping later.
 
+// ── Every provider the menu needs (2026-10-17) ───────────────────────────
+// Rating now runs per provider: the deal's menu template names the providers
+// its slots need, each is rated through its adapter in parallel, and each gets
+// its own fni.rated_offers row. TecAssured goes through _shared/adapters/
+// tecassured.ts, which is the code that used to sit in steps 4 to 6 below,
+// unchanged in what it sends and receives. See _shared/rate-session.ts and
+// docs/multi-provider.md, section 5.
+
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createTecAssuredClient, EndpointNotFoundError } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { tecAssuredProviderId } from "../_shared/provider-rows.ts";
-import { allTiers, normalizeOffer } from "../_shared/planner-offers.ts";
-import {
-  parseRequiredProperties,
-  readRateProperties,
-  writeRateProperties,
-  type RequiredProperty,
-} from "../_shared/rate-properties.ts";
-import { buildRateRequest, type RateSource } from "../_shared/rate-request.ts";
 import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
+import { rateSession, recordOutcome, type ProviderOutcome } from "../_shared/rate-session.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -117,58 +117,12 @@ function json(status: number, body: unknown): Response {
 // So the row is the record of the last ATTEMPT. `state` says which of the three
 // outcomes it was and `error_detail` says why, for staff. See migration 0013.
 
-type AttemptState = "Rated" | "Not Offered" | "Failed";
-
-async function recordAttempt(
-  supabase: SupabaseClient,
-  sessionId: string,
-  providerId: string | null,
-  state: AttemptState,
-  fields: {
-    request?: unknown;
-    response?: unknown;
-    productCount?: number;
-    error?: string;
-  } = {}
-): Promise<void> {
-  // One attempt per provider per session (0021). Without a provider there is
-  // no row to write it to; that only happens when the tenant has no TecAssured
-  // provider at all, which is said in the response instead.
-  if (providerId === null) {
-    console.error(`RATE_ATTEMPT_NOT_RECORDED session=${sessionId} state=${state}: no provider`);
-    return;
+/** One provider's outcome, as the caller reads it. */
+function outcomeLine(o: ProviderOutcome): string {
+  if (o.result.state === "Rated") {
+    return `${o.provider.name}: Rated, ${o.productCount} ${o.productCount === 1 ? "product" : "products"}.`;
   }
-  const { error } = await supabase
-    .schema("fni")
-    .from("rated_offers")
-    .upsert(
-      {
-        session_id: sessionId,
-        provider_id: providerId,
-        state,
-        request_payload: fields.request ?? null,
-        response_payload: fields.response ?? null,
-        product_count: fields.productCount ?? 0,
-        // The constraint in 0013 requires a reason for Failed and forbids one
-        // otherwise, so this is normalised here rather than at each call site.
-        error_detail: state === "Failed" ? (fields.error ?? "Rating failed") : null,
-        rated_at: new Date().toISOString(),
-        // Every attempt rates the session's current values, so its result is
-        // current by definition, whatever the state. Without this the flag set
-        // by Refresh, +24h or a rating input edit survived every re-rate, and
-        // Verify never offered Open presentation again.
-        out_of_date: false,
-      },
-      { onConflict: "session_id,provider_id" }
-    );
-
-  // A failure to record a failure must not become the thing the caller sees, so
-  // it is logged and swallowed. The caller is already returning an error.
-  if (error) {
-    console.error(
-      `RATE_ATTEMPT_NOT_RECORDED session=${sessionId} state=${state}: ${error.message}`
-    );
-  }
+  return `${o.provider.name}: ${o.result.reason}`;
 }
 
 // ─── Main handler ────────────────────────────────────────────────────────
@@ -199,8 +153,8 @@ serve(async (req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  // The provider this attempt is recorded against. Set once the session is
-  // read, and in scope for the catch below, which records failures too.
+  // The TecAssured provider, so an unexpected failure is still recorded as an
+  // attempt rather than left as an absent row. In scope for the catch below.
   let providerId: string | null = null;
 
   try {
@@ -216,9 +170,6 @@ serve(async (req: Request) => {
 
     const sess = session as SessionRow;
     providerId = await tecAssuredProviderId(supabase, sess.tenant_id);
-    if (providerId === null) {
-      return json(400, { error: "This dealer group has no active TecAssured provider to rate with." });
-    }
 
     const terminalStatuses = ["Finalized", "Written Back", "Cancelled"];
     if (terminalStatuses.includes(sess.status)) {
@@ -272,203 +223,83 @@ serve(async (req: Request) => {
       }
     }
 
-    // ── Step 3: Resolve the store's login and Dealer ID ────────────────
+    // ── Step 3: Rate every provider the menu needs ────────────────────
     //
-    // By store, not by the session's credential_id. The mapping is the current
-    // truth about which account and which Dealer ID this store uses, and a
-    // session created before a store was configured should start working the
-    // moment it is, without anyone editing the session row.
-    let store;
-    try {
-      store = await createTecAssuredClient(sess.store_id, supabase);
-    } catch (err) {
-      return json(400, { error: err instanceof Error ? err.message : String(err) });
-    }
+    // Which login and Dealer ID TecAssured is called with is still resolved by
+    // store, not by the session's credential_id: the mapping is the current
+    // truth, and a session created before a store was configured starts working
+    // the moment it is.
+    const { template, outcomes } = await rateSession(
+      supabase,
+      { id: sess.id, tenant_id: sess.tenant_id, store_id: sess.store_id },
+      rateSource
+    );
 
-    const { client, credentials, dealerCode } = store;
-
-    // ── Step 4: What does this dealer need for this vehicle type? ────────────
-    //
-    // Cached overnight by fni-refresh-rate-properties. Fetched live when the
-    // cache is cold or last said Unavailable, so a store configured this
-    // morning still rates today, and a dealer since given the product is not
-    // refused on a stale answer.
-    const editedVtype = rateSource.vehicle_type_code as string | null;
-
-    if (!editedVtype) {
-      // A body type DocuRide cannot map to a TecAssured vehicle type. Not the
-      // customer's business and not "not offered": it is a gap in our mapping
-      // or a blank Sold_1_Body_Type on the deal, and a person has to close it.
-      await recordAttempt(supabase, session_id, providerId, "Failed", {
-        error:
-          "No TecAssured vehicle type for this unit. The deal's body type is " +
-          "either blank or not in BODY_TYPE_MAP (_shared/vehicle-types.ts), so " +
-          "there is nothing to ask the provider about.",
-      });
+    if (outcomes.length === 0) {
       return json(400, {
-        error: "Missing required fields for rating",
-        missing_fields: ["vehicle_type_code"],
-        message:
-          "The vehicle type decides which properties TecAssured needs, so it has " +
-          "to be set before rating. Set it on the Verify screen.",
+        error: template
+          ? `The menu template "${template.name}" names no active provider's products, so there is nothing to rate.`
+          : "This dealer group has no active provider to rate with.",
       });
     }
 
-    const vtype = editedVtype;
-    let required: RequiredProperty[];
+    const rated = outcomes.filter((o) => o.result.state === "Rated");
+    const productCount = rated.reduce((n, o) => n + o.productCount, 0);
+    const ta = outcomes.find((o) => o.tecassured);
 
-    try {
-      const cached = await readRateProperties(supabase, store.account.id, vtype);
-
-      if (cached && cached.status === "Cached") {
-        required = parseRequiredProperties(cached.properties).properties;
-      } else {
-        const live = await client.getRequiredProperties(vtype);
-        required = (await writeRateProperties(supabase, store.account.id, vtype, live)).properties;
-      }
-    } catch (err) {
-      const detail =
-        err instanceof EndpointNotFoundError
-          ? `TecAssured's ${err.url} is not answering, so the properties needed to ` +
-            `rate a ${vtype} cannot be determined.`
-          : `Could not determine what TecAssured needs to rate a ${vtype}: ` +
-            (err instanceof Error ? err.message : String(err));
-
-      await recordAttempt(supabase, session_id, providerId, "Failed", { error: detail });
-      return json(502, { error: detail });
-    }
-
-    if (required.length === 0) {
-      // The dealer answered and had nothing. Not a fault: this Dealer ID does
-      // not sell this vehicle type, which is the one case where "plans are not
-      // offered on this machine" is a true thing to tell a customer.
-      await recordAttempt(supabase, session_id, providerId, "Not Offered", {
-        response: { requiredproperties: [], vtype, dealer_code: dealerCode },
-      });
-      return json(400, {
-        error: `Dealer ID ${dealerCode} has no rateable products for vehicle type ${vtype}.`,
-        vtype,
-        dealer_code: dealerCode,
-        status: "Unavailable",
-      });
-    }
-
-    // ── Step 5: Answer exactly what was asked ────────────────────────────────
-    const built = buildRateRequest(required, rateSource as unknown as RateSource, {
-      dealerCode,
-      vtype,
-    });
-
-    // ── An unanswered property no longer stops the request ────────────────
-    //
-    // It used to. Anything /rate/requiredproperties named and we could not fill
-    // in was refused here, locally, and TecAssured was never asked -- on the
-    // reasoning that a rate built from a partial request is a rate for a
-    // different vehicle.
-    //
-    // That reasoning was right about price-bearing fields and wrong about who
-    // gets to decide which fields those are. /rate/requiredproperties returns a
-    // flat list of names, types and descriptions with no "required" flag on any
-    // of them, so treating all seventeen as mandatory was our inference, not the
-    // provider's instruction. And the provider is perfectly willing to say when
-    // something it needs is absent: `{"error":" Missing displacement."}` is a
-    // real response. A quote it returns for the inputs it was given is its own
-    // price for its own inputs, which is more authoritative than our guess at
-    // which inputs mattered.
-    //
-    // So we send what we have and let TecAssured rule. What we could not supply
-    // is carried forward, because if it does refuse, this list is almost
-    // certainly the reason and it is what a staff member needs to see.
-    const unsupplied = built.missing.map((m) => m.description ?? m.name).join(", ");
-    if (built.missing.length > 0) {
-      console.warn(
-        `RATE_PROPERTIES_UNSUPPLIED session=${session_id} vtype=${vtype} ` +
-          `names=${JSON.stringify(built.missing.map((m) => m.name))}`
-      );
-    }
-
-    const ratePayload = built.request;
-
-    // ── Step 6: Rate ─────────────────────────────────────────────────────────
-    const offerResponse = await client.rateVehicle(ratePayload);
-
-    // ── A refusal is not an offer ──────────────────────────────────────
-    // TecAssured answers a rejected request with HTTP 200 and an error string
-    // -- {"error":" Missing displacement."} is a real one. Without this check
-    // that object was written to rated_offers as the offer and the session was
-    // marked "Rated", so the planner would have shown a customer a menu built
-    // from an error message. The session deliberately keeps its current status.
-    if (offerResponse && typeof offerResponse === "object") {
-      const err = (offerResponse as Record<string, unknown>).error;
-      if (typeof err === "string" && err.trim() !== "") {
-        // The provider's own words first, then what we know we left out, since
-        // that is nearly always the cause and the two together are the whole
-        // answer to "why didn't this rate".
-        await recordAttempt(supabase, session_id, providerId, "Failed", {
-          request: ratePayload,
-          response: offerResponse,
-          error:
-            `TecAssured refused the rate request: ${err.trim()}` +
-            (unsupplied === ""
-              ? ""
-              : ` The deal does not carry ${unsupplied}; enter ${built.missing
-                  .map((m) => m.name)
-                  .join(", ")} on the session (vehicle_properties) and rate again.`),
-        });
-        return json(400, {
-          error: `TecAssured could not rate this vehicle: ${err.trim()}`,
-          tecassured_error: err.trim(),
-          dealer_code: dealerCode,
-          unsupplied_properties: built.missing.map((m) => m.name),
-          // Echoed so the fix is visible without re-deriving the request.
-          request: ratePayload,
-        });
-      }
-    }
-
-    // Counted through the normalizer, which is the one place that knows where
-    // a real quote keeps its products: quote.vehicles[].products[]. This used
-    // to look for a top-level `products` array, which the QA server has never
-    // sent, so product_count was 0 on every live rating and the planner was
-    // told an eleven-product quote held none.
-    const productCount = allTiers(normalizeOffer(offerResponse)).length;
-
-    // ── Step 7: Store the offer ────────────────────────────────────────
-    // Zero products from a request the provider accepted is the honest "not
-    // offered": it asked for nothing more and returned nothing. Anything else
-    // that produced no products came back as an error above.
-    await recordAttempt(supabase, session_id, providerId, productCount > 0 ? "Rated" : "Not Offered", {
-      request: ratePayload,
-      response: offerResponse,
-      productCount,
-    });
-
-    // ── Step 8: Record status, the login and the Dealer ID that acted ──
+    // ── Step 4: Record status, the template, the providers, and who acted ──
     // The session only advances to Rated when there is something to present.
-    // A "Not Offered" session has been asked about and has no menu, which is
-    // not the same as being ready to present one.
+    // The login and Dealer ID are copies on purpose: together they answer
+    // "who rated this", and neither may drift when configuration changes. They
+    // are written only when TecAssured actually answered.
+    const taAnswered = ta && ta.tecassured && ta.result.state !== "Failed";
     const { error: statusErr } = await supabase
       .schema("fni")
       .from("sessions")
       .update({
         status: productCount > 0 ? "Rated" : sess.status,
-        // Both are copies on purpose. Together they are the answer to "who
-        // rated this", and neither may drift when configuration changes.
-        credential_id: credentials.id,
-        dealer_code_used: dealerCode,
+        menu_template_id: template?.id ?? null,
+        rated_provider_ids: outcomes.map((o) => o.provider.id),
+        ...(taAnswered
+          ? { credential_id: ta.tecassured!.credentialId, dealer_code_used: ta.tecassured!.dealer_code }
+          : {}),
       })
       .eq("id", session_id);
 
     if (statusErr) console.error(`Failed to update session status: ${statusErr.message}`);
 
-    // ── Step 9: Return the offer ───────────────────────────────────────
+    const providers = outcomes.map((o) => ({
+      provider: o.provider.name,
+      state: o.result.state,
+      product_count: o.productCount,
+      line: outcomeLine(o),
+    }));
+
+    // ── Step 5: Answer ────────────────────────────────────────────────
+    if (productCount === 0) {
+      // Nothing to present. Every provider's reason, in its own words, is what
+      // a staff member needs to see.
+      const missingVtype = !rateSource.vehicle_type_code && ta !== undefined;
+      return json(400, {
+        error: providers.map((p) => p.line).join(" "),
+        status: outcomes.some((o) => o.result.state === "Not Offered") ? "Not Offered" : "Failed",
+        providers,
+        menu_template: template?.name ?? null,
+        dealer_code: ta?.tecassured?.dealer_code ?? null,
+        unsupplied_properties: ta?.tecassured?.unsupplied ?? [],
+        ...(missingVtype ? { missing_fields: ["vehicle_type_code"] } : {}),
+      });
+    }
+
     return json(200, {
       session_id,
-      status: productCount > 0 ? "Rated" : "Not Offered",
+      status: "Rated",
       product_count: productCount,
-      dealer_code: dealerCode,
-      environment: credentials.environment,
-      offer: offerResponse,
+      providers,
+      menu_template: template?.name ?? null,
+      dealer_code: ta?.tecassured?.dealer_code ?? null,
+      environment: ta?.tecassured?.environment ?? null,
+      offer: ta?.result.response ?? null,
       rated_at: new Date().toISOString(),
     });
   } catch (err) {
@@ -478,9 +309,13 @@ serve(async (req: Request) => {
     // A timeout, a dropped connection, a malformed response. Recorded so the
     // planner shows neutral copy rather than inferring "not offered" from the
     // absence of a quote.
-    await recordAttempt(supabase, session_id, providerId, "Failed", {
-      error: `Rating failed: ${message}`,
-    });
+    if (providerId) {
+      await recordOutcome(supabase, session_id, {
+        provider: { id: providerId, name: "TecAssured", kind: "Connected", adapter: "TecAssured", active: true },
+        productCount: 0,
+        result: { state: "Failed", reason: `Rating failed: ${message}` },
+      });
+    }
 
     return json(500, { error: message });
   }

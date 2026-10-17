@@ -400,10 +400,27 @@ export default async function VerifyPage({
               <small>
                 {sheet.rating.state === "Rated"
                   ? `${sheet.rating.product_count} products, ${stamp(sheet.rating.rated_at)}`
-                  : sheet.rating.detail ?? "No rate yet."}
+                  : (sheet.rating.providers?.length ?? 0) > 1
+                    ? "No provider rated this deal."
+                    : sheet.rating.detail ?? "No rate yet."}
               </small>
+              {(sheet.rating.providers?.length ?? 0) > 1 ? (
+                <ul className="vproviders">
+                  {sheet.rating.providers!.map((p) => (
+                    <li key={p.name}>{p.line}</li>
+                  ))}
+                </ul>
+              ) : null}
             </dd>
           </div>
+          {sheet.menu_template ? (
+            <div>
+              <dt>Menu</dt>
+              <dd>
+                <small>{sheet.menu_template.name}</small>
+              </dd>
+            </div>
+          ) : null}
         </dl>
 
         {sheet.session.is_test ? (
