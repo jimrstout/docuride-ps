@@ -552,6 +552,72 @@ export async function voidContract(formData: FormData): Promise<void> {
   return backToVerify(sessionId, "voided", contractNumber);
 }
 
+// ── OEM contracts, recorded by staff (multi-provider Part 7) ─────────────
+//
+// A Price Sheet provider has no API. Staff write its contract on the OEM's own
+// system, then record it here with the signed document, which the browser puts
+// straight into the private oem-contracts bucket. Nothing here calls
+// TecAssured or any other provider. Signed in, like Void: it is paperwork.
+
+/** A one-time upload URL for a signed OEM contract. */
+export async function oemContractUploadUrl(
+  sessionId: string,
+  fileName: string
+): Promise<{ document_path: string; signed_url: string } | { error: string }> {
+  const operator = await currentOperator();
+  if (!operator) return { error: "Sign in again to upload." };
+  if (!UUID_RE.test(sessionId)) return { error: "That deal could not be found." };
+  try {
+    return await edge.oemContractWrite<{ document_path: string; signed_url: string }>({
+      action: "upload_url",
+      session_id: sessionId,
+      file_name: fileName,
+    });
+  } catch (err) {
+    return {
+      error: err instanceof EdgeError && err.status < 500 ? err.message : "An upload could not be started just now. Try again shortly.",
+    };
+  }
+}
+
+async function oemWrite(fd: FormData, build: (by: string) => Record<string, unknown>): Promise<never> {
+  const operator = await currentOperator();
+  if (!operator) redirect(SESSIONS);
+  const sessionId = String(fd.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
+  let message = "Done.";
+  try {
+    const done = await edge.oemContractWrite<{ message?: string }>({ session_id: sessionId, ...build(operator.email) });
+    message = done.message ?? message;
+  } catch (err) {
+    console.error(`OEM contract write failed for ${sessionId}:`, err);
+    return backToVerify(sessionId, "refused", err instanceof EdgeError ? err.message : "Something went wrong. Try again.");
+  }
+  revalidatePath(`/verify/${sessionId}`);
+  return backToVerify(sessionId, "oem", message);
+}
+
+/** Record an OEM contract whose signed document is already uploaded. */
+export async function recordOemContract(fd: FormData): Promise<void> {
+  await oemWrite(fd, (by) => ({
+    action: "record",
+    selected_product_id: String(fd.get("selected_product_id") ?? ""),
+    contract_number: String(fd.get("contract_number") ?? ""),
+    document_path: String(fd.get("document_path") ?? ""),
+    recorded_by: by,
+  }));
+}
+
+/** Void a recorded OEM contract here. It must also be voided on the OEM's system. */
+export async function voidOemContract(fd: FormData): Promise<void> {
+  await oemWrite(fd, (by) => ({
+    action: "void",
+    contract_number: String(fd.get("contract_number") ?? ""),
+    void_reason: String(fd.get("void_reason") ?? ""),
+    voided_by: by,
+  }));
+}
+
 /**
  * Say that TecAssured has been checked.
  *
@@ -670,6 +736,32 @@ export async function setProviderStores(fd: FormData): Promise<void> {
       action: "stores",
       provider_id: field(fd, "provider_id"),
       store_ids: fd.getAll("store_ids").map(String),
+      updated_by: by,
+    }), "saved");
+}
+
+// ── Product wording ──
+
+export async function saveWording(fd: FormData): Promise<void> {
+  const providerId = field(fd, "provider_id");
+  const productId = field(fd, "product_id");
+  await adminWrite(`${PROVIDERS}/wording?provider=${providerId}&product=${productId}`, (by) =>
+    edge.adminSaveWording({
+      action: "save",
+      product_id: productId,
+      display_name: field(fd, "display_name"),
+      goal: field(fd, "goal"),
+      what_it_accomplishes: field(fd, "what_it_accomplishes"),
+      what_it_covers: field(fd, "what_it_covers"),
+      coverage_duration: field(fd, "coverage_duration"),
+      what_it_excludes: field(fd, "what_it_excludes"),
+      deductible_note: field(fd, "deductible_note"),
+      how_to_use: field(fd, "how_to_use"),
+      transferable: field(fd, "transferable"),
+      transfer_note: field(fd, "transfer_note"),
+      future_value_note: field(fd, "future_value_note"),
+      full_terms_url: field(fd, "full_terms_url"),
+      active: fd.get("active") === "on",
       updated_by: by,
     }), "saved");
 }

@@ -208,6 +208,13 @@ export const edge = {
   adminSaveProviders: <T>(body: Record<string, unknown>) =>
     call<T>("fni-admin-settings", { method: "POST", body: { ...body, section: "providers" } }),
 
+  /** Providers, Product wording: a provider's catalog products and their wording. */
+  adminWording: <T>(providerId: string) =>
+    call<T>("fni-admin-settings", { method: "GET", query: { section: "wording", provider_id: providerId } }),
+
+  adminSaveWording: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-admin-settings", { method: "POST", body: { ...body, section: "wording" } }),
+
   /** The Menus section: every menu template with its slots. */
   adminTemplates: <T>() =>
     call<T>("fni-admin-settings", { method: "GET", query: { section: "templates" } }),
@@ -222,6 +229,10 @@ export const edge = {
   /** Upload, correct, leave out, publish, retire. Checked by the function. */
   priceSheetWrite: <T>(body: Record<string, unknown>) =>
     call<T>("fni-price-sheets", { method: "POST", body }),
+
+  /** OEM contracts, recorded by staff: upload_url, record, void. Never calls a provider. */
+  oemContractWrite: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-oem-contracts", { method: "POST", body }),
 
   /** Read a sheet with Claude. Answers at once; the read runs in the background. */
   priceSheetParse: <T>(body: Record<string, unknown>) =>

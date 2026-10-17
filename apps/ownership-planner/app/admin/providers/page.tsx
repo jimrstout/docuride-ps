@@ -168,7 +168,8 @@ export default async function ProvidersPage({ searchParams }: { searchParams: Pr
                   </td>
                   <td>{sheetLine(p)}</td>
                   <td className="num">
-                    <Link href={`/admin/providers?edit=${p.id}`} prefetch={false} className="ad-btn ad-btn--secondary">Edit</Link>
+                    <Link href={`/admin/providers?edit=${p.id}`} prefetch={false} className="ad-btn ad-btn--secondary">Edit</Link>{" "}
+                    <Link href={`/admin/providers/wording?provider=${p.id}`} prefetch={false} className="ad-btn ad-btn--secondary">Product wording</Link>
                   </td>
                 </tr>
               ))}

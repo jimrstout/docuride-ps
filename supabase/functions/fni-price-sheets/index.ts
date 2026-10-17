@@ -28,6 +28,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { secretsMatch } from "../_shared/supabase.ts";
 import { BUCKET, fileTypeFor, parseRateEdit, parseUpload, safeFileName } from "../_shared/price-sheet-admin.ts";
 import { checkRates, datesOverlap, publishRefusal, type CheckedRate } from "../_shared/price-sheet-checks.ts";
+import { newCatalogRows, type SheetProduct } from "../_shared/oem-contracts.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -220,7 +221,40 @@ async function publish(supabase: SupabaseClient, body: Record<string, unknown>):
     .update({ status: "Published", published_by: by, published_at: now, updated_at: now })
     .eq("id", sheet.id as string);
   if (error) return json(500, { error: `The sheet could not be published: ${error.message}` });
-  return json(200, { sheet: await loadSheet(supabase, sheet.id as string), retired });
+  const catalog = await addToCatalog(supabase, sheet, rates);
+  return json(200, { sheet: await loadSheet(supabase, sheet.id as string), retired, catalog });
+}
+
+/**
+ * Every product the published sheet offers gets a catalog row, so Menus can
+ * put it in a slot and the planner can find it. Name and category only: no
+ * customer wording is written for it, so it is not presentable until staff
+ * write it under Providers, Product wording. A failure here does not undo the
+ * publish; it is said, and publishing again adds what is missing.
+ */
+async function addToCatalog(
+  supabase: SupabaseClient,
+  sheet: Record<string, unknown>,
+  rates: Record<string, unknown>[]
+): Promise<{ added: string[]; problem: string | null }> {
+  const { data: existing, error: readErr } = await supabase
+    .schema("fni")
+    .from("product_catalog")
+    .select("product_code")
+    .eq("tenant_id", sheet.tenant_id as string)
+    .eq("provider_id", sheet.provider_id as string)
+    .is("store_id", null);
+  if (readErr) return { added: [], problem: `The catalog could not be read: ${readErr.message}` };
+  const rows = newCatalogRows(
+    rates as unknown as SheetProduct[],
+    new Set(((existing ?? []) as { product_code: string }[]).map((r) => r.product_code)),
+    sheet.tenant_id as string,
+    sheet.provider_id as string
+  );
+  if (rows.length === 0) return { added: [], problem: null };
+  const { error } = await supabase.schema("fni").from("product_catalog").insert(rows);
+  if (error) return { added: [], problem: `The sheet's products could not be added to the catalog: ${error.message}` };
+  return { added: rows.map((r) => r.display_name as string), problem: null };
 }
 
 serve(async (req: Request) => {

@@ -150,3 +150,43 @@ export function resolveSlots(
       };
     });
 }
+
+/** The cheapest thing a tier can be sold for, for ordering tiers. */
+function floorOf(tier: NormalizedTier): number {
+  const prices = tier.rates.map((r) => r.offered_price ?? r.dealer_cost).filter((p): p is number => p !== null);
+  return prices.length > 0 ? Math.min(...prices) : Number.POSITIVE_INFINITY;
+}
+
+/**
+ * The menu's decisions as families, one per shown slot, in the slot's order.
+ *
+ * A slot whose tiers all come from one family is that family, cut down to
+ * those tiers in the family's own order (cheapest first): "All deals" turns
+ * back into exactly the five families the planner has always shown. A slot
+ * that gathers tiers from more than one family or provider becomes a family of
+ * its own, its tiers cheapest first, each tier naming its provider. Hidden
+ * slots are left out.
+ */
+export function slotFamilies(resolved: ResolvedSlot[]): NormalizedFamily[] {
+  const out: NormalizedFamily[] = [];
+  for (const slot of resolved) {
+    if (slot.hidden) continue;
+    const families = new Set(slot.tiers.map((t) => t.family));
+    if (families.size === 1) {
+      const family = slot.tiers[0].family;
+      const keep = new Set(slot.tiers.map((t) => t.tier.product_code));
+      out.push({ ...family, tiers: family.tiers.filter((t) => keep.has(t.product_code)) });
+      continue;
+    }
+    out.push({
+      family_code: `slot-${slot.position}`,
+      provider_id: null,
+      provider_name: null,
+      tiers: slot.tiers
+        .map(({ family, tier }) => ({ ...tier, provider_id: family.provider_id, provider_name: family.provider_name }))
+        .sort((a, b) => floorOf(a) - floorOf(b)),
+    });
+  }
+  return out;
+}
+

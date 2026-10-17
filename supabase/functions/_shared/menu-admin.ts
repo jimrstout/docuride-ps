@@ -156,3 +156,66 @@ export function conditionsLine(
   if (t.store_ids.length > 0) parts.push(`at ${t.store_ids.map(storeName).join(", ")}`);
   return parts.length === 0 ? "Every deal" : parts.join(", ");
 }
+
+// ── Product wording ──────────────────────────────────────────────────────
+
+export const GOALS = ["Keep ownership manageable", "Keep ownership enjoyable", "Keep the asset valuable"] as const;
+
+/** The customer wording fields, in the order the planner asks its questions. */
+export const WORDING_FIELDS = [
+  "what_it_accomplishes",
+  "what_it_covers",
+  "coverage_duration",
+  "what_it_excludes",
+  "deductible_note",
+  "how_to_use",
+  "transfer_note",
+  "future_value_note",
+  "full_terms_url",
+] as const;
+
+/** What a product still needs before the planner will show it, in words. */
+export function wordingMissing(row: Record<string, unknown>): string[] {
+  const missing: string[] = [];
+  const blank = (k: string) => text(row[k]) === "";
+  if (blank("what_it_accomplishes")) missing.push("what it accomplishes");
+  if (blank("what_it_covers")) missing.push("what it covers");
+  if (blank("coverage_duration")) missing.push("how long it lasts");
+  if (blank("what_it_excludes")) missing.push("what it excludes");
+  if (blank("how_to_use")) missing.push("how to use it");
+  if (row.transferable !== true && row.transferable !== false) missing.push("whether it transfers");
+  if (blank("full_terms_url")) missing.push("a link to the full terms");
+  if (row.active !== true) missing.push("to be switched on");
+  return missing;
+}
+
+/**
+ * A product's wording, as staff write it. Nothing here is generated: the words
+ * a customer reads are written by a person, checked against the provider's
+ * approved language.
+ */
+export function parseWording(body: Record<string, unknown>): { fields: Record<string, unknown> } | { errors: string[] } {
+  const errors: string[] = [];
+  const name = text(body.display_name);
+  if (name === "") errors.push("Give the product the name customers see.");
+  if (name.length > 120) errors.push("That name is longer than 120 characters.");
+  const goal = text(body.goal);
+  if (!(GOALS as readonly string[]).includes(goal)) errors.push("Choose which goal the product serves.");
+  const transfer = text(body.transferable);
+  if (!["", "Yes", "No"].includes(transfer)) errors.push("Transfers must be Yes, No, or not answered yet.");
+  const fields: Record<string, unknown> = {
+    display_name: name,
+    goal,
+    transferable: transfer === "" ? null : transfer === "Yes",
+    active: bool(body.active),
+  };
+  for (const k of WORDING_FIELDS) {
+    const v = text(body[k]);
+    if (v.length > 2000) errors.push("One of the answers is longer than 2,000 characters.");
+    fields[k] = v === "" ? null : v;
+  }
+  const url = fields.full_terms_url as string | null;
+  if (url !== null && !/^https:\/\/\S+$/i.test(url)) errors.push("The full terms link must start with https://.");
+  if (errors.length > 0) return { errors: [...new Set(errors)] };
+  return { fields };
+}

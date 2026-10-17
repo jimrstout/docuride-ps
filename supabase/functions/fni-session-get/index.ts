@@ -32,6 +32,8 @@ import {
   ratingSummary,
   type RatingRow,
 } from "../_shared/rating-summary.ts";
+import { slotFamilies } from "../_shared/menu-templates.ts";
+import { resolvedSlotsFor } from "../_shared/menu-template-rows.ts";
 import { PricingRule } from "../_shared/planner-pricing.ts";
 import { priceFamilies, sessionCap, sessionPaymentBasis } from "../_shared/plan-prices.ts";
 import { modeLabel } from "../_shared/session-mode.ts";
@@ -199,8 +201,29 @@ serve(async (req: Request) => {
     // changed. One provider out of date holds back the whole menu.
     const superseded = summary.out_of_date;
 
-    const families: NormalizedFamily[] = superseded ? [] : familiesFromRows(rows);
-    const offeredProviders = [...new Set(families.map((f) => f.provider_id).filter((p): p is string => !!p))];
+    const offered: NormalizedFamily[] = superseded ? [] : familiesFromRows(rows);
+
+    // ── The menu template's slots ─────────────────────────────────────────
+    // Rating recorded which template the deal matched. Its slots are the
+    // menu: each shown slot is one decision, in the slot's order, and a slot
+    // nothing was offered for is not shown. A session rated before templates
+    // (or with none) shows every offered family, as it always did.
+    let families = offered;
+    if (offered.length > 0) {
+      const resolved = await resolvedSlotsFor(
+        supabase,
+        typeof s.menu_template_id === "string" ? s.menu_template_id : null,
+        offered
+      );
+      if (resolved) families = slotFamilies(resolved);
+    }
+    const offeredProviders = [
+      ...new Set(
+        families
+          .flatMap((f) => [f.provider_id, ...f.tiers.map((t) => t.provider_id ?? null)])
+          .filter((p): p is string => !!p)
+      ),
+    ];
 
     // ── Pricing rules, then price each offered product ──────────────────
     const { data: ruleRows } = await supabase
@@ -271,10 +294,13 @@ serve(async (req: Request) => {
     // copy is a decision; one that matched nothing is a defect. They used to be
     // the same silent absence. See _shared/planner-catalog.ts.
     const coverage = classifyCoverage(
-      tiers.map((t) => ({
-        product_code: t.product_code,
-        product_name: t.product_name,
-      })),
+      pricedFamilies.flatMap((f) =>
+        f.tiers.map((t) => ({
+          product_code: t.product_code,
+          product_name: t.product_name,
+          provider_id: t.provider_id ?? f.provider_id,
+        }))
+      ),
       byCode
     );
 

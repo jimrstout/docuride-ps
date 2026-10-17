@@ -96,3 +96,6 @@ verify_jwt = false
 
 [functions.fni-price-sheet-parse]
 verify_jwt = false
+
+[functions.fni-oem-contracts]
+verify_jwt = false

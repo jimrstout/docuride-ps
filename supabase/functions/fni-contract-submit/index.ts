@@ -66,6 +66,7 @@ import {
   type ContractRef,
   type SubmitLockState,
 } from "../_shared/duplicates.ts";
+import { RECORDED_BY_STAFF, splitSelections } from "../_shared/oem-contracts.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -103,9 +104,9 @@ serve(async (req: Request) => {
     return json(400, { error: "Invalid JSON body" });
   }
 
-  const { session_id, selections } = body;
+  const { session_id } = body;
   if (!session_id) return json(400, { error: "session_id is required" });
-  if (!Array.isArray(selections) || selections.length === 0) {
+  if (!Array.isArray(body.selections) || body.selections.length === 0) {
     return json(400, { error: "At least one product selection is required" });
   }
 
@@ -113,6 +114,36 @@ serve(async (req: Request) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
+
+  // ── OEM selections are never sent ──────────────────────────────────
+  // A product from a Price Sheet provider is contracted on the OEM's own
+  // system and recorded by staff (fni-oem-contracts). It is held back here,
+  // before the lock or any provider call, and reported, so a menu that mixes
+  // OEM and Riders Advantage products can still submit the Riders Advantage
+  // ones and nothing else.
+  const { data: recordedRows } = await supabase
+    .schema("fni")
+    .from("selected_products")
+    .select("rate_unique_id, product_name, providers!inner(contract_method)")
+    .eq("session_id", session_id)
+    .eq("providers.contract_method", RECORDED_BY_STAFF);
+  const recordedNames = new Map(
+    ((recordedRows ?? []) as { rate_unique_id: string; product_name: string }[]).map((r) => [r.rate_unique_id, r.product_name])
+  );
+  const { toProvider: selections, recordedByStaff } = splitSelections(body.selections, new Set(recordedNames.keys()));
+  const recordedByStaffReport = recordedByStaff.map((s) => ({
+    rate_unique: s.rate_unique,
+    product_name: recordedNames.get(s.rate_unique) ?? null,
+    note: "An OEM product. Its contract is written on the OEM's own system and recorded by staff on Verify. It was not sent.",
+  }));
+  if (selections.length === 0) {
+    return json(400, {
+      error:
+        "Every selection is an OEM product, and OEM contracts are recorded by staff on Verify, " +
+        "not submitted. Nothing was sent.",
+      recorded_by_staff: recordedByStaffReport,
+    });
+  }
 
   // The lock's state lives out here, above the try, because the catch is the
   // one place that has to decide what to leave it as. Everything from the
@@ -342,7 +373,11 @@ serve(async (req: Request) => {
         .schema("fni")
         .from("agreement_products")
         .select("provider_product_id, contract_number, product_name, status, rate_unique_id, pdf_link")
-        .eq("agreement_id", (existingAgreement as { id: string }).id);
+        .eq("agreement_id", (existingAgreement as { id: string }).id)
+        // This provider's contracts only. A recorded OEM contract may share a
+        // product code with a Riders Advantage product and must not block it.
+        .eq("provider_id", store.providerId)
+        .is("recorded_by", null);
 
       alreadyContracted = blockingByProduct(
         (existingRows ?? []) as unknown as ContractRef[]
@@ -394,6 +429,7 @@ serve(async (req: Request) => {
         session_id,
         status: session.status,
         already_submitted: true,
+        recorded_by_staff: recordedByStaffReport,
         contracts: already.map((c) => ({
           contract_number: c.contract_number,
           provider_product_id: c.provider_product_id,
@@ -696,6 +732,8 @@ serve(async (req: Request) => {
         pdf_link: p.pdf_link,
       })),
       contract_count: productRows.length,
+      // OEM selections in the request, held back: they are recorded by staff.
+      recorded_by_staff: recordedByStaffReport,
       // A partial retry: these products were already done before this call and
       // were not sent again. Reported so the caller sees the whole deal, not
       // just the part this request happened to create.

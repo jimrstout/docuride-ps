@@ -26,10 +26,13 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { offerRowsFor, tecAssuredAccount } from "../_shared/provider-rows.ts";
-import { currentRows, ratingSummary, type RatingRow } from "../_shared/rating-summary.ts";
+import { currentRows, familiesFromRows, ratingSummary, type RatingRow } from "../_shared/rating-summary.ts";
 import { menuFor, ratingDeal } from "../_shared/rate-session.ts";
 import { priceSheetRequiredInputs } from "../_shared/adapters/price-sheet.ts";
 import { publishedSheetFor } from "../_shared/price-sheet-rows.ts";
+import { resolvedSlotsFor } from "../_shared/menu-template-rows.ts";
+import { oemContractList } from "../_shared/oem-contract-rows.ts";
+import { contractStateLabel } from "../_shared/oem-contracts.ts";
 import { getRecord } from "../_shared/zoho.ts";
 import { crmRatingFields } from "../_shared/crm-fields.ts";
 import {
@@ -115,6 +118,8 @@ const COLUMNS = [
   "staff_edits",
   // Which providers the latest rating covered. Multi-provider Part 4.
   "rated_provider_ids",
+  // The menu template rating matched, for the hidden-slot notes. Part 7.
+  "menu_template_id",
 ].join(",");
 
 async function loadSession(
@@ -187,7 +192,7 @@ async function liveContracts(
   const { data } = await supabase
     .schema("fni")
     .from("agreement_products")
-    .select("provider_product_id, contract_number, product_name, status")
+    .select("provider_product_id, contract_number, product_name, status, recorded_by")
     .in("agreement_id", ids);
 
   return ((data ?? []) as ContractRef[]).filter(occupiesSlot);
@@ -281,16 +286,27 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
   const sheet = buildVerification(s as unknown as VerificationSource, properties, edits);
 
   // ── The rating, per provider ──────────────────────────────────────────
-  const summary = ratingSummary(
-    currentRows(
-      (await offerRowsFor(supabase, s.id as string)) as unknown as RatingRow[],
-      s.rated_provider_ids as string[] | null
-    )
+  const rows = currentRows(
+    (await offerRowsFor(supabase, s.id as string)) as unknown as RatingRow[],
+    s.rated_provider_ids as string[] | null
   );
+  const summary = ratingSummary(rows);
 
-  const [duplicates, contracts] = await Promise.all([
+  // ── The menu's slots, as rating left them ─────────────────────────────
+  // A slot nothing was offered for is not shown to the customer. Staff see
+  // which, and why, here: it is the answer to "where did Theft go?".
+  const resolved = summary.state === "Rated" && !summary.out_of_date
+    ? await resolvedSlotsFor(
+        supabase,
+        typeof s.menu_template_id === "string" ? s.menu_template_id : null,
+        familiesFromRows(rows)
+      )
+    : null;
+
+  const [duplicates, contracts, oemContracts] = await Promise.all([
     duplicateVinSessions(supabase, s),
     liveContracts(supabase, s.id as string),
+    oemContractList(supabase, s.id as string),
   ]);
 
   return {
@@ -323,6 +339,13 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
     },
     // The template the deal matches now. Rating records it on the session.
     menu_template: menu.template ? { name: menu.template.name } : null,
+    // Slots hidden from the customer on this deal, with the reason for staff.
+    hidden_slots: (resolved ?? [])
+      .filter((r) => r.hidden)
+      .map((r) => ({ title: r.title, note: r.staff_note })),
+    // OEM selections, whose contracts staff write on the OEM's system and
+    // record here. See fni-oem-contracts.
+    oem_contracts: oemContracts,
     vin_decode: s.vin_decode ?? null,
     vin_decode_at: s.vin_decode_at ?? null,
     vin_decode_attempted_at: s.vin_decode_attempted_at ?? null,
@@ -344,7 +367,7 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
       contract_number: c.contract_number,
       provider_product_id: c.provider_product_id,
       product_name: c.product_name,
-      status: c.status,
+      status: contractStateLabel(c as { status: string; recorded_by?: string | null }),
     })),
     submit_state: s.submit_state ?? "Idle",
     submit_detail: s.submit_detail ?? null,

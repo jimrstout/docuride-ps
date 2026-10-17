@@ -49,7 +49,9 @@ import {
   setCheckerName,
   verifyAndRate,
   voidContract,
+  voidOemContract,
 } from "@/app/console-actions";
+import OemContractRecord from "@/components/OemContractRecord";
 
 export const dynamic = "force-dynamic";
 
@@ -418,6 +420,13 @@ export default async function VerifyPage({
               <dt>Menu</dt>
               <dd>
                 <small>{sheet.menu_template.name}</small>
+                {(sheet.hidden_slots?.length ?? 0) > 0 ? (
+                  <ul className="vproviders">
+                    {sheet.hidden_slots!.map((h) => (
+                      <li key={h.title}>{h.note ?? `${h.title} is not shown on this deal.`}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </dd>
             </div>
           ) : null}
@@ -539,7 +548,9 @@ export default async function VerifyPage({
                               should authorise. The contract is still listed either
                               way, because knowing it exists is what stops somebody
                               trying to submit it again. */}
-                          {!c.contract_number ? (
+                          {c.status === "Recorded" ? (
+                            <small>An OEM contract. Void it under OEM contracts below.</small>
+                          ) : !c.contract_number ? (
                             <small>No number to void by. Ask TecAssured.</small>
                           ) : operator ? (
                             <form action={voidContract}>
@@ -566,6 +577,71 @@ export default async function VerifyPage({
               </table>
             </div>
           </>
+        ) : null}
+
+        {/* ── OEM contracts, recorded by staff ────────────────────────────── */}
+        {/* A Price Sheet provider has no API. Its contract is written on the
+            OEM's own system and recorded here with the signed document. Nothing
+            on this list calls TecAssured or any other provider. */}
+        {(sheet.oem_contracts?.length ?? 0) > 0 ? (
+          <section className="voem" aria-labelledby="voem-title">
+            <h2 id="voem-title">OEM contracts</h2>
+            <p className="console-note">
+              Write each of these on the OEM&apos;s own system, then record the contract
+              number and the signed contract here. DocuRide does not send them anywhere.
+            </p>
+            <ul className="voem-list">
+              {sheet.oem_contracts!.map((o) => (
+                <li key={o.selected_product_id}>
+                  <p className="voem-head">
+                    <strong>{o.product_name}</strong> <small>{o.provider_name}</small>{" "}
+                    <span className={`tag ${o.contract ? "tag--good" : "tag--quiet"}`}>
+                      {o.contract ? "Recorded" : "Not recorded"}
+                    </span>
+                  </p>
+                  {o.contract ? (
+                    <>
+                      <p>
+                        <small>
+                          Contract {o.contract.contract_number}, recorded by {o.contract.recorded_by}{" "}
+                          {stamp(o.contract.recorded_at)}.{" "}
+                          {o.contract.document_url ? (
+                            <a href={o.contract.document_url} target="_blank" rel="noreferrer">
+                              Open the signed contract
+                            </a>
+                          ) : null}
+                        </small>
+                      </p>
+                      {operator ? (
+                        <form action={voidOemContract} className="oem-record">
+                          <input type="hidden" name="session_id" value={sheet.session.id} />
+                          <input type="hidden" name="contract_number" value={o.contract.contract_number} />
+                          <label>
+                            <span>Why it is being voided</span>
+                            <input name="void_reason" required />
+                          </label>
+                          <button type="submit" className="btn btn--quiet">Void record</button>
+                        </form>
+                      ) : null}
+                    </>
+                  ) : operator ? (
+                    <OemContractRecord sessionId={sheet.session.id} selectedProductId={o.selected_product_id} />
+                  ) : (
+                    <Link className="btn btn--quiet" href="/admin/sessions" prefetch={false}>
+                      Sign in to record
+                    </Link>
+                  )}
+                  {o.voided.map((v) => (
+                    <p key={`${v.contract_number}-${v.voided_at}`}>
+                      <small>
+                        Contract {v.contract_number} was voided by {v.voided_by} {stamp(v.voided_at)}: {v.void_reason}
+                      </small>
+                    </p>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : null}
 
         {sheet.changed_inputs && sheet.changed_inputs.length > 0 ? (
