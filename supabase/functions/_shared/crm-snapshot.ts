@@ -16,7 +16,13 @@
 // Every field here is one fni-session-start maps into a session column, or one
 // fni-session-get reads back to recover the payment math. Nothing on this list
 // is stored that is not already on the session row in its own column; the
-// snapshot is the record of what the CRM said when the session was made.
+// snapshot is the record of what the CRM said about the deal when the session
+// was made.
+//
+// No contact fields. The buyer's, co-buyer's and lender's names, addresses,
+// phones and emails are mapped into the session's own columns, which is all
+// contracting needs, so a second copy here would only be one more place to
+// guard. The lender's name stays: it is a company, and it is a rating input.
 //
 // Adding a field: add it here, say in the comment which code reads it, and the
 // test in test/crm-snapshot-allow-list.test.mjs will check it is not one of the
@@ -54,35 +60,8 @@ export const MENU_CRM_FIELDS: readonly string[] = [
   "Interest_Rate",
   "Term_Months",
 
-  // The buyer, as the contract needs them. mapSession.
-  "Buyer_Type",
-  "Buyer_Display_Name",
-  "Buyer_First_Name",
-  "Buyer_Last_Name",
-  "Buyer_Street_Address",
-  "Buyer_City",
-  "Buyer_State",
-  "Buyer_ZIP",
-  "Buyer_Phone",
-  "Email",
-
-  // The co-buyer, the same way. mapSession.
-  "Co_Buyer_Type",
-  "Co_Buyer_Display_Name",
-  "Co_Buyer_First_Name",
-  "Co_Buyer_Last_Name",
-  "Co_Buyer_Street_Address",
-  "Co_Buyer_City",
-  "Co_Buyer_State",
-  "Co_Buyer_ZIP",
-  "Co_Buyer_Phone",
-  "Co_Buyer_Email",
-
-  // The lender. mapSession and crmRatingFields.
+  // The lender, by name only. crmRatingFields: it decides Loan or Cash.
   "Lienholder_Name",
-  "Lienholder_Street",
-  "Lienholder_City_State_ZIP",
-  "Lienholder_Phone",
 ];
 
 /**

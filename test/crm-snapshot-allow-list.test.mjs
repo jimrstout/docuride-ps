@@ -148,9 +148,34 @@ test("the allow list names no sensitive kind of field", () => {
   assert.equal(new Set(MENU_CRM_FIELDS).size, MENU_CRM_FIELDS.length, "the allow list has a repeat");
 });
 
-test("every field mapSession and crmRatingFields read is on the allow list", () => {
+test("the snapshot keeps no contact fields: the session's columns hold them", () => {
+  const contact = /^(Co_)?Buyer_|^Email$|^Lienholder_(?!Name$)/;
+  for (const key of MENU_CRM_FIELDS) {
+    assert.doesNotMatch(key, contact, `${key} is a contact field and must not be kept`);
+  }
+
+  const session = mapSession(
+    { ...record, Buyer_Street_Address: "12 Elm St", Buyer_Phone: "304-555-0100", Email: "pat@example.com",
+      Co_Buyer_First_Name: "Sam", Lienholder_Street: "1 Bank Plaza", Lienholder_Phone: "304-555-0199" },
+    "store-1", "tenant-1", null, null, "Jim Stout"
+  );
+  for (const v of ["Pat", "Example", "12 Elm St", "304-555-0100", "pat@example.com", "Sam", "1 Bank Plaza", "304-555-0199"]) {
+    assert.ok(!JSON.stringify(session.raw_snapshot).includes(v), `raw_snapshot holds "${v}"`);
+  }
+  // Still on the session, in its columns, for the contract.
+  assert.equal(session.buyer_address, "12 Elm St");
+  assert.equal(session.buyer_email, "pat@example.com");
+  assert.equal(session.cobuyer_first_name, "Sam");
+  assert.equal(session.lienholder_phone, "304-555-0199");
+  // The lender's name is kept: a company, and what makes the deal a loan.
+  assert.equal(session.raw_snapshot.Lienholder_Name, "Test Finance Co");
+});
+
+test("every non-contact field the mappings read is on the allow list", () => {
+  const contact = /^(Co_)?Buyer_|^Email$|^Lienholder_(?!Name$)/;
   for (const file of ["../supabase/functions/_shared/session-map.ts", "../supabase/functions/_shared/crm-fields.ts"]) {
     for (const [, field] of src(file).matchAll(/record\.([A-Za-z0-9_]+)/g)) {
+      if (contact.test(field)) continue;
       assert.ok(MENU_CRM_FIELDS.includes(field), `${file} reads ${field}, which the snapshot does not keep`);
     }
   }
