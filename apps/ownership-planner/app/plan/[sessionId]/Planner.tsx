@@ -59,6 +59,8 @@ import ProductScreen, {
 import ActionFooter, { type SaveState } from "@/components/ActionFooter";
 import PlanSummary, { type PlanLine } from "@/components/PlanSummary";
 import CompletionState from "@/components/CompletionState";
+import DecisionRecord from "@/components/DecisionRecord";
+import { decisionRecord } from "@/lib/decision-record";
 import {
   DealTerms,
   DownPaymentSummary,
@@ -612,6 +614,23 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     };
   });
 
+  // The last screen's record: every tier on every product screen, grouped by
+  // family in the order they were shown, with the decision on each.
+  const recordGroups = decisionRecord(
+    presentable.map((p) => ({
+      code: p.family_code,
+      goal: tierOf(p).copy.goal,
+      tiers: p.tiers.map((t) => ({
+        code: t.tier.product_code,
+        name: t.copy.display_name,
+        term: durationOf(rateOf(t), t.copy.coverage_duration),
+      })),
+      tierInForce: tierOf(p).tier.product_code,
+      decision: decisions[p.family_code],
+      price: priceOf(p),
+    }))
+  );
+
   // ── Footer wiring ───────────────────────────────────────────────────────
   const onBack = () => goTo(Math.max(0, at - 1));
   const onNext = () => {
@@ -987,7 +1006,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
       {screen.kind === "ack" && (
         <section className="screen">
           <CompletionState vehicleName={vehicleName} term={term}>
-            <div className="panel panel--ack">
+            <div className="panel panel--ack" data-session-id={session.id}>
               <h2 className="panel-head">What you were shown, and what you decided</h2>
               <p>
                 Your plan has been saved and prepared for signing. It lists every
@@ -1002,14 +1021,18 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                   : " your credit approval or the terms of your sale"}
                 . Pricing was presented by this system rather than negotiated.
               </p>
+              <DecisionRecord
+                groups={recordGroups}
+                planTotal={planTotal}
+                totals={totals}
+                isCash={isCash}
+              />
               {downSummary}
               <p className="ack-meta">
                 {ackState === "working" && "Preparing your record…"}
                 {ackState === "done" && "Saved and ready for signing."}
                 {ackState === "error" &&
                   "We saved your plan, but couldn't prepare the signing copy. Your dealership can finish this for you."}
-                <br />
-                Session {session.id}
                 <br />
                 {session.mode_label} · Prepared{" "}
                 {new Date(presentedAt.current).toLocaleString("en-US")}
