@@ -12,6 +12,7 @@
 // the menu and Verify read exactly this rating and not a provider an earlier
 // one needed.
 
+import { resolveVehicleType } from "./vehicle-types.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient } from "./tecassured.ts";
 import { tecAssuredAdapter, type TecAssuredDetail } from "./adapters/tecassured.ts";
@@ -55,6 +56,7 @@ export function ratingDeal(src: Record<string, unknown>): RatingDeal & { deal_ty
     year: num(src.unit_year),
     condition: str(src.condition),
     vehicle_type_code: str(src.vehicle_type_code),
+    vehicle_type: resolveVehicleType(src).type,
     odometer: num(src.odometer),
     // The rate request's own resolution: staff entry first, then the VIN decode.
     engine_cc: num(resolveEngineCc(src.vehicle_properties, src.vin_decode)?.value ?? null),
@@ -95,7 +97,7 @@ export async function menuFor(
   const template = chooseTemplate(templates, {
     store_id: deal.store_id,
     deal_type: deal.deal_type,
-    vehicle_type_code: deal.vehicle_type_code,
+    vehicle_type: deal.vehicle_type ?? null,
     condition: deal.condition,
     make: deal.make,
   });

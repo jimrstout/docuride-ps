@@ -1016,6 +1016,15 @@ button { cursor: pointer; }
   scroll-margin-top: 80px;
 }
 .vgroup-fields .vfield:last-child { border-bottom: 0; }
+/* The vehicle type: first in the Vehicle panel, a choice that is hard to miss. */
+.vfield--vtype { display: block; padding: var(--s3) var(--s4); }
+.vtype { border: 1px solid var(--copper-edge); border-radius: 8px; background: var(--copper-wash); padding: var(--s3); margin: 0; }
+.vtype--edited { border-color: var(--copper); }
+.vtype legend { font-weight: 600; padding: 0 var(--s1); }
+.vtype-choices { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.vtype-choice { display: flex; align-items: center; gap: var(--s1); padding: var(--s1) var(--s2); border: 1px solid var(--line); border-radius: 999px; background: #fff; cursor: pointer; }
+.vtype-choice.is-chosen { border-color: var(--copper); color: var(--copper-ink); font-weight: 600; }
+.vtype-line { margin: var(--s2) 0 0; font-size: var(--fs-xs); color: var(--muted); }
 .vfield:target { outline: 2px solid var(--copper); outline-offset: -2px; }
 /* The Missing marker sits under the label, so the value box gets the full
    width and every row lines up. */

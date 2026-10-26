@@ -55,6 +55,7 @@ import {
   moveDocumentsToDealJacket,
 } from "@/app/console-actions";
 import PendingButton from "@/components/PendingButton";
+import VehicleTypeChoice from "@/components/VehicleTypeChoice";
 import { money } from "@/lib/money";
 import OemContractRecord from "@/components/OemContractRecord";
 
@@ -72,7 +73,7 @@ const EDITABLE_HELP: Record<string, string> = {
   "engine.ccs": "Engine displacement in cc.",
   warranty: "Whole months of factory coverage left on the day of sale.",
   "fuel.type": "Gasoline, Electric or Diesel.",
-  vehicle_type_code: "UTV, ATV, MCYC, BIKE, PWAC, BOAT or SNOW.",
+  vehicle_type: "Decides the menu and the version of each product TecAssured will contract.",
   deal_type: "Cash, Finance or Lease.",
   condition: "New or Used.",
   sale_date: "YYYY-MM-DD.",
@@ -90,7 +91,7 @@ const OPTIONAL_FIELDS = new Set(["max_amount_financed"]);
 
 /** The three that take a word rather than a number, so the keypad stays away. */
 const TEXT_FIELDS = new Set([
-  "fuel.type", "vehicle_type_code", "deal_type", "condition",
+  "fuel.type", "vehicle_type", "deal_type", "condition",
   "vin", "unit_make", "unit_model", "buyer_city", "buyer_state",
   "sale_date", "in_service_date",
 ]);
@@ -184,6 +185,19 @@ function Field({ field }: { field: VerifyField }) {
   const tip = [field.label, origin, field.note, help, wasLine, wasDetail]
     .filter(Boolean)
     .join(" ");
+
+  // The vehicle type is a choice, first in the Vehicle panel and hard to miss.
+  if (field.key === "vehicle_type" && field.editable) {
+    const editedLine = edited
+      ? `Entered by Staff: ${field.edited_by ?? "unknown"}, ${stamp(field.edited_at)}. ` +
+        `Was ${field.original ?? "not set"} (${field.original_source}).`
+      : null;
+    return (
+      <div id={`field-${field.key}`} className={`vfield vfield--vtype ${state}`}>
+        <VehicleTypeChoice value={field.value} line={editedLine ?? field.note} edited={edited} />
+      </div>
+    );
+  }
 
   return (
     <div id={`field-${field.key}`} className={`vfield ${state}`} title={tip}>

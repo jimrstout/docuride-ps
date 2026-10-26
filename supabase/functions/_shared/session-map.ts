@@ -7,7 +7,7 @@
 // the test suite: it pulls `serve` from deno.land.
 
 import type { ZohoRecord } from "./zoho.ts";
-import { vtypeForBodyType } from "./vehicle-types.ts";
+import { crmVehicleType } from "./vehicle-types.ts";
 import { crmRatingFields } from "./crm-fields.ts";
 import { menuSnapshot } from "./crm-snapshot.ts";
 
@@ -68,8 +68,6 @@ export function mapSession(
   initiatedBy: string
 ): Record<string, unknown> {
   const lienholderParsed = parseCityStateZip(record.Lienholder_City_State_ZIP);
-  const bodyType = text(record.Sold_1_Body_Type);
-  const vehicleTypeCode = vtypeForBodyType(bodyType);
   const hasLienholder = !!text(record.Lienholder_Name);
   const financeType = hasLienholder ? "Loan" : "Cash";
   const saleDate = record.Sale_Date ?? null;
@@ -103,7 +101,7 @@ export function mapSession(
     unit_model: text(record.Sold_1_Model),
     unit_submodel: null,
     condition: text(record.Sold_1_Condition) || null,
-    vehicle_type_code: vehicleTypeCode,
+    ...crmVehicleType(record as unknown as Record<string, unknown>),
     odometer: integer(record.Sold_1_Meter),
 
     // Financials

@@ -23,7 +23,7 @@ const template = (over = {}) => ({
   id: "t", name: "t", store_ids: [], deal_types: [], vehicle_types: [], conditions: [],
   makes: [], priority: 0, active: true, updated_at: "2026-10-17T00:00:00Z", ...over,
 });
-const deal = { store_id: "pkb", deal_type: "Loan", vehicle_type_code: "UTV", condition: "New", make: "Can-Am" };
+const deal = { store_id: "pkb", deal_type: "Loan", vehicle_type: "UTV", condition: "New", make: "Can-Am" };
 
 test("an empty list matches anything; every specified condition must match", () => {
   assert.ok(templateMatches(template(), deal));

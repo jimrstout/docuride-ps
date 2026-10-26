@@ -257,11 +257,19 @@ test("an existing vehicle_properties value survives the layer", () => {
 test("an edited vehicle type is what decides which fields are asked for", () => {
   // The Defender case. A body type nobody fixed in Zoho is corrected here, and
   // the required-properties lookup has to follow the correction.
+  // Now a choice: the edit is the choice as shown, and the TecAssured code the
+  // lookup needs is derived from it.
   const out = applied(
-    { vehicle_type_code: edit({ value: "utv", original: null, original_source: "Missing" }) },
-    { vehicle_type_code: null }
+    { vehicle_type: edit({ value: "utv", original: null, original_source: "Missing" }) },
+    { vehicle_type_code: null, vehicle_type: null }
   );
-  assert.equal(out.vehicle_type_code, "UTV", "must be upper-cased for the lookup");
+  assert.equal(out.vehicle_type, "UTV");
+  assert.equal(out.vehicle_type_code, "UTV", "the code the required-properties lookup is keyed on");
+  const bike = applied(
+    { vehicle_type: edit({ value: "On-Road Motorcycle", original: "Off-Road Motorcycle", original_source: "CRM" }) },
+    { vehicle_type_code: "BIKE", vehicle_type: "Off-Road Motorcycle" }
+  );
+  assert.equal(bike.vehicle_type_code, "MCYC");
 });
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -333,7 +341,7 @@ test("ratingInputs covers the three fields requiredproperties never names", () =
   // The vehicle type decides what is asked for at all; city and state go up as
   // customerCity and customerState. A change to any of them changes the request.
   const inputs = ratingInputs(sheet());
-  for (const k of ["vehicle_type_code", "buyer_city", "buyer_state"]) {
+  for (const k of ["vehicle_type", "buyer_city", "buyer_state"]) {
     assert.ok(k in inputs, `${k} must count as a rating input`);
   }
 });
@@ -452,11 +460,17 @@ test("refresh never touches the edits column", () => {
 test("refresh compares with the edits applied", () => {
   // Otherwise a CRM field moving underneath an edit would un-verify a session
   // whose rate request did not change at all.
+  // Refresh and Save share the comparison, which lives in one helper.
   const refresh = verifyFn.slice(
     verifyFn.indexOf("async function refresh("),
     verifyFn.indexOf("async function verify(")
   );
-  assert.match(refresh, /buildVerification\([\s\S]{0,120}freshEdits\)/);
+  assert.match(refresh, /await unverifyIfInputsMoved\(supabase, fresh\)/);
+  const helper = verifyFn.slice(verifyFn.indexOf("async function unverifyIfInputsMoved("));
+  assert.match(helper, /buildVerification\([\s\S]{0,120}freshEdits\)/);
+  // And a saved correction to a rating input goes through it too.
+  const save = verifyFn.slice(verifyFn.indexOf("async function save("), verifyFn.indexOf("async function discardEdits("));
+  assert.match(save, /await unverifyIfInputsMoved\(supabase, fresh\)/);
 });
 
 test("discard drops the CRM overrides and keeps what CRM cannot supply", () => {
@@ -616,7 +630,7 @@ test("a formatting-only difference is not an edit", () => {
   assert.equal(sameAsUnedited(editTargetFor("apr"), "6.99", "6.99%"), true);
   assert.equal(sameAsUnedited(editTargetFor("deal_type"), "Loan", "Finance"), true);
   assert.equal(sameAsUnedited(editTargetFor("sale_date"), "09/26/2026", "2026-09-26"), true);
-  assert.equal(sameAsUnedited(editTargetFor("vehicle_type_code"), "utv", "UTV"), true);
+  assert.equal(sameAsUnedited(editTargetFor("vehicle_type"), "utv", "UTV"), true);
 
   const deal = defender({ sale_price: "24999" });
   assert.deepEqual(simulateSave(deal, { sale_price: "24999" }), {});
@@ -663,4 +677,13 @@ test("save() uses the general rule and no fuel-only special case", () => {
   const save = verify.slice(verify.indexOf("async function save("), verify.indexOf("async function discardEdits("));
   assert.match(save, /const edit = editFor\(target, stored, baseByKey\.get\(key\), edits\[key\], editedBy, now\);\s*if \(edit === null\) \{\s*delete edits\[key\];\s*continue;\s*\}/);
   assert.doesNotMatch(save, /key === "fuel\.type"/);
+});
+
+test("a staff choice of Other is not overridden by the VIN decode", () => {
+  const out = applied(
+    { vehicle_type: edit({ value: "Other", original: "UTV", original_source: "VIN Decode" }) },
+    { vehicle_type_code: null, vehicle_type: null, vin_decode: { vtype: "UTV" } }
+  );
+  assert.equal(out.vehicle_type, "Other");
+  assert.equal(out.vehicle_type_code, null);
 });
