@@ -68,6 +68,7 @@ import {
 } from "../_shared/duplicates.ts";
 import { RECORDED_BY_STAFF, splitSelections } from "../_shared/oem-contracts.ts";
 import { contractCallRefusal } from "../_shared/contract-guard.ts";
+import { atMaximum, pricePolicy, refusalInPlainEnglish } from "../_shared/price-cap.ts";
 import { savedSelections, type SavedSelection } from "../_shared/saved-selections.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -320,7 +321,15 @@ serve(async (req: Request) => {
     // eleven products with flags is a request to submit all eleven, and the
     // QA server simply stopped responding when we did.
     const offerPayload = ratedOffer.response_payload as Record<string, unknown>;
-    const { resolved } = buildSubmitQuote(offerPayload, selections);
+    // What each product is submitted at (_shared/price-cap.ts). A test session
+    // on the QA server goes at the maximum the QA dealer allows; everything
+    // else at the customer's price, with TecAssured's answer deciding.
+    const policy = pricePolicy(session, credentials.api_base_url);
+    const customerPrice = new Map(selections.map((s) => [s.rate_unique, s.retail_price]));
+    let { resolved } = buildSubmitQuote(offerPayload, selections);
+    if (policy === "Test at maximum") {
+      resolved = buildSubmitQuote(offerPayload, atMaximum(selections, resolved)).resolved;
+    }
 
     // Every selection must have been found in the offer. One that was not is a
     // stale menu, and submitting the rest silently would sell a different set
@@ -351,10 +360,11 @@ serve(async (req: Request) => {
       });
     }
 
-    // And none may be priced above what the provider will allow. It rejects
-    // the whole submit otherwise, naming the cap, so the check belongs here
-    // where it can name the product instead.
-    const overCap = resolved.filter((r) => r.overCap);
+    // On the QA server a test submit is priced at the cap, so this guard can
+    // only trip on a bug. Anywhere else no cap is assumed: dealer cost plus
+    // markup is QA dealer 3-306's rule, not every dealer's, and TecAssured's
+    // own answer is what decides.
+    const overCap = policy === "Test at maximum" ? resolved.filter((r) => r.overCap) : [];
     if (overCap.length > 0) {
       return await refuse(400, {
         error:
@@ -525,7 +535,7 @@ serve(async (req: Request) => {
     // goes back. Only silence is ambiguous.
     if (response.error && String(response.error).trim() !== "") {
       return await refuse(400, {
-        error: `TecAssured contract submit failed: ${response.error}`,
+        error: refusalInPlainEnglish(response.error, toSubmit.length === 1 ? toSubmit[0].productName : null),
         tecassured_error: response.error,
       });
     }
@@ -539,8 +549,10 @@ serve(async (req: Request) => {
       (c) => typeof c.error === "string" && c.error.trim() !== ""
     );
     if (failed.length > 0 && failed.length === contracts.length) {
+      const nameOf = (c: Record<string, unknown>) =>
+        resolved.find((r) => r.rateUniqueId === str(c.rateUniqueId ?? c.rateUnique, ""))?.productName ?? null;
       return await refuse(400, {
-        error: "The provider refused every contract in this submit.",
+        error: failed.map((c) => refusalInPlainEnglish(c.error, nameOf(c))).join(" "),
         failures: failed.map((c) => ({
           rate_unique_id: c.rateUniqueId ?? c.rateUnique ?? null,
           provider_product_id: c.productId ?? null,
@@ -609,8 +621,10 @@ serve(async (req: Request) => {
       term_miles: r.termMiles,
       deductible: r.deductible,
       dealer_cost: r.dealerCost,
-      retail_price: r.selection.retail_price,
-      customer_price: r.selection.retail_price,
+      // The customer's price, as they chose it. A test submit at the maximum
+      // changes what the contract says, never what the customer chose.
+      retail_price: customerPrice.get(r.rateUniqueId) ?? r.selection.retail_price,
+      customer_price: customerPrice.get(r.rateUniqueId) ?? r.selection.retail_price,
       selected_options: r.selection.option_uniques ?? [],
       rate_snapshot: r.rateSnapshot,
       selected_at: now,
