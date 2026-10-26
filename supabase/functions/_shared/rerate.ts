@@ -71,3 +71,60 @@ export function keptWarning(providerName: string, reason: string, current: boole
     ? `${providerName} could not rate again (${why}). The last good offers are kept, so the deal can still go ahead on them.`
     : `${providerName} could not rate again (${why}). The last good offers are kept but are out of date, so rate again before submitting.`;
 }
+
+// ── The status after a rating (fix 4d) ───────────────────────────────────
+//
+// A successful rating used to set the session to Rated whatever it was, so a
+// re-rate after the customer had chosen (Products Selected) sent the deal
+// back a step and Verify stopped offering Submit. The customer's choices are
+// what decides: while every product they took is still offered at the same
+// rate, the session stays where it was.
+
+/** The statuses past Rated: the customer has made their choices. */
+export const PAST_RATED: readonly string[] = ["Products Selected", "Agreement Created", "Finalized"];
+
+/** One product the customer took, as fni.selected_products holds it. */
+export interface ChosenRate {
+  provider_id: string | null;
+  provider_product_id: string | null;
+  rate_unique_id: string | null;
+}
+
+/** The key an offered rate and a chosen one share. */
+export function rateKey(providerId: string | null, productCode: string | null, rateId: string | null): string {
+  return `${providerId ?? ""}|${productCode ?? ""}|${rateId ?? ""}`;
+}
+
+/**
+ * Is every product the customer took still offered at the same rate?
+ *
+ * offered holds the rateKey of every rate the new rating returned. A
+ * provider whose failed attempt kept current offers (keptProviders) still
+ * offers what it did, so its choices stand.
+ */
+export function choicesStillOffered(
+  chosen: ChosenRate[],
+  offered: ReadonlySet<string>,
+  keptProviders: ReadonlySet<string>
+): boolean {
+  return chosen.every(
+    (c) =>
+      (c.provider_id !== null && keptProviders.has(c.provider_id)) ||
+      offered.has(rateKey(c.provider_id, c.provider_product_id, c.rate_unique_id))
+  );
+}
+
+/**
+ * The session's status after a rating. Nothing offered leaves it alone, and
+ * so do kept offers (fix 4b). New offers make it Rated, unless the customer
+ * has already chosen and every choice is still offered.
+ */
+export function statusAfterRating(
+  current: string,
+  freshCount: number,
+  choicesOffered: boolean
+): string {
+  if (freshCount === 0) return current;
+  if (PAST_RATED.includes(current) && choicesOffered) return current;
+  return "Rated";
+}

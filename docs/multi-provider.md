@@ -744,3 +744,12 @@ already chosen from, and the deal could no longer be submitted. Now
   on them." The provider line on Verify and in Admin > Sessions adds "The
   last re-rate failed (...), so these are the earlier offers, kept." The
   customer sees the offers, never the warning.
+
+**A re-rate after the customer has chosen** (fix 4d). A successful rating
+used to set the session to Rated whatever it was, so re-rating a Products
+Selected deal sent it back a step and Verify stopped offering Submit. Now
+(`statusAfterRating` in `_shared/rerate.ts`) the session keeps its status
+while every product the customer took (Included in selected_products) is
+still offered by the same provider at the same rate id. TecAssured's rate ids
+are stable across quotes. A choice that is gone, or offered only at another
+rate, sends the session back to Rated, as before.

@@ -74,5 +74,5 @@ test("a timed-out TecAssured call still records what it asked", () => {
 test("rate-vehicle answers with the kept offers and leaves the status alone", () => {
   const rv = src("../supabase/functions/fni-rate-vehicle/index.ts");
   assert.match(rv, /if \(productCount === 0 && keptCount > 0\) \{[\s\S]*?status: sess\.status,[\s\S]*?kept_offers: true,/);
-  assert.match(rv, /status: productCount > 0 \? /);
+  assert.match(rv, /status: nextStatus,/);
 });
