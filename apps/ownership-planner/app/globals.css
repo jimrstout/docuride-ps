@@ -1187,3 +1187,11 @@ button { cursor: pointer; }
   .vgate-warn-table td { padding: 0; border-bottom: 0; }
   .vgate-warn-table td::before { content: attr(data-label) ": "; color: var(--muted); }
 }
+
+/* TecAssured's program name next to our product name. Staff screens only:
+   it tells twins apart (UTV, On-Road and Off-Road MC versions). */
+.prog-label {
+  display: inline-block; font-size: 0.72rem; font-weight: 500; letter-spacing: 0.02em;
+  color: var(--ink-soft); background: var(--code-bg); border: var(--bw) solid var(--line);
+  border-radius: 4px; padding: 0 var(--s1); vertical-align: middle; white-space: nowrap;
+}

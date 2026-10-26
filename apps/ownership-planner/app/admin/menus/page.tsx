@@ -20,6 +20,7 @@ import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
 import type { TemplateRow, TemplateSlotRow, TemplatesPayload } from "@/lib/types";
 import { moveSlot, saveSlot, saveTemplate } from "@/app/console-actions";
+import ProgramLabel from "@/components/admin/ProgramLabel";
 import { Badge, Notice, PageHead } from "@/components/admin/Parts";
 
 export const dynamic = "force-dynamic";
@@ -144,7 +145,10 @@ function SlotForm({ t, slot, payload }: { t: TemplateRow; slot: TemplateSlotRow 
                       <td className="num">
                         <input className="ad-order" name={`order_${p.id}`} inputMode="numeric" defaultValue={order(p.id)} aria-label={`Order for ${p.name}`} />
                       </td>
-                      <td>{p.name}<small>{p.code}</small></td>
+                      <td>
+                        {p.name} <ProgramLabel name={p.program} />
+                        <small>{p.code}</small>
+                      </td>
                       <td>{p.provider_name}</td>
                       <td>{p.category}</td>
                     </tr>
@@ -210,10 +214,18 @@ function MenuDetail({ t, payload, params }: { t: TemplateRow; payload: Templates
                   <td><span className="ad-strong">{s.title}</span>{s.category ? <small>{s.category}</small> : null}</td>
                   <td>{s.mode}</td>
                   <td>
-                    {s.product_ids.length === 0 ? "None, so it is not shown" : s.product_ids.map((id) => {
-                      const p = name(id);
-                      return p ? `${p.name} (${p.provider_name})` : "A product no longer in the catalog";
-                    }).join(", ")}
+                    {s.product_ids.length === 0 ? "None, so it is not shown" : (
+                      <ul className="ad-plain">
+                        {s.product_ids.map((id) => {
+                          const p = name(id);
+                          return (
+                            <li key={id}>
+                              {p ? <>{p.name} <ProgramLabel name={p.program} /><small>{p.provider_name}</small></> : "A product no longer in the catalog"}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
                   </td>
                   <td className="num">
                     <div className="ad-actions">

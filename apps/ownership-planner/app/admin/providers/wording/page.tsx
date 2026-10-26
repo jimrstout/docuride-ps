@@ -14,6 +14,7 @@ import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
 import type { ProvidersPayload, WordingProductRow } from "@/lib/types";
 import { saveWording } from "@/app/console-actions";
+import ProgramLabel from "@/components/admin/ProgramLabel";
 import { Badge, Notice, PageHead } from "@/components/admin/Parts";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,7 @@ function WordingForm({ p }: { p: WordingProductRow }) {
   return (
     <section className="ad-panel ad-editor" aria-labelledby="wording-form">
       <div className="ad-panel-head">
-        <h2 id="wording-form">{p.display_name}</h2>
+        <h2 id="wording-form">{p.display_name} <ProgramLabel name={p.provider_program_name} /></h2>
       </div>
       <div className="ad-panel-body">
         <form action={saveWording} className="ad-editor-fields">
@@ -164,7 +165,7 @@ export default async function WordingPage({ searchParams }: { searchParams: Prom
               {products.map((p) => (
                 <tr key={p.id}>
                   <td>
-                    <span className="ad-strong">{p.display_name}</span>
+                    <span className="ad-strong">{p.display_name}</span> <ProgramLabel name={p.provider_program_name} />
                     <small>{p.product_code}</small>
                   </td>
                   <td>{p.category}</td>

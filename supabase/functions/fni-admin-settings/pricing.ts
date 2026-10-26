@@ -127,19 +127,22 @@ async function scopeProducts(
   let q = supabase
     .schema("fni")
     .from("product_catalog")
-    .select("store_id, product_code, display_name, display_order")
+    .select("store_id, product_code, display_name, display_order, provider_program_name")
     .eq("tenant_id", tenantId);
   q = storeId === null ? q.is("store_id", null) : q.or(`store_id.eq.${storeId},store_id.is.null`);
   const { data, error } = await q;
   if (error) throw new Error(`Failed to read the product catalog: ${error.message}`);
 
-  const rows = (data ?? []) as { store_id: string | null; product_code: string; display_name: string | null; display_order: number | null }[];
-  const byCode = new Map<string, { name: string; order: number }>();
+  const rows = (data ?? []) as {
+    store_id: string | null; product_code: string; display_name: string | null;
+    display_order: number | null; provider_program_name: string | null;
+  }[];
+  const byCode = new Map<string, { name: string; order: number; program: string | null }>();
   for (const r of rows.filter((r) => r.store_id === null)) {
-    byCode.set(r.product_code, { name: r.display_name ?? r.product_code, order: r.display_order ?? 0 });
+    byCode.set(r.product_code, { name: r.display_name ?? r.product_code, order: r.display_order ?? 0, program: r.provider_program_name });
   }
   for (const r of rows.filter((r) => r.store_id !== null)) {
-    byCode.set(r.product_code, { name: r.display_name ?? r.product_code, order: r.display_order ?? 0 });
+    byCode.set(r.product_code, { name: r.display_name ?? r.product_code, order: r.display_order ?? 0, program: r.provider_program_name });
   }
 
   const list = [...byCode.entries()].map(([code, v]) => ({ code, ...v }));
@@ -148,7 +151,9 @@ async function scopeProducts(
 
   return list
     .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
-    .map((p) => ({ code: p.code, name: (counts.get(p.name) ?? 0) > 1 ? `${p.name} (${p.code})` : p.name }));
+    // Twins (one name, several TecAssured versions) are told apart by
+    // TecAssured's program name, or the code when it has not been seen yet.
+    .map((p) => ({ code: p.code, name: (counts.get(p.name) ?? 0) > 1 ? `${p.name} (${p.program ?? p.code})` : p.name }));
 }
 
 /** "all" is All stores; anything else must be a menu store's id. */

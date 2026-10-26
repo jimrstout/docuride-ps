@@ -194,19 +194,26 @@ async function contractsPanel(supabase: SupabaseClient, s: Record<string, unknow
   const { data: chosen } = await supabase
     .schema("fni")
     .from("selected_products")
-    .select("product_name, term_months, term_miles, customer_price, providers!inner(name, contract_method)")
+    .select("provider_id, provider_product_id, product_name, term_months, term_miles, customer_price, providers!inner(name, contract_method)")
     .eq("session_id", s.id as string)
     .eq("disposition", "Included")
     .eq("providers.contract_method", "Through API")
     .order("product_name");
-  const selections = ((chosen ?? []) as unknown as {
+  const chosenRows = (chosen ?? []) as unknown as {
+    provider_id: string;
+    provider_product_id: string | null;
     product_name: string;
     term_months: number | null;
     term_miles: number | null;
     customer_price: number | null;
     providers: { name: string };
-  }[]).map((c) => ({
+  }[];
+  const programs = await programNamesFor(supabase, chosenRows.map((c) => c.provider_id));
+  const programOf = (providerId: unknown, code: unknown) =>
+    programs.get(`${providerId}|${code}`) ?? null;
+  const selections = chosenRows.map((c) => ({
     product_name: c.product_name,
+    program_name: programOf(c.provider_id, c.provider_product_id),
     provider_name: c.providers.name,
     term_months: c.term_months,
     term_miles: c.term_miles,
@@ -226,7 +233,8 @@ async function contractsPanel(supabase: SupabaseClient, s: Record<string, unknow
       .schema("fni")
       .from("agreement_products")
       .select(
-        "contract_number, product_name, status, document_position, workdrive_file_id, workdrive_file_name, " +
+        "provider_id, provider_product_id, contract_number, product_name, status, document_position, " +
+          "workdrive_file_id, workdrive_file_name, " +
           "workdrive_saved_at, voided_by, voided_at, void_reason, page_count, document_status, document_storage_path"
       )
       .eq("agreement_id", (agreement as { id: string }).id)
@@ -242,9 +250,10 @@ async function contractsPanel(supabase: SupabaseClient, s: Record<string, unknow
             .createSignedUrl(String(c.document_storage_path), 600);
           view = link?.signedUrl ?? null;
         }
-        const { document_storage_path: _path, ...shown } = c;
+        const { document_storage_path: _path, provider_id: _provider, ...shown } = c;
         return {
           ...shown,
+          program_name: programOf(c.provider_id, c.provider_product_id),
           held: !!c.document_storage_path,
           view_pdf_url: view,
           workdrive_url: c.workdrive_file_id ? workDriveFileUrl(String(c.workdrive_file_id)) : null,
@@ -255,6 +264,30 @@ async function contractsPanel(supabase: SupabaseClient, s: Record<string, unknow
   // Held documents not in the Deal Jacket yet, voided ones included.
   const waiting = contracts.filter((c) => c.held && !c.workdrive_file_id).length;
   return { provider_name: selections[0].provider_name, selections, contracts, waiting_count: waiting };
+}
+
+/**
+ * TecAssured's program name for each catalog product, keyed provider|code.
+ * Staff only: it tells twins apart ("USED BRONZE ON-ROAD NON-EU").
+ */
+async function programNamesFor(
+  supabase: SupabaseClient,
+  providerIds: string[]
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const ids = [...new Set(providerIds)];
+  if (ids.length === 0) return out;
+  const { data } = await supabase
+    .schema("fni")
+    .from("product_catalog")
+    .select("provider_id, product_code, provider_program_name")
+    .in("provider_id", ids)
+    .is("store_id", null)
+    .not("provider_program_name", "is", null);
+  for (const r of (data ?? []) as { provider_id: string; product_code: string; provider_program_name: string }[]) {
+    out.set(`${r.provider_id}|${r.product_code}`, r.provider_program_name);
+  }
+  return out;
 }
 
 async function liveContracts(

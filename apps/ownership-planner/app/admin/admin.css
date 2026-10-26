@@ -312,3 +312,8 @@
 .ad-notes { white-space: pre-line; font-size: 13px; line-height: 1.5; }
 .ad-rates td { vertical-align: top; }
 .ad-rates .ad-row input { width: 9em; }
+
+/* A plain list inside a table cell: one product per line. */
+.ad-plain { list-style: none; margin: 0; padding: 0; }
+.ad-plain li + li { margin-top: 2px; }
+.ad-plain small { margin-left: var(--s1); color: var(--muted); }

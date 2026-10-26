@@ -560,6 +560,8 @@ export interface CatalogProductRow {
   code: string;
   name: string;
   category: string;
+  /** TecAssured's program name for this version. Staff only. */
+  program: string | null;
 }
 
 export interface TemplatesPayload {
@@ -647,6 +649,8 @@ export interface WordingProductRow {
   full_terms_url: string | null;
   active: boolean;
   updated_at: string;
+  /** TecAssured's program name for this version. Staff only. */
+  provider_program_name: string | null;
   /** What it still needs before the planner shows it. Empty when it is ready. */
   missing: string[];
 }
@@ -682,6 +686,8 @@ export interface ContractsPanel {
   provider_name: string;
   selections: {
     product_name: string;
+    /** TecAssured's program name. Staff only. */
+    program_name: string | null;
     provider_name: string;
     term_months: number | null;
     term_miles: number | null;
@@ -690,6 +696,8 @@ export interface ContractsPanel {
   contracts: {
     contract_number: string | null;
     product_name: string;
+    /** TecAssured's program name. Staff only. */
+    program_name: string | null;
     status: string;
     document_position: number | null;
     workdrive_file_id: string | null;

@@ -31,7 +31,7 @@ test("voiding a waiting document marks its record Voided with VOID in its stored
 test("the sheet gives a ten-minute link to a held PDF and never the storage path", () => {
   const verify = src("../supabase/functions/fni-session-verify/index.ts");
   assert.match(verify, /\.from\(HOLD_BUCKET\)\s*\.createSignedUrl\(String\(c\.document_storage_path\), 600\)/);
-  assert.match(verify, /const \{ document_storage_path: _path, \.\.\.shown \} = c;/);
+  assert.match(verify, /const \{ document_storage_path: _path, [^}]*\.\.\.shown \} = c;/);
   assert.match(verify, /waiting_count: waiting/);
 });
 
