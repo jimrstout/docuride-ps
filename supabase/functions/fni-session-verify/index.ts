@@ -33,6 +33,7 @@ import { publishedSheetFor } from "../_shared/price-sheet-rows.ts";
 import { resolvedSlotsFor } from "../_shared/menu-template-rows.ts";
 import { oemContractList } from "../_shared/oem-contract-rows.ts";
 import { contractStateLabel } from "../_shared/oem-contracts.ts";
+import { workDriveFileUrl } from "../_shared/workdrive-links.ts";
 import { getRecord } from "../_shared/zoho.ts";
 import { crmRatingFields } from "../_shared/crm-fields.ts";
 import {
@@ -176,6 +177,66 @@ async function duplicateVinSessions(
  * are left out: they no longer hold a product's slot, and listing them would
  * read as paperwork that still stands.
  */
+/** Statuses at which the customer has finished choosing in the planner. */
+const PLANNER_DONE = ["Products Selected", "Agreement Created", "Finalized"];
+
+/**
+ * The staff contracts panel: what the customer chose from providers
+ * contracted through their API, and every contract submitted for them,
+ * voided ones included, with its saved WorkDrive file.
+ */
+async function contractsPanel(supabase: SupabaseClient, s: Record<string, unknown>) {
+  if (!PLANNER_DONE.includes(String(s.status))) return null;
+
+  const { data: chosen } = await supabase
+    .schema("fni")
+    .from("selected_products")
+    .select("product_name, term_months, term_miles, customer_price, providers!inner(name, contract_method)")
+    .eq("session_id", s.id as string)
+    .eq("disposition", "Included")
+    .eq("providers.contract_method", "Through API")
+    .order("product_name");
+  const selections = ((chosen ?? []) as unknown as {
+    product_name: string;
+    term_months: number | null;
+    term_miles: number | null;
+    customer_price: number | null;
+    providers: { name: string };
+  }[]).map((c) => ({
+    product_name: c.product_name,
+    provider_name: c.providers.name,
+    term_months: c.term_months,
+    term_miles: c.term_miles,
+    customer_price: c.customer_price,
+  }));
+  if (selections.length === 0) return null;
+
+  const { data: agreement } = await supabase
+    .schema("fni")
+    .from("agreements")
+    .select("id")
+    .eq("session_id", s.id as string)
+    .maybeSingle();
+  let contracts: Record<string, unknown>[] = [];
+  if (agreement) {
+    const { data } = await supabase
+      .schema("fni")
+      .from("agreement_products")
+      .select(
+        "contract_number, product_name, status, document_position, workdrive_file_id, workdrive_file_name, " +
+          "workdrive_saved_at, voided_by, voided_at, void_reason, page_count"
+      )
+      .eq("agreement_id", (agreement as { id: string }).id)
+      .is("recorded_by", null)
+      .order("document_position", { ascending: true, nullsFirst: false });
+    contracts = ((data ?? []) as unknown as Record<string, unknown>[]).map((c) => ({
+      ...c,
+      workdrive_url: c.workdrive_file_id ? workDriveFileUrl(String(c.workdrive_file_id)) : null,
+    }));
+  }
+  return { provider_name: selections[0].provider_name, selections, contracts };
+}
+
 async function liveContracts(
   supabase: SupabaseClient,
   sessionId: string
@@ -303,10 +364,11 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
       )
     : null;
 
-  const [duplicates, contracts, oemContracts] = await Promise.all([
+  const [duplicates, contracts, oemContracts, panel] = await Promise.all([
     duplicateVinSessions(supabase, s),
     liveContracts(supabase, s.id as string),
     oemContractList(supabase, s.id as string),
+    contractsPanel(supabase, s),
   ]);
 
   return {
@@ -346,6 +408,8 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
     // OEM selections, whose contracts staff write on the OEM's system and
     // record here. See fni-oem-contracts.
     oem_contracts: oemContracts,
+    // The staff contracts panel, once the customer has finished the planner.
+    contracts_panel: panel,
     vin_decode: s.vin_decode ?? null,
     vin_decode_at: s.vin_decode_at ?? null,
     vin_decode_attempted_at: s.vin_decode_attempted_at ?? null,

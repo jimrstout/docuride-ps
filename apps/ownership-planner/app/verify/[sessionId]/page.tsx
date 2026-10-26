@@ -1,4 +1,4 @@
-// app/verify/[sessionId]/page.tsx — the staff Verify step.
+// app/verify/[sessionId]/page.tsx: the staff Verify step.
 //
 // Everything that goes into a TecAssured rate request, on one page, with where
 // each value came from beside it. Nothing here is ever shown to a customer, and
@@ -50,7 +50,11 @@ import {
   verifyAndRate,
   voidContract,
   voidOemContract,
+  submitContracts,
+  getContractDocument,
 } from "@/app/console-actions";
+import PendingButton from "@/components/PendingButton";
+import { money } from "@/lib/money";
 import OemContractRecord from "@/components/OemContractRecord";
 
 export const dynamic = "force-dynamic";
@@ -512,7 +516,7 @@ export default async function VerifyPage({
         {/* Here because this is where staff land when CRM sends a deal through a
             second time. A product with a live contract cannot be submitted again,
             and voiding is the only way to change that, so the two live together. */}
-        {sheet.contracts.length > 0 ? (
+        {sheet.contracts.length > 0 && !sheet.contracts_panel ? (
           <>
             <p className="console-note">
               Contracts already submitted on this deal:{" "}
@@ -553,16 +557,21 @@ export default async function VerifyPage({
                           ) : !c.contract_number ? (
                             <small>No number to void by. Ask TecAssured.</small>
                           ) : operator ? (
-                            <form action={voidContract}>
+                            <form action={voidContract} className="oem-record">
                               <input type="hidden" name="session_id" value={sheet.session.id} />
                               <input
                                 type="hidden"
                                 name="contract_number"
                                 value={c.contract_number}
                               />
-                              <button type="submit" className="btn btn--quiet">
-                                Void
-                              </button>
+                              <label>
+                                <span>Why it is being voided</span>
+                                <input name="void_reason" required />
+                              </label>
+                              <label className="vcontracts-confirm">
+                                <input type="checkbox" name="confirm" required /> Cancel with TecAssured
+                              </label>
+                              <PendingButton pending="Voiding…">Void</PendingButton>
                             </form>
                           ) : (
                             <Link className="btn btn--quiet" href="/admin/sessions" prefetch={false}>
@@ -577,6 +586,102 @@ export default async function VerifyPage({
               </table>
             </div>
           </>
+        ) : null}
+
+        {/* ── Staff contracts panel ─────────────────────────────────────────── */}
+        {/* Once the customer has finished the planner: their choices, Submit,
+            and each contract's document and Void. While DocuRide is being
+            tested these go to TecAssured's QA server only. */}
+        {sheet.contracts_panel ? (
+          <section className="vcontracts" aria-labelledby="vcontracts-title">
+            <h2 id="vcontracts-title">Contracts</h2>
+            <ul className="vcontracts-chosen">
+              {sheet.contracts_panel.selections.map((c) => (
+                <li key={c.product_name}>
+                  <strong>{c.product_name}</strong>
+                  <small>
+                    {[
+                      c.term_months ? `${c.term_months} months` : null,
+                      c.term_miles ? `${c.term_miles.toLocaleString("en-US")} miles` : null,
+                      c.customer_price !== null ? money(Number(c.customer_price)) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </small>
+                </li>
+              ))}
+            </ul>
+            {sheet.submit_state === "In Progress" ? (
+              <p className="console-note">A submit is running for this deal. Reload in a moment to see what came back.</p>
+            ) : sheet.submit_state === "Submit Status Unknown" ? (
+              <p className="console-note">Submitting is paused until the Submit Status Unknown notice above is cleared.</p>
+            ) : operator ? (
+              <form action={submitContracts}>
+                <input type="hidden" name="session_id" value={sheet.session.id} />
+                <PendingButton className="btn" pending="Submitting…">
+                  Submit contracts to {sheet.contracts_panel.provider_name}
+                </PendingButton>
+              </form>
+            ) : (
+              <Link className="btn btn--quiet" href="/admin/sessions" prefetch={false}>
+                Sign in to submit
+              </Link>
+            )}
+
+            {sheet.contracts_panel.contracts.length > 0 ? (
+              <ul className="vcontracts-list">
+                {sheet.contracts_panel.contracts.map((c) => (
+                  <li key={`${c.contract_number}-${c.document_position}`}>
+                    <p className="vcontracts-head">
+                      <strong>{c.contract_number ?? "No number returned"}</strong> {c.product_name}{" "}
+                      <span className={`tag ${c.status === "Voided" ? "tag--quiet" : "tag--good"}`}>{c.status}</span>
+                    </p>
+                    {c.workdrive_url ? (
+                      <p>
+                        <small>
+                          Saved to the Deal Jacket {stamp(c.workdrive_saved_at)}
+                          {c.page_count ? `, ${c.page_count} ${c.page_count === 1 ? "page" : "pages"}` : ""}.{" "}
+                          <a href={c.workdrive_url} target="_blank" rel="noreferrer">
+                            Open in WorkDrive
+                          </a>
+                        </small>
+                      </p>
+                    ) : null}
+                    {c.status === "Voided" ? (
+                      <p>
+                        <small>
+                          Voided by {c.voided_by} {stamp(c.voided_at)}
+                          {c.void_reason ? `: ${c.void_reason}` : "."}
+                        </small>
+                      </p>
+                    ) : operator && c.contract_number ? (
+                      <div className="vcontracts-actions">
+                        <form action={getContractDocument}>
+                          <input type="hidden" name="session_id" value={sheet.session.id} />
+                          <input type="hidden" name="contract_number" value={c.contract_number} />
+                          <PendingButton pending="Getting the document…">
+                            {c.workdrive_url ? "Get document again" : "Get document"}
+                          </PendingButton>
+                        </form>
+                        <form action={voidContract} className="oem-record">
+                          <input type="hidden" name="session_id" value={sheet.session.id} />
+                          <input type="hidden" name="contract_number" value={c.contract_number} />
+                          <label>
+                            <span>Why it is being voided</span>
+                            <input name="void_reason" required />
+                          </label>
+                          <label className="vcontracts-confirm">
+                            <input type="checkbox" name="confirm" required /> Cancel this contract with TecAssured
+                          </label>
+                          <PendingButton pending="Voiding…">Void</PendingButton>
+                        </form>
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
         ) : null}
 
         {/* ── OEM contracts, recorded by staff ────────────────────────────── */}

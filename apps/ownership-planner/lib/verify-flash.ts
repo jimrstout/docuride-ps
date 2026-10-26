@@ -131,6 +131,9 @@ export function flashMessage(flash: VerifyFlash | null): FlashMessage | null {
             `again on this deal.`
           : "The contract is voided. That product can be submitted again on this deal.",
       };
+    case "contracts":
+      // fni-contract-submit's or fni-contract-documents' own account of what happened.
+      return { tone: "ok", text: flash.detail ?? "Done." };
     case "oem":
       // fni-oem-contracts' own sentence: what was recorded or voided.
       return { tone: "ok", text: flash.detail ?? "Done." };

@@ -506,3 +506,32 @@ permission names the scope.
 **Void** cancels the contract with TecAssured, records who, when and why, and
 renames the file by adding " VOID" before the first pipe. The file is never
 deleted.
+
+**Staff contracts panel on Verify.** Shown once the customer has finished the
+planner (session Products Selected or later) and chose something from a
+provider contracted through its API:
+
+- The chosen products, and "Submit contracts to Riders Advantage". It sends
+  the planner's saved choices (`use_saved_selections`), through the same OEM
+  split, submit lock and QA rule as any submit. While a submit runs, or the
+  deal is at Submit Status Unknown, the button is replaced by a sentence.
+- Per contract: number, status, "Get document" (saves to the Deal Jacket),
+  a link to the saved file, and "Void" with a reason and a tick to confirm.
+- Every button is disabled while it works and says what it is doing.
+- Signed in only, like Void always was.
+
+### Part 12 decisions
+
+- **WorkDrive through DC's Zoho client.** PS's own Zoho client is CRM only.
+  DC's already has WorkDrive.files.ALL for the same Deal Jackets, so PS uses
+  it and shares DC's token row and refresh lock, rather than a second grant.
+- **Replacing a file moves the old one to the WorkDrive trash,** exactly as
+  DC replaces its own documents; nothing is deleted outright.
+- **Contracts submitted before places existed** get the next place, in the
+  order they were recorded, the first time their document is fetched.
+- **The checks come first.** Prefix and folders are checked before
+  TecAssured is asked, so a refusal saves nothing and asks for nothing.
+- **What TecAssured returned is kept whole**: signatures as returned, and
+  every other field except the PDF.
+- **The planner's saved choices are what Submit sends.** Staff do not
+  re-pick products on Verify.

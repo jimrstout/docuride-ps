@@ -532,14 +532,22 @@ export async function voidContract(formData: FormData): Promise<void> {
 
   const contractNumber = String(formData.get("contract_number") ?? "").trim();
   if (!contractNumber) return backToVerify(sessionId, "refused", "No contract number was given.");
+  const reason = String(formData.get("void_reason") ?? "").trim();
+  if (!reason) return backToVerify(sessionId, "refused", "Say why this contract is being voided.");
+  if (formData.get("confirm") !== "on") {
+    return backToVerify(sessionId, "refused", "Tick the box to confirm. Voiding cancels the contract with TecAssured.");
+  }
 
+  let message: string | null = null;
   try {
-    await edge.contractVoid<unknown>({
+    const done = await edge.contractVoid<{ message?: string }>({
       session_id: sessionId,
       action: "Void",
       contract_number: contractNumber,
       staff_email: operator.email,
+      void_reason: reason,
     });
+    message = done.message ?? null;
   } catch (err) {
     const message =
       err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
@@ -549,7 +557,66 @@ export async function voidContract(formData: FormData): Promise<void> {
 
   revalidatePath(`/verify/${sessionId}`);
   revalidatePath(SESSIONS);
-  return backToVerify(sessionId, "voided", contractNumber);
+  return message ? backToVerify(sessionId, "contracts", message) : backToVerify(sessionId, "voided", contractNumber);
+}
+
+/**
+ * Submit what the customer chose in the planner, as saved, to the provider.
+ * Signed in, like Void: it creates real paperwork (on the QA server only,
+ * while DocuRide is being tested). fni-contract-submit's lock refuses a second
+ * submit for the session while one is running.
+ */
+export async function submitContracts(formData: FormData): Promise<void> {
+  const operator = await currentOperator();
+  if (!operator) redirect(SESSIONS);
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
+
+  let detail: string;
+  try {
+    const done = await edge.submit<{ contract_count?: number; contracts?: { contract_number: string | null }[]; already_submitted?: boolean }>({
+      session_id: sessionId,
+      use_saved_selections: true,
+    });
+    const numbers = (done.contracts ?? []).map((c) => c.contract_number ?? "no number").join(", ");
+    detail = done.already_submitted
+      ? `These products were already submitted: ${numbers}. Nothing new was sent.`
+      : `Submitted. TecAssured returned ${done.contract_count ?? 0} ${done.contract_count === 1 ? "contract" : "contracts"}: ${numbers}. Get each document next.`;
+  } catch (err) {
+    console.error(`submit failed for ${sessionId}:`, err);
+    return backToVerify(sessionId, "refused", err instanceof EdgeError ? err.message : "Something went wrong. Try again.");
+  }
+  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath(SESSIONS);
+  return backToVerify(sessionId, "contracts", detail);
+}
+
+/** Pull one contract's document from the provider and save it to the Deal Jacket. */
+export async function getContractDocument(formData: FormData): Promise<void> {
+  const operator = await currentOperator();
+  if (!operator) redirect(SESSIONS);
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
+  const contractNumber = String(formData.get("contract_number") ?? "").trim();
+  if (!contractNumber) return backToVerify(sessionId, "refused", "No contract number was given.");
+
+  let done: { documents?: { file_name: string | null; workdrive_file_id: string | null; page_count: number | null; error: string | null }[] };
+  try {
+    done = await edge.documents({ session_id: sessionId, contract_number: contractNumber });
+  } catch (err) {
+    console.error(`document failed for ${sessionId} / ${contractNumber}:`, err);
+    return backToVerify(sessionId, "refused", err instanceof EdgeError ? err.message : "Something went wrong. Try again.");
+  }
+  const doc = done.documents?.[0];
+  revalidatePath(`/verify/${sessionId}`);
+  if (!doc || doc.error || !doc.workdrive_file_id) {
+    return backToVerify(sessionId, "refused", doc?.error ?? `The document for ${contractNumber} was not saved. Try again.`);
+  }
+  return backToVerify(
+    sessionId,
+    "contracts",
+    `Saved the document for ${contractNumber} to the Deal Jacket (${doc.page_count ?? "?"} ${doc.page_count === 1 ? "page" : "pages"}).`
+  );
 }
 
 // ── OEM contracts, recorded by staff (multi-provider Part 7) ─────────────

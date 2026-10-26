@@ -948,6 +948,16 @@ button { cursor: pointer; }
 .voem-head { margin: 0 0 var(--s2); display: flex; flex-wrap: wrap; gap: var(--s1); align-items: baseline; }
 .oem-record { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: flex-end; }
 .oem-record label { display: grid; gap: 2px; font-size: var(--fs-xs); color: var(--muted); }
+/* Staff contracts panel on Verify. */
+.vcontracts { margin: var(--s4) 0; }
+.vcontracts h2 { font-size: var(--fs-head); margin: 0 0 var(--s2); }
+.vcontracts-chosen { list-style: none; margin: 0 0 var(--s3); padding: 0; display: grid; gap: var(--s1); }
+.vcontracts-chosen li { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: baseline; }
+.vcontracts-list { list-style: none; margin: var(--s3) 0 0; padding: 0; display: grid; gap: var(--s3); }
+.vcontracts-list > li { border: 1px solid var(--line); border-radius: 8px; padding: var(--s3); }
+.vcontracts-head { margin: 0 0 var(--s2); display: flex; flex-wrap: wrap; gap: var(--s1); align-items: baseline; }
+.vcontracts-actions { display: grid; gap: var(--s3); }
+.vcontracts-confirm { display: flex !important; gap: var(--s1); align-items: center; }
 
 /* ── The workspace: what is missing, then the sheet ── */
 .vworkspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); }

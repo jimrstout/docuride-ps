@@ -105,7 +105,4 @@ export function workDriveProblem(err: unknown): string {
   return "The document could not be saved to WorkDrive. Try again shortly.";
 }
 
-/** The link staff open in WorkDrive. */
-export function workDriveFileUrl(fileId: string): string {
-  return `https://workdrive.zoho.com/file/${encodeURIComponent(fileId)}`;
-}
+export { workDriveFileUrl } from "./workdrive-links.ts";
