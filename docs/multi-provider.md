@@ -443,3 +443,23 @@ holds. Voiding a record needs a reason and changes the row only.
   contracts: they are paperwork, not a customer decision.
 - **The signed contract is required** to record. A ten-minute link to it is
   shown on Verify.
+
+## 11. Test contracts on the QA server
+
+TecAssured confirmed that contracts on its QA server (ratessys-qa.com) are
+test documents and that any of them can be voided. While DocuRide is being
+tested, fni-contract-submit, fni-contract-documents and fni-contract-void
+refuse, in plain English and before anything is sent, unless:
+
+- the store's TecAssured login points at ratessys-qa.com, and
+- the deal is 13759, or its session is marked is_test, and
+- the deal is not 14957 (session 5f8be61f), which is never sent.
+
+The rule lives in one place, `_shared/contract-guard.ts`. The deal 13759
+session is marked is_test.
+
+### Go-live items
+
+- **Lift the QA-only contract rule.** Before any real contract, a person
+  decides to allow the production server, and `_shared/contract-guard.ts`
+  changes with that decision. Nothing else turns it off.
