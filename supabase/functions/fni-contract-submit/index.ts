@@ -70,6 +70,8 @@ import { RECORDED_BY_STAFF, splitSelections } from "../_shared/oem-contracts.ts"
 import { contractCallRefusal } from "../_shared/contract-guard.ts";
 import { atMaximum, pricePolicy } from "../_shared/price-cap.ts";
 import { readSubmitResponse } from "../_shared/submit-outcome.ts";
+import { applyCobuyerProbe, probeDecision, type MarkerRow } from "../_shared/cobuyer-probe.ts";
+import { programName } from "../_shared/program-names.ts";
 import { savedSelections, type SavedSelection } from "../_shared/saved-selections.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -82,6 +84,10 @@ interface ContractSubmitRequest {
    * list sent with the request. What Verify's Submit button sends.
    */
   use_saved_selections?: boolean;
+  /** TEMPORARY: the co-buyer field probe (_shared/cobuyer-probe.ts). */
+  cobuyer_probe?: boolean;
+  /** "All", 1, 2 or 3. "All" when left out. */
+  cobuyer_probe_batch?: unknown;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -383,6 +389,19 @@ serve(async (req: Request) => {
       });
     }
 
+    // ── Step 4a: The co-buyer field probe (TEMPORARY) ──────────────────
+    // Only past the QA-only guard above, only on a test session, only when
+    // asked for, and only for forms that print a co-buyer name. Asked for
+    // anywhere else, the flag is ignored. See _shared/cobuyer-probe.ts.
+    const probe = probeDecision({
+      requested: body.cobuyer_probe,
+      batch: body.cobuyer_probe_batch,
+      isTest: session.is_test === true,
+      guardPassed: notCleared === null,
+      products: resolved.map((r) => ({ name: r.productName, program: programName(r.productName) })),
+    });
+    if (probe.kind === "Refuse") return await refuse(400, { error: probe.message });
+
     // ── Step 4b: A product that already has paperwork ──────────────────
     //
     // Jim's rule, and the one the schema now also enforces: there is never more
@@ -521,6 +540,33 @@ serve(async (req: Request) => {
     };
     if (Object.keys(lienholder).length > 0) submitPayload.lienholder = lienholder;
 
+    // ── Step 5b: The co-buyer field probe (TEMPORARY) ──────────────────
+    // Marker codes only, added after the real buyer and never over any key
+    // already there. Recorded on the session before anything is sent, so the
+    // record exists even if the call never answers.
+    let probeMarkers: MarkerRow[] | null = null;
+    if (probe.kind === "On") {
+      probeMarkers = applyCobuyerProbe(submitQuote, submitPayload, probe.batch);
+      const { error: eventErr } = await supabase
+        .schema("fni")
+        .from("session_events")
+        .insert({
+          session_id,
+          event: "Co-buyer field probe sent",
+          detail: {
+            batch: probe.batch === "All" ? "All" : `Batch ${probe.batch}`,
+            products: toSubmit.map((r) => r.productName),
+            markers: probeMarkers,
+          },
+          created_by: "fni-contract-submit",
+        });
+      if (eventErr) {
+        return await refuse(500, {
+          error: `The co-buyer field test could not be recorded on the session (${eventErr.code ?? "error"}), so nothing was sent.`,
+        });
+      }
+    }
+
     // ── Step 6: Submit ─────────────────────────────────────────────────
     //
     // The moment before this call is the last one at which "nothing happened" is
@@ -547,6 +593,23 @@ serve(async (req: Request) => {
     );
 
     if (reading.refusedOutright) {
+      if (probe.kind === "On") {
+        // TecAssured's own words, exactly. An "unknown field" error says
+        // something about the probe, and Jim decides whether to run the
+        // batches. Nothing is retried, stripped or switched here.
+        const verbatim = [
+          typeof response.error === "string" ? response.error : "",
+          ...(Array.isArray(response.contracts) ? response.contracts : [])
+            .map((c) => (c && typeof c === "object" ? (c as Record<string, unknown>).error : null))
+            .filter((e): e is string => typeof e === "string" && e.trim() !== ""),
+        ].filter((e) => e.trim() !== "");
+        return await refuse(400, {
+          error: verbatim.length > 0 ? verbatim.join(" | ") : JSON.stringify(response),
+          tecassured_error: response.error ?? null,
+          cobuyer_probe: { batch: probe.batch, markers: probeMarkers },
+          products: reading.products,
+        });
+      }
       return await refuse(400, {
         error: reading.message,
         tecassured_error: response.error ?? null,
@@ -789,6 +852,8 @@ serve(async (req: Request) => {
       status: "Agreement Created",
       // Product by product: created, refused, or not known.
       message: reading.message,
+      // TEMPORARY: which markers went out, to read the contract against.
+      ...(probe.kind === "On" ? { cobuyer_probe: { batch: probe.batch, markers: probeMarkers } } : {}),
       products: reading.products,
       partial: reading.products.some((p) => p.outcome !== "Created"),
       submit_state: reading.unknown ? "Submit Status Unknown" : "Idle",
