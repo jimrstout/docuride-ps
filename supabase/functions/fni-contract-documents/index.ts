@@ -37,6 +37,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { contractCallRefusal } from "../_shared/contract-guard.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ serve(async (req: Request) => {
     const { data: session, error: sessErr } = await supabase
       .schema("fni")
       .from("sessions")
-      .select("id, store_id, is_test, dealer_code_used")
+      .select("id, store_id, is_test, dealer_code_used, deal_number")
       .eq("id", session_id)
       .single();
 
@@ -119,6 +120,9 @@ serve(async (req: Request) => {
       return json(400, { error: err instanceof Error ? err.message : String(err) });
     }
     const { client, dealerCode } = store;
+
+    const notCleared = contractCallRefusal(session, store.credentials.api_base_url, "fetched");
+    if (notCleared) return json(403, { error: notCleared });
 
     // Documents must be fetched as the dealer that submitted the contract. If
     // the store has since been repointed at a different Dealer ID, say so

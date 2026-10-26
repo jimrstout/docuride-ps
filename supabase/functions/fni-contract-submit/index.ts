@@ -67,6 +67,7 @@ import {
   type SubmitLockState,
 } from "../_shared/duplicates.ts";
 import { RECORDED_BY_STAFF, splitSelections } from "../_shared/oem-contracts.ts";
+import { contractCallRefusal } from "../_shared/contract-guard.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -285,6 +286,13 @@ serve(async (req: Request) => {
       return await refuse(400, { error: err instanceof Error ? err.message : String(err) });
     }
     const { client, credentials, dealerCode } = store;
+
+    // ── Step 3b: Test contracts only, on the QA server ─────────────────
+    // While DocuRide is being tested a contract may go only to TecAssured's
+    // QA server, and only for a cleared deal or a test session. Checked
+    // before anything is sent. See _shared/contract-guard.ts.
+    const notCleared = contractCallRefusal(session, credentials.api_base_url, "submitted");
+    if (notCleared) return await refuse(403, { error: notCleared });
 
     // ── Step 4: Cut the quote down to what is being bought ────────────
     // Pruned, not flagged: see _shared/offer-selections.ts. Sending all

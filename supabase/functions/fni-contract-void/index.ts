@@ -47,6 +47,7 @@ import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { describeContract, type ContractRef } from "../_shared/duplicates.ts";
 import { isRecorded } from "../_shared/oem-contracts.ts";
+import { contractCallRefusal } from "../_shared/contract-guard.ts";
 
 const ACTION_VOID = "Void";
 const ACTION_CLEAR = "Clear Submit Status Unknown";
@@ -116,7 +117,7 @@ serve(async (req: Request) => {
     const { data: session, error: sessErr } = await supabase
       .schema("fni")
       .from("sessions")
-      .select("id, store_id, is_test, dealer_code_used, submit_state, submit_detail")
+      .select("id, store_id, is_test, dealer_code_used, submit_state, submit_detail, deal_number")
       .eq("id", session_id)
       .single();
 
@@ -236,6 +237,9 @@ serve(async (req: Request) => {
       return json(400, { error: err instanceof Error ? err.message : String(err) });
     }
     const { client, dealerCode } = store;
+
+    const notCleared = contractCallRefusal(session, store.credentials.api_base_url, "voided");
+    if (notCleared) return json(403, { error: notCleared });
 
     // Same rule as documents: void as the dealer that submitted. A store that
     // has since been repointed must not void under a different Dealer ID.

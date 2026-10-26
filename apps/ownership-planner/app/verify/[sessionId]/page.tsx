@@ -434,8 +434,8 @@ export default async function VerifyPage({
 
         {sheet.session.is_test ? (
           <p className="note note--flag">
-            This is a test session. It has no CRM deal behind it, so Refresh has
-            nothing to pull.
+            This is a test session. Its contracts go only to the TecAssured test
+            server, and can be voided there.
           </p>
         ) : null}
 
