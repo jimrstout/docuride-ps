@@ -463,3 +463,46 @@ session is marked is_test.
 - **Lift the QA-only contract rule.** Before any real contract, a person
   decides to allow the production server, and `_shared/contract-guard.ts`
   changes with that decision. Nothing else turns it off.
+
+## 12. Contract documents in the Deal Jacket
+
+fni-contract-documents pulls each live contract's document from the provider
+and saves it to the deal's WorkDrive Deal Jacket, alongside DocuRide DC's own
+documents.
+
+**Name.** `_shared/document-names.ts`, the one place it is built:
+
+    {prefix}{nn} MUI #{deal number} {buyer display name} {product name} {contract number}|SignedDocuRideDC|{signed documents folder id}|.pdf
+
+- The prefix is the provider's (Admin > Providers; Riders Advantage is TA).
+  A provider with no prefix cannot send documents to WorkDrive, and the
+  function says so.
+- {nn} is the contract's place on the deal, given at submit in submit order
+  and never changed (agreement_products.document_position).
+- Buyer display name and the Signed Documents folder id come from dc.deals
+  (by Zoho id, then deal number). The character cleanup is DC's own:
+  \ / : * ? " < > become "-", double spaces collapse, pipes stay. ".pdf" is
+  added as WorkDrive shows DC's stored documents.
+
+**Folders.** Only DocuRide DC makes a deal's folders (V2 Generate Documents).
+A deal not in dc.deals, or with no Deal Jacket or Signed Documents folder,
+stops with "Missing Folder" and nothing is saved.
+
+**Replace, don't duplicate.** A file in the Deal Jacket with the same name is
+moved to the WorkDrive trash first, as DC replaces its own, then the PDF is
+uploaded.
+
+**What is kept** on fni.agreement_products (migration 0029): the WorkDrive
+file id, name and when it was saved; the provider's signature data exactly
+as returned (provider_signatures); everything else it returned except the PDF
+(provider_document); the page count and each page's size in points.
+
+**Access.** WorkDrive is reached with DocuRide DC's Zoho client
+(ZOHO_DC_*, scope WorkDrive.files.ALL), sharing DC's one token row and its
+refresh lock (`_shared/dc-zoho.ts`, a copy of DC's to keep in step). No token
+or secret value is read, logged or returned. A refusal for a missing
+permission names the scope.
+
+**Void** cancels the contract with TecAssured, records who, when and why, and
+renames the file by adding " VOID" before the first pipe. The file is never
+deleted.

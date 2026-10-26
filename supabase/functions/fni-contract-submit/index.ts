@@ -678,6 +678,19 @@ serve(async (req: Request) => {
     }
 
     if (productRows.length > 0) {
+      // Each contract's place on the deal, in submit order, after any already
+      // there (voided ones keep theirs). It is the "01" in the WorkDrive file
+      // name, so it is given once and never changed. See _shared/document-names.ts.
+      const { data: placed } = await supabase
+        .schema("fni")
+        .from("agreement_products")
+        .select("document_position")
+        .eq("agreement_id", agreement.id)
+        .not("document_position", "is", null);
+      const taken = ((placed ?? []) as { document_position: number }[]).map((r) => r.document_position);
+      let next = (taken.length > 0 ? Math.max(...taken) : 0) + 1;
+      for (const row of productRows) row.document_position = next++;
+
       const { error: prodErr } = await supabase
         .schema("fni")
         .from("agreement_products")
