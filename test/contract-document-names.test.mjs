@@ -112,10 +112,10 @@ test("pages are counted and measured in points; the provider's answer is kept ex
   assert.ok(!isPdf(fromBase64("PGh0bWw+")));
 });
 
-test("contract-documents checks the rule, the prefix and the folders before asking TecAssured", () => {
+test("contract-documents checks the rule, the prefix and the buyer name before asking TecAssured", () => {
   const fn = src("../supabase/functions/fni-contract-documents/index.ts");
   const ask = fn.indexOf("client.getContractDocument(");
-  for (const needle of ["contractCallRefusal(session", "prefixProblem(provider", "folderProblem(deal)"]) {
+  for (const needle of ["contractCallRefusal(session", "prefixProblem(provider", "buyerNameFor(deal"]) {
     const at = fn.indexOf(needle);
     assert.ok(at > 0 && at < ask, needle);
   }
@@ -123,8 +123,9 @@ test("contract-documents checks the rule, the prefix and the folders before aski
   assert.match(fn, /provider_signatures: doc\.signatures \?\? null,/);
   assert.doesNotMatch(fn, /pdf_base64:/);
   // Replace, don't duplicate; never a delete.
-  assert.ok(fn.indexOf("trashFile(f.id)") < fn.indexOf("uploadPdf("));
-  assert.doesNotMatch(fn + src("../supabase/functions/_shared/workdrive.ts"), /method: "DELETE"/);
+  const move = src("../supabase/functions/_shared/deal-jacket-move.ts");
+  assert.ok(move.indexOf("await deps.trash(f.id)") < move.indexOf("await deps.upload("));
+  assert.doesNotMatch(fn + move + src("../supabase/functions/_shared/workdrive.ts"), /method: "DELETE"|\.remove\(/);
   // No folder code of our own.
   assert.doesNotMatch(src("../supabase/functions/_shared/workdrive.ts"), /createFolder/);
 });

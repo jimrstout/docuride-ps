@@ -66,3 +66,25 @@ export function assignPositions<T extends { id: string; document_position: numbe
   for (const r of missing) out.set(r.id, next++);
   return out;
 }
+
+/** The folders, when the deal has both a Deal Jacket and a Signed Documents folder. */
+export function readyFolders(
+  deal: Pick<DealFolders, "deal_jacket_folder_id" | "signed_documents_folder_id"> | null
+): { deal_jacket_folder_id: string; signed_documents_folder_id: string } | null {
+  if (!deal || blank(deal.deal_jacket_folder_id) || blank(deal.signed_documents_folder_id)) return null;
+  return {
+    deal_jacket_folder_id: String(deal.deal_jacket_folder_id).trim(),
+    signed_documents_folder_id: String(deal.signed_documents_folder_id).trim(),
+  };
+}
+
+/**
+ * The buyer's name for the file: DocuRide DC's, which its own documents use,
+ * or the session's when the deal is not in DC yet. Null when neither has one.
+ */
+export function buyerNameFor(deal: Pick<DealFolders, "buyer_display_name"> | null, sessionBuyer: string | null): string | null {
+  const dc = deal?.buyer_display_name;
+  if (!blank(dc)) return String(dc).trim();
+  if (!blank(sessionBuyer)) return String(sessionBuyer).trim();
+  return null;
+}

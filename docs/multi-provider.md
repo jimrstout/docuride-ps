@@ -535,3 +535,36 @@ provider contracted through its API:
   every other field except the PDF.
 - **The planner's saved choices are what Submit sends.** Staff do not
   re-pick products on Verify.
+
+## 13. Holding documents until the Deal Jacket exists
+
+A provider's contract PDF often exists before DocuRide DC has made the deal's
+WorkDrive folders, which only happens when the full sale documents are
+generated. So fni-contract-documents holds every PDF in a private Supabase
+bucket, **fni-contracts** (migration 0030; never public), at
+`{session id}/{file name}`, and:
+
+- if dc.deals already has the deal's Deal Jacket and Signed Documents
+  folder, also saves it to the Deal Jacket straight away, as before;
+- if not, it no longer stops with "Missing Folder". The document is
+  "Waiting for Deal Jacket" until it is moved.
+
+**Names.** The stored name is the file name without its routing part,
+"TA01 MUI #13759 {buyer} {product} {contract}" (agreement_products.
+document_name). The full name, with "|SignedDocuRideDC|{signed documents
+folder id}|.pdf", is built when the file moves, from the same
+`_shared/document-names.ts`. Supabase Storage keys do not take "#", "|" or
+accented letters, so in the bucket those become "-"; the WorkDrive name keeps
+them. The buyer's name is DocuRide DC's, or the session's while the deal is
+not in DC yet.
+
+**Statuses** (agreement_products.document_status): "Waiting for Deal
+Jacket", "Saved to Deal Jacket", "Voided". The bucket copy is kept after a
+move. Nothing is deleted.
+
+**Moving** (`_shared/deal-jacket-move.ts`, shared by Get document and
+fni-documents-to-deal-jacket): build the full name, move any same-named file
+in the Deal Jacket to the WorkDrive trash, upload the PDF from the bucket,
+record the WorkDrive file id, name and time. A document already in the Deal
+Jacket is skipped, so a move is safe to repeat. A voided document moves with
+" VOID" before the first pipe.
