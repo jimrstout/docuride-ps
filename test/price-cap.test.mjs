@@ -54,7 +54,9 @@ test("submit keeps the cap check for test sessions on QA only, and never changes
   assert.match(sub, /if \(policy === "Test at maximum"\) \{\s+resolved = buildSubmitQuote\(offerPayload, atMaximum\(selections, resolved\)\)\.resolved;/);
   assert.match(sub, /const overCap = policy === "Test at maximum" \? resolved\.filter\(\(r\) => r\.overCap\) : \[\];/);
   assert.match(sub, /customer_price: customerPrice\.get\(r\.rateUniqueId\) \?\? r\.selection\.retail_price,/);
-  assert.match(sub, /error: refusalInPlainEnglish\(response\.error,/);
+  // Refusals reach staff through the product-by-product reading, which words
+  // each one with refusalInPlainEnglish (test/submit-outcome.test.mjs).
+  assert.match(src("../supabase/functions/_shared/submit-outcome.ts"), /refusalInPlainEnglish\(no\.error, a\.productName\)/);
 });
 
 test("the go-live item is written down", () => {

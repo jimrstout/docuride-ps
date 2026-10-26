@@ -465,6 +465,26 @@ guard. The customer's chosen price is kept on their selections; only the
 contract carries the maximum. Everywhere else no cap is assumed (see Go-live
 items).
 
+**Reading a submit's answer, product by product** (`_shared/submit-outcome.ts`).
+TecAssured can report a submit as failed while StoneEagle has created some of
+the contracts. On deal 13437 Tire and Wheel was refused, Battery and Theft
+were created, the answer carried a top-level error, nothing was recorded, and
+a resubmit was refused as a duplicate. Now each product is one of:
+
+| Outcome | What the answer showed | What happens |
+|---|---|---|
+| Created | an entry with a contract number and no error of its own | recorded as a Live contract, whatever the top-level answer |
+| Refused | an entry with its own error, or a top-level error with no entries at all | not recorded; the reason in plain English |
+| Not known | the answer does not mention it | the session goes to Submit Status Unknown |
+
+A clear no for every product hands the lock back, as before. A contract
+number that matches nothing we sent is named, and also parks the session at
+Submit Status Unknown (the whole answer is kept on the agreement). Verify
+shows the result one product per line, for example: "TecAssured created 2 of
+3 contracts. Tire and Wheel: not created. TecAssured would not accept Tire
+and Wheel: it has no rate for this product that matches the vehicle ...
+Battery Plus: created, contract ... Theft, Plan A: created, contract ..."
+
 **Where is_test comes from.** A session starts as a test session when its
 DocuRide record has "Test Record Only" ticked (API name `Test_Record_Only`).
 Reopening a session (Start the planner again) marks it is_test if the box has

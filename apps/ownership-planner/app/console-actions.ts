@@ -576,22 +576,34 @@ export async function submitContracts(formData: FormData): Promise<void> {
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
   let detail: string;
+  let partial = false;
   try {
-    const done = await edge.submit<{ contract_count?: number; contracts?: { contract_number: string | null }[]; already_submitted?: boolean }>({
+    const done = await edge.submit<{
+      contract_count?: number;
+      contracts?: { contract_number: string | null }[];
+      already_submitted?: boolean;
+      /** Product by product: created, refused, or not known. */
+      message?: string;
+      partial?: boolean;
+    }>({
       session_id: sessionId,
       use_saved_selections: true,
     });
     const numbers = (done.contracts ?? []).map((c) => c.contract_number ?? "no number").join(", ");
+    // Some went through and some did not: the endpoint's own lines say which.
+    partial = done.partial === true;
     detail = done.already_submitted
       ? `These products were already submitted: ${numbers}. Nothing new was sent.`
-      : `Submitted. TecAssured returned ${done.contract_count ?? 0} ${done.contract_count === 1 ? "contract" : "contracts"}: ${numbers}. Get each document next.`;
+      : partial && done.message
+        ? `${done.message} Get the document for each contract created.`
+        : `Submitted. TecAssured returned ${done.contract_count ?? 0} ${done.contract_count === 1 ? "contract" : "contracts"}: ${numbers}. Get each document next.`;
   } catch (err) {
     console.error(`submit failed for ${sessionId}:`, err);
     return backToVerify(sessionId, "refused", err instanceof EdgeError ? err.message : "Something went wrong. Try again.");
   }
   revalidatePath(`/verify/${sessionId}`);
   revalidatePath(SESSIONS);
-  return backToVerify(sessionId, "contracts", detail);
+  return backToVerify(sessionId, partial ? "refused" : "contracts", detail);
 }
 
 /**

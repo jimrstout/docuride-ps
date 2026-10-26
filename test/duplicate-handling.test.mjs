@@ -266,12 +266,14 @@ test("the catch parks the session at unknown when the provider was called", () =
 test("every path that records paperwork badly blocks the next submit", () => {
   // Contracts exist at TecAssured, our rows do not, and the rows are the thing
   // that would have stopped a second contract. So the session is parked rather
-  // than released, on all three write failures after the provider call.
+  // than released, on all three write failures after the provider call, and
+  // when the answer leaves a product not known (fix 4e).
   const persistence = contractSubmit.slice(
     contractSubmit.indexOf("Step 7: The agreement"),
     contractSubmit.lastIndexOf("} catch (err)")
   );
-  assert.equal((persistence.match(/await markUnknown\(/g) ?? []).length, 3);
+  assert.equal((persistence.match(/await markUnknown\(/g) ?? []).length, 4);
+  assert.match(persistence, /if \(reading\.unknown\) await markUnknown\(reading\.message\);/);
   assert.equal((persistence.match(/Do not retry/g) ?? []).length, 3);
 });
 

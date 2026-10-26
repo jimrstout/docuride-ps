@@ -381,7 +381,7 @@ test("a long provider message still fits in one cookie", () => {
   const long = "x".repeat(5000);
   const encoded = encodeVerifyFlash("refused", long);
   assert.ok(encoded.length < 4000, `cookie would be ${encoded.length} bytes`);
-  assert.equal(decodeVerifyFlash(encoded).detail.length, 600);
+  assert.equal(decodeVerifyFlash(encoded).detail.length, 1200);
 });
 
 test("a missing or damaged cookie shows nothing rather than throwing", () => {
