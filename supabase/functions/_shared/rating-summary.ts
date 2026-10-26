@@ -22,6 +22,8 @@ export interface RatingRow {
   error_detail: string | null;
   out_of_date: boolean;
   response_payload: unknown;
+  /** Why the last re-rate failed, when these offers were kept through it. */
+  last_failure_detail?: string | null;
   provider: { id: string; name: string; kind: string; adapter: string | null } | null;
 }
 
@@ -59,9 +61,12 @@ export function familiesFromRows(rows: RatingRow[]): NormalizedFamily[] {
 /** One provider's line on Verify, in plain English. */
 export function providerLine(row: RatingRow): string {
   const name = row.provider?.name ?? "A provider";
-  if (row.out_of_date) return `${name}: Out of date. Rate again.`;
+  const kept = row.state === "Rated" && row.last_failure_detail
+    ? ` The last re-rate failed (${row.last_failure_detail.replace(/[.\s]+$/, "")}), so these are the earlier offers, kept.`
+    : "";
+  if (row.out_of_date) return `${name}: Out of date. Rate again.${kept}`;
   if (row.state === "Rated") {
-    return `${name}: Rated, ${row.product_count} ${row.product_count === 1 ? "product" : "products"}.`;
+    return `${name}: Rated, ${row.product_count} ${row.product_count === 1 ? "product" : "products"}.${kept}`;
   }
   if (row.state === "Not Offered") return `${name}: Nothing offered for this unit.`;
   const detail = (row.error_detail ?? "Rating failed.").replace(` for ${name}.`, ".");

@@ -14,6 +14,7 @@
 
 import { resolveVehicleType } from "./vehicle-types.ts";
 import { programNamesFromQuote } from "./program-names.ts";
+import { keepsPrior, keptStillCurrent, keptWarning, type PriorOffer } from "./rerate.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient } from "./tecassured.ts";
 import { tecAssuredAdapter, type TecAssuredDetail } from "./adapters/tecassured.ts";
@@ -40,6 +41,11 @@ export interface ProviderOutcome {
   productCount: number;
   /** Set when TecAssured was called. */
   tecassured?: TecAssuredDetail & { credentialId: string; environment: string };
+  /**
+   * Set when this attempt failed and the last good offers were kept. current
+   * says whether they still answer for this deal (see _shared/rerate.ts).
+   */
+  kept?: { product_count: number; current: boolean; warning: string };
 }
 
 /** The deal as rating and template matching see it, staff edits applied. */
@@ -186,12 +192,51 @@ function responseFor(o: ProviderOutcome): unknown {
   return o.result.response ?? null;
 }
 
-/** Record one attempt. A failure to record is logged, never thrown. */
+/**
+ * Record one attempt. A failure to record is logged, never thrown.
+ *
+ * A failed attempt never replaces offers the provider gave earlier: the Rated
+ * row is kept and the failure goes beside it as a warning. Returns what was
+ * kept, or null when the attempt was recorded as it came.
+ */
 export async function recordOutcome(
   supabase: SupabaseClient,
   sessionId: string,
   o: ProviderOutcome
-): Promise<void> {
+): Promise<ProviderOutcome["kept"] | null> {
+  if (o.result.state === "Failed") {
+    const reason = o.result.reason;
+    const { data: priorRow } = await supabase
+      .schema("fni")
+      .from("rated_offers")
+      .select("state, out_of_date, request_payload, product_count, rated_at")
+      .eq("session_id", sessionId)
+      .eq("provider_id", o.provider.id)
+      .maybeSingle();
+    const prior = (priorRow as PriorOffer | null) ?? null;
+    if (keepsPrior(prior)) {
+      const current = keptStillCurrent(prior, o.result.request ?? null);
+      const { error } = await supabase
+        .schema("fni")
+        .from("rated_offers")
+        .update({
+          last_failure_detail: reason,
+          last_failure_at: new Date().toISOString(),
+          // Current or not, by what the failed attempt shows about the deal.
+          out_of_date: !current,
+        })
+        .eq("session_id", sessionId)
+        .eq("provider_id", o.provider.id);
+      if (error) {
+        console.error(
+          `RATE_ATTEMPT_NOT_RECORDED session=${sessionId} provider=${o.provider.name} ` +
+            `state=Failed (kept): ${error.message}`
+        );
+      }
+      return { product_count: prior.product_count, current, warning: keptWarning(o.provider.name, reason, current) };
+    }
+  }
+
   const { error } = await supabase
     .schema("fni")
     .from("rated_offers")
@@ -208,6 +253,9 @@ export async function recordOutcome(
         rated_at: new Date().toISOString(),
         // Every attempt rates the session's current values, so it is current.
         out_of_date: false,
+        // An answer from the provider clears the warning of a failed re-rate.
+        last_failure_detail: null,
+        last_failure_at: null,
       },
       { onConflict: "session_id,provider_id" }
     );
@@ -217,6 +265,7 @@ export async function recordOutcome(
         `state=${o.result.state}: ${error.message}`
     );
   }
+  return null;
 }
 
 /** Rate every provider the deal's menu needs, and record each attempt. */
@@ -231,7 +280,10 @@ export async function rateSession(
   const outcomes = await Promise.all(
     providers.map((p) => rateOne(supabase, p, session.store_id, rateSource, deal))
   );
-  await Promise.all(outcomes.map((o) => recordOutcome(supabase, session.id, o)));
+  const kept = await Promise.all(outcomes.map((o) => recordOutcome(supabase, session.id, o)));
+  kept.forEach((k, i) => {
+    if (k) outcomes[i].kept = k;
+  });
   await Promise.all(
     outcomes
       .filter((o) => o.provider.adapter === "TecAssured" && o.result.state === "Rated")

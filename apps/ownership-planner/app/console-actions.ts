@@ -486,10 +486,13 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
   // so the person who pressed the button is told in words what happened.
   let rated = false;
   let reason: string | null = null;
+  let warning: string | null = null;
   try {
-    const result = await edge.adminRate<{ product_count?: number }>(sessionId);
+    const result = await edge.adminRate<{ product_count?: number; warning?: string | null }>(sessionId);
     if ((result?.product_count ?? 0) > 0) {
       rated = true;
+      // A provider failed and its last good offers were kept: said in words.
+      warning = typeof result?.warning === "string" ? result.warning : null;
     } else {
       reason = "TecAssured did not offer any plans for this deal.";
     }
@@ -512,7 +515,7 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
   // Even when the rate failed, this comes back with a message rather than an
   // error page. The presentation can still be opened: the planner has a neutral
   // screen for a session with no rate, and that is what the customer sees.
-  return backToVerify(sessionId, rated ? "rated" : "notrated", reason);
+  return backToVerify(sessionId, rated ? (warning ? "ratedkept" : "rated") : "notrated", warning ?? reason);
 }
 
 /**

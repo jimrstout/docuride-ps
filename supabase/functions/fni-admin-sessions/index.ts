@@ -152,7 +152,7 @@ async function list(url: URL): Promise<Response> {
       .schema("fni")
       .from("rated_offers")
       // Every provider's attempt per session, summed the way Verify sums them.
-      .select("session_id, provider_id, state, error_detail, product_count, rated_at, out_of_date, provider:providers(id, name, kind, adapter)")
+      .select("session_id, provider_id, state, error_detail, last_failure_detail, product_count, rated_at, out_of_date, provider:providers(id, name, kind, adapter)")
       .in("session_id", sessionIds);
 
     const bySession = new Map<string, RatingRow[]>();

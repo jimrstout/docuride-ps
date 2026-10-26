@@ -719,3 +719,28 @@ filled from the offers already held, and refreshed by every successful
 TecAssured rating. Two products can share a program name (14_3 and 2058_141
 are both "USED ON-ROAD CARE"), so the code stays beside it. Customers never
 see it: the planner payload does not carry it, and a test holds that.
+
+## 15. A failed re-rate keeps the last good offers
+
+A rating attempt used to overwrite the provider's `rated_offers` row whatever
+came back, so a timeout on a re-rate threw away a quote the customer may have
+already chosen from, and the deal could no longer be submitted. Now
+(`_shared/rerate.ts`, migration 0035):
+
+- **Only an answer replaces offers.** Rated or Not Offered from the provider
+  overwrites the row as before. A Failed attempt over a Rated row keeps it and
+  writes the reason beside it (`last_failure_detail`, `last_failure_at`). The
+  next answer clears it.
+- **Still current?** When the failed attempt got as far as building its
+  request, it is compared with the request behind the kept offers, ignoring
+  rateDate. The same deal means the offers are current: Confirm and Continue
+  marks every row out of date and then re-rates, so a timeout there leaves the
+  deal submittable. A different deal means they are out of date. A failure
+  before any request was built keeps the mark the row had.
+- **Status and choices stand.** fni-rate-vehicle answers 200 with the kept
+  count and a `warning`, and leaves the session status alone.
+- **Staff are told.** Verify says "Verified. Riders Advantage could not rate
+  again (...). The last good offers are kept, so the deal can still go ahead
+  on them." The provider line on Verify and in Admin > Sessions adds "The
+  last re-rate failed (...), so these are the earlier offers, kept." The
+  customer sees the offers, never the warning.

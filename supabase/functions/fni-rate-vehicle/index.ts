@@ -245,6 +245,11 @@ serve(async (req: Request) => {
 
     const rated = outcomes.filter((o) => o.result.state === "Rated");
     const productCount = rated.reduce((n, o) => n + o.productCount, 0);
+    // A failed re-rate keeps the last good offers (_shared/rerate.ts). Those
+    // still current keep the deal presentable and submittable as it was.
+    const kept = outcomes.filter((o) => o.kept);
+    const keptCount = kept.reduce((n, o) => n + (o.kept!.current ? o.kept!.product_count : 0), 0);
+    const warning = kept.length > 0 ? kept.map((o) => o.kept!.warning).join(" ") : null;
     const ta = outcomes.find((o) => o.tecassured);
 
     // ── Step 4: Record status, the template, the providers, and who acted ──
@@ -271,11 +276,26 @@ serve(async (req: Request) => {
     const providers = outcomes.map((o) => ({
       provider: o.provider.name,
       state: o.result.state,
-      product_count: o.productCount,
-      line: outcomeLine(o),
+      product_count: o.kept ? o.kept.product_count : o.productCount,
+      line: o.kept ? o.kept.warning : outcomeLine(o),
     }));
 
     // ── Step 5: Answer ────────────────────────────────────────────────
+    if (productCount === 0 && keptCount > 0) {
+      // Nothing new, but the last good offers stand: the status and the
+      // customer's choices are untouched, and staff are told why.
+      return json(200, {
+        session_id,
+        status: sess.status,
+        product_count: keptCount,
+        kept_offers: true,
+        warning,
+        providers,
+        menu_template: template?.name ?? null,
+        dealer_code: ta?.tecassured?.dealer_code ?? null,
+      });
+    }
+
     if (productCount === 0) {
       // Nothing to present. Every provider's reason, in its own words, is what
       // a staff member needs to see.
@@ -301,6 +321,8 @@ serve(async (req: Request) => {
       environment: ta?.tecassured?.environment ?? null,
       offer: ta?.result.response ?? null,
       rated_at: new Date().toISOString(),
+      // Another provider failed and its last good offers were kept.
+      ...(warning ? { warning } : {}),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
