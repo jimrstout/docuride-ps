@@ -59,6 +59,10 @@ function ProviderForm({ p, stores }: { p: ProviderRow | null; stores: ProvidersP
             <span>Makes its program covers</span>
             <input name="makes" defaultValue={p?.makes.join(", ") ?? ""} placeholder="Can-Am, Sea-Doo" />
           </label>
+          <label className="ad-field">
+            <span>Document prefix (starts its WorkDrive file names)</span>
+            <input name="document_prefix" defaultValue={p?.document_prefix ?? ""} placeholder="TA" maxLength={6} />
+          </label>
           <label className="ad-field ad-field--wide">
             <span>Notes</span>
             <input name="notes" defaultValue={p?.notes ?? ""} />
@@ -160,6 +164,7 @@ export default async function ProvidersPage({ searchParams }: { searchParams: Pr
                     <span className="ad-strong">{p.name}</span>{" "}
                     {p.active ? null : <Badge>Off</Badge>}
                     <small>{p.contract_method === "Through API" ? "Contracts through its API" : "Contracts recorded by staff"}</small>
+                    <small>{p.document_prefix ? `Document prefix ${p.document_prefix}` : "No document prefix, so its documents cannot go to WorkDrive"}</small>
                   </td>
                   <td>{p.kind === "Connected" ? `Connected (${p.adapter})` : "Price Sheet"}</td>
                   <td>{p.makes.length > 0 ? p.makes.join(", ") : "Any make"}</td>

@@ -511,6 +511,8 @@ export interface ProviderRow {
   makes: string[];
   active: boolean;
   notes: string | null;
+  /** Starts the WorkDrive name of its documents ("TA"). Null when not set. */
+  document_prefix: string | null;
   updated_at: string;
   updated_by: string | null;
   stores: ProviderStoreRow[];

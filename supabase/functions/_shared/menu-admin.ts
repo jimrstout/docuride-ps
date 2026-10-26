@@ -29,6 +29,8 @@ export interface ProviderFields {
   makes: string[];
   active: boolean;
   notes: string | null;
+  /** Starts the WorkDrive name of its documents ("TA"). Null when not set. */
+  document_prefix: string | null;
 }
 
 /**
@@ -44,8 +46,20 @@ export function parseProvider(body: Record<string, unknown>): { fields: Provider
   if (name.length > 80) errors.push("That name is longer than 80 characters.");
   const notes = text(body.notes);
   if (notes.length > 1000) errors.push("The notes are longer than 1,000 characters.");
+  const prefix = text(body.document_prefix).toUpperCase();
+  if (prefix !== "" && !/^[A-Z0-9]{2,6}$/.test(prefix)) {
+    errors.push("The document prefix is two to six letters or digits, such as TA.");
+  }
   if (errors.length > 0) return { errors };
-  return { fields: { name, makes: listOf(body.makes), active: bool(body.active), notes: notes === "" ? null : notes } };
+  return {
+    fields: {
+      name,
+      makes: listOf(body.makes),
+      active: bool(body.active),
+      notes: notes === "" ? null : notes,
+      document_prefix: prefix === "" ? null : prefix,
+    },
+  };
 }
 
 /** The stores a Price Sheet provider is sold at, checked against the real ones. */

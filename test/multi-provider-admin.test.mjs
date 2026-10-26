@@ -41,7 +41,7 @@ test("the store account check is restored, provider-aware, and checks existing r
 test("providers: a name is required; makes are a list; a new one is a Price Sheet provider", () => {
   assert.deepEqual(parseProvider({ name: "", makes: "" }).errors, ["Give the provider a name."]);
   const ok = parseProvider({ name: " Yamaha ", makes: "Yamaha, Yamaha WaveRunner, Yamaha", active: "on" });
-  assert.deepEqual(ok.fields, { name: "Yamaha", makes: ["Yamaha", "Yamaha WaveRunner"], active: true, notes: null });
+  assert.deepEqual(ok.fields, { name: "Yamaha", makes: ["Yamaha", "Yamaha WaveRunner"], active: true, notes: null, document_prefix: null });
   const handler = src("../supabase/functions/fni-admin-settings/providers.ts");
   assert.match(handler, /kind: "Price Sheet",\s*adapter: null,\s*contract_method: "Recorded by Staff",/);
   assert.match(handler, /store accounts carry a login and a Dealer ID, so they are set up by DocuRide staff/);
