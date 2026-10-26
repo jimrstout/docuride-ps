@@ -34,6 +34,7 @@ import { resolvedSlotsFor } from "../_shared/menu-template-rows.ts";
 import { oemContractList } from "../_shared/oem-contract-rows.ts";
 import { contractStateLabel } from "../_shared/oem-contracts.ts";
 import { workDriveFileUrl } from "../_shared/workdrive-links.ts";
+import { HOLD_BUCKET } from "../_shared/contract-documents.ts";
 import { getRecord } from "../_shared/zoho.ts";
 import { crmRatingFields } from "../_shared/crm-fields.ts";
 import {
@@ -224,17 +225,34 @@ async function contractsPanel(supabase: SupabaseClient, s: Record<string, unknow
       .from("agreement_products")
       .select(
         "contract_number, product_name, status, document_position, workdrive_file_id, workdrive_file_name, " +
-          "workdrive_saved_at, voided_by, voided_at, void_reason, page_count"
+          "workdrive_saved_at, voided_by, voided_at, void_reason, page_count, document_status, document_storage_path"
       )
       .eq("agreement_id", (agreement as { id: string }).id)
       .is("recorded_by", null)
       .order("document_position", { ascending: true, nullsFirst: false });
-    contracts = ((data ?? []) as unknown as Record<string, unknown>[]).map((c) => ({
-      ...c,
-      workdrive_url: c.workdrive_file_id ? workDriveFileUrl(String(c.workdrive_file_id)) : null,
-    }));
+    contracts = await Promise.all(
+      ((data ?? []) as unknown as Record<string, unknown>[]).map(async (c) => {
+        // A held PDF, seen through a ten-minute link: the bucket is private.
+        let view: string | null = null;
+        if (c.document_storage_path) {
+          const { data: link } = await supabase.storage
+            .from(HOLD_BUCKET)
+            .createSignedUrl(String(c.document_storage_path), 600);
+          view = link?.signedUrl ?? null;
+        }
+        const { document_storage_path: _path, ...shown } = c;
+        return {
+          ...shown,
+          held: !!c.document_storage_path,
+          view_pdf_url: view,
+          workdrive_url: c.workdrive_file_id ? workDriveFileUrl(String(c.workdrive_file_id)) : null,
+        };
+      })
+    );
   }
-  return { provider_name: selections[0].provider_name, selections, contracts };
+  // Held documents not in the Deal Jacket yet, voided ones included.
+  const waiting = contracts.filter((c) => c.held && !c.workdrive_file_id).length;
+  return { provider_name: selections[0].provider_name, selections, contracts, waiting_count: waiting };
 }
 
 async function liveContracts(

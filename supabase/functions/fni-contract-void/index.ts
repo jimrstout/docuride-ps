@@ -48,7 +48,7 @@ import { secretsMatch } from "../_shared/supabase.ts";
 import { describeContract, type ContractRef } from "../_shared/duplicates.ts";
 import { isRecorded } from "../_shared/oem-contracts.ts";
 import { contractCallRefusal } from "../_shared/contract-guard.ts";
-import { voidedName } from "../_shared/document-names.ts";
+import { voidedBaseName, voidedName } from "../_shared/document-names.ts";
 import { renameFile, workDriveProblem } from "../_shared/workdrive.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -218,7 +218,10 @@ serve(async (req: Request) => {
     const { data: rows, error: rowErr } = await supabase
       .schema("fni")
       .from("agreement_products")
-      .select("id, provider_product_id, contract_number, product_name, status, recorded_by, workdrive_file_id, workdrive_file_name")
+      .select(
+        "id, provider_product_id, contract_number, product_name, status, recorded_by, workdrive_file_id, " +
+          "workdrive_file_name, document_name, document_storage_path"
+      )
       .in("agreement_id", agreementIds)
       .eq("contract_number", contractNumber);
 
@@ -226,11 +229,13 @@ serve(async (req: Request) => {
 
     // A recorded OEM contract and a TecAssured one could share a number. The
     // TecAssured one is the one this function voids; see below for the other.
-    const found = (rows ?? []) as (ContractRef & {
+    const found = (rows ?? []) as unknown as (ContractRef & {
       id: string;
       recorded_by: string | null;
       workdrive_file_id: string | null;
       workdrive_file_name: string | null;
+      document_name: string | null;
+      document_storage_path: string | null;
     })[];
     const row = found.find((r) => !isRecorded(r)) ?? found[0];
 
@@ -319,6 +324,15 @@ serve(async (req: Request) => {
         voided_at: new Date().toISOString(),
         voided_by: staffEmail,
         void_reason: reason,
+        // A held document is marked too, so if it ever moves to the Deal
+        // Jacket it lands with " VOID" before the first pipe. The bucket copy
+        // itself is kept as it is.
+        ...(row.document_storage_path
+          ? {
+              document_status: "Voided",
+              document_name: row.document_name ? voidedBaseName(row.document_name) : null,
+            }
+          : {}),
       })
       .eq("id", row.id);
 

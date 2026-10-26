@@ -617,3 +617,34 @@ Example answer (200):
 `folders_from` is "This call", "DocuRide DC", or "This call and DocuRide DC".
 Each `outcome` is a sentence; anything other than "Saved to Deal Jacket..." or
 "Already in the Deal Jacket..." means that file did not move and says why.
+
+**On Verify,** each contract on the Contracts panel says where its document
+is, in plain English:
+
+- "Waiting for Deal Jacket", with "View PDF": a ten-minute signed link to
+  the held copy (the bucket is private; the page never sees the storage path).
+- "Saved to Deal Jacket", with the WorkDrive link.
+- Voided contracts stay listed, marked Voided.
+
+While any held document is not in the Deal Jacket, staff see "Move documents
+to Deal Jacket" (pending label "Moving documents..."). It makes the same call
+the CRM will, so the move can be tried by hand before the Deluge trigger
+exists.
+
+**Voiding a waiting document** cancels it with TecAssured as before, marks it
+Voided, and adds " VOID" to its stored name, so if it ever moves to the Deal
+Jacket it lands with " VOID" before the first pipe. The bucket copy is left as
+it is.
+
+### Section 13 decisions
+
+- **Storage names** use "-" for characters Supabase Storage keys refuse
+  ("#", "|", accented letters). The WorkDrive name is unchanged.
+- **Get document again** replaces the same contract's own copy in the bucket
+  and, if it was already in the Deal Jacket, replaces that file too.
+- **Finalized** now means every live contract's document is held, whether or
+  not it has reached the Deal Jacket yet.
+- **The buyer's name** comes from DocuRide DC when the deal is there, and
+  from the session otherwise, so a document can be held before DC has the deal.
+- **Verify's button sends the session id**; the CRM sends the record id or
+  deal number. Both reach the same move.

@@ -700,5 +700,13 @@ export interface ContractsPanel {
     voided_at: string | null;
     void_reason: string | null;
     page_count: number | null;
+    /** "Waiting for Deal Jacket", "Saved to Deal Jacket" or "Voided". Null before its document is fetched. */
+    document_status: string | null;
+    /** PS holds its PDF in the fni-contracts bucket. */
+    held: boolean;
+    /** A ten-minute link to the held PDF. */
+    view_pdf_url: string | null;
   }[];
+  /** Held documents not in the Deal Jacket yet, voided ones included. */
+  waiting_count: number;
 }

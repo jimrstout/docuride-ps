@@ -115,5 +115,5 @@ test("migration 0030: private PDF-only bucket, three columns, nothing removed", 
     assert.match(sql, new RegExp(`add column if not exists ${c}`));
   }
   assert.match(sql, /'Waiting for Deal Jacket', 'Saved to Deal Jacket', 'Voided'/);
-  assert.match(src("../supabase/functions/_shared/deal-jacket-live.ts"), /export const HOLD_BUCKET = "fni-contracts";/);
+  assert.match(src("../supabase/functions/_shared/contract-documents.ts"), /export const HOLD_BUCKET = "fni-contracts";/);
 });

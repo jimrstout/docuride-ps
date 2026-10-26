@@ -52,6 +52,7 @@ import {
   voidOemContract,
   submitContracts,
   getContractDocument,
+  moveDocumentsToDealJacket,
 } from "@/app/console-actions";
 import PendingButton from "@/components/PendingButton";
 import { money } from "@/lib/money";
@@ -639,11 +640,26 @@ export default async function VerifyPage({
                     {c.workdrive_url ? (
                       <p>
                         <small>
-                          Saved to the Deal Jacket {stamp(c.workdrive_saved_at)}
+                          <span className="tag tag--good">Saved to Deal Jacket</span> {stamp(c.workdrive_saved_at)}
                           {c.page_count ? `, ${c.page_count} ${c.page_count === 1 ? "page" : "pages"}` : ""}.{" "}
                           <a href={c.workdrive_url} target="_blank" rel="noreferrer">
                             Open in WorkDrive
                           </a>
+                        </small>
+                      </p>
+                    ) : c.held ? (
+                      <p>
+                        <small>
+                          <span className="tag tag--quiet">Waiting for Deal Jacket</span>{" "}
+                          {c.status === "Voided"
+                            ? "It will move with VOID in its name once the deal's folders exist."
+                            : "Held in DocuRide until the deal's folders exist."}
+                          {c.page_count ? ` ${c.page_count} ${c.page_count === 1 ? "page" : "pages"}.` : ""}{" "}
+                          {c.view_pdf_url ? (
+                            <a href={c.view_pdf_url} target="_blank" rel="noreferrer">
+                              View PDF
+                            </a>
+                          ) : null}
                         </small>
                       </p>
                     ) : null}
@@ -680,6 +696,18 @@ export default async function VerifyPage({
                   </li>
                 ))}
               </ul>
+            ) : null}
+
+            {operator && sheet.contracts_panel.waiting_count > 0 ? (
+              <form action={moveDocumentsToDealJacket} className="vcontracts-move">
+                <input type="hidden" name="session_id" value={sheet.session.id} />
+                <PendingButton pending="Moving documents...">Move documents to Deal Jacket</PendingButton>
+                <small>
+                  {sheet.contracts_panel.waiting_count}{" "}
+                  {sheet.contracts_panel.waiting_count === 1 ? "document is" : "documents are"} waiting. The CRM will
+                  do this on its own once DocuRide DC makes the deal&apos;s folders; this does it now.
+                </small>
+              </form>
             ) : null}
           </section>
         ) : null}

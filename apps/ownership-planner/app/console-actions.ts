@@ -591,6 +591,30 @@ export async function submitContracts(formData: FormData): Promise<void> {
   return backToVerify(sessionId, "contracts", detail);
 }
 
+/**
+ * Move the deal's held documents into its Deal Jacket, the same call the CRM
+ * makes once DocuRide DC has made the deal's folders. For testing by hand.
+ */
+export async function moveDocumentsToDealJacket(formData: FormData): Promise<void> {
+  const operator = await currentOperator();
+  if (!operator) redirect(SESSIONS);
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
+
+  let done: { message?: string; files?: { file_name: string | null; outcome: string }[] };
+  try {
+    done = await edge.documentsToDealJacket({ session_id: sessionId });
+  } catch (err) {
+    console.error(`move to Deal Jacket failed for ${sessionId}:`, err);
+    return backToVerify(sessionId, "refused", err instanceof EdgeError ? err.message : "Something went wrong. Try again.");
+  }
+  revalidatePath(`/verify/${sessionId}`);
+  const notMoved = (done.files ?? []).filter((f) => !/^(Saved to Deal Jacket|Already in the Deal Jacket)/.test(f.outcome));
+  const detail =
+    (done.message ?? "Done.") + (notMoved.length > 0 ? ` Not moved: ${notMoved.map((f) => f.outcome).join(" ")}` : "");
+  return backToVerify(sessionId, notMoved.length > 0 ? "refused" : "contracts", detail);
+}
+
 /** Pull one contract's document from the provider and save it to the Deal Jacket. */
 export async function getContractDocument(formData: FormData): Promise<void> {
   const operator = await currentOperator();
@@ -600,7 +624,15 @@ export async function getContractDocument(formData: FormData): Promise<void> {
   const contractNumber = String(formData.get("contract_number") ?? "").trim();
   if (!contractNumber) return backToVerify(sessionId, "refused", "No contract number was given.");
 
-  let done: { documents?: { file_name: string | null; workdrive_file_id: string | null; page_count: number | null; error: string | null }[] };
+  let done: {
+    documents?: {
+      file_name: string | null;
+      workdrive_file_id: string | null;
+      page_count: number | null;
+      document_status: string | null;
+      error: string | null;
+    }[];
+  };
   try {
     done = await edge.documents({ session_id: sessionId, contract_number: contractNumber });
   } catch (err) {
@@ -609,13 +641,18 @@ export async function getContractDocument(formData: FormData): Promise<void> {
   }
   const doc = done.documents?.[0];
   revalidatePath(`/verify/${sessionId}`);
-  if (!doc || doc.error || !doc.workdrive_file_id) {
+  if (!doc || (doc.error && !doc.document_status)) {
     return backToVerify(sessionId, "refused", doc?.error ?? `The document for ${contractNumber} was not saved. Try again.`);
+  }
+  const pages = `${doc.page_count ?? "?"} ${doc.page_count === 1 ? "page" : "pages"}`;
+  if (doc.workdrive_file_id) {
+    return backToVerify(sessionId, "contracts", `Saved the document for ${contractNumber} to the Deal Jacket (${pages}).`);
   }
   return backToVerify(
     sessionId,
-    "contracts",
-    `Saved the document for ${contractNumber} to the Deal Jacket (${doc.page_count ?? "?"} ${doc.page_count === 1 ? "page" : "pages"}).`
+    doc.error ? "refused" : "contracts",
+    doc.error ??
+      `Got the document for ${contractNumber} (${pages}). It is held in DocuRide and waiting for the deal's Deal Jacket.`
   );
 }
 
