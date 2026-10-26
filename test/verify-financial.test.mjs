@@ -88,7 +88,7 @@ test("creation, reopen and Refresh all fill it through the shared mapping", () =
 
   // Reopen writes the whole shared patch.
   const reopen = start.slice(start.indexOf("async function reopen("), start.indexOf("async function ratingInputsChanged("));
-  assert.match(reopen, /const patch = crmRatingFields\(record as unknown as Record<string, unknown>\);/);
+  assert.match(reopen, /\.\.\.crmRatingFields\(record as unknown as Record<string, unknown>\),/);
   assert.match(reopen, /\.update\(patch\)/);
 
   // Refresh from CRM writes the same patch, and the sheet reads the column.

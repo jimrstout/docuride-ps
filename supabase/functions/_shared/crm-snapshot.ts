@@ -36,6 +36,9 @@ export const MENU_CRM_FIELDS: readonly string[] = [
   "Store_Location",
   "Modified_Time",
 
+  // A ticked "Test Record Only" checkbox makes the session a test session.
+  "Test_Record_Only",
+
   // The vehicle. mapSession and crmRatingFields.
   "Sold_1_Stock_Number",
   "Sold_1_VIN",

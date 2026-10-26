@@ -57,6 +57,30 @@ function parseCityStateZip(combined: unknown): {
   return { city: s, state: null, zip: null };
 }
 
+// ─── Test records ────────────────────────────────────────────────────────
+
+/**
+ * Is this DocuRide record ticked "Test Record Only" (API name
+ * Test_Record_Only, a checkbox)? Only a real true counts: a blank or missing
+ * field is a real deal.
+ */
+export function isTestRecord(record: Record<string, unknown>): boolean {
+  return record.Test_Record_Only === true;
+}
+
+/**
+ * What reopening a session does to is_test: it can turn a session into a
+ * test session when the record has since been ticked, and never the reverse.
+ * Clearing is_test would let a session that was sent to the QA server as a
+ * test become a real deal with test contracts behind it.
+ */
+export function testRecordPatch(
+  record: Record<string, unknown>,
+  session: { is_test?: unknown }
+): { is_test?: true } {
+  return isTestRecord(record) && session.is_test !== true ? { is_test: true } : {};
+}
+
 // ─── Zoho record -> session row ──────────────────────────────────────────
 
 export function mapSession(
@@ -87,10 +111,10 @@ export function mapSession(
     status: "Initiated",
     initiated_by: initiatedBy,
 
-    // A session created from a real Zoho deal is never a test session. Stated
-    // rather than defaulted, so the two paths that create sessions both say
-    // which kind they are making.
-    is_test: false,
+    // A test session when the record is ticked "Test Record Only", otherwise
+    // a real one. Stated rather than defaulted, so the two paths that create
+    // sessions both say which kind they are making.
+    is_test: isTestRecord(record as unknown as Record<string, unknown>),
 
     // Vehicle
     deal_number: text(record.Name),
