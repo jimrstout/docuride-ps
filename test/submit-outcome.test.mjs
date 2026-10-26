@@ -78,7 +78,7 @@ test("a contract number matching nothing we sent is reported, and makes it Not k
 test("submit records what was created and parks the lock only when something is not known", () => {
   const sub = readFileSync(new URL("../supabase/functions/fni-contract-submit/index.ts", import.meta.url), "utf8");
   assert.doesNotMatch(sub, /if \(response\.error && String\(response\.error\)\.trim\(\) !== ""\)/);
-  assert.match(sub, /if \(reading\.refusedOutright\) \{\s+return await refuse\(400,/);
+  assert.match(sub, /if \(reading\.refusedOutright\) \{[\s\S]*?return await refuse\(400, \{\s+error: reading\.message,/);
   assert.match(sub, /if \(reading\.created\.length === 0\) \{[\s\S]*?await markUnknown\(reading\.message\);/);
   assert.match(sub, /const contracts = reading\.created;/);
   assert.match(sub, /if \(reading\.unknown\) await markUnknown\(reading\.message\);\s+else await releaseLock\(\);/);
