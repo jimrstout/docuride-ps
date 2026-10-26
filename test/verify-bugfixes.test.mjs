@@ -524,7 +524,12 @@ test("recording any rate attempt clears out_of_date", () => {
   const row = between(fn, ".upsert(", '{ onConflict: "session_id,provider_id" }');
   assert.match(row, /out_of_date: false,/);
   assert.match(row, /state: o\.result\.state,/);
-  // One upsert serves every state and every provider, so none can skip it.
-  assert.doesNotMatch(fn, /if \(o\.result\.state ===|switch \(/);
+  // One upsert serves every state and every provider. The one branch is a
+  // failure over a Rated row, which keeps the offers (fix 4b) and decides
+  // out_of_date from what the failed attempt asked (test/rerate-keeps-offers).
+  assert.equal((fn.match(/if \(o\.result\.state ===/g) ?? []).length, 1);
+  assert.match(fn, /if \(o\.result\.state === "Failed"\) \{/);
+  assert.match(fn, /out_of_date: !current,/);
+  assert.doesNotMatch(fn, /switch \(/);
   assert.match(rate, /await Promise\.all\(outcomes\.map\(\(o\) => recordOutcome\(supabase, session\.id, o\)\)\)/);
 });

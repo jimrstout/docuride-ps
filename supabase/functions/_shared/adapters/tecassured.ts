@@ -111,7 +111,19 @@ export function tecAssuredAdapter(
       });
       detail.unsupplied = built.missing.map((m) => m.name);
       const request = built.request;
-      const response = await store.client.rateVehicle(request);
+      // A call that never answers still says what it asked, so a failed
+      // re-rate can show it was about the same deal as the offers kept
+      // (_shared/rerate.ts).
+      let response: unknown;
+      try {
+        response = await store.client.rateVehicle(request);
+      } catch (err) {
+        return {
+          state: "Failed",
+          request,
+          reason: `Rating failed: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
 
       // TecAssured answers a rejected request with HTTP 200 and an error string.
       if (response && typeof response === "object") {

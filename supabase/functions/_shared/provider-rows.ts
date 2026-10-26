@@ -78,6 +78,9 @@ export interface OfferRow {
   rated_at: string | null;
   error_detail: string | null;
   out_of_date: boolean;
+  /** Why the last re-rate failed, on a row whose earlier offers were kept. */
+  last_failure_detail: string | null;
+  last_failure_at: string | null;
   provider: EmbeddedProvider | null;
 }
 

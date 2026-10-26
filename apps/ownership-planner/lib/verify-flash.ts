@@ -88,6 +88,13 @@ export function flashMessage(flash: VerifyFlash | null): FlashMessage | null {
           "Verified and rated. Open the presentation when you are ready to show " +
           "the customer.",
       };
+    case "ratedkept":
+      // A re-rate failed and the last good offers were kept. A warning, not an
+      // error: the deal can go ahead on them unless the detail says otherwise.
+      return {
+        tone: "bad",
+        text: `Verified. ${flash.detail ?? "The re-rate failed, and the last good offers are kept."}`,
+      };
     case "notrated": {
       const why = flash.detail
         ? /[.!?]$/.test(flash.detail) ? flash.detail : `${flash.detail}.`
