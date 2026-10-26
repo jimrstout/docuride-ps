@@ -68,12 +68,18 @@ import {
 } from "../_shared/duplicates.ts";
 import { RECORDED_BY_STAFF, splitSelections } from "../_shared/oem-contracts.ts";
 import { contractCallRefusal } from "../_shared/contract-guard.ts";
+import { savedSelections, type SavedSelection } from "../_shared/saved-selections.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
 interface ContractSubmitRequest {
   session_id: string;
   selections: ProductSelection[];
+  /**
+   * Submit what the customer chose in the planner, as saved, instead of a
+   * list sent with the request. What Verify's Submit button sends.
+   */
+  use_saved_selections?: boolean;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -107,14 +113,29 @@ serve(async (req: Request) => {
 
   const { session_id } = body;
   if (!session_id) return json(400, { error: "session_id is required" });
-  if (!Array.isArray(body.selections) || body.selections.length === 0) {
-    return json(400, { error: "At least one product selection is required" });
-  }
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
+
+  // ── The customer's saved choices, when asked for ───────────────────
+  if (body.use_saved_selections === true) {
+    const { data: saved, error: savedErr } = await supabase
+      .schema("fni")
+      .from("selected_products")
+      .select("provider_product_id, rate_unique_id, selected_options, customer_price, retail_price")
+      .eq("session_id", session_id)
+      .eq("disposition", "Included");
+    if (savedErr) return json(500, { error: `The customer's choices could not be read: ${savedErr.message}` });
+    body.selections = savedSelections((saved ?? []) as SavedSelection[]);
+    if (body.selections.length === 0) {
+      return json(400, { error: "The customer has not chosen any products in the planner yet, so there is nothing to submit." });
+    }
+  }
+  if (!Array.isArray(body.selections) || body.selections.length === 0) {
+    return json(400, { error: "At least one product selection is required" });
+  }
 
   // ── OEM selections are never sent ──────────────────────────────────
   // A product from a Price Sheet provider is contracted on the OEM's own

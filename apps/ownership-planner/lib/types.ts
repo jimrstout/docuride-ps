@@ -444,6 +444,8 @@ export interface VerifySheet {
   hidden_slots?: { title: string; note: string | null }[];
   /** The customer's OEM selections, whose contracts staff record here. */
   oem_contracts?: OemContractSelection[];
+  /** The staff contracts panel. Null until the customer finishes the planner. */
+  contracts_panel?: ContractsPanel | null;
   vin_decode: Record<string, unknown> | null;
   vin_decode_at: string | null;
   /** When a decode last started, successful or not. The page decodes on its
@@ -673,4 +675,30 @@ export interface OemContractSelection {
   customer_price: number | null;
   contract: OemRecordedContract | null;
   voided: OemRecordedContract[];
+}
+
+/** Verify's staff contracts panel: the customer's choices and their contracts. */
+export interface ContractsPanel {
+  provider_name: string;
+  selections: {
+    product_name: string;
+    provider_name: string;
+    term_months: number | null;
+    term_miles: number | null;
+    customer_price: number | null;
+  }[];
+  contracts: {
+    contract_number: string | null;
+    product_name: string;
+    status: string;
+    document_position: number | null;
+    workdrive_file_id: string | null;
+    workdrive_file_name: string | null;
+    workdrive_saved_at: string | null;
+    workdrive_url: string | null;
+    voided_by: string | null;
+    voided_at: string | null;
+    void_reason: string | null;
+    page_count: number | null;
+  }[];
 }

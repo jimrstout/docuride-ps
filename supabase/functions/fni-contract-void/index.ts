@@ -48,6 +48,9 @@ import { secretsMatch } from "../_shared/supabase.ts";
 import { describeContract, type ContractRef } from "../_shared/duplicates.ts";
 import { isRecorded } from "../_shared/oem-contracts.ts";
 import { contractCallRefusal } from "../_shared/contract-guard.ts";
+import { voidedName } from "../_shared/document-names.ts";
+import { renameFile, workDriveProblem } from "../_shared/workdrive.ts";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ACTION_VOID = "Void";
 const ACTION_CLEAR = "Clear Submit Status Unknown";
@@ -58,6 +61,33 @@ interface VoidRequest {
   contract_number?: string;
   staff_email?: string;
   note?: string;
+  /** Why the contract is being voided, in the staff member's words. Required to void. */
+  void_reason?: string;
+}
+
+/**
+ * The voided contract's file in the Deal Jacket gets " VOID" before the first
+ * pipe, so it can never be mistaken for a live contract. Renamed, never
+ * deleted. Returns a sentence to add to the reply when something is off.
+ */
+async function markFileVoid(
+  supabase: SupabaseClient,
+  row: { id: string; workdrive_file_id: string | null; workdrive_file_name: string | null }
+): Promise<string> {
+  if (!row.workdrive_file_id || !row.workdrive_file_name) return "";
+  const name = voidedName(row.workdrive_file_name);
+  if (name === row.workdrive_file_name) return "";
+  try {
+    await renameFile(row.workdrive_file_id, name);
+  } catch (err) {
+    console.error("fni-contract-void: WorkDrive rename failed", {
+      status: (err as { status?: unknown })?.status ?? null,
+      code: (err as { code?: unknown })?.code ?? null,
+    });
+    return ` Its file in the Deal Jacket could not be marked VOID: ${workDriveProblem(err)} Press Void again to retry the rename.`;
+  }
+  await supabase.schema("fni").from("agreement_products").update({ workdrive_file_name: name }).eq("id", row.id);
+  return " Its file in the Deal Jacket is now marked VOID.";
 }
 
 function json(status: number, body: unknown): Response {
@@ -188,7 +218,7 @@ serve(async (req: Request) => {
     const { data: rows, error: rowErr } = await supabase
       .schema("fni")
       .from("agreement_products")
-      .select("id, provider_product_id, contract_number, product_name, status, recorded_by")
+      .select("id, provider_product_id, contract_number, product_name, status, recorded_by, workdrive_file_id, workdrive_file_name")
       .in("agreement_id", agreementIds)
       .eq("contract_number", contractNumber);
 
@@ -196,7 +226,12 @@ serve(async (req: Request) => {
 
     // A recorded OEM contract and a TecAssured one could share a number. The
     // TecAssured one is the one this function voids; see below for the other.
-    const found = (rows ?? []) as (ContractRef & { id: string; recorded_by: string | null })[];
+    const found = (rows ?? []) as (ContractRef & {
+      id: string;
+      recorded_by: string | null;
+      workdrive_file_id: string | null;
+      workdrive_file_name: string | null;
+    })[];
     const row = found.find((r) => !isRecorded(r)) ?? found[0];
 
     if (!row) {
@@ -208,13 +243,20 @@ serve(async (req: Request) => {
     // Already voided is not a failure. Whoever asked wanted this contract not
     // to be live, and it is not live, so the answer is the same answer.
     if (row.status === "Voided") {
+      // A rename that failed last time is tried again; nothing goes to TecAssured.
+      const fileNote = await markFileVoid(supabase, row);
       return json(200, {
         session_id,
         action: ACTION_VOID,
         already_voided: true,
         contract_number: contractNumber,
-        message: `${describeContract(row)} was already voided. Nothing was sent to TecAssured.`,
+        message: `${describeContract(row)} was already voided. Nothing was sent to TecAssured.${fileNote}`,
       });
+    }
+
+    const reason = (body.void_reason ?? "").trim();
+    if (!reason) {
+      return json(400, { error: "Say why this contract is being voided. The reason is kept with the contract." });
     }
 
     // A recorded OEM contract was never at TecAssured. Calling it to void one
@@ -276,6 +318,7 @@ serve(async (req: Request) => {
         status: "Voided",
         voided_at: new Date().toISOString(),
         voided_by: staffEmail,
+        void_reason: reason,
       })
       .eq("id", row.id);
 
@@ -293,6 +336,8 @@ serve(async (req: Request) => {
       });
     }
 
+    const fileNote = await markFileVoid(supabase, row);
+
     return json(200, {
       session_id,
       action: ACTION_VOID,
@@ -304,7 +349,7 @@ serve(async (req: Request) => {
       dealer_code: dealerCode,
       is_test: session.is_test === true,
       message:
-        `${describeContract(row)} is voided. This product can be submitted again on this deal.`,
+        `${describeContract(row)} is voided. This product can be submitted again on this deal.${fileNote}`,
       tecassured_response: response,
     });
   } catch (error) {
