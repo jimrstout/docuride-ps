@@ -15,6 +15,7 @@ export const VEHICLE_TYPE_CHOICES = [
   "UTV",
   "On-Road Motorcycle",
   "Off-Road Motorcycle",
+  "Scooter",
   "Personal Watercraft",
   "Snowmobile",
   "Other",

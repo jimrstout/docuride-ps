@@ -20,7 +20,7 @@ const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 
 test("seven choices, stored exactly as shown", () => {
   assert.deepEqual([...VEHICLE_TYPES], [
-    "ATV", "UTV", "On-Road Motorcycle", "Off-Road Motorcycle", "Personal Watercraft", "Snowmobile", "Other",
+    "ATV", "UTV", "On-Road Motorcycle", "Off-Road Motorcycle", "Scooter", "Personal Watercraft", "Snowmobile", "Other",
   ]);
   const sql = src("../supabase/migrations/0031_session_vehicle_type.sql");
   assert.match(sql, /'ATV', 'UTV', 'On-Road Motorcycle', 'Off-Road Motorcycle',\s*'Personal Watercraft', 'Snowmobile', 'Other'/);
@@ -34,6 +34,12 @@ test("what TecAssured is sent is unchanged for UTV and motorcycles", () => {
   }
   assert.equal(TECASSURED_VTYPE["On-Road Motorcycle"], "MCYC");
   assert.equal(TECASSURED_VTYPE["Off-Road Motorcycle"], "BIKE");
+  // Exactly TecAssured's own codes (API guide 6.3).
+  assert.deepEqual(TECASSURED_VTYPE, {
+    ATV: "ATV", UTV: "UTV", "On-Road Motorcycle": "MCYC", "Off-Road Motorcycle": "BIKE",
+    Scooter: "SCO", "Personal Watercraft": "PWAC", Snowmobile: "SNOW", Other: null,
+  });
+  assert.equal(vehicleTypeForCode("SCO"), "Scooter");
   assert.equal(TECASSURED_VTYPE.Other, null);
 });
 
@@ -95,4 +101,10 @@ test("Verify shows the choice first in the Vehicle panel, and a change needs Con
   assert.match(choice, /closest\("form"\)\?\.requestSubmit\(\)/);
   // The two lists agree.
   for (const v of VEHICLE_TYPES) assert.match(choice, new RegExp(`"${v}"`));
+});
+
+test("migration 0032 adds Scooter to the database check, and nothing else", () => {
+  const sql = src("../supabase/migrations/0032_session_vehicle_type_scooter.sql");
+  assert.match(sql, /'Off-Road Motorcycle', 'Scooter',/);
+  assert.doesNotMatch(sql, /update |delete /i);
 });

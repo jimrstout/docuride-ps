@@ -38,7 +38,9 @@ export const BODY_TYPE_MAP: Record<string, string> = {
  * written twice. Adding a body type above is enough to get it cached.
  */
 export const RATEABLE_VTYPES: readonly string[] = [
-  ...new Set(Object.values(BODY_TYPE_MAP)),
+  // SCO (Scooter) has no CRM body type yet, but staff can choose it on Verify,
+  // so what TecAssured asks for it is cached like the rest.
+  ...new Set([...Object.values(BODY_TYPE_MAP), "SCO"]),
 ].sort();
 
 export function vtypeForBodyType(bodyType: string | null): string | null {
@@ -60,6 +62,7 @@ export const VEHICLE_TYPES = [
   "UTV",
   "On-Road Motorcycle",
   "Off-Road Motorcycle",
+  "Scooter",
   "Personal Watercraft",
   "Snowmobile",
   "Other",
@@ -67,15 +70,18 @@ export const VEHICLE_TYPES = [
 export type VehicleType = (typeof VEHICLE_TYPES)[number];
 
 /**
- * What TecAssured is sent for each choice. UTV and motorcycles send what they
- * always sent: a street bike MCYC, an off-road bike BIKE. "Other" is not a
- * vehicle TecAssured rates, so nothing is sent and the deal is not rated.
+ * What TecAssured is sent for each choice: exactly its own vehicle type codes
+ * (API guide 6.3). MCYC is On-Road Motorcycle, BIKE Off-Road Motorcycle, SCO
+ * Scooter, PWAC Personal Watercraft, SNOW Snowmobile. UTV and motorcycles send
+ * what they always sent. "Other" is not a vehicle TecAssured rates, so nothing
+ * is sent and the deal is not rated.
  */
 export const TECASSURED_VTYPE: Record<VehicleType, string | null> = {
   "ATV": "ATV",
   "UTV": "UTV",
   "On-Road Motorcycle": "MCYC",
   "Off-Road Motorcycle": "BIKE",
+  "Scooter": "SCO",
   "Personal Watercraft": "PWAC",
   "Snowmobile": "SNOW",
   "Other": null,
@@ -97,6 +103,7 @@ export function vehicleTypeForCode(code: string | null | undefined): VehicleType
     case "UTV": return "UTV";
     case "MCYC": return "On-Road Motorcycle";
     case "BIKE": return "Off-Road Motorcycle";
+    case "SCO": return "Scooter";
     case "PWAC": return "Personal Watercraft";
     case "SNOW": return "Snowmobile";
     case "": return null;

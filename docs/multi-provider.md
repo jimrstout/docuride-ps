@@ -659,7 +659,7 @@ was shown the Off-Road Tire and Wheel and TecAssured refused the contract
 Verify, first in the Vehicle panel, stored exactly as shown
 (sessions.vehicle_type, migration 0031):
 
-    ATV, UTV, On-Road Motorcycle, Off-Road Motorcycle, Personal Watercraft, Snowmobile, Other
+    ATV, UTV, On-Road Motorcycle, Off-Road Motorcycle, Scooter, Personal Watercraft, Snowmobile, Other
 
 **Picked automatically** by one rule, `pickVehicleType` in
 `_shared/vehicle-types.ts`: the CRM body type (Sold_1_Body_Type) first, then
@@ -676,9 +676,12 @@ change to a rating input now does the same (it used to happen only on
 Refresh).
 
 **What TecAssured is sent** is the code the choice stands for
-(sessions.vehicle_type_code, derived): ATV, UTV, MCYC (On-Road), BIKE
-(Off-Road), PWAC, SNOW. UTV and motorcycles send exactly what they did.
-Other sends nothing and is not rated.
+(sessions.vehicle_type_code, derived), exactly TecAssured's own vehicle types
+(API guide 6.3): ATV, UTV, MCYC (On-Road Motorcycle), BIKE (Off-Road
+Motorcycle), SCO (Scooter), PWAC (Personal Watercraft), SNOW (Snowmobile).
+UTV and motorcycles send exactly what they did. Other sends nothing and is not
+rated. Scooter joins the database check in migration 0032, which replaces the
+constraint and so is applied by hand.
 
 **Existing sessions** were converted from their stored code (UTV to UTV,
 MCYC to On-Road Motorcycle ...), and each says so in its source line.
