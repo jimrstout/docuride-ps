@@ -30,7 +30,7 @@ export const VERIFY_FLASH_OPTIONS = {
 } as const;
 
 /** Keeps a long provider message inside one cookie. */
-const MAX_DETAIL = 600;
+const MAX_DETAIL = 1200;
 
 export interface VerifyFlash {
   code: string;

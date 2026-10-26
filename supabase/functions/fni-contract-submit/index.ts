@@ -68,7 +68,8 @@ import {
 } from "../_shared/duplicates.ts";
 import { RECORDED_BY_STAFF, splitSelections } from "../_shared/oem-contracts.ts";
 import { contractCallRefusal } from "../_shared/contract-guard.ts";
-import { atMaximum, pricePolicy, refusalInPlainEnglish } from "../_shared/price-cap.ts";
+import { atMaximum, pricePolicy } from "../_shared/price-cap.ts";
+import { readSubmitResponse } from "../_shared/submit-outcome.ts";
 import { savedSelections, type SavedSelection } from "../_shared/saved-selections.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -531,35 +532,40 @@ serve(async (req: Request) => {
     const submitResponse = await client.submitContract(submitPayload);
     const response = (submitResponse ?? {}) as Record<string, unknown>;
 
-    // A refusal is a clear answer: it declined, so nothing exists and the lock
-    // goes back. Only silence is ambiguous.
-    if (response.error && String(response.error).trim() !== "") {
-      return await refuse(400, {
-        error: refusalInPlainEnglish(response.error, toSubmit.length === 1 ? toSubmit[0].productName : null),
-        tecassured_error: response.error,
-      });
-    }
-
-    const contracts = (Array.isArray(response.contracts) ? response.contracts : []) as Record<string, unknown>[];
-
-    // A contract entry can carry its own error while the call itself is a 200
-    // with no top-level error. Those are failures, not contracts, and must not
-    // be written to agreement_products as though paperwork exists.
-    const failed = contracts.filter(
-      (c) => typeof c.error === "string" && c.error.trim() !== ""
+    // ── Step 6b: Read the answer, product by product ──────────────────
+    //
+    // TecAssured can report a submit as failed while contracts were created
+    // (deal 13437: Tire and Wheel refused, Battery and Theft created, a
+    // top-level error, and nothing recorded). So the answer is never read by
+    // its top-level error alone: see _shared/submit-outcome.ts. A clear no for
+    // every product hands the lock back; anything created is recorded below;
+    // anything that cannot be accounted for parks the session at Submit Status
+    // Unknown.
+    const reading = readSubmitResponse(
+      response,
+      toSubmit.map((r) => ({ rateUniqueId: r.rateUniqueId, productName: r.productName }))
     );
-    if (failed.length > 0 && failed.length === contracts.length) {
-      const nameOf = (c: Record<string, unknown>) =>
-        resolved.find((r) => r.rateUniqueId === str(c.rateUniqueId ?? c.rateUnique, ""))?.productName ?? null;
+
+    if (reading.refusedOutright) {
       return await refuse(400, {
-        error: failed.map((c) => refusalInPlainEnglish(c.error, nameOf(c))).join(" "),
-        failures: failed.map((c) => ({
-          rate_unique_id: c.rateUniqueId ?? c.rateUnique ?? null,
-          provider_product_id: c.productId ?? null,
-          detail: c.error,
-        })),
+        error: reading.message,
+        tecassured_error: response.error ?? null,
+        products: reading.products,
       });
     }
+
+    if (reading.created.length === 0) {
+      // Nothing we can record, and no clear no either.
+      await markUnknown(reading.message);
+      return json(502, {
+        error: reading.message,
+        submit_state: "Submit Status Unknown",
+        products: reading.products,
+        tecassured_response: submitResponse,
+      });
+    }
+
+    const contracts = reading.created;
 
     // ── Step 7: The agreement ──────────────────────────────────────────
     // Upsert on session_id, which carries a UNIQUE constraint: one agreement
@@ -756,6 +762,9 @@ serve(async (req: Request) => {
     }
 
     // ── Step 10: Advance the session ───────────────────────────────────
+    // Agreement Created once any contract is on record. A product the answer
+    // did not account for keeps the lock at Submit Status Unknown, for a
+    // person to check against TecAssured.
     const { error: statusErr } = await supabase
       .schema("fni")
       .from("sessions")
@@ -770,12 +779,19 @@ serve(async (req: Request) => {
 
     // Everything that could go wrong has either gone right or returned above,
     // and the agreement_products rows are now the thing that stops a second
-    // contract for these products. The lock has done its job; let it go.
-    await releaseLock();
+    // contract for these products. The lock has done its job; let it go,
+    // unless part of the answer cannot be accounted for.
+    if (reading.unknown) await markUnknown(reading.message);
+    else await releaseLock();
 
     return json(200, {
       session_id,
       status: "Agreement Created",
+      // Product by product: created, refused, or not known.
+      message: reading.message,
+      products: reading.products,
+      partial: reading.products.some((p) => p.outcome !== "Created"),
+      submit_state: reading.unknown ? "Submit Status Unknown" : "Idle",
       agreement_id: agreement.id,
       dealer_code: dealerCode,
       environment: credentials.environment,
