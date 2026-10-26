@@ -714,6 +714,7 @@ export async function saveProvider(fd: FormData): Promise<void> {
       name: field(fd, "name"),
       makes: field(fd, "makes"),
       notes: field(fd, "notes"),
+      document_prefix: field(fd, "document_prefix"),
       active: fd.get("active") === "on",
       updated_by: by,
     }), "saved");
@@ -726,6 +727,7 @@ export async function addProvider(fd: FormData): Promise<void> {
       name: field(fd, "name"),
       makes: field(fd, "makes"),
       notes: field(fd, "notes"),
+      document_prefix: field(fd, "document_prefix"),
       updated_by: by,
     }), "added");
 }

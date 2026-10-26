@@ -36,7 +36,7 @@ export async function readProviders(supabase: SupabaseClient, tenantId: string):
     supabase
       .schema("fni")
       .from("providers")
-      .select("id, name, kind, adapter, contract_method, makes, active, notes, updated_at, updated_by")
+      .select("id, name, kind, adapter, contract_method, makes, active, notes, document_prefix, updated_at, updated_by")
       .eq("tenant_id", tenantId)
       .order("name"),
     stores(supabase, tenantId),
@@ -80,6 +80,13 @@ export async function readProviders(supabase: SupabaseClient, tenantId: string):
   };
 }
 
+/** Which name a unique index refused: the provider's, or its document prefix. */
+function duplicate(message: string, f: { name: string; document_prefix: string | null }): string {
+  return /document_prefix/.test(message)
+    ? `Another provider already uses the document prefix ${f.document_prefix}.`
+    : `There is already a provider called ${f.name}.`;
+}
+
 export async function writeProviders(
   supabase: SupabaseClient,
   tenantId: string,
@@ -103,13 +110,12 @@ export async function writeProviders(
         contract_method: "Recorded by Staff",
         makes: f.makes,
         notes: f.notes,
+        document_prefix: f.document_prefix,
         active: true,
         updated_by: by,
       });
       if (error) {
-        return error.code === "23505"
-          ? { status: 400, body: { error: `There is already a provider called ${f.name}.` } }
-          : { status: 500, body: { error: error.message } };
+        return error.code === "23505" ? { status: 400, body: { error: duplicate(error.message, f) } } : { status: 500, body: { error: error.message } };
       }
       return { status: 200, body: { ok: true } };
     }
@@ -120,13 +126,19 @@ export async function writeProviders(
     const { error } = await supabase
       .schema("fni")
       .from("providers")
-      .update({ name: f.name, makes: f.makes, active: f.active, notes: f.notes, updated_by: by, updated_at: now })
+      .update({
+        name: f.name,
+        makes: f.makes,
+        active: f.active,
+        notes: f.notes,
+        document_prefix: f.document_prefix,
+        updated_by: by,
+        updated_at: now,
+      })
       .eq("id", body.provider_id)
       .eq("tenant_id", tenantId);
     if (error) {
-      return error.code === "23505"
-        ? { status: 400, body: { error: `There is already a provider called ${f.name}.` } }
-        : { status: 500, body: { error: error.message } };
+      return error.code === "23505" ? { status: 400, body: { error: duplicate(error.message, f) } } : { status: 500, body: { error: error.message } };
     }
     return { status: 200, body: { ok: true } };
   }
