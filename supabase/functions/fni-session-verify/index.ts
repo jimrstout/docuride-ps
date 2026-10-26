@@ -98,6 +98,8 @@ const COLUMNS = [
   "deal_number", "stock_number", "finance_type", "sale_date",
   "vin", "unit_year", "unit_make", "unit_model", "condition",
   "vehicle_type_code", "odometer", "in_service_date",
+  // The vehicle type choice and where it came from. Migration 0031.
+  "vehicle_type", "vehicle_type_source",
   "sale_price", "amount_financed", "finance_term", "apr",
   // The corrected finance columns the sheet resolves the term and rate from.
   // Without these on the select, deal 13759's 60 months at 6.99% read as
@@ -460,6 +462,66 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
   };
 }
 
+/**
+ * Did anything a rate depends on move since the session was verified?
+ *
+ * Compared against the snapshot taken at verification, with the staff layer
+ * applied, because the question is whether what the verifier approved is
+ * still what would be sent. If something moved, the session needs Confirm and
+ * Continue again and its quotes are marked out of date (kept, never deleted).
+ * Shared by Refresh and Save: a corrected rating input, such as the vehicle
+ * type, is exactly such a move. Returns the inputs that moved.
+ */
+async function unverifyIfInputsMoved(
+  supabase: SupabaseClient,
+  fresh: Record<string, unknown>
+): Promise<string[]> {
+  const freshEdits = parseStaffEdits(fresh.staff_edits);
+
+  // A field that changed twice and came back is unchanged.
+  const { properties } = await requiredFor(
+    supabase,
+    fresh.store_id as string,
+    (applyStaffEdits(fresh, freshEdits, editTargetFor)).vehicle_type_code
+  );
+  // With the edits applied, because the question is whether what the verifier
+  // approved is still what would be sent, and what would be sent includes their
+  // corrections. A CRM field that moved underneath an edit changes nothing the
+  // provider sees, so it must not un-verify the session; it shows up in the
+  // mismatch warning instead, which is where it belongs.
+  const after = ratingInputs(
+    buildVerification(fresh as unknown as VerificationSource, properties, freshEdits)
+  );
+
+  const snapshot = (fresh.verified_snapshot ?? null) as Record<string, unknown> | null;
+  const before = (snapshot?.rating_inputs ?? null) as Record<string, string | null> | null;
+
+  const changed = fresh.verification_state === "Verified" ? changedInputs(before, after) : [];
+
+  if (changed.length > 0) {
+    await supabase
+      .schema("fni")
+      .from("sessions")
+      .update({
+        verification_state: "Needs Verification",
+        verified_at: null,
+        verified_by: null,
+        verified_snapshot: null,
+      })
+      .eq("id", fresh.id as string);
+
+    // The quote is not deleted. It was a real price once and the record of it
+    // matters; it just is not the answer to the current question any more.
+    await supabase
+      .schema("fni")
+      .from("rated_offers")
+      .update({ out_of_date: true })
+      .eq("session_id", fresh.id as string);
+  }
+
+  return changed;
+}
+
 // ── save: any field that feeds a rate ─────────────────────────────────────
 
 async function save(
@@ -601,8 +663,12 @@ async function save(
 
   if (error) return json(500, { error: error.message });
 
-  const fresh = await loadSession(supabase, s.id as string);
-  return json(200, await sheetFor(supabase, fresh!));
+  const fresh = (await loadSession(supabase, s.id as string))!;
+  // A changed rating input (the vehicle type above all, which also re-matches
+  // the menu) means the deal needs Confirm and Continue again.
+  const changed = await unverifyIfInputsMoved(supabase, fresh);
+  const latest = changed.length > 0 ? (await loadSession(supabase, s.id as string))! : fresh;
+  return json(200, { ...(await sheetFor(supabase, latest)), changed_inputs: changed });
 }
 
 // ── discard: put the CRM's figures back ───────────────────────────────────
@@ -698,52 +764,7 @@ async function refresh(
   if (error) return json(500, { error: error.message });
 
   const fresh = (await loadSession(supabase, s.id as string))!;
-  const freshEdits = parseStaffEdits(fresh.staff_edits);
-
-  // ── Did the refresh move anything a rate depends on? ──────────────────
-  //
-  // Compared against the snapshot taken at verification, not against the row
-  // before this update: the question is whether what the verifier approved is
-  // still true, and a field that changed twice and came back is unchanged.
-  const { properties } = await requiredFor(
-    supabase,
-    fresh.store_id as string,
-    (applyStaffEdits(fresh, freshEdits, editTargetFor)).vehicle_type_code
-  );
-  // With the edits applied, because the question is whether what the verifier
-  // approved is still what would be sent, and what would be sent includes their
-  // corrections. A CRM field that moved underneath an edit changes nothing the
-  // provider sees, so it must not un-verify the session; it shows up in the
-  // mismatch warning instead, which is where it belongs.
-  const after = ratingInputs(
-    buildVerification(fresh as unknown as VerificationSource, properties, freshEdits)
-  );
-
-  const snapshot = (fresh.verified_snapshot ?? null) as Record<string, unknown> | null;
-  const before = (snapshot?.rating_inputs ?? null) as Record<string, string | null> | null;
-
-  const changed = fresh.verification_state === "Verified" ? changedInputs(before, after) : [];
-
-  if (changed.length > 0) {
-    await supabase
-      .schema("fni")
-      .from("sessions")
-      .update({
-        verification_state: "Needs Verification",
-        verified_at: null,
-        verified_by: null,
-        verified_snapshot: null,
-      })
-      .eq("id", fresh.id as string);
-
-    // The quote is not deleted. It was a real price once and the record of it
-    // matters; it just is not the answer to the current question any more.
-    await supabase
-      .schema("fni")
-      .from("rated_offers")
-      .update({ out_of_date: true })
-      .eq("session_id", fresh.id as string);
-  }
+  const changed = await unverifyIfInputsMoved(supabase, fresh);
 
   const latest = (await loadSession(supabase, fresh.id as string))!;
   return json(200, {

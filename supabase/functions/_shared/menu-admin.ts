@@ -7,7 +7,7 @@
 // "Loan", "Cash", "New", "Used", "Best Match", "Side by Side".
 
 import { CATEGORIES } from "./providers.ts";
-import { RATEABLE_VTYPES } from "./vehicle-types.ts";
+import { VEHICLE_TYPES } from "./vehicle-types.ts";
 import { SLOT_MODES } from "./menu-templates.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -99,9 +99,11 @@ export function parseTemplate(
   if (dealTypes.some((d) => d !== "Loan" && d !== "Cash")) errors.push("Deal types are Loan and Cash.");
   const conditions = listOf(body.conditions);
   if (conditions.some((c) => c !== "New" && c !== "Used")) errors.push("New or Used must be New, Used, or both.");
-  const vehicleTypes = listOf(body.vehicle_types).map((v) => v.toUpperCase());
-  if (vehicleTypes.some((v) => !RATEABLE_VTYPES.includes(v))) {
-    errors.push(`Vehicle types must be from: ${RATEABLE_VTYPES.join(", ")}.`);
+  // Verify's choices, as shown: "On-Road Motorcycle". Typed in any case.
+  const typed = listOf(body.vehicle_types);
+  const vehicleTypes = typed.map((v) => VEHICLE_TYPES.find((t) => t.toLowerCase() === v.toLowerCase()) ?? v);
+  if (vehicleTypes.some((v) => !(VEHICLE_TYPES as readonly string[]).includes(v))) {
+    errors.push(`Vehicle types must be from: ${VEHICLE_TYPES.join(", ")}.`);
   }
 
   const p = text(body.priority);

@@ -267,9 +267,10 @@ test("an entry with no name is dropped rather than sent blank", () => {
 // ── The vtype list ────────────────────────────────────────────────────────
 
 test("the cached vtypes are exactly the ones a session can hold", () => {
-  assert.deepEqual([...RATEABLE_VTYPES], ["ATV", "BIKE", "BOAT", "MCYC", "PWAC", "SNOW", "UTV"]);
-  // Derived from the map, so the two cannot drift.
-  assert.deepEqual([...RATEABLE_VTYPES], [...new Set(Object.values(BODY_TYPE_MAP))].sort());
+  assert.deepEqual([...RATEABLE_VTYPES], ["ATV", "BIKE", "BOAT", "MCYC", "PWAC", "SCO", "SNOW", "UTV"]);
+  // Derived from the map, plus SCO (Scooter), which staff can choose on Verify
+  // though no CRM body type maps to it yet.
+  assert.deepEqual([...RATEABLE_VTYPES], [...new Set([...Object.values(BODY_TYPE_MAP), "SCO"])].sort());
 });
 
 test("body types map the way the planner expects", () => {

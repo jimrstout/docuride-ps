@@ -648,3 +648,45 @@ it is.
   from the session otherwise, so a document can be held before DC has the deal.
 - **Verify's button sends the session id**; the CRM sends the record id or
   deal number. Both reach the same move.
+
+## 14. Vehicle type on Verify
+
+TecAssured offers each Riders Advantage product in vehicle-specific versions
+(On-Road, Off-Road MC, UTV/ATV) and enforces the match when the contract goes
+in, not when it is quoted. Deal 13437, a 2010 Kawasaki Vulcan 900 street bike,
+was shown the Off-Road Tire and Wheel and TecAssured refused the contract
+("no rate found matching criteria"). So the vehicle type is a choice on
+Verify, first in the Vehicle panel, stored exactly as shown
+(sessions.vehicle_type, migration 0031):
+
+    ATV, UTV, On-Road Motorcycle, Off-Road Motorcycle, Scooter, Personal Watercraft, Snowmobile, Other
+
+**Picked automatically** by one rule, `pickVehicleType` in
+`_shared/vehicle-types.ts`: the CRM body type (Sold_1_Body_Type) first, then
+the VIN decode's vtype. MCYC (a street or three-wheel body type, or MCYC from
+the decode) is On-Road Motorcycle unless the model clearly marks an off-road
+bike (KX, CRF, YZ, RM-Z, KLX, TC, SX, EXC, FC and their kin). One plain line
+under the choice says where it came from ("Picked from the CRM body type
+Street Motorcycle. Change it if that is wrong."); once staff change it, it
+reads "Entered by Staff" with who and when.
+
+**Changing it** saves at once, re-matches the menu template, marks the
+deal's quotes out of date and needs Confirm and Continue again. Any saved
+change to a rating input now does the same (it used to happen only on
+Refresh).
+
+**What TecAssured is sent** is the code the choice stands for
+(sessions.vehicle_type_code, derived), exactly TecAssured's own vehicle types
+(API guide 6.3): ATV, UTV, MCYC (On-Road Motorcycle), BIKE (Off-Road
+Motorcycle), SCO (Scooter), PWAC (Personal Watercraft), SNOW (Snowmobile).
+UTV and motorcycles send exactly what they did. Other sends nothing and is not
+rated. Scooter joins the database check in migration 0032, which replaces the
+constraint and so is applied by hand.
+
+**Existing sessions** were converted from their stored code (UTV to UTV,
+MCYC to On-Road Motorcycle ...), and each says so in its source line.
+Verification snapshots taken before the change are read in the new terms, so
+the change of field alone un-verifies nobody.
+
+Menu templates match on the choice ("On-Road Motorcycle"); price sheet rates
+still match on the code.

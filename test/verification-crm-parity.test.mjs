@@ -137,12 +137,14 @@ test("a lienholder is what makes a deal financed, in both mappings", () => {
 
 test("the body type becomes the vehicle type through the one shared map", () => {
   assert.equal(crmRatingFields(record).vehicle_type_code, "UTV");
-  assert.equal(crmRatingFields({ ...record, Sold_1_Body_Type: "Trailer" }).vehicle_type_code, null);
+  assert.equal(crmRatingFields(record).vehicle_type, "UTV");
+  const trailer = crmRatingFields({ ...record, Sold_1_Body_Type: "Trailer" });
+  assert.equal(trailer.vehicle_type, "Other");
+  assert.equal(trailer.vehicle_type_code, null);
 
-  // Both call the same function on the same field, so there is one mapping and
-  // not two that happen to agree today.
-  assert.match(SESSION_START, /vtypeForBodyType\(bodyType\)/);
-  assert.match(SESSION_START, /bodyType\s*=\s*text\(record\.Sold_1_Body_Type\)/);
+  // Both call the same function, so there is one rule and not two that happen
+  // to agree today.
+  assert.match(SESSION_START, /\.\.\.crmVehicleType\(record as unknown as Record<string, unknown>\),/);
 });
 
 test("mapSession fills the corrected finance columns from crmRatingFields", () => {

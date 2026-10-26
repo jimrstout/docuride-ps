@@ -13,7 +13,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { conditionsLine, parseSlot, parseTemplate } from "../_shared/menu-admin.ts";
-import { RATEABLE_VTYPES } from "../_shared/vehicle-types.ts";
+import { VEHICLE_TYPES } from "../_shared/vehicle-types.ts";
 import type { Reply } from "./providers.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -71,7 +71,7 @@ export async function readTemplates(supabase: SupabaseClient, tenantId: string):
     body: {
       stores,
       products,
-      vehicle_types: RATEABLE_VTYPES,
+      vehicle_types: VEHICLE_TYPES,
       templates: ((templates ?? []) as Record<string, unknown>[]).map((t) => ({
         ...t,
         conditions_line: conditionsLine(t as never, storeName),

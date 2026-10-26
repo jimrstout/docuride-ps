@@ -25,6 +25,7 @@
 // numbers while the provider is quoted another.
 
 import { fuelChoice } from "./fuel-type.ts";
+import { isVehicleType, resolveVehicleType, tecAssuredVtype, VEHICLE_TYPES } from "./vehicle-types.ts";
 
 /** One correction, as recorded the moment it was made. */
 export interface StaffEdit {
@@ -79,7 +80,9 @@ export const EDIT_TARGETS: Record<string, EditTarget> = {
   unit_make: { kind: "column", column: "unit_make", cast: "text" },
   unit_model: { kind: "column", column: "unit_model", cast: "text" },
   condition: { kind: "column", column: "condition", cast: "text" },
-  vehicle_type_code: { kind: "column", column: "vehicle_type_code", cast: "text" },
+  // The choice staff make on Verify ("On-Road Motorcycle"). The TecAssured
+  // code it stands for is derived from it in applyStaffEdits.
+  vehicle_type: { kind: "column", column: "vehicle_type", cast: "text" },
   odometer: { kind: "column", column: "odometer", cast: "integer" },
   in_service_date: { kind: "column", column: "in_service_date", cast: "date" },
   "engine.ccs": { kind: "property", key: "engine.ccs" },
@@ -183,10 +186,10 @@ export function castForColumn(
   if (target.column === "finance_type") return financeTypeColumnValue(v);
   if (target.column === "condition") return conditionColumnValue(v);
 
-  // TecAssured's vehicle types are upper-case, and the required-properties cache
-  // is keyed on them exactly. Somebody typing "utv" would otherwise miss the
-  // cache, get an Unavailable answer, and be told the machine cannot be rated.
-  if (target.column === "vehicle_type_code") return v.toUpperCase();
+  // One of the seven choices, as shown. Anything else is not a vehicle type.
+  if (target.column === "vehicle_type") {
+    return VEHICLE_TYPES.find((t) => t.toLowerCase() === v.toLowerCase()) ?? null;
+  }
 
   switch (target.cast) {
     case "number":
@@ -257,6 +260,22 @@ export function applyStaffEdits(
   }
 
   if (propsTouched) out.vehicle_properties = props;
+
+  // ── The vehicle type, and the code TecAssured is sent ─────────────────
+  // Only where the row carries the choice (or staff made one), so a reader
+  // that selected the code alone keeps the code it read.
+  const edited = edits.vehicle_type ? castForColumn({ kind: "column", column: "vehicle_type", cast: "text" }, edits.vehicle_type.value) : null;
+  if (isVehicleType(edited)) {
+    out.vehicle_type = edited;
+    // A person chose it, so nothing else (the VIN decode) may override it.
+    out.vehicle_type_entered = true;
+    out.vehicle_type_code = tecAssuredVtype(edited);
+  } else if ("vehicle_type" in session) {
+    // The choice itself is left as its source gave it, so Verify can still say
+    // where it came from; only the code TecAssured is sent follows it.
+    const resolved = resolveVehicleType(out).type;
+    out.vehicle_type_code = resolved ? tecAssuredVtype(resolved) : (session.vehicle_type_code ?? null);
+  }
   return out;
 }
 

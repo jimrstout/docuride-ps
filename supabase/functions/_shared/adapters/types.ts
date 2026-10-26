@@ -24,6 +24,8 @@ export interface RatingDeal {
   /** "New" or "Used". */
   condition: string | null;
   vehicle_type_code: string | null;
+  /** The vehicle type as staff see it on Verify. Menu templates match on it. */
+  vehicle_type?: string | null;
   odometer: number | null;
   engine_cc: number | null;
   /** YYYY-MM-DD. */

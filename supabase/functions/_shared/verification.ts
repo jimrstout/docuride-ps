@@ -47,6 +47,7 @@
 import { financeFigures, type FinanceSource } from "./finance-basis.ts";
 import { resolveFuelType } from "./fuel-type.ts";
 import { resolveEngineCc } from "./engine-size.ts";
+import { resolveVehicleType, vehicleTypeForCode } from "./vehicle-types.ts";
 import {
   EDITED_SOURCE,
   applyStaffEdits,
@@ -220,6 +221,9 @@ export interface VerificationSource {
   unit_model: unknown;
   condition: unknown;
   vehicle_type_code: unknown;
+  /** The choice on Verify ("On-Road Motorcycle"), and where it came from. */
+  vehicle_type?: unknown;
+  vehicle_type_source?: unknown;
   odometer: unknown;
   in_service_date: unknown;
 
@@ -406,6 +410,19 @@ const SPECS: Spec[] = [
   },
 
   // ── Vehicle ────────────────────────────────────────────────────────────
+  // First in the Vehicle panel, shown as a choice: it decides the menu and the
+  // version of each product TecAssured will contract, so a wrong one is the
+  // most expensive mistake on the sheet. See _shared/vehicle-types.ts.
+  {
+    key: "vehicle_type", label: "Vehicle type", group: "Vehicle", provider_property: null,
+    resolve: (s) => {
+      const r = resolveVehicleType(s as unknown as Record<string, unknown>);
+      return r.type ? { value: r.type, source: r.from } : { value: null, source: "Missing" };
+    },
+    in_crm: true,
+    // Where the choice came from, in one plain line.
+    note: (s) => resolveVehicleType(s as unknown as Record<string, unknown>).line,
+  },
   {
     key: "vin", label: "VIN", group: "Vehicle", provider_property: "vin",
     resolve: (s) => fromCrm(text(s.vin)),
@@ -435,23 +452,6 @@ const SPECS: Spec[] = [
     resolve: (s) => fromCrm(conditionLabel(s.condition)),
     in_crm: true,
     note: "New or Used. " + FROM_CRM,
-  },
-  {
-    key: "vehicle_type_code", label: "Vehicle type", group: "Vehicle", provider_property: null,
-    resolve: (s) => {
-      const mapped = text(s.vehicle_type_code);
-      if (mapped !== null) return { value: mapped, source: "CRM" };
-      // The decode's own opinion, when our body-type mapping had none. Better
-      // than nothing and clearly attributed, so a staff member can see that the
-      // vehicle type came from the provider rather than from the deal.
-      const auto = decoded(s, "vtype");
-      if (auto !== null) return { value: auto, source: "VIN Decode" };
-      return { value: null, source: "Missing" };
-    },
-    in_crm: true,
-    note:
-      "Mapped from the deal's body type, and it decides which fields TecAssured " +
-      "asks for. UTV, ATV, MCYC, BIKE, PWAC, BOAT or SNOW.",
   },
   {
     key: STAFF_ENTERED.engineCc, label: "Engine size (cc)", group: "Vehicle",
@@ -853,6 +853,13 @@ export function changedInputs(
   after: Record<string, string | null>
 ): string[] {
   if (!before) return Object.keys(after);
+  // A snapshot taken before the vehicle type became a choice holds the
+  // TecAssured code. Read as the choice it stands for, so nobody's verified
+  // deal is un-verified by the change of field alone.
+  if ("vehicle_type_code" in before && !("vehicle_type" in before)) {
+    const { vehicle_type_code, ...rest } = before;
+    before = { ...rest, vehicle_type: vehicleTypeForCode(vehicle_type_code) };
+  }
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
   return [...keys].filter((k) => (before[k] ?? null) !== (after[k] ?? null)).sort();
 }

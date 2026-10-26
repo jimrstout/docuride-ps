@@ -7,7 +7,7 @@
 // Node's loader will not fetch over https -- and this mapping is exactly the
 // thing that most needs a test holding it beside fni-session-start's.
 
-import { vtypeForBodyType } from "./vehicle-types.ts";
+import { crmVehicleType } from "./vehicle-types.ts";
 
 /**
  * The rating inputs the CRM owns, mapped from a Zoho record.
@@ -50,7 +50,9 @@ export function crmRatingFields(record: Record<string, unknown>): Record<string,
     unit_make: text(record.Sold_1_Make),
     unit_model: text(record.Sold_1_Model),
     condition: text(record.Sold_1_Condition) || null,
-    vehicle_type_code: vtypeForBodyType(text(record.Sold_1_Body_Type)),
+    // The vehicle type, picked by the one rule, and the TecAssured code it
+    // stands for. See _shared/vehicle-types.ts.
+    ...crmVehicleType(record),
     odometer: int(record.Sold_1_Meter),
 
     sale_price: num(record.Sold_1_Vehicle_DSP),

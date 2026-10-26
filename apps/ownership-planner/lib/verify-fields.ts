@@ -41,7 +41,7 @@ export const RATING_INPUT_NAMES: readonly string[] = [
   "unit_make",
   "unit_model",
   "condition",
-  "vehicle_type_code",
+  "vehicle_type",
   "odometer",
   "in_service_date",
   "engine.ccs",

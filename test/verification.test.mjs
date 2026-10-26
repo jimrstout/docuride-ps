@@ -227,9 +227,10 @@ test("the casing TecAssured uses does not change what is required", () => {
 // ── The vehicle type falls back to the provider's own opinion ─────────────
 
 test("an unmapped body type takes the vehicle type from the decode", () => {
-  const f = byKey(sheet({ vehicle_type_code: null, vin_decode: DECODE }));
-  assert.equal(f.vehicle_type_code.value, "UTV");
-  assert.equal(f.vehicle_type_code.source, "VIN Decode");
+  const f = byKey(sheet({ vehicle_type_code: null, vehicle_type: null, vin_decode: DECODE }));
+  assert.equal(f.vehicle_type.value, "UTV");
+  assert.equal(f.vehicle_type.source, "VIN Decode");
+  assert.match(f.vehicle_type.note, /^Picked from the VIN decode \(UTV\)\./);
 });
 
 // ── What a refresh counts as a change ─────────────────────────────────────
@@ -304,4 +305,9 @@ test("the states read as words", () => {
       `unexpected source ${v}`
     );
   }
+});
+
+test("a snapshot from before the vehicle type choice does not un-verify a deal", () => {
+  assert.deepEqual(changedInputs({ vehicle_type_code: "MCYC", odometer: "5" }, { vehicle_type: "On-Road Motorcycle", odometer: "5" }), []);
+  assert.deepEqual(changedInputs({ vehicle_type_code: "MCYC" }, { vehicle_type: "Off-Road Motorcycle" }), ["vehicle_type"]);
 });

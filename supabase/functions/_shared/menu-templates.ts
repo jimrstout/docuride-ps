@@ -18,6 +18,7 @@ export interface MenuTemplate {
   store_ids: string[];
   /** "Loan", "Cash". */
   deal_types: string[];
+  /** Verify's vehicle type choices: "UTV", "On-Road Motorcycle". */
   vehicle_types: string[];
   /** "New", "Used". */
   conditions: string[];
@@ -43,7 +44,8 @@ export interface TemplateDeal {
   store_id: string;
   /** sessions.finance_type: "Loan" or "Cash". */
   deal_type: string | null;
-  vehicle_type_code: string | null;
+  /** The vehicle type as staff see it on Verify ("On-Road Motorcycle"). */
+  vehicle_type: string | null;
   condition: string | null;
   make: string | null;
 }
@@ -68,7 +70,7 @@ export function specificity(t: MenuTemplate): number {
 export function templateMatches(t: MenuTemplate, deal: TemplateDeal): boolean {
   if (t.store_ids.length > 0 && !t.store_ids.includes(deal.store_id)) return false;
   if (t.deal_types.length > 0 && !t.deal_types.some((d) => same(deal.deal_type, d))) return false;
-  if (t.vehicle_types.length > 0 && !t.vehicle_types.some((v) => same(deal.vehicle_type_code, v))) {
+  if (t.vehicle_types.length > 0 && !t.vehicle_types.some((v) => same(deal.vehicle_type, v))) {
     return false;
   }
   if (t.conditions.length > 0 && !t.conditions.some((c) => same(deal.condition, c))) return false;
