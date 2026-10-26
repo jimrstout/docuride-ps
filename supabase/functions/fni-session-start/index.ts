@@ -38,7 +38,7 @@ import { getRecord, ZohoRecord } from "../_shared/zoho.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { tecAssuredAccount } from "../_shared/provider-rows.ts";
 import { crmRatingFields } from "../_shared/crm-fields.ts";
-import { mapSession, text } from "../_shared/session-map.ts";
+import { mapSession, testRecordPatch, text } from "../_shared/session-map.ts";
 import {
   buildVerification,
   changedInputs,
@@ -199,7 +199,12 @@ async function reopen(
   }
 
   // ── Refresh the rating inputs from the CRM ────────────────────────────
-  const patch = crmRatingFields(record as unknown as Record<string, unknown>);
+  const patch: Record<string, unknown> = {
+    ...crmRatingFields(record as unknown as Record<string, unknown>),
+    // A record ticked "Test Record Only" since the session began makes it a
+    // test session. Nothing here ever clears is_test.
+    ...testRecordPatch(record as unknown as Record<string, unknown>, session),
+  };
 
   const { error: patchErr } = await supabase
     .schema("fni")

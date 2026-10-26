@@ -458,6 +458,12 @@ refuse, in plain English and before anything is sent, unless:
 The rule lives in one place, `_shared/contract-guard.ts`. The deal 13759
 session is marked is_test.
 
+**Where is_test comes from.** A session starts as a test session when its
+DocuRide record has "Test Record Only" ticked (API name `Test_Record_Only`).
+Reopening a session (Start the planner again) marks it is_test if the box has
+been ticked since, and nothing ever clears is_test: a session that has sent
+test contracts never turns back into a real deal.
+
 ### Go-live items
 
 - **Lift the QA-only contract rule.** Before any real contract, a person
