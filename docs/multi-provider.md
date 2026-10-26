@@ -458,6 +458,13 @@ refuse, in plain English and before anything is sent, unless:
 The rule lives in one place, `_shared/contract-guard.ts`. The deal 13759
 session is marked is_test.
 
+**What a test contract is submitted at.** A test session on the QA server
+submits each product at the most QA dealer 3-306 allows (dealer cost +
+provider markup + options), automatically, and the cap check stays as a
+guard. The customer's chosen price is kept on their selections; only the
+contract carries the maximum. Everywhere else no cap is assumed (see Go-live
+items).
+
 **Where is_test comes from.** A session starts as a test session when its
 DocuRide record has "Test Record Only" ticked (API name `Test_Record_Only`).
 Reopening a session (Start the planner again) marks it is_test if the box has
@@ -469,6 +476,17 @@ test contracts never turns back into a real deal.
 - **Lift the QA-only contract rule.** Before any real contract, a person
   decides to allow the production server, and `_shared/contract-guard.ts`
   changes with that decision. Nothing else turns it off.
+- **Confirm how each production dealer's price cap works.** On QA dealer
+  3-306 TecAssured caps a contract at dealer cost + provider markup +
+  options, and the submit used to assume every dealer worked that way. It no
+  longer does (`_shared/price-cap.ts`): outside a test session on the QA
+  server the customer's price is sent and TecAssured's answer decides, its
+  refusal shown in plain English ("TecAssured would not accept Theft, Plan A:
+  its price, $1,450.00, is above the most TecAssured allows this dealer to
+  sell it for, $1,094.00 ..."). Before go-live, ask TecAssured whether
+  production dealers have a cap, what it is, and whether the rate response
+  carries it, so the planner can stop a price the provider will refuse before
+  the customer agrees to it.
 
 ## 12. Contract documents in the Deal Jacket
 
