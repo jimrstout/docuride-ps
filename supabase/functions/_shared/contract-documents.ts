@@ -91,3 +91,44 @@ export function buyerNameFor(deal: Pick<DealFolders, "buyer_display_name"> | nul
   if (!blank(sessionBuyer)) return String(sessionBuyer).trim();
   return null;
 }
+
+// ── Signature data, exactly as TecAssured returns it ─────────────────────
+//
+// /contract/document answers with `signatures`, an array of buyer and seller
+// blocks (TECASSURED_SHOP_API.md). It is stored as it comes, whatever shape it
+// takes next: an array, an object, a singular `signature`, or a new type such
+// as "cobuyer". A type other than buyer and seller is reported, because it is
+// what the co-buyer field probe (_shared/cobuyer-probe.ts) is looking for.
+
+/** The signature data in a /contract/document answer, untouched. */
+export function signatureData(doc: Record<string, unknown>): unknown {
+  return doc.signatures ?? doc.signature ?? null;
+}
+
+const KNOWN_SIGNATURE_TYPES = new Set(["buyer", "seller"]);
+
+/**
+ * Every signature type other than buyer and seller, wherever it appears: a
+ * `type` on a block, or a key of an object keyed by type. In the order found,
+ * each once, as TecAssured spelled it.
+ */
+export function otherSignatureTypes(signatures: unknown): string[] {
+  const found: string[] = [];
+  const note = (t: unknown) => {
+    if (typeof t !== "string" || t.trim() === "") return;
+    if (!KNOWN_SIGNATURE_TYPES.has(t.trim().toLowerCase()) && !found.includes(t)) found.push(t);
+  };
+  const walk = (v: unknown, depth: number) => {
+    if (depth > 4 || v === null || typeof v !== "object") return;
+    if (Array.isArray(v)) {
+      for (const item of v) walk(item, depth + 1);
+      return;
+    }
+    const o = v as Record<string, unknown>;
+    if ("type" in o) note(o.type);
+    else for (const [k, inner] of Object.entries(o)) if (inner && typeof inner === "object") note(k);
+    for (const inner of Object.values(o)) if (inner && typeof inner === "object") walk(inner, depth + 1);
+  };
+  walk(signatures, 0);
+  return found;
+}

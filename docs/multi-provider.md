@@ -837,6 +837,11 @@ marker table. If TecAssured rejects the submit, its error text is returned
 verbatim, with no retry, no stripping and no switch to the batches: an "unknown
 field" error is information, and Jim decides whether to run the batches.
 
+**Signatures.** fni-contract-documents stores the signature data exactly as
+TecAssured returns it (`agreement_products.provider_signatures`), whatever its
+shape, and its answer names any signature type other than buyer and seller
+(`other_signature_types`), such as "cobuyer".
+
 **Batches**, used only if TecAssured rejects the full set, and only when Jim
 says so: Batch 1 is CB01 to CB12, Batch 2 is CB13 to CB25, Batch 3 is CB26 to
 CB41 plus R01 to R03.

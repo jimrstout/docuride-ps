@@ -120,7 +120,7 @@ test("contract-documents checks the rule, the prefix and the buyer name before a
     assert.ok(at > 0 && at < ask, needle);
   }
   // Signature data stored exactly as returned; the PDF itself is not returned.
-  assert.match(fn, /provider_signatures: doc\.signatures \?\? null,/);
+  assert.match(fn, /provider_signatures: signatureData\(doc\),/);
   assert.doesNotMatch(fn, /pdf_base64:/);
   // Replace, don't duplicate; never a delete.
   const move = src("../supabase/functions/_shared/deal-jacket-move.ts");
