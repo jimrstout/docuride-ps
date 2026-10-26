@@ -58,6 +58,7 @@ import { secretsMatch } from "../_shared/supabase.ts";
 import { tecAssuredProviderId } from "../_shared/provider-rows.ts";
 import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
 import { rateSession, recordOutcome, type ProviderOutcome } from "../_shared/rate-session.ts";
+import { choicesStillOffered, rateKey, statusAfterRating, type ChosenRate } from "../_shared/rerate.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -250,6 +251,28 @@ serve(async (req: Request) => {
     const kept = outcomes.filter((o) => o.kept);
     const keptCount = kept.reduce((n, o) => n + (o.kept!.current ? o.kept!.product_count : 0), 0);
     const warning = kept.length > 0 ? kept.map((o) => o.kept!.warning).join(" ") : null;
+
+    // A re-rate after the customer has chosen keeps the session where it was
+    // while every choice is still offered at the same rate (_shared/rerate.ts).
+    const { data: chosenRows } = await supabase
+      .schema("fni")
+      .from("selected_products")
+      .select("provider_id, provider_product_id, rate_unique_id")
+      .eq("session_id", session_id)
+      .eq("disposition", "Included");
+    const offeredRates = new Set(
+      rated.flatMap((o) =>
+        o.result.state === "Rated"
+          ? o.result.offers.map((f) => rateKey(o.provider.id, f.product_code, f.rate_key))
+          : []
+      )
+    );
+    const keptProviders = new Set(kept.filter((o) => o.kept!.current).map((o) => o.provider.id));
+    const nextStatus = statusAfterRating(
+      String(sess.status),
+      productCount,
+      choicesStillOffered((chosenRows ?? []) as ChosenRate[], offeredRates, keptProviders)
+    );
     const ta = outcomes.find((o) => o.tecassured);
 
     // ── Step 4: Record status, the template, the providers, and who acted ──
@@ -262,7 +285,7 @@ serve(async (req: Request) => {
       .schema("fni")
       .from("sessions")
       .update({
-        status: productCount > 0 ? "Rated" : sess.status,
+        status: nextStatus,
         menu_template_id: template?.id ?? null,
         rated_provider_ids: outcomes.map((o) => o.provider.id),
         ...(taAnswered
@@ -313,7 +336,7 @@ serve(async (req: Request) => {
 
     return json(200, {
       session_id,
-      status: "Rated",
+      status: nextStatus,
       product_count: productCount,
       providers,
       menu_template: template?.name ?? null,
