@@ -46,7 +46,7 @@ import { PDFDocument } from "npm:pdf-lib@1.17.1";
 import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { contractCallRefusal } from "../_shared/contract-guard.ts";
-import { assignPositions, buyerNameFor, prefixProblem, readyFolders } from "../_shared/contract-documents.ts";
+import { assignPositions, buyerNameFor, otherSignatureTypes, prefixProblem, readyFolders, signatureData } from "../_shared/contract-documents.ts";
 import { documentBaseName, storageFileName } from "../_shared/document-names.ts";
 import { fromBase64, isPdf, pageSizes, withoutPdf } from "../_shared/pdf-pages.ts";
 import { dcDealFolders } from "../_shared/dc-deal-folders.ts";
@@ -71,6 +71,10 @@ interface DocumentResult {
   workdrive_url: string | null;
   page_count: number | null;
   error: string | null;
+  /** The signature data exactly as TecAssured returned it. */
+  signatures: unknown;
+  /** Any signature type other than buyer and seller, such as "cobuyer". */
+  other_signature_types: string[];
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -209,6 +213,8 @@ serve(async (req: Request) => {
         workdrive_url: null,
         page_count: null,
         error: null,
+        signatures: null,
+        other_signature_types: [],
       };
       results.push(result);
 
@@ -226,10 +232,13 @@ serve(async (req: Request) => {
 
         // What TecAssured said, kept exactly as it said it.
         const record: Record<string, unknown> = {
-          provider_signatures: doc.signatures ?? null,
+          provider_signatures: signatureData(doc),
           provider_document: withoutPdf(doc),
           document_retrieved_at: new Date().toISOString(),
         };
+
+        result.signatures = signatureData(doc);
+        result.other_signature_types = otherSignatureTypes(result.signatures);
 
         const bytes = typeof doc.data === "string" ? fromBase64(doc.data) : null;
         if (!isPdf(bytes)) {
@@ -349,6 +358,11 @@ serve(async (req: Request) => {
       held_count: results.filter((r) => r.document_status !== null && r.error === null).length,
       saved_count: results.filter((r) => r.workdrive_file_id !== null).length,
       total_count: results.length,
+      // A signature type TecAssured has not sent before (buyer and seller are
+      // the known ones), by contract. Empty when there is none.
+      other_signature_types: results
+        .filter((r) => r.other_signature_types.length > 0)
+        .map((r) => ({ contract_number: r.contract_number, types: r.other_signature_types })),
       dealer_code: dealerCode,
       is_test: session.is_test === true,
     });
