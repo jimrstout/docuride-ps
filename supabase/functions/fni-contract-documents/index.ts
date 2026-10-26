@@ -1,8 +1,9 @@
 // fni-contract-documents/index.ts
 //
-// Pulls each contract's document from TecAssured and saves it to the deal's
-// WorkDrive Deal Jacket, named so it sits alongside DocuRide DC's own
-// documents. See docs/multi-provider.md, section 12.
+// Pulls each contract's document from TecAssured, holds it in the private
+// fni-contracts bucket, and, if the deal's WorkDrive folders already exist,
+// saves it to the Deal Jacket as well. See docs/multi-provider.md, sections
+// 12 and 13.
 //
 // Input (POST JSON):
 //   session_id      - fni.sessions UUID (required)
@@ -13,33 +14,31 @@
 //
 // ── Before anything is asked of TecAssured ───────────────────────────────
 //   • The QA-only rule (_shared/contract-guard.ts).
-//   • The provider has a document prefix (Admin > Providers). Without one its
-//     documents cannot be sent to WorkDrive, and this says so.
-//   • The deal is in DocuRide DC (dc.deals, by Zoho id, then deal number)
-//     with a Deal Jacket and a Signed Documents folder. Otherwise "Missing
-//     Folder", as DC says, and nothing is saved. Folders are made only by
-//     DocuRide DC (V2 Generate Documents); nothing here makes one.
+//   • The provider has a document prefix (Admin > Providers).
+//   • There is a buyer name for the file: DocuRide DC's (dc.deals), or the
+//     session's while the deal is not in DC yet.
 //
 // ── For each contract ────────────────────────────────────────────────────
 //   1. Ask TecAssured for the document.
-//   2. Keep exactly what it said: the signature data as returned (every
-//      field, nothing converted) and everything else it returned except the
-//      PDF itself. Count the PDF's pages and measure each in points.
-//   3. Name it (_shared/document-names.ts):
-//        TA01 MUI #13759 {buyer} {product} {contract}|SignedDocuRideDC|{signed folder id}|.pdf
-//   4. Replace, don't duplicate: a file in the Deal Jacket with that name is
-//      moved to the WorkDrive trash first, as DocuRide DC replaces its own;
-//      then the PDF is uploaded.
-//   5. Record the WorkDrive file id, name and when it was saved.
+//   2. Keep exactly what it said: the signature data as returned, everything
+//      else except the PDF, and the PDF's page count and page sizes in points.
+//   3. Name it (_shared/document-names.ts): "TA01 MUI #13759 {buyer}
+//      {product} {contract}". The routing part needs the Signed Documents
+//      folder id, so the full name is built when the file reaches WorkDrive.
+//   4. Hold the PDF in fni-contracts at {session id}/{file name}. The
+//      document is "Waiting for Deal Jacket".
+//   5. If dc.deals already has the deal's Deal Jacket and Signed Documents
+//      folder, move it there now (_shared/deal-jacket-move.ts): "Saved to
+//      Deal Jacket". If not, it waits, and fni-documents-to-deal-jacket moves
+//      it once DocuRide DC has made the folders.
 // Voided contracts and OEM contracts recorded by staff are left alone.
 //
-// WorkDrive is reached with DocuRide DC's Zoho client and its shared token
-// (_shared/dc-zoho.ts). No token or secret value is read, logged or returned,
-// and nothing logs a buyer's name or a file name.
+// No token or secret value is read, logged or returned, and nothing logs a
+// buyer's name or a file name.
 //
-// Returns: { documents: [{ contract_number, file_name, workdrive_file_id,
-// workdrive_url, page_count, error }], status, saved_count, total_count }.
-// The PDF itself is not returned: it is in the Deal Jacket.
+// Returns: { documents: [{ contract_number, file_name, document_status,
+// workdrive_file_id, workdrive_url, page_count, error }], ... }. The PDF itself
+// is not returned.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -47,11 +46,13 @@ import { PDFDocument } from "npm:pdf-lib@1.17.1";
 import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { contractCallRefusal } from "../_shared/contract-guard.ts";
-import { assignPositions, folderProblem, MISSING_FOLDER, prefixProblem, type DealFolders } from "../_shared/contract-documents.ts";
-import { contractFileName, sameDocument } from "../_shared/document-names.ts";
+import { assignPositions, buyerNameFor, prefixProblem, readyFolders } from "../_shared/contract-documents.ts";
+import { documentBaseName, storageFileName } from "../_shared/document-names.ts";
 import { fromBase64, isPdf, pageSizes, withoutPdf } from "../_shared/pdf-pages.ts";
-import { dcDb } from "../_shared/dc-zoho.ts";
-import { listFolderItems, trashFile, uploadPdf, workDriveFileUrl, workDriveProblem } from "../_shared/workdrive.ts";
+import { dcDealFolders } from "../_shared/dc-deal-folders.ts";
+import { HOLD_BUCKET, liveMoveDeps } from "../_shared/deal-jacket-live.ts";
+import { moveHeldDocuments, WAITING } from "../_shared/deal-jacket-move.ts";
+import { workDriveFileUrl } from "../_shared/workdrive-links.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ interface DocumentResult {
   contract_number: string;
   provider_product_id: string;
   file_name: string | null;
+  document_status: string | null;
   workdrive_file_id: string | null;
   workdrive_url: string | null;
   page_count: number | null;
@@ -78,22 +80,6 @@ function json(status: number, body: unknown): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
-}
-
-/** The deal in DocuRide DC: by Zoho id first, then by deal number. */
-async function dcDeal(zohoId: string | null, dealNumber: string | null): Promise<DealFolders | null> {
-  const sql = dcDb();
-  const cols = sql`deal_number, buyer_display_name, deal_jacket_folder_id, signed_documents_folder_id`;
-  if (zohoId) {
-    const rows = await sql`select ${cols} from dc.deals where zoho_id = ${zohoId} limit 1`;
-    if (rows[0]) return rows[0] as unknown as DealFolders;
-  }
-  if (dealNumber) {
-    const rows = await sql`select ${cols} from dc.deals where deal_number = ${dealNumber} order by updated_at desc limit 2`;
-    // Two DC deals with one number is not a guess to make with somebody's paperwork.
-    if (rows.length === 1) return rows[0] as unknown as DealFolders;
-  }
-  return null;
 }
 
 // ─── Main handler ────────────────────────────────────────────────────────
@@ -124,7 +110,7 @@ serve(async (req: Request) => {
     const { data: session, error: sessErr } = await supabase
       .schema("fni")
       .from("sessions")
-      .select("id, store_id, is_test, dealer_code_used, deal_number, zoho_deal_id")
+      .select("id, store_id, is_test, dealer_code_used, deal_number, zoho_deal_id, buyer_display_name")
       .eq("id", session_id)
       .single();
     if (sessErr || !session) return json(404, { error: `Session ${session_id} not found` });
@@ -149,7 +135,7 @@ serve(async (req: Request) => {
       });
     }
 
-    // ── Step 2: The prefix and the folders, before TecAssured is asked ───
+    // ── Step 2: The prefix and the buyer name, before TecAssured is asked ─
     const { data: provider } = await supabase
       .schema("fni")
       .from("providers")
@@ -160,10 +146,13 @@ serve(async (req: Request) => {
     if (noPrefix) return json(409, { error: noPrefix });
     const prefix = String((provider as { document_prefix: string }).document_prefix);
 
-    const deal = await dcDeal(session.zoho_deal_id ?? null, session.deal_number ?? null);
-    const noFolder = folderProblem(deal);
-    if (noFolder) return json(409, { error: `${MISSING_FOLDER}. ${noFolder}`, reason: MISSING_FOLDER });
-    const folders = deal!;
+    const deal = await dcDealFolders(session.zoho_deal_id ?? null, session.deal_number ?? null);
+    const buyer = buyerNameFor(deal, session.buyer_display_name ?? null);
+    if (!buyer) {
+      return json(409, { error: "This deal has no buyer name, and its documents are named after the buyer. Refresh it from the CRM first." });
+    }
+    // Null until DocuRide DC has made the deal's folders.
+    const folders = readyFolders(deal);
 
     // ── Step 3: The agreement and its contracts ──────────────────────────
     let agreementQuery = supabase.schema("fni").from("agreements").select("id, status").eq("session_id", session_id);
@@ -204,8 +193,9 @@ serve(async (req: Request) => {
       });
     }
 
+    const deps = liveMoveDeps(supabase);
+
     // ── Step 4: Each document ────────────────────────────────────────────
-    let folderItems: { id: string; name: string }[] | null = null;
     const results: DocumentResult[] = [];
 
     for (const product of products) {
@@ -214,6 +204,7 @@ serve(async (req: Request) => {
         contract_number: number,
         provider_product_id: String(product.provider_product_id),
         file_name: null,
+        document_status: (product.document_status as string | null) ?? null,
         workdrive_file_id: null,
         workdrive_url: null,
         page_count: null,
@@ -243,7 +234,7 @@ serve(async (req: Request) => {
         const bytes = typeof doc.data === "string" ? fromBase64(doc.data) : null;
         if (!isPdf(bytes)) {
           await supabase.schema("fni").from("agreement_products").update(record).eq("id", product.id as string);
-          result.error = "TecAssured's answer had no PDF in it, so nothing was saved to WorkDrive.";
+          result.error = "TecAssured's answer had no PDF in it, so nothing was held or saved.";
           continue;
         }
         const pages = pageSizes(await PDFDocument.load(bytes!, { ignoreEncryption: true }));
@@ -251,40 +242,35 @@ serve(async (req: Request) => {
         record.page_sizes = pages.page_sizes;
         result.page_count = pages.page_count;
 
+        // ── Hold it in the bucket ──
         const position = places.get(String(product.id))!;
-        const name = contractFileName({
+        const base = documentBaseName({
           prefix,
           position,
-          deal_number: String(folders.deal_number ?? session.deal_number ?? ""),
-          buyer_display_name: String(folders.buyer_display_name ?? ""),
+          deal_number: String(deal?.deal_number ?? session.deal_number ?? ""),
+          buyer_display_name: buyer,
           product_name: String(product.product_name ?? ""),
           contract_number: number,
-          signed_documents_folder_id: String(folders.signed_documents_folder_id),
         });
-        result.file_name = name;
-        record.document_position = position;
-        record.filename = name;
-
-        try {
-          // Replace, don't duplicate.
-          folderItems ??= await listFolderItems(String(folders.deal_jacket_folder_id));
-          for (const f of folderItems.filter((f) => sameDocument(f.name, name))) await trashFile(f.id);
-          const fileId = await uploadPdf(String(folders.deal_jacket_folder_id), name, bytes!);
-          folderItems = folderItems.filter((f) => !sameDocument(f.name, name)).concat([{ id: fileId, name }]);
-
-          record.workdrive_file_id = fileId;
-          record.workdrive_file_name = name;
-          record.workdrive_saved_at = new Date().toISOString();
-          result.workdrive_file_id = fileId;
-          result.workdrive_url = workDriveFileUrl(fileId);
-        } catch (err) {
-          result.error = workDriveProblem(err);
-          console.error("fni-contract-documents: WorkDrive save failed", {
-            contract_number: number,
-            status: (err as { status?: unknown })?.status ?? null,
-            code: (err as { code?: unknown })?.code ?? null,
-          });
+        const path = `${session_id}/${storageFileName(base)}`;
+        // The same contract's own earlier copy is replaced; nothing else is touched.
+        const { error: holdErr } = await supabase.storage
+          .from(HOLD_BUCKET)
+          .upload(path, bytes!, { contentType: "application/pdf", upsert: true });
+        if (holdErr) {
+          await supabase.schema("fni").from("agreement_products").update(record).eq("id", product.id as string);
+          result.error = "The document could not be held in DocuRide just now, so nothing was saved. Get it again.";
+          console.error("fni-contract-documents: bucket save failed", { contract_number: number });
+          continue;
         }
+        record.document_position = position;
+        record.document_storage_path = path;
+        record.document_name = base;
+        record.document_status = WAITING;
+        // A fresh copy waits for, or replaces, its Deal Jacket file.
+        record.workdrive_file_id = null;
+        record.workdrive_saved_at = null;
+        record.workdrive_file_name = null;
 
         const { error: updErr } = await supabase
           .schema("fni")
@@ -292,26 +278,60 @@ serve(async (req: Request) => {
           .update(record)
           .eq("id", product.id as string);
         if (updErr) {
-          result.error =
-            (result.error ? `${result.error} ` : "") +
-            `The document's details could not be recorded (${updErr.code ?? "error"}). Get it again.`;
+          result.error = `The document is held, but its details could not be recorded (${updErr.code ?? "error"}). Get it again.`;
+          continue;
+        }
+        result.document_status = WAITING;
+        result.file_name = base;
+
+        // ── And into the Deal Jacket, if it is there ──
+        if (folders) {
+          const [line] = await moveHeldDocuments(
+            [
+              {
+                id: String(product.id),
+                contract_number: number,
+                document_name: base,
+                document_storage_path: path,
+                document_status: WAITING,
+                workdrive_file_id: null,
+              },
+            ],
+            folders,
+            deps
+          );
+          result.file_name = line.file_name;
+          if (line.moved) {
+            const { data: saved } = await supabase
+              .schema("fni")
+              .from("agreement_products")
+              .select("workdrive_file_id, document_status")
+              .eq("id", product.id as string)
+              .maybeSingle();
+            const s = saved as { workdrive_file_id: string | null; document_status: string | null } | null;
+            result.document_status = s?.document_status ?? result.document_status;
+            result.workdrive_file_id = s?.workdrive_file_id ?? null;
+            result.workdrive_url = s?.workdrive_file_id ? workDriveFileUrl(s.workdrive_file_id) : null;
+          } else {
+            result.error = `Held in DocuRide, but not saved to the Deal Jacket: ${line.outcome}`;
+          }
         }
       } catch (err) {
         result.error = err instanceof Error ? err.message : String(err);
       }
     }
 
-    // ── Step 5: Finalized once every live contract's document is saved ───
+    // ── Step 5: Finalized once every live contract's document is held ────
     const { data: after } = await supabase
       .schema("fni")
       .from("agreement_products")
-      .select("status, recorded_by, workdrive_file_id, provider_id")
+      .select("status, recorded_by, document_storage_path, provider_id")
       .eq("agreement_id", agreement.id);
     const live = ((after ?? []) as Record<string, unknown>[]).filter(
       (r) => r.provider_id === store.providerId && !r.recorded_by && r.status !== "Voided"
     );
-    const allSaved = live.length > 0 && live.every((r) => !!r.workdrive_file_id);
-    if (allSaved) {
+    const allHeld = live.length > 0 && live.every((r) => !!r.document_storage_path);
+    if (allHeld) {
       await supabase
         .schema("fni")
         .from("agreements")
@@ -323,8 +343,10 @@ serve(async (req: Request) => {
     return json(200, {
       session_id,
       agreement_id: agreement.id,
-      status: allSaved ? "Finalized" : "Partial",
+      status: allHeld ? "Finalized" : "Partial",
+      deal_jacket: folders ? "Ready" : "Not made yet",
       documents: results,
+      held_count: results.filter((r) => r.document_status !== null && r.error === null).length,
       saved_count: results.filter((r) => r.workdrive_file_id !== null).length,
       total_count: results.length,
       dealer_code: dealerCode,

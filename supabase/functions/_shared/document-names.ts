@@ -44,17 +44,47 @@ export function positionCode(position: number): string {
   return String(position).padStart(2, "0");
 }
 
-/** The name before ".pdf". The closing pipe is part of it, as in DocuRide DC. */
-export function contractDocumentName(p: ContractDocumentParts): string {
+/**
+ * The name without its routing part:
+ *   TA01 MUI #13759 {buyer} {product} {contract}
+ * Known as soon as the document is fetched, so it is what is stored while a
+ * document waits for its Deal Jacket. The routing part needs the Signed
+ * Documents folder id, which may not exist yet.
+ */
+export function documentBaseName(p: Omit<ContractDocumentParts, "signed_documents_folder_id">): string {
   return cleanName(
     `${str(p.prefix)}${positionCode(p.position)} MUI #${str(p.deal_number)} ${str(p.buyer_display_name)} ` +
-      `${str(p.product_name)} ${str(p.contract_number)}|SignedDocuRideDC|${str(p.signed_documents_folder_id)}|`
+      `${str(p.product_name)} ${str(p.contract_number)}`
   );
+}
+
+/** The full WorkDrive file name from a stored base name and the Signed Documents folder id. */
+export function routedFileName(baseName: string, signedDocumentsFolderId: string): string {
+  return `${cleanName(`${baseName}|SignedDocuRideDC|${str(signedDocumentsFolderId)}|`)}.pdf`;
+}
+
+/** The name before ".pdf". The closing pipe is part of it, as in DocuRide DC. */
+export function contractDocumentName(p: ContractDocumentParts): string {
+  return routedFileName(documentBaseName(p), p.signed_documents_folder_id).slice(0, -4);
 }
 
 /** The file's name in WorkDrive. */
 export function contractFileName(p: ContractDocumentParts): string {
-  return `${contractDocumentName(p)}.pdf`;
+  return routedFileName(documentBaseName(p), p.signed_documents_folder_id);
+}
+
+/** A voided base name: " VOID" on the end, once. */
+export function voidedBaseName(baseName: string): string {
+  return baseName.endsWith(" VOID") ? baseName : `${baseName} VOID`;
+}
+
+/**
+ * The PDF's name in the private fni-contracts bucket. Supabase Storage keys
+ * take letters, digits, spaces and a few marks only, so anything else ("#",
+ * accented letters) becomes "-" there. The WorkDrive name keeps them.
+ */
+export function storageFileName(baseName: string): string {
+  return `${baseName.replace(/[^A-Za-z0-9 _!.*'()&$@=;:+,-]/g, "-").replace(/ {2,}/g, " ").trim()}.pdf`;
 }
 
 /** A file in the folder that is this document: the name itself, or with ".pdf". */
