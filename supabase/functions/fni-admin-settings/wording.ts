@@ -19,7 +19,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const COLUMNS =
   "id, provider_id, product_code, display_name, category, goal, what_it_accomplishes, what_it_covers, " +
   "coverage_duration, what_it_excludes, deductible_note, how_to_use, transferable, transfer_note, " +
-  "future_value_note, full_terms_url, active, updated_at";
+  "future_value_note, full_terms_url, active, updated_at, provider_program_name";
 
 export async function readWording(supabase: SupabaseClient, tenantId: string, providerId: string): Promise<Reply> {
   if (!UUID.test(providerId)) return { status: 400, body: { error: "Which provider is missing." } };

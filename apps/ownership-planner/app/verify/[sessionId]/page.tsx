@@ -58,6 +58,7 @@ import PendingButton from "@/components/PendingButton";
 import VehicleTypeChoice from "@/components/VehicleTypeChoice";
 import { money } from "@/lib/money";
 import OemContractRecord from "@/components/OemContractRecord";
+import ProgramLabel from "@/components/admin/ProgramLabel";
 
 export const dynamic = "force-dynamic";
 
@@ -613,7 +614,7 @@ export default async function VerifyPage({
             <ul className="vcontracts-chosen">
               {sheet.contracts_panel.selections.map((c) => (
                 <li key={c.product_name}>
-                  <strong>{c.product_name}</strong>
+                  <strong>{c.product_name}</strong> <ProgramLabel name={c.program_name} />
                   <small>
                     {[
                       c.term_months ? `${c.term_months} months` : null,
@@ -649,6 +650,7 @@ export default async function VerifyPage({
                   <li key={`${c.contract_number}-${c.document_position}`}>
                     <p className="vcontracts-head">
                       <strong>{c.contract_number ?? "No number returned"}</strong> {c.product_name}{" "}
+                      <ProgramLabel name={c.program_name} />{" "}
                       <span className={`tag ${c.status === "Voided" ? "tag--quiet" : "tag--good"}`}>{c.status}</span>
                     </p>
                     {c.workdrive_url ? (

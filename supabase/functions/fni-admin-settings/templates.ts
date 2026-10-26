@@ -24,7 +24,7 @@ async function context(supabase: SupabaseClient, tenantId: string) {
     supabase
       .schema("fni")
       .from("product_catalog")
-      .select("id, provider_id, product_code, display_name, category, display_order, provider:providers(name)")
+      .select("id, provider_id, product_code, display_name, category, display_order, provider_program_name, provider:providers(name)")
       .eq("tenant_id", tenantId)
       .is("store_id", null)
       .order("display_order"),
@@ -33,7 +33,7 @@ async function context(supabase: SupabaseClient, tenantId: string) {
   if (cErr) throw new Error(`Failed to read the catalog: ${cErr.message}`);
   const products = ((catalog ?? []) as unknown as {
     id: string; provider_id: string; product_code: string; display_name: string;
-    category: string; provider: { name: string } | null;
+    category: string; provider_program_name: string | null; provider: { name: string } | null;
   }[]).map((c) => ({
     id: c.id,
     provider_id: c.provider_id,
@@ -41,6 +41,7 @@ async function context(supabase: SupabaseClient, tenantId: string) {
     code: c.product_code,
     name: c.display_name,
     category: c.category,
+    program: c.provider_program_name,
   }));
   return { stores: (stores ?? []) as { id: string; name: string }[], products };
 }

@@ -702,3 +702,14 @@ still match on the code.
 A test holds that the On-Road and Off-Road menus never share a
 vehicle-specific product. Products with no customer wording stay hidden until
 staff write it.
+
+**Telling twins apart** (migration 0034). Our one product name covers several
+TecAssured versions, so wherever staff see products (Admin > Menus, both the
+product list and each slot; Admin > Product wording; the pricing scopes; and
+Verify's Contracts panel) a small grey label shows TecAssured's own program
+name next to ours, for example "USED BRONZE ON-ROAD NON-EU". It is the rated
+offer's product label up to " - ", kept on `product_catalog.provider_program_name`:
+filled from the offers already held, and refreshed by every successful
+TecAssured rating. Two products can share a program name (14_3 and 2058_141
+are both "USED ON-ROAD CARE"), so the code stays beside it. Customers never
+see it: the planner payload does not carry it, and a test holds that.

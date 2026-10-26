@@ -13,6 +13,7 @@
 // one needed.
 
 import { resolveVehicleType } from "./vehicle-types.ts";
+import { programNamesFromQuote } from "./program-names.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient } from "./tecassured.ts";
 import { tecAssuredAdapter, type TecAssuredDetail } from "./adapters/tecassured.ts";
@@ -231,5 +232,39 @@ export async function rateSession(
     providers.map((p) => rateOne(supabase, p, session.store_id, rateSource, deal))
   );
   await Promise.all(outcomes.map((o) => recordOutcome(supabase, session.id, o)));
+  await Promise.all(
+    outcomes
+      .filter((o) => o.provider.adapter === "TecAssured" && o.result.state === "Rated")
+      .map((o) => recordProgramNames(supabase, session.tenant_id, o.provider.id, o.result.response))
+  );
   return { template, outcomes };
+}
+
+/**
+ * Keep the catalog's TecAssured program names current, from what TecAssured
+ * just quoted, so staff can tell product versions apart in Admin and on
+ * Verify. Only a name that changed is written; a failure here is logged and
+ * never fails the rating.
+ */
+async function recordProgramNames(
+  supabase: SupabaseClient,
+  tenantId: string,
+  providerId: string,
+  quote: unknown
+): Promise<void> {
+  const names = programNamesFromQuote(quote);
+  if (names.size === 0) return;
+  const { data } = await supabase
+    .schema("fni")
+    .from("product_catalog")
+    .select("id, product_code, provider_program_name")
+    .eq("tenant_id", tenantId)
+    .eq("provider_id", providerId)
+    .in("product_code", [...names.keys()]);
+  for (const row of (data ?? []) as { id: string; product_code: string; provider_program_name: string | null }[]) {
+    const name = names.get(row.product_code);
+    if (!name || name === row.provider_program_name) continue;
+    const { error } = await supabase.schema("fni").from("product_catalog").update({ provider_program_name: name }).eq("id", row.id);
+    if (error) console.error(`PROGRAM_NAME_NOT_RECORDED code=${row.product_code}: ${error.code ?? "error"}`);
+  }
 }
