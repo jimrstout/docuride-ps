@@ -30,9 +30,11 @@ function num(v: unknown): number | null {
 export async function publishedSheetFor(
   supabase: SupabaseClient,
   providerId: string,
-  saleDate: string | null
+  saleDate: string
 ): Promise<{ sheet: PublishedSheet | null; rates: PriceSheetRate[] }> {
-  const day = (saleDate ?? new Date().toISOString()).slice(0, 10);
+  // The sheet in force on the day the unit was sold. Never today: a caller
+  // with no sale date does not rate at all (_shared/deal-dates.ts).
+  const day = saleDate.slice(0, 10);
   const { data: sheets, error } = await supabase
     .schema("fni")
     .from("price_sheets")

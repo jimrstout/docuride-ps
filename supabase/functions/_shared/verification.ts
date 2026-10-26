@@ -47,6 +47,7 @@
 import { financeFigures, type FinanceSource } from "./finance-basis.ts";
 import { resolveFuelType } from "./fuel-type.ts";
 import { resolveEngineCc } from "./engine-size.ts";
+import { dealDates, isNewUnit, IN_SERVICE_DATE_MISSING, SALE_DATE_MISSING } from "./deal-dates.ts";
 import { resolveVehicleType, vehicleTypeForCode } from "./vehicle-types.ts";
 import {
   EDITED_SOURCE,
@@ -317,6 +318,8 @@ interface Spec {
    * Today only the maximum amount financed. See fni-session-verify save().
    */
   staff_column?: boolean;
+  /** Needed for every vehicle type, whether or not the provider lists it. */
+  always_required?: boolean;
   /** Left off the sheet entirely unless this holds. */
   shownWhen?: (src: VerificationSource) => boolean;
   /**
@@ -406,7 +409,10 @@ const SPECS: Spec[] = [
     key: "sale_date", label: "Sale date", group: "Deal", provider_property: "sale.date",
     resolve: (s) => fromCrm(text(s.sale_date)),
     in_crm: true,
-    note: FROM_CRM,
+    // Sent on every rate and every contract, so needed for every vehicle
+    // type, whether or not TecAssured lists it (_shared/deal-dates.ts).
+    always_required: true,
+    note: (s) => (dealDates(s).sale === null ? SALE_DATE_MISSING : FROM_CRM),
   },
 
   // ── Vehicle ────────────────────────────────────────────────────────────
@@ -470,9 +476,17 @@ const SPECS: Spec[] = [
   {
     key: "in_service_date", label: "In-service date", group: "Vehicle",
     provider_property: "inservice.date",
-    resolve: (s) => fromCrm(text(s.in_service_date) ?? text(s.sale_date)),
+    // The sale date stands in only for a New unit. A used unit needs its own,
+    // which the CRM does not carry, so staff enter it here.
+    resolve: (s) => fromCrm(dealDates(s).inService),
     in_crm: true,
-    note: "Defaults to the sale date. " + FROM_CRM,
+    always_required: true,
+    note: (s) =>
+      dealDates(s).sale !== null && dealDates(s).inService === null
+        ? IN_SERVICE_DATE_MISSING
+        : isNewUnit(s.condition)
+          ? "For a new unit, the sale date unless entered here. " + FROM_CRM
+          : "A used unit needs the date it first went into service. " + FROM_CRM,
   },
   {
     key: STAFF_ENTERED.warrantyMonths, label: "Factory warranty remaining (months)",
@@ -704,7 +718,8 @@ export function buildVerification(
     const shown = spec.resolve(editedSrc);
 
     const required =
-      spec.provider_property !== null && wanted.has(spec.provider_property.toLowerCase());
+      spec.always_required === true ||
+      (spec.provider_property !== null && wanted.has(spec.provider_property.toLowerCase()));
 
     const editable =
       (target !== null || spec.staff_column === true) &&

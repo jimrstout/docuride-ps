@@ -10,6 +10,7 @@ import type { ZohoRecord } from "./zoho.ts";
 import { crmVehicleType } from "./vehicle-types.ts";
 import { crmRatingFields } from "./crm-fields.ts";
 import { menuSnapshot } from "./crm-snapshot.ts";
+import { isNewUnit } from "./deal-dates.ts";
 
 // ─── Field helpers ───────────────────────────────────────────────────────
 
@@ -140,7 +141,10 @@ export function mapSession(
     agreed_down_payment: crm.agreed_down_payment,
     finance_type: financeType,
     sale_date: saleDate,
-    in_service_date: saleDate,
+    // The CRM carries no in-service date. A New unit went into service when it
+    // was sold; a used unit's date is entered by staff on Verify, never
+    // assumed (_shared/deal-dates.ts).
+    in_service_date: isNewUnit(record.Sold_1_Condition) ? saleDate : null,
 
     // Buyer
     buyer_type: text(record.Buyer_Type) || null,

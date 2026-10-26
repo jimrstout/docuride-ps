@@ -18,6 +18,7 @@ import { financeFigures, type FinanceSource } from "./finance-basis.ts";
 import type { RequiredProperty } from "./rate-properties.ts";
 import { fuelCodeFor, resolveFuelType } from "./fuel-type.ts";
 import { resolveEngineCc } from "./engine-size.ts";
+import { dealDates } from "./deal-dates.ts";
 
 // ─── Building the request ────────────────────────────────────────────────
 
@@ -53,12 +54,6 @@ export interface RateSource {
   vin_decode?: Record<string, unknown> | null;
 }
 
-function isoDate(v: unknown): string | null {
-  if (typeof v !== "string" || v.trim() === "") return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? null : d.toISOString().split("T")[0];
-}
 
 function text(v: unknown): string | null {
   if (v === null || v === undefined) return null;
@@ -172,6 +167,7 @@ function newUsed(condition: string | null): string | null {
  */
 function fromSession(source: RateSource): Record<string, string | null> {
   const fin = financeFields(source);
+  const dates = dealDates(source);
 
   return {
     "vin": text(source.vin),
@@ -185,8 +181,10 @@ function fromSession(source: RateSource): Record<string, string | null> {
     "finance.amount": fin.amount,
     "finance.apr": fin.apr,
     "finance.term": fin.term,
-    "sale.date": isoDate(source.sale_date),
-    "inservice.date": isoDate(source.in_service_date) ?? isoDate(source.sale_date),
+    // Never invented: see _shared/deal-dates.ts. The in-service date is the
+    // sale date only for a New unit.
+    "sale.date": dates.sale,
+    "inservice.date": dates.inService,
     "postal.code": text(source.buyer_zip),
     "fuel.type": fuelTypeCode(source),
     // Staff value, then the VIN decode's displacement, through the same resolver
@@ -200,6 +198,9 @@ function fromSession(source: RateSource): Record<string, string | null> {
     // without it rather than sent with a number we invented.
   };
 }
+
+/** Date properties sent for every vehicle type. */
+export const ALWAYS_SENT_DATES = ["sale.date", "inservice.date"] as const;
 
 export interface BuiltProperties {
   properties: { name: string; value: string }[];
@@ -249,6 +250,16 @@ export function buildRateProperties(
     properties.push({ name: req.name, value });
   }
 
+  // The dates go on every request, whether or not TecAssured listed them for
+  // this vehicle type: a New MCYC that does not list inservice.date is still
+  // refused for want of one (deal 15029). Sent only when known; a missing one
+  // stops the rate before it is sent (BuiltRateRequest.dateProblem).
+  const listed = new Set(required.map((r) => r.name.toLowerCase()));
+  for (const name of ALWAYS_SENT_DATES) {
+    const value = session[name];
+    if (!listed.has(name) && value !== null) properties.push({ name, value });
+  }
+
   return { properties, missing };
 }
 
@@ -278,13 +289,18 @@ export function buildRateProperties(
 export interface RateRequestOptions {
   dealerCode: string;
   vtype: string;
-  /** Defaults to today. The date the actuarial tables are pulled for. */
+  /**
+   * Defaults to today. The date the actuarial tables are pulled for: when we
+   * asked, not anything about the deal, and the only date that is ever today.
+   */
   rateDate?: string;
 }
 
 export interface BuiltRateRequest {
   request: Record<string, unknown>;
   missing: RequiredProperty[];
+  /** The deal's dates will not do, in plain English. A rate must not be sent while set. */
+  dateProblem: string | null;
 }
 
 /**
@@ -309,9 +325,10 @@ export function buildRateRequest(
     for (const [k, v] of Object.entries(extra)) supplied.set(k.toLowerCase(), v);
   }
 
-  const today = new Date().toISOString().split("T")[0];
-  const saleDate = isoDate(source.sale_date) ?? today;
-  const inService = isoDate(source.in_service_date) ?? saleDate;
+  // The deal's own dates, never today (_shared/deal-dates.ts).
+  const dates = dealDates(source);
+  const saleDate = dates.sale;
+  const inService = dates.inService;
   const status = newUsed(source.condition);
 
   // Engine size and warranty months live under different names in the two
@@ -329,7 +346,7 @@ export function buildRateRequest(
     dealerCode: opts.dealerCode,
     vtype: opts.vtype,
     productType: "All",
-    rateDate: opts.rateDate ?? today,
+    rateDate: opts.rateDate ?? new Date().toISOString().split("T")[0],
 
     vin: text(source.vin),
     year: text(source.unit_year),
@@ -372,5 +389,5 @@ export function buildRateRequest(
 
   request.properties = built.properties;
 
-  return { request, missing: built.missing };
+  return { request, missing: built.missing, dateProblem: dates.problem };
 }

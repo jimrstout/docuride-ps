@@ -8,6 +8,7 @@
 // thing that most needs a test holding it beside fni-session-start's.
 
 import { crmVehicleType } from "./vehicle-types.ts";
+import { isNewUnit } from "./deal-dates.ts";
 
 /**
  * The rating inputs the CRM owns, mapped from a Zoho record.
@@ -84,7 +85,10 @@ export function crmRatingFields(record: Record<string, unknown>): Record<string,
 
     finance_type: hasLienholder ? "Loan" : "Cash",
     sale_date: saleDate,
-    in_service_date: saleDate,
+    // The CRM carries no in-service date. A New unit went into service when it
+    // was sold; a used unit's date is entered by staff on Verify, never
+    // assumed (_shared/deal-dates.ts).
+    in_service_date: isNewUnit(record.Sold_1_Condition) ? saleDate : null,
 
     buyer_city: text(record.Buyer_City),
     buyer_state: text(record.Buyer_State),

@@ -150,10 +150,12 @@ test("a capitalised stored Warranty answers a lowercase warranty", () => {
   assert.equal("Warranty" in asMap(built), false, "must echo the server's spelling, not ours");
 });
 
-test("MCYC is not asked for inservice.date, so none is sent", () => {
+test("MCYC is not asked for inservice.date, and it is sent anyway", () => {
+  // Deal 15029: a New MCYC sent without inservice.date was refused with
+  // "The value '' cannot be parsed as the type 'DateTime'".
   const built = asMap(buildRateProperties(parseRequiredProperties(MCYC).properties, session()));
-  assert.equal("inservice.date" in built, false);
-  assert.equal("sale.date" in built, true);
+  assert.equal(built["inservice.date"], "2026-09-25");
+  assert.equal(built["sale.date"], "2026-09-25");
 });
 
 // ── Refusing rather than guessing ─────────────────────────────────────────

@@ -110,6 +110,9 @@ export function tecAssuredAdapter(
         vtype,
       });
       detail.unsupplied = built.missing.map((m) => m.name);
+      // A deal date that will not do stops the rate here, before anything is
+      // sent: no date is ever made up to fill the gap (_shared/deal-dates.ts).
+      if (built.dateProblem) return { state: "Failed", reason: built.dateProblem };
       const request = built.request;
       // A call that never answers still says what it asked, so a failed
       // re-rate can show it was about the same deal as the offers kept
