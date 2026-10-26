@@ -5,6 +5,9 @@
 // test holds them. fni-contract-documents runs them before it asks the
 // provider for anything, so a refusal saves nothing.
 
+/** The private bucket provider contract PDFs are held in. Never public. */
+export const HOLD_BUCKET = "fni-contracts";
+
 /** The word DocuRide DC uses when a deal's folders are not there. */
 export const MISSING_FOLDER = "Missing Folder";
 

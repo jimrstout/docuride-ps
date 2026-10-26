@@ -6,9 +6,9 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { MoveDeps } from "./deal-jacket-move.ts";
 import { listFolderItems, trashFile, uploadPdf, workDriveProblem } from "./workdrive.ts";
+import { HOLD_BUCKET } from "./contract-documents.ts";
 
-/** The private bucket provider contract PDFs are held in. Never public. */
-export const HOLD_BUCKET = "fni-contracts";
+export { HOLD_BUCKET };
 
 export function liveMoveDeps(supabase: SupabaseClient): MoveDeps {
   return {

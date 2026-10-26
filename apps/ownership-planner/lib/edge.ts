@@ -230,6 +230,10 @@ export const edge = {
   priceSheetWrite: <T>(body: Record<string, unknown>) =>
     call<T>("fni-price-sheets", { method: "POST", body }),
 
+  /** Move the deal's held contract documents into its Deal Jacket. Never calls a provider. */
+  documentsToDealJacket: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-documents-to-deal-jacket", { method: "POST", body }),
+
   /** OEM contracts, recorded by staff: upload_url, record, void. Never calls a provider. */
   oemContractWrite: <T>(body: Record<string, unknown>) =>
     call<T>("fni-oem-contracts", { method: "POST", body }),

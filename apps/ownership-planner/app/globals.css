@@ -958,6 +958,7 @@ button { cursor: pointer; }
 .vcontracts-head { margin: 0 0 var(--s2); display: flex; flex-wrap: wrap; gap: var(--s1); align-items: baseline; }
 .vcontracts-actions { display: grid; gap: var(--s3); }
 .vcontracts-confirm { display: flex !important; gap: var(--s1); align-items: center; }
+.vcontracts-move { margin-top: var(--s3); display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
 
 /* ── The workspace: what is missing, then the sheet ── */
 .vworkspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
