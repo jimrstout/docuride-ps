@@ -690,3 +690,15 @@ the change of field alone un-verifies nobody.
 
 Menu templates match on the choice ("On-Road Motorcycle"); price sheet rates
 still match on the code.
+
+**A menu per vehicle type** (migration 0033). "All deals" stays the fallback.
+
+| Template | Vehicle types | Slots (all Side by Side, All deals order) |
+|---|---|---|
+| ATV and UTV | ATV, UTV | Maintenance 66_7, 78_7, 72_7, 84_7; Mechanical Protection 16_3, 86_3, Premium 2060_141, Premium Service Drive 2064_141; Tire and Wheel 23_4; Theft; Battery |
+| On-Road Motorcycle | On-Road Motorcycle | Maintenance 62_7, 77_7, 71_7, 83_7; Mechanical Protection 14_3, 88_3, 2058_141, 2066_141; Tire and Wheel 22_4; Theft; Battery |
+| Off-Road Motorcycle | Off-Road Motorcycle | Maintenance 1619_7, 1616_7, 1618_7, 1617_7; Tire and Wheel 23_4; Theft; Battery. No Care: TecAssured offered none on our test deals. |
+
+A test holds that the On-Road and Off-Road menus never share a
+vehicle-specific product. Products with no customer wording stay hidden until
+staff write it.
