@@ -634,6 +634,30 @@ export default async function VerifyPage({
             ) : operator ? (
               <form action={submitContracts}>
                 <input type="hidden" name="session_id" value={sheet.session.id} />
+                {sheet.contracts_panel.cobuyer_probe_available ? (
+                  // TEMPORARY: the co-buyer field test. Test sessions on the
+                  // QA server only; see docs/multi-provider.md, section 16.
+                  <fieldset className="vprobe">
+                    <label className="vprobe-check">
+                      <input type="checkbox" name="cobuyer_probe" value="1" /> Co-buyer field test
+                    </label>
+                    <p className="vprobe-note">
+                      A one-off test on this test deal. It sends made-up marker codes (CB01, CB02 and
+                      so on) in many guessed co-buyer fields, so the contract shows which field
+                      TecAssured prints, if any. No real names are sent. Only Battery Standard or Care
+                      Coverage can be submitted with it on. Leave it off for a normal submit.
+                    </p>
+                    <label className="vprobe-batch">
+                      Batch{" "}
+                      <select name="cobuyer_probe_batch" defaultValue="All">
+                        <option value="All">All</option>
+                        <option value="1">Batch 1</option>
+                        <option value="2">Batch 2</option>
+                        <option value="3">Batch 3</option>
+                      </select>
+                    </label>
+                  </fieldset>
+                ) : null}
                 <PendingButton className="btn" pending="Submitting…">
                   Submit contracts to {sheet.contracts_panel.provider_name}
                 </PendingButton>
