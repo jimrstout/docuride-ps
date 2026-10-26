@@ -99,3 +99,6 @@ verify_jwt = false
 
 [functions.fni-oem-contracts]
 verify_jwt = false
+
+[functions.fni-documents-to-deal-jacket]
+verify_jwt = false

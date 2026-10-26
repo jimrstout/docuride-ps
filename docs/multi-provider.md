@@ -568,3 +568,52 @@ in the Deal Jacket to the WorkDrive trash, upload the PDF from the bucket,
 record the WorkDrive file id, name and time. A document already in the Deal
 Jacket is skipped, so a move is safe to repeat. A voided document moves with
 " VOID" before the first pipe.
+
+### The call for the CRM: fni-documents-to-deal-jacket
+
+For the Deluge function that runs **right after DocuRide DC has created the
+deal's WorkDrive folders** (V2 Generate Documents). It moves every document PS
+holds for the deal into the Deal Jacket. Safe to call any number of times:
+documents already in the Deal Jacket are skipped. It calls no provider and
+deletes nothing.
+
+    POST https://fovccigwlcmmzfubpfny.supabase.co/functions/v1/fni-documents-to-deal-jacket
+    Header:  x-webhook-secret: <FNI_WEBHOOK_SECRET>   (the same secret as the other CRM calls)
+    Header:  Content-Type: application/json
+
+    {
+      "record_id": "4742556000231058020",
+      "deal_jacket_folder_id": "<optional>",
+      "signed_documents_folder_id": "<optional>"
+    }
+
+- `record_id` is the Zoho DocuRide record id. `deal_number` ("13759") may be
+  sent instead.
+- The folder ids are optional. Any sent win over the ones in dc.deals, so the
+  call can go out the moment the folders exist, before dc.deals is updated.
+- No folders in either: 409, "Missing Folder", and nothing is changed.
+- No DocuRide session for the deal: 404, nothing changed.
+
+Example answer (200):
+
+    {
+      "deal_number": "13759",
+      "folders_from": "DocuRide DC",
+      "moved_count": 2,
+      "message": "2 of 3 documents were moved to the Deal Jacket.",
+      "files": [
+        { "contract_number": "RA123456",
+          "file_name": "TA01 MUI #13759 Chad Baber Mechanical Protection RA123456|SignedDocuRideDC|<signed folder id>|.pdf",
+          "outcome": "Saved to Deal Jacket." },
+        { "contract_number": "RA123457",
+          "file_name": "TA02 MUI #13759 Chad Baber Theft Protection, Plan A RA123457 VOID|SignedDocuRideDC|<signed folder id>|.pdf",
+          "outcome": "Saved to Deal Jacket, marked VOID." },
+        { "contract_number": "RA123458",
+          "file_name": "TA03 MUI #13759 Chad Baber Tire and Wheel Protection RA123458|SignedDocuRideDC|<signed folder id>|.pdf",
+          "outcome": "Already in the Deal Jacket. Nothing changed." }
+      ]
+    }
+
+`folders_from` is "This call", "DocuRide DC", or "This call and DocuRide DC".
+Each `outcome` is a sentence; anything other than "Saved to Deal Jacket..." or
+"Already in the Deal Jacket..." means that file did not move and says why.
