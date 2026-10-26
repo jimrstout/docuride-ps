@@ -14,6 +14,7 @@
 
 import { resolveVehicleType } from "./vehicle-types.ts";
 import { programNamesFromQuote } from "./program-names.ts";
+import { dealDates, SALE_DATE_MISSING } from "./deal-dates.ts";
 import { keepsPrior, keptStillCurrent, keptWarning, type PriorOffer } from "./rerate.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient } from "./tecassured.ts";
@@ -67,8 +68,10 @@ export function ratingDeal(src: Record<string, unknown>): RatingDeal & { deal_ty
     odometer: num(src.odometer),
     // The rate request's own resolution: staff entry first, then the VIN decode.
     engine_cc: num(resolveEngineCc(src.vehicle_properties, src.vin_decode)?.value ?? null),
-    sale_date: str(src.sale_date),
-    in_service_date: str(src.in_service_date),
+    // The deal's own dates, never today: the in-service date is the sale date
+    // only for a New unit (_shared/deal-dates.ts).
+    sale_date: dealDates(src).sale,
+    in_service_date: dealDates(src).inService,
     deal_type: str(src.finance_type),
   };
 }
@@ -154,6 +157,12 @@ async function rateOne(
     }
 
     if (provider.kind === "Price Sheet") {
+      // Which sheet is in force is decided by the sale date, so without one
+      // there is no answer, and today is not one (_shared/deal-dates.ts).
+      const dates = dealDates(rateSource);
+      if (dates.problem || !deal.sale_date) {
+        return { provider, productCount: 0, result: { state: "Failed", reason: dates.problem ?? SALE_DATE_MISSING } };
+      }
       const { sheet, rates } = await publishedSheetFor(supabase, provider.id, deal.sale_date);
       const result = rateFromSheet(offerProvider, sheet, rates, deal);
       return { provider, result, productCount: result.state === "Rated" ? countTiers(result) : 0 };

@@ -897,3 +897,52 @@ CB41 plus R01 to R03.
 | R01 | Top level | `coBuyerFirstName / coBuyerLastName` | R01 / R01 | 3 |
 | R02 | Top level | `CoBuyerFirstName / CoBuyerLastName` | R02 / R02 | 3 |
 | R03 | Top level | `coBuyer: { firstName, lastName }` | { R03, R03 } | 3 |
+
+## 17. Dates are always sent and never invented
+
+Deal 15029 (test session, 2026 Indian Pursuit, New, MCYC) was refused with
+"The value '' cannot be parsed as the type 'DateTime'". Its request matched
+13437's (Used MCYC, rated fine) except New against Used. Both left out
+`inservice.date`, because the properties array followed TecAssured's required
+properties per vehicle type and MCYC does not list it. Separately, the rate
+request filled a missing sale date with today. That is the likely cause of a
+maintenance contract showing today instead of the sale date.
+
+The rule, in `_shared/deal-dates.ts`, used by the rate request, the
+TecAssured adapter, the price-sheet path, the Verify sheet and the submit:
+
+| Date | Where it comes from | When it is missing |
+|---|---|---|
+| Sale date | the session (the CRM's Sale_Date, or a staff entry on Verify) | No rate and no submit: "Sale date is missing. Add it on the deal and refresh from CRM, or enter it on Verify." |
+| In-service date | the session's own; for a New unit, the sale date | Used unit: no rate and no submit, with a plain-English message asking for it |
+| rateDate | today | Never missing. It says when we asked, not anything about the deal. |
+
+- **Every rate request carries all three deal dates:** `saleDate`,
+  `inServiceDate` and `vehiclePurchaseDate` at the top level, and `sale.date`
+  and `inservice.date` in the properties, whether or not TecAssured lists them
+  for the vehicle type.
+- **Verify needs both dates for every vehicle type,** and says what is missing
+  in the words above.
+- **The CRM has no in-service date field.** So the CRM mappings now give a New
+  unit its sale date and a Used unit none; staff enter it on Verify. Existing
+  sessions keep the value they have until their next Refresh or reopen.
+- **The price-sheet path needs a sale date too,** since that date decides which
+  sheet is in force. It never uses today instead.
+- **Submit refuses on the same rule** before sending anything. It then makes
+  the quote's echoed dates the session's own: `quote.saleDate` (kept in
+  TecAssured's "Sep 6, 2026, 6:53:44 PM" format) and the `sale.date` /
+  `inservice.date` values in each vehicle's `form.properties`. It changes
+  values only, and adds nothing TecAssured did not send.
+
+**What submit sent before this change.** The rated quote, as TecAssured
+returned it:
+- `quote.saleDate`: TecAssured's echo of the rate request's sale date, with
+  the time of the rating attached.
+- `sale.date` among each vehicle's `form.properties`, and `inservice.date`
+  only where the vehicle type lists it.
+- No vehicle purchase date and no in-service date of its own.
+
+Each vehicle's `effectiveDate`, and each rate's `expireDate` (ten years on),
+are TecAssured's own stamps of the moment of rating. They are left as they
+are. If a contract still shows the rating day after this change, they are
+the next place to look.

@@ -416,6 +416,9 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
     menu.providers
       .filter((p) => p.kind === "Price Sheet")
       .map(async (p) => {
+        // No sale date, no sheet in force to ask: the sheet marks the sale
+        // date missing on its own, and today is never used instead.
+        if (!deal.sale_date) return [];
         const { sheet, rates } = await publishedSheetFor(supabase, p.id, deal.sale_date);
         return sheet ? priceSheetRequiredInputs(rates) : [];
       })

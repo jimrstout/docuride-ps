@@ -70,6 +70,8 @@ import { RECORDED_BY_STAFF, splitSelections } from "../_shared/oem-contracts.ts"
 import { contractCallRefusal } from "../_shared/contract-guard.ts";
 import { atMaximum, pricePolicy } from "../_shared/price-cap.ts";
 import { readSubmitResponse } from "../_shared/submit-outcome.ts";
+import { alignContractDates, dealDates, SALE_DATE_MISSING } from "../_shared/deal-dates.ts";
+import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
 import { applyCobuyerProbe, probeDecision, type MarkerRow } from "../_shared/cobuyer-probe.ts";
 import { programName } from "../_shared/program-names.ts";
 import { savedSelections, type SavedSelection } from "../_shared/saved-selections.ts";
@@ -323,6 +325,16 @@ serve(async (req: Request) => {
     const notCleared = contractCallRefusal(session, credentials.api_base_url, "submitted");
     if (notCleared) return await refuse(403, { error: notCleared });
 
+    // ── Step 3c: The deal's dates ──────────────────────────────────────
+    // A contract carries the sale date and the in-service date, and neither is
+    // ever made up: no sale date, or a used unit with no in-service date, and
+    // nothing is sent (_shared/deal-dates.ts).
+    // Staff corrections first: a used unit's in-service date is entered on Verify.
+    const dates = dealDates(applyStaffEdits(session as Record<string, unknown>, parseStaffEdits(session.staff_edits)));
+    if (dates.problem || dates.sale === null || dates.inService === null) {
+      return await refuse(400, { error: dates.problem ?? SALE_DATE_MISSING });
+    }
+
     // ── Step 4: Cut the quote down to what is being bought ────────────
     // Pruned, not flagged: see _shared/offer-selections.ts. Sending all
     // eleven products with flags is a request to submit all eleven, and the
@@ -539,6 +551,11 @@ serve(async (req: Request) => {
       quote: submitQuote,
     };
     if (Object.keys(lienholder).length > 0) submitPayload.lienholder = lienholder;
+
+    // The quote's dates are the ones TecAssured echoed when it rated. Each is
+    // made the session's own, so a contract never carries another day.
+    const datesChanged = alignContractDates(submitQuote, { sale: dates.sale, inService: dates.inService });
+    if (datesChanged.length > 0) console.log(`fni-contract-submit dates aligned: ${datesChanged.join("; ")}`);
 
     // ── Step 5b: The co-buyer field probe (TEMPORARY) ──────────────────
     // Marker codes only, added after the real buyer and never over any key
