@@ -577,6 +577,11 @@ export async function submitContracts(formData: FormData): Promise<void> {
 
   let detail: string;
   let partial = false;
+  // TEMPORARY: the co-buyer field test, off unless ticked. The Edge Function
+  // ignores it anywhere but a test session on the QA server.
+  const probe = formData.get("cobuyer_probe") === "1";
+  const batchRaw = String(formData.get("cobuyer_probe_batch") ?? "All");
+  const probeBatch = batchRaw === "All" ? "All" : Number(batchRaw);
   try {
     const done = await edge.submit<{
       contract_count?: number;
@@ -585,9 +590,11 @@ export async function submitContracts(formData: FormData): Promise<void> {
       /** Product by product: created, refused, or not known. */
       message?: string;
       partial?: boolean;
+      cobuyer_probe?: { batch: string | number } | null;
     }>({
       session_id: sessionId,
       use_saved_selections: true,
+      ...(probe ? { cobuyer_probe: true, cobuyer_probe_batch: probeBatch } : {}),
     });
     const numbers = (done.contracts ?? []).map((c) => c.contract_number ?? "no number").join(", ");
     // Some went through and some did not: the endpoint's own lines say which.
@@ -597,9 +604,19 @@ export async function submitContracts(formData: FormData): Promise<void> {
       : partial && done.message
         ? `${done.message} Get the document for each contract created.`
         : `Submitted. TecAssured returned ${done.contract_count ?? 0} ${done.contract_count === 1 ? "contract" : "contracts"}: ${numbers}. Get each document next.`;
+    if (done.cobuyer_probe) {
+      detail +=
+        ` Co-buyer field test sent (${done.cobuyer_probe.batch === "All" ? "all fields" : `batch ${done.cobuyer_probe.batch}`}).` +
+        " Get the document, then read it for the CB and R marker codes.";
+    }
   } catch (err) {
     console.error(`submit failed for ${sessionId}:`, err);
-    return backToVerify(sessionId, "refused", err instanceof EdgeError ? err.message : "Something went wrong. Try again.");
+    const message = err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
+    return backToVerify(
+      sessionId,
+      "refused",
+      probe ? `Co-buyer field test: the submit did not go through. ${message}` : message
+    );
   }
   revalidatePath(`/verify/${sessionId}`);
   revalidatePath(SESSIONS);

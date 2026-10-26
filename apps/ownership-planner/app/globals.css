@@ -1195,3 +1195,9 @@ button { cursor: pointer; }
   color: var(--ink-soft); background: var(--code-bg); border: var(--bw) solid var(--line);
   border-radius: 4px; padding: 0 var(--s1); vertical-align: middle; white-space: nowrap;
 }
+
+/* TEMPORARY: the co-buyer field test on Verify (docs section 16). */
+.vprobe { border: var(--bw) dashed var(--line-strong); border-radius: 6px; padding: var(--s2) var(--s3); margin: 0 0 var(--s3); }
+.vprobe-check { font-weight: 600; }
+.vprobe-note { color: var(--ink-soft); font-size: 0.85rem; margin: var(--s1) 0; max-width: 70ch; }
+.vprobe-batch { font-size: 0.9rem; }

@@ -26,6 +26,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { offerRowsFor, tecAssuredAccount } from "../_shared/provider-rows.ts";
+import { hostOf, QA_HOST } from "../_shared/contract-guard.ts";
 import { currentRows, familiesFromRows, ratingSummary, type RatingRow } from "../_shared/rating-summary.ts";
 import { menuFor, ratingDeal } from "../_shared/rate-session.ts";
 import { priceSheetRequiredInputs } from "../_shared/adapters/price-sheet.ts";
@@ -263,7 +264,31 @@ async function contractsPanel(supabase: SupabaseClient, s: Record<string, unknow
   }
   // Held documents not in the Deal Jacket yet, voided ones included.
   const waiting = contracts.filter((c) => c.held && !c.workdrive_file_id).length;
-  return { provider_name: selections[0].provider_name, selections, contracts, waiting_count: waiting };
+  return {
+    provider_name: selections[0].provider_name,
+    selections,
+    contracts,
+    waiting_count: waiting,
+    // TEMPORARY: the co-buyer field test is offered on test sessions on the
+    // QA server only (_shared/cobuyer-probe.ts).
+    cobuyer_probe_available: s.is_test === true && (await onQaServer(supabase, String(s.store_id))),
+  };
+}
+
+/**
+ * Does this store's TecAssured login point at the QA server? Reads the base
+ * URL only, never the login itself.
+ */
+async function onQaServer(supabase: SupabaseClient, storeId: string): Promise<boolean> {
+  const account = await tecAssuredAccount(supabase, storeId).catch(() => null);
+  if (!account?.credential_id) return false;
+  const { data } = await supabase
+    .schema("fni")
+    .from("provider_credentials")
+    .select("api_base_url")
+    .eq("id", account.credential_id)
+    .maybeSingle();
+  return hostOf((data as { api_base_url?: string | null } | null)?.api_base_url) === QA_HOST;
 }
 
 /**
