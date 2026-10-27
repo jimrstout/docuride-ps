@@ -131,6 +131,10 @@ export function flashMessage(
       return { tone: "ok", text: "Decoded from the VIN." };
     case "refreshed":
       return { tone: "ok", text: "Re-pulled from CRM." };
+    case "planned":
+      return { tone: "ok", text: "Planned sale date saved. This deal stays open until the end of that day." };
+    case "plannedcleared":
+      return { tone: "ok", text: "Planned sale date cleared. This deal stays open until the end of today." };
     case "needname":
       return {
         tone: "bad",

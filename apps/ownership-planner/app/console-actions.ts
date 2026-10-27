@@ -448,6 +448,25 @@ export async function refreshFromCrm(formData: FormData): Promise<void> {
 }
 
 /**
+ * Set the day this deal is planned to be sold, to prepare it the night before.
+ * The session then stays open to the end of that day at its store. It is never
+ * sent to a provider, and at submit it must be the sale date.
+ */
+export async function setPlannedSaleDate(formData: FormData): Promise<void> {
+  const value = String(formData.get("planned_sale_date") ?? "").trim();
+  await verifyAction(
+    formData,
+    (session_id) => ({ session_id, action: "planned_sale_date", value }),
+    value === "" ? "plannedcleared" : "planned"
+  );
+}
+
+/** Clear the planned sale date: the session stays open to the end of today. */
+export async function clearPlannedSaleDate(formData: FormData): Promise<void> {
+  await verifyAction(formData, (session_id) => ({ session_id, action: "planned_sale_date", value: "" }), "plannedcleared");
+}
+
+/**
  * Verify, then rate.
  *
  * In that order and not the other way round: the verification is recorded first,

@@ -132,3 +132,20 @@ test("Sessions offers Renew for Today, not +24h, and only when it gives longer",
   assert.equal(storeTime("2026-10-28T03:59:59Z", "Not/AZone"), "11:59 PM, 27 Oct (EDT)");
   assert.equal(storeTime(null, "America/Chicago"), "");
 });
+
+test("Details shows when the deal ends, sets the planned sale date, and holds Submit off the sale day", async () => {
+  const page = src("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  assert.match(page, /<dt>Open until<\/dt>/);
+  assert.match(page, /<form action=\{setPlannedSaleDate\} className="vplanned" data-working-panel="">/);
+  assert.match(page, /min=\{sheet\.day\.today\}/);
+  assert.match(page, /<PendingButton formAction=\{clearPlannedSaleDate\} formNoValidate pending="Clearing the date\.\.\.">/);
+  assert.match(page, /\{sheet\.day\?\.submit_problem \? \(\s*<p className="console-flash console-flash--bad" role="alert">\{sheet\.day\.submit_problem\}<\/p>/);
+  assert.match(page, /disabled=\{!!sheet\.day\?\.submit_problem\}/);
+  // Submit and Confirm and Continue (which rates) are busy buttons.
+  assert.match(page, /pending="Submitting contracts\.\.\."/);
+  const actions = src("apps/ownership-planner/app/console-actions.ts");
+  assert.match(actions, /\(session_id\) => \(\{ session_id, action: "planned_sale_date", value \}\)/);
+  const { flashMessage } = await import("../apps/ownership-planner/lib/verify-flash.ts");
+  assert.equal(flashMessage({ code: "planned", detail: null }).text, "Planned sale date saved. This deal stays open until the end of that day.");
+  assert.equal(flashMessage({ code: "plannedcleared", detail: null }).text, "Planned sale date cleared. This deal stays open until the end of today.");
+});

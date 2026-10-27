@@ -494,6 +494,18 @@ export interface VerifySheet {
   submit_detail: string | null;
   /** Why nothing is required, when nothing is. Null when the sheet is normal. */
   not_ready_reason: string | null;
+  /**
+   * The store's day (migration 0038): when this session ends, the planned sale
+   * date, and why Submit would be refused on the deal's dates today, if it would.
+   */
+  day?: {
+    time_zone: string | null;
+    today: string;
+    expires_at: string | null;
+    planned_sale_date: string | null;
+    sale_date: string | null;
+    submit_problem: string | null;
+  };
   fields: VerifyField[];
   missing: VerifyField[];
   ready: boolean;
