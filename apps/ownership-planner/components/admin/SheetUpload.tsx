@@ -63,6 +63,7 @@ export default function SheetUpload({
     path.value = started.file_path;
     (f.elements.namedItem("file_name") as HTMLInputElement).value = file.name;
     setState("saving");
+    area?.resend();
     form.current?.requestSubmit();
   }
 

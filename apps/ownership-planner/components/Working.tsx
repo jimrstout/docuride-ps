@@ -51,6 +51,8 @@ interface Running extends WorkingJob {
   panel: HTMLElement | null;
   kept: FieldValue[];
   resultsBefore: Set<string>;
+  /** Set by resend(): the form's own work is done and its one real send may go. */
+  resendAllowed: boolean;
 }
 
 interface Result {
@@ -119,6 +121,7 @@ function begin(job: WorkingJob, form: HTMLFormElement, submitter: HTMLElement | 
     panel: job.scope === "panel" ? ((form.closest("[data-working-panel]") as HTMLElement | null) ?? form) : null,
     kept: snapshotFields(Array.from(form.elements) as unknown as ControlLike[]),
     resultsBefore: resultIds(),
+    resendAllowed: false,
   };
   for (const t of timers) clearTimeout(t);
   timers = [
@@ -209,7 +212,13 @@ interface WorkingApi {
    * the <Working /> marker in it ends the job, or done() does if it stops.
    */
   start: (job: WorkingJob, form: HTMLFormElement, submitter?: HTMLElement | null) => void;
+  /** The form's own work is done: let its next send through, once. */
+  resend: () => void;
   done: () => void;
+}
+
+function resend() {
+  if (state.running) state.running.resendAllowed = true;
 }
 
 const WorkingContext = createContext<WorkingApi | null>(null);
@@ -234,9 +243,15 @@ export function WorkingArea({ children }: { children: React.ReactNode }) {
       const form = e.target;
       if (!(form instanceof HTMLFormElement)) return;
       if (state.running) {
-        // The form that is running may send itself (an upload done, now the
-        // save). Anything else waits.
-        if (state.running.form === form) return;
+        // The form that is running may send itself once, when its own work
+        // is done and it says so (an upload done, now the save). Anything
+        // else waits, a second tap on the same button included: that tap can
+        // land before the button has been redrawn as disabled, and it used to
+        // go through, which is how one +24h could extend a session twice.
+        if (state.running.form === form && state.running.resendAllowed) {
+          state.running.resendAllowed = false;
+          return;
+        }
         e.preventDefault();
         e.stopImmediatePropagation();
         return;
@@ -302,7 +317,7 @@ export function WorkingArea({ children }: { children: React.ReactNode }) {
   const page = running?.scope === "page";
 
   return (
-    <WorkingContext.Provider value={{ running, start: begin, done: finish }}>
+    <WorkingContext.Provider value={{ running, start: begin, resend, done: finish }}>
       <div
         ref={root}
         className="working-area"
