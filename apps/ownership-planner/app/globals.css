@@ -727,7 +727,11 @@ button { cursor: pointer; }
   .decision-option { min-width: 0; }
   .product-actions { flex-direction: column; align-items: stretch; }
   .expander { text-align: left; }
-  .actions { grid-template-columns: 1fr 1fr; padding: var(--s3); }
+  .actions {
+    grid-template-columns: 1fr 1fr; padding: var(--s3);
+    padding-bottom: max(var(--s3), env(safe-area-inset-bottom));
+  }
+  .app { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
   .actions-status { grid-column: 1 / 3; order: 3; }
   .terms { grid-template-columns: 1fr; gap: var(--s3); }
 }
@@ -1233,7 +1237,7 @@ button.is-busy, .btn.is-busy, .ad-btn.is-busy { cursor: progress; }
   cursor: progress;
 }
 .working-box {
-  max-width: 28rem; width: 100%; text-align: center;
+  max-width: min(28rem, calc(100vw - 32px)); width: 100%; text-align: center;
   background: var(--panel); border-radius: 10px; border-top: var(--bw-accent) solid var(--copper);
   padding: var(--s4) var(--s4) calc(var(--s4) + 2px);
   box-shadow: 0 12px 40px rgba(19, 34, 50, 0.35);
@@ -1281,6 +1285,17 @@ button.is-busy, .btn.is-busy, .ad-btn.is-busy { cursor: progress; }
   color: var(--ink-soft); font: inherit; font-size: 0.85rem; text-decoration: underline; text-underline-offset: 3px;
 }
 
+/* On a phone: overlays and the result stay clear of the notch and the home bar. */
+.working-overlay, .calm-wait {
+  padding:
+    max(var(--s4), env(safe-area-inset-top)) max(var(--s4), env(safe-area-inset-right))
+    max(var(--s4), env(safe-area-inset-bottom)) max(var(--s4), env(safe-area-inset-left));
+}
+.working-result { bottom: max(var(--s4), env(safe-area-inset-bottom)); }
+@media (max-width: 899px) {
+  .working-result-close { min-height: var(--tap); padding: 0 var(--s2); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .btn-spinner, .working-spinner, .is-working::before { animation-duration: 2.4s; }
 }
@@ -1298,7 +1313,10 @@ button.is-busy, .btn.is-busy, .ad-btn.is-busy { cursor: progress; }
   display: grid; place-items: center; padding: var(--s4);
   background: rgba(247, 248, 250, 0.82); cursor: progress;
 }
-.calm-wait-box { display: grid; justify-items: center; gap: var(--s2); color: var(--ink-soft); }
+.calm-wait-box {
+  display: grid; justify-items: center; gap: var(--s2); color: var(--ink-soft);
+  max-width: min(28rem, calc(100vw - 32px)); text-align: center;
+}
 .calm-wait-box p { margin: 0; font-size: 1rem; }
 @media (prefers-reduced-motion: reduce) { .calm-spinner { animation-duration: 2.6s; } }
 

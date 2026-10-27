@@ -67,3 +67,27 @@ test("Details shortens its long messages and fits a phone", () => {
   assert.match(phone, /font-size: 16px; min-height: var\(--tap\);/);
   assert.match(phone, /env\(safe-area-inset-left\)/);
 });
+
+// ── Overlays, the viewport and the customer menu ─────────────────────────
+
+test("the root layout sets the device-width viewport with cover", () => {
+  const s = src("app/layout.tsx");
+  assert.match(s, /export const viewport: Viewport/);
+  assert.match(s, /width: "device-width"/);
+  assert.match(s, /initialScale: 1/);
+  assert.match(s, /viewportFit: "cover"/);
+});
+
+test("overlays are fixed, centered and never wider than the screen less a margin", () => {
+  const css = src("app/globals.css");
+  assert.match(css, /\.working-overlay \{\s*position: fixed; inset: 0;[^}]*place-items: center/);
+  assert.match(css, /\.calm-wait \{\s*position: fixed; inset: 0;[^}]*place-items: center/);
+  assert.match(css, /\.working-box \{\s*max-width: min\(28rem, calc\(100vw - 32px\)\)/);
+  assert.match(css, /\.calm-wait-box \{[^}]*max-width: min\(28rem, calc\(100vw - 32px\)\)/);
+  assert.match(css, /width: min\(36rem, calc\(100vw - 32px\)\)/);
+  assert.match(css, /bottom: max\(var\(--s4\), env\(safe-area-inset-bottom\)\)/);
+});
+
+test("the customer action bar clears the iPhone home bar", () => {
+  assert.match(src("app/globals.css"), /padding-bottom: max\(var\(--s3\), env\(safe-area-inset-bottom\)\)/);
+});
