@@ -107,3 +107,12 @@ test("Details reads and sets the planned sale date, and says what Submit would",
   assert.match(f, /if \(action === "planned_sale_date"\) return await setPlannedSaleDate\(supabase, s, body\.value\);/);
   assert.match(f, /\.rpc\("renew_session", \{ p_session: s\.id as string \}\)/);
 });
+
+test("Administration sets each store's time zone, from the listed zones only", () => {
+  const settings = src("supabase/functions/fni-admin-settings/index.ts");
+  assert.match(settings, /if \(section === "stores"\) \{/);
+  assert.match(settings, /if \(body\.section === "stores"\) \{/);
+  const stores = src("supabase/functions/fni-admin-settings/stores.ts");
+  assert.match(stores, /if \(!isStoreTimeZone\(body\.time_zone\)\) \{/);
+  assert.match(stores, /\.update\(\{ time_zone: body\.time_zone \}\)\s*\.eq\("id", body\.store_id\)\s*\.eq\("tenant_id", tenantId\)/);
+});
