@@ -202,6 +202,13 @@ export const edge = {
   adminSavePricing: <T>(body: Record<string, unknown>) =>
     call<T>("fni-admin-settings", { method: "POST", body: { ...body, section: "pricing" } }),
 
+  /** The Stores section: each store's time zone. */
+  adminStores: <T>() =>
+    call<T>("fni-admin-settings", { method: "GET", query: { section: "stores" } }),
+
+  adminSaveStore: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-admin-settings", { method: "POST", body: { ...body, section: "stores" } }),
+
   /** The Providers section: every provider, its stores and its sheets. */
   adminProviders: <T>() =>
     call<T>("fni-admin-settings", { method: "GET", query: { section: "providers" } }),

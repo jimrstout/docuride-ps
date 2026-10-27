@@ -817,6 +817,7 @@ export async function clearSubmitUnknown(formData: FormData): Promise<void> {
 // retired.
 
 const PROVIDERS = "/admin/providers";
+const STORES = "/admin/stores";
 const MENUS = "/admin/menus";
 const SHEETS = "/admin/price-sheets";
 
@@ -859,6 +860,14 @@ async function adminWrite(
 }
 
 const field = (fd: FormData, k: string) => String(fd.get(k) ?? "");
+
+// ── Stores ──
+
+/** One store's time zone, which decides when its day ends. */
+export async function saveStoreTimeZone(fd: FormData): Promise<void> {
+  await adminWrite(STORES, (by) =>
+    edge.adminSaveStore({ store_id: field(fd, "store_id"), time_zone: field(fd, "time_zone"), updated_by: by }), "saved");
+}
 
 // ── Providers ──
 

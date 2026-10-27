@@ -149,3 +149,15 @@ test("Details shows when the deal ends, sets the planned sale date, and holds Su
   assert.equal(flashMessage({ code: "planned", detail: null }).text, "Planned sale date saved. This deal stays open until the end of that day.");
   assert.equal(flashMessage({ code: "plannedcleared", detail: null }).text, "Planned sale date cleared. This deal stays open until the end of today.");
 });
+
+test("Administration > Stores sets each store's time zone", () => {
+  const page = src("apps/ownership-planner/app/admin/stores/page.tsx");
+  assert.match(page, /payload = await edge\.adminStores<StoresPayload>\(\);/);
+  assert.match(page, /<form action=\{saveStoreTimeZone\} className="ad-inline-form" data-working-panel="">/);
+  assert.match(page, /<select id=\{`tz-\$\{s\.id\}`\} name="time_zone" defaultValue=\{s\.time_zone\}>/);
+  assert.match(page, /const operator = await currentOperator\(\);\s*if \(!operator\) return null;/);
+  const actions = src("apps/ownership-planner/app/console-actions.ts");
+  assert.match(actions, /edge\.adminSaveStore\(\{ store_id: field\(fd, "store_id"\), time_zone: field\(fd, "time_zone"\), updated_by: by \}\)/);
+  const sections = src("apps/ownership-planner/lib/admin-sections.ts");
+  assert.match(sections, /\{ href: "\/admin\/stores", label: "Stores", icon: "stores" \},/);
+});

@@ -21,6 +21,13 @@ const PATHS: Record<AdminSection["icon"], React.ReactNode> = {
       <circle cx="7.5" cy="7.5" r="1.5" />
     </>
   ),
+  // A clock: when each store's day ends.
+  stores: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.5 2" />
+    </>
+  ),
   // Lines of text.
   wording: <path d="M4 6h16M4 10.5h16M4 15h10M4 19.5h7" />,
   // Two buildings: the providers behind the products.

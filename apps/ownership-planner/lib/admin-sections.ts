@@ -10,7 +10,7 @@ export interface AdminSection {
   href: string;
   label: string;
   /** Which of the menu's line icons to draw. See components/admin/Icon.tsx. */
-  icon: "sessions" | "pricing" | "wording" | "providers" | "menus" | "sheets";
+  icon: "sessions" | "pricing" | "wording" | "providers" | "menus" | "sheets" | "stores";
 }
 
 export const ADMIN_SECTIONS: readonly AdminSection[] = [
@@ -20,6 +20,7 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   { href: "/admin/menus", label: "Menus", icon: "menus" },
   { href: "/admin/price-sheets", label: "Price sheets", icon: "sheets" },
   { href: "/admin/wording", label: "Wording", icon: "wording" },
+  { href: "/admin/stores", label: "Stores", icon: "stores" },
 ];
 
 /** Where the admin area opens, and where signing out lands. */

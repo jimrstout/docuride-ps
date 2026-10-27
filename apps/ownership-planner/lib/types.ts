@@ -242,6 +242,12 @@ export function num(v: string | number | null | undefined): number | null {
 }
 
 // ── The internal console ──────────────────────────────────────────────────
+/** What fni-admin-settings returns for the Stores section. */
+export interface StoresPayload {
+  time_zones: { zone: string; label: string }[];
+  stores: { id: string; name: string; place: string | null; time_zone: string; today: string }[];
+}
+
 // What fni-admin-sessions returns. Deliberately narrow: no buyer, co-buyer,
 // lienholder or VIN field appears here because the Edge Function never sends
 // one, and this type is the record of that.
