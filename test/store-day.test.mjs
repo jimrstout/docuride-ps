@@ -79,3 +79,13 @@ test("the migration is additive and puts the day in Postgres", () => {
   assert.match(m, /create or replace function fni\.renew_session\(p_session uuid\)/);
   assert.match(m, /revoke all on function fni\.renew_session\(uuid\) from public, anon, authenticated;/);
 });
+
+test("Renew for Today replaces +24h and never adds hours", () => {
+  const f = src("supabase/functions/fni-admin-sessions/index.ts");
+  assert.match(f, /\.rpc\("renew_session", \{ p_session: sessionId \}\)/);
+  assert.match(f, /if \(req\.method === "POST"\) return await renew\(req\);/);
+  assert.doesNotMatch(f, /hours \* 3600_000/);
+  assert.doesNotMatch(f, /MAX_EXTEND_HOURS/);
+  assert.match(f, /\.rpc\("session_renew_targets", \{ p_ids: sessionIds \}\)/);
+  assert.match(f, /renewable: renewable\(s\),/);
+});

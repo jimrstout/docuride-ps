@@ -1,12 +1,20 @@
 // fni-admin-sessions/index.ts
 //
 // The internal session browser's data source: the most recent planner sessions,
-// and the one write it needs -- pushing expires_at out so a lapsed session can
-// be opened again without creating a new deal.
+// and the one write it needs -- Renew for Today, so a lapsed session can be
+// opened again without creating a new deal.
 //
 // Input:
 //   GET  ?limit=25                    -> the newest sessions, newest first
-//   POST { session_id, hours }        -> extend that session's expiry
+//   POST { session_id }               -> Renew for Today: the session lasts to
+//                                        the end of its store's day, or of its
+//                                        planned sale date when that is later
+//
+// ── Renew for Today, not +24h ───────────────────────────────────────────
+// +24h added 24 hours a press, so two presses stacked (deal 13437 gained 48).
+// A session now lasts to 23:59:59 on its store's day (migration 0038), and
+// renewing sets that same moment again: a second press changes nothing. An
+// older console that still sends { hours } is renewed the same way.
 //
 // Auth: FNI_WEBHOOK_SECRET via x-webhook-secret header or ?secret= query param,
 // exactly as fni-session-get. The browser never holds it; the console's server
@@ -47,6 +55,7 @@ const LIST_COLUMNS = [
   "stock_number",
   "created_at",
   "expires_at",
+  "planned_sale_date",
   // Which providers the latest rating covered. Multi-provider Part 4.
   "rated_provider_ids",
 ].join(",");
@@ -54,10 +63,6 @@ const LIST_COLUMNS = [
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
 
-const DEFAULT_EXTEND_HOURS = 24;
-/** Thirty days. An internal tool reviving a test session does not need longer,
- *  and expiry is the only thing that ever retires a leaked plan link. */
-const MAX_EXTEND_HOURS = 720;
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -177,7 +182,28 @@ async function list(url: URL): Promise<Response> {
     }
   }
 
+  // ── What Renew for Today would do ─────────────────────────────────────
+  // The end of the store's day (or of the planned sale date), from Postgres so
+  // it is the same moment the renew writes. Offered only when it is later than
+  // the expiry the session already has.
+  const renewTo = new Map<string, { renew_to: string; time_zone: string }>();
+  if (sessionIds.length > 0) {
+    const { data: targets, error: targetErr } = await supabase
+      .schema("fni")
+      .rpc("session_renew_targets", { p_ids: sessionIds });
+    if (targetErr) console.error(`session_renew_targets failed: ${targetErr.message}`);
+    for (const t of (targets ?? []) as { session_id: string; renew_to: string; time_zone: string }[]) {
+      renewTo.set(t.session_id, { renew_to: t.renew_to, time_zone: t.time_zone });
+    }
+  }
+
   const now = Date.now();
+  const renewable = (s: Record<string, unknown>): boolean => {
+    const t = renewTo.get(String(s.id));
+    if (!t) return false;
+    const current = typeof s.expires_at === "string" ? Date.parse(s.expires_at) : NaN;
+    return !Number.isFinite(current) || Date.parse(t.renew_to) > current;
+  };
 
   return json(200, {
     // Echoed so the console can say "the 25 newest" without assuming the
@@ -198,6 +224,11 @@ async function list(url: URL): Promise<Response> {
       created_at: s.created_at,
       expires_at: s.expires_at,
       expired: isExpired(s.expires_at, now),
+      planned_sale_date: s.planned_sale_date ?? null,
+      // Renew for Today is offered only when it would give the session longer.
+      renewable: renewable(s),
+      renew_to: renewTo.get(String(s.id))?.renew_to ?? null,
+      time_zone: renewTo.get(String(s.id))?.time_zone ?? null,
 
       // No row means nobody has asked the provider yet. That is a real and
       // common state on a session created moments ago, so it is named rather
@@ -207,7 +238,7 @@ async function list(url: URL): Promise<Response> {
   });
 }
 
-async function extend(req: Request): Promise<Response> {
+async function renew(req: Request): Promise<Response> {
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
@@ -219,12 +250,6 @@ async function extend(req: Request): Promise<Response> {
   if (typeof sessionId !== "string" || !UUID_RE.test(sessionId)) {
     return json(400, { error: "A well-formed session_id is required" });
   }
-
-  const askedHours = Number(body.hours ?? DEFAULT_EXTEND_HOURS);
-  if (!Number.isFinite(askedHours) || askedHours <= 0) {
-    return json(400, { error: "hours must be a positive number" });
-  }
-  const hours = Math.min(askedHours, MAX_EXTEND_HOURS);
 
   const supabase = admin();
 
@@ -238,34 +263,22 @@ async function extend(req: Request): Promise<Response> {
   if (readErr) return json(500, { error: readErr.message });
   if (!row) return json(404, { error: "Session not found" });
 
-  const current = Date.parse((row as { expires_at: string }).expires_at);
-  const now = Date.now();
-
-  // From whichever is later: the current expiry, or now. Adding to a lapsed
-  // expiry is the difference between reviving a session and doing nothing
-  // visible to a session that went stale three weeks ago.
-  const from = Number.isFinite(current) ? Math.max(current, now) : now;
-  const next = new Date(from + hours * 3600_000).toISOString();
-
-  const { error: writeErr } = await supabase
+  const before = (row as { expires_at: string }).expires_at;
+  const { data: next, error: writeErr } = await supabase
     .schema("fni")
-    .from("sessions")
-    .update({ expires_at: next })
-    .eq("id", sessionId);
+    .rpc("renew_session", { p_session: sessionId });
 
   if (writeErr) return json(500, { error: writeErr.message });
 
-  console.log(
-    `fni-admin-sessions extended ${sessionId} by ${hours}h to ${next}`
-  );
+  console.log(`fni-admin-sessions renewed ${sessionId} to ${next}`);
 
+  const current = Date.parse(before);
   return json(200, {
     session_id: sessionId,
-    previous_expires_at: (row as { expires_at: string }).expires_at,
+    previous_expires_at: before,
     expires_at: next,
-    hours,
     // It was revived rather than merely pushed out. The console says so.
-    revived: Number.isFinite(current) && current <= now,
+    revived: Number.isFinite(current) && current <= Date.now(),
   });
 }
 
@@ -276,7 +289,7 @@ serve(async (req: Request) => {
 
   try {
     if (req.method === "GET") return await list(url);
-    if (req.method === "POST") return await extend(req);
+    if (req.method === "POST") return await renew(req);
     return json(405, { error: "GET or POST only" });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
