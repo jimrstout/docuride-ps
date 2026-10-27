@@ -236,8 +236,8 @@ which is the correct consequence of a rotation. The cookie is `HttpOnly`,
 `Secure`, `SameSite=Strict`, and lasts twelve hours.
 
 **Edge Functions.** `fni-admin-auth` checks the password and the platform-admin
-flag; `fni-admin-sessions` serves the list (`GET`) and extends an expiry
-(`POST`). Both authenticate with `FNI_WEBHOOK_SECRET` and both are deployed
+flag; `fni-admin-sessions` serves the list (`GET`) and renews a session for
+today (`POST`). Both authenticate with `FNI_WEBHOOK_SECRET` and both are deployed
 with `verify_jwt` off, like every other `fni` function — they carry their own
 auth, and the gateway's JWT check would reject the secret header before it
 reached them.
@@ -247,7 +247,9 @@ list and no buyer, co-buyer, lienholder, VIN or `raw_snapshot` field is in it.
 The console cannot leak what it never receives, which is why the filtering is
 in the Edge Function rather than in the page that renders it.
 
-**Extending.** One press adds 24 hours from whichever is later, now or the
-current expiry — so it revives a session that lapsed weeks ago rather than
-adding a day to a date already in the past. The Edge Function caps a single
-extension at 30 days.
+**Renew for Today.** A session stays open until 23:59:59 on its store's day,
+in the store's own time zone (Administration > Stores), or on its planned
+sale date when that is later. Renew for Today sets that same moment again,
+so it revives a lapsed session and a second press changes nothing. It
+replaced +24h, which added 24 hours a press and could stack. See
+docs/multi-provider.md, section 20.

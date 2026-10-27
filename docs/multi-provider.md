@@ -1024,3 +1024,20 @@ its own (a double click can land first, and a second tab has its own button):
   result. Nothing more was sent to TecAssured." The claim is cleared when the
   void ends, whatever the outcome; one older than three minutes counts as
   abandoned.
+
+## 20. Session dates: the store's day
+
+A deal is sold on a day, in a store, so a planning session lasts until the end
+of that store's day rather than for a fixed number of hours. Migration 0038.
+
+| What | How |
+|---|---|
+| Store time zone | `public.stores.time_zone`, one of the US zones in `_shared/store-day.ts`. New York until set in Administration > Stores. `dc-dealer-sync` does not write it. |
+| Session expiry | 23:59:59 on the store's today, or on the planned sale date when that is later. Set by a trigger on every new session (`fni.sessions_set_expiry`); existing sessions kept theirs. |
+| Renew for Today | `fni.renew_session` sets that same moment again. Offered on Sessions only when it would give the session longer, so it cannot stack. Replaced +24h, which added 24 hours a press (deal 13437 gained 48). |
+| Planned sale date | `fni.sessions.planned_sale_date`, set on Details to prepare a deal the night before; the session stays open to the end of that day. It cannot be in the past and is never sent to a provider. |
+| Submit | Only on the day of the sale at the store: the sale date must be today there, a planned sale date must equal it, and the in-service date cannot be after it. `fni-contract-submit` refuses before anything is sent; Details says why and disables Submit ahead of time. |
+
+The day boundary is worked out in Postgres (`fni.store_day_end`), so a session
+made by any path ends at the same moment; "today" for the submit check is
+`storeToday` in `_shared/store-day.ts`, from the same zone.
