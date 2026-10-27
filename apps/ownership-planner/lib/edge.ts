@@ -145,10 +145,11 @@ export const edge = {
       query: { limit: String(limit) },
     }),
 
-  adminExtend: <T>(sessionId: string, hours: number) =>
+  /** Renew for Today: the session lasts to the end of its store's day. */
+  adminRenew: <T>(sessionId: string) =>
     call<T>("fni-admin-sessions", {
       method: "POST",
-      body: { session_id: sessionId, hours },
+      body: { session_id: sessionId },
     }),
 
   // Staff re-rating a session by hand, after fixing whatever stopped it. The

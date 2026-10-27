@@ -22,6 +22,7 @@ import LongText from "@/components/LongText";
 import RatingErrorText from "@/components/RatingErrorText";
 import RowDetailsToggle from "@/components/admin/RowDetailsToggle";
 import { hasMoreDetail, ratingErrorHeadline, ratingFailures } from "@/lib/rating-error";
+import { storeTime } from "@/lib/store-time";
 import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge } from "@/lib/edge";
@@ -29,7 +30,7 @@ import type { ConsoleListPayload, ConsoleSessionRow, PricingPayload } from "@/li
 import { SIGN_IN_NOTICES } from "@/components/admin/SignIn";
 import { Badge, Notice, PageHead, type Tone } from "@/components/admin/Parts";
 import { SessionFilters, type FilterOption } from "@/components/admin/SessionFilters";
-import { extendSession, rateSession } from "@/app/console-actions";
+import { renewSession, rateSession } from "@/app/console-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -241,11 +242,15 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
           ) : (
             <Badge tone="good">Active</Badge>
           )}
-          <small>{row.expired ? "Extension available" : since(row.expires_at, now)}</small>
+          <small>
+          {row.expired
+            ? row.renewable ? "Renew available" : "Ended"
+            : row.time_zone ? `Until ${storeTime(row.expires_at, row.time_zone)}` : since(row.expires_at, now)}
+        </small>
         </td>
 
         <td className="ad-row-actions">
-          {/* The panel +24h locks while it runs (components/Working.tsx). */}
+          {/* The panel Renew for Today locks while it runs (components/Working.tsx). */}
           <div className="ad-actions" data-working-panel="">
             {/* The customer's menu opens in a new tab, so this list stays where
                 it was and one person can work several deals at once. */}
@@ -257,13 +262,22 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
             >
               Open
             </a>
-            <form action={extendSession}>
-              <Working />
-              <input type="hidden" name="session_id" value={row.id} />
-              <PendingButton className="ad-btn ad-btn--secondary" pending="Adding 24 hours...">
-                +24h
-              </PendingButton>
-            </form>
+            {/* Renew for Today: to the end of the store's day, never more.
+                Shown only when it would give the session longer, so it cannot
+                stack the way +24h did. */}
+            {row.renewable ? (
+              <form action={renewSession}>
+                <Working />
+                <input type="hidden" name="session_id" value={row.id} />
+                <PendingButton
+                  className="ad-btn ad-btn--secondary"
+                  pending="Renewing for today..."
+                  title={row.renew_to ? `Open until ${storeTime(row.renew_to, row.time_zone)}` : undefined}
+                >
+                  Renew for Today
+                </PendingButton>
+              </form>
+            ) : null}
             {/* Details is where rating starts now, so it is the button that is
                 always here. Rate on its own is for re-asking after a failure on a
                 deal that is already verified. */}
@@ -408,6 +422,6 @@ export default async function SessionsPage({
   if (!operator) return null;
 
   const params = await searchParams;
-  const key = ["extendfailed", "bad"].find((k) => params[k] !== undefined);
+  const key = ["renewfailed", "bad"].find((k) => params[k] !== undefined);
   return <SessionList notice={key ? SIGN_IN_NOTICES[key] : null} />;
 }
