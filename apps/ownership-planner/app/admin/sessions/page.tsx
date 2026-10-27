@@ -18,6 +18,7 @@
 
 import Link from "next/link";
 import PendingButton from "@/components/PendingButton";
+import LongText from "@/components/LongText";
 import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge } from "@/lib/edge";
@@ -153,7 +154,7 @@ function Rating({ row, now }: { row: ConsoleSessionRow; now: number }) {
       {/* The provider's own words, or the field nobody filled in. This is the
           whole point of the column, so it is shown rather than hidden behind a
           hover: a reason you have to discover is a reason nobody reads. */}
-      {r.detail ? <small className="ad-why">{r.detail}</small> : null}
+      {r.detail ? <small className="ad-why"><LongText text={r.detail} /></small> : null}
     </>
   );
 }
@@ -181,28 +182,28 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
     >
       <td className="ad-deal">{row.deal_number ?? "Not set"}</td>
 
-      <td>
+      <td className="ad-vehicle">
         <span className="ad-strong">{vehicle(row)}</span>
         {row.stock_number ? <small>Stock {row.stock_number}</small> : null}
       </td>
 
-      <td>{row.store_name ?? "Not set"}</td>
+      <td data-label="Store">{row.store_name ?? "Not set"}</td>
 
-      <td>
+      <td data-label="Status">
         <Badge tone={statusTone(row.status)}>{row.status ?? "Not set"}</Badge>
         {row.mode ? <small>{row.mode}</small> : null}
       </td>
 
-      <td>
+      <td data-label="Rating">
         <Rating row={row} now={now} />
       </td>
 
-      <td style={{ whiteSpace: "nowrap" }}>
+      <td data-label="Created" style={{ whiteSpace: "nowrap" }}>
         {day(row.created_at)}
         <small>{clock(row.created_at)}</small>
       </td>
 
-      <td style={{ whiteSpace: "nowrap" }}>
+      <td data-label="Expires" style={{ whiteSpace: "nowrap" }}>
         {row.expired ? (
           <Badge tone="warn">Expired</Badge>
         ) : (
@@ -211,7 +212,7 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
         <small>{row.expired ? "Extension available" : since(row.expires_at, now)}</small>
       </td>
 
-      <td>
+      <td className="ad-row-actions">
         {/* The panel +24h locks while it runs (components/Working.tsx). */}
         <div className="ad-actions" data-working-panel="">
           {/* The customer's menu opens in a new tab, so this list stays where

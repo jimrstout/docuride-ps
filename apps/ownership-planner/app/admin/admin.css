@@ -281,26 +281,6 @@
   .ad-main { padding: 24px; }
   .ad-top { padding: 0 24px; }
 }
-@media (max-width: 620px) {
-  .ad-side {
-    position: sticky; top: 0; width: auto; height: auto; inset: auto;
-    flex-direction: row; align-items: center; gap: 10px; padding: 10px 12px;
-  }
-  .ad-side .ad-brand-sub, .ad-side-foot { display: none; }
-  .ad-side .ad-brand-name { font-size: 14px; }
-  .ad-nav { flex-direction: row; margin-left: auto; }
-  .ad-nav-link { padding: 10px; }
-  .ad-nav-link .ad-nav-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-  .ad-nav-link.is-here { box-shadow: inset 0 -3px var(--copper); }
-  .ad-body { margin-left: 0; }
-  .ad-gate { min-height: auto; padding-top: 40px; }
-  .ad-top { padding: 0 16px; height: auto; min-height: 56px; flex-wrap: wrap; padding-block: 10px; }
-  .ad-top .ad-signout { display: inline-flex; }
-  .ad-me-name { max-width: 40vw; }
-  .ad-main { padding: 18px 16px; }
-  .ad-head h1 { font-size: 23px; }
-  .ad-editor-fields .ad-field--wide { grid-column: auto; }
-}
 
 /* ── Providers, Menus and Price sheets (multi-provider Part 6) ─────────── */
 .ad-fieldset { border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px 10px; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
@@ -317,3 +297,98 @@
 .ad-plain { list-style: none; margin: 0; padding: 0; }
 .ad-plain li + li { margin-top: 2px; }
 .ad-plain small { margin-left: var(--s1); color: var(--muted); }
+
+/* ── Phones and narrow tablets ─────────────────────────────────────────
+   Nothing here applies at 900px and wider, so the desktop is untouched. */
+
+/* The Menu button and its panel: below tablet width only. */
+.ad-menu { display: none; }
+.ad-menu-button {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px;
+  border: 1px solid var(--nav-line); border-radius: 6px; background: transparent;
+  color: var(--nav-bright); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.ad-menu-button:focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; }
+.ad-menu-bars, .ad-menu-bars::before, .ad-menu-bars::after {
+  display: block; width: 16px; height: 2px; background: currentColor; border-radius: 1px; position: relative;
+}
+.ad-menu-bars::before, .ad-menu-bars::after { content: ""; position: absolute; left: 0; }
+.ad-menu-bars::before { top: -5px; }
+.ad-menu-bars::after { top: 5px; }
+.ad-menu-panel {
+  position: absolute; left: 0; right: 0; top: 100%; z-index: 20;
+  display: grid; padding: 8px max(12px, env(safe-area-inset-right)) 12px max(12px, env(safe-area-inset-left));
+  background: var(--nav); border-top: 1px solid var(--nav-line);
+  box-shadow: 0 12px 24px rgba(19, 34, 50, 0.35);
+}
+.ad-menu-link {
+  display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 12px; border-radius: 6px;
+  color: var(--nav-text); text-decoration: none; font-size: 16px; font-weight: 500;
+}
+.ad-menu-link:hover, .ad-menu-link:focus-visible { color: var(--panel); background: var(--nav-hover); outline: none; }
+.ad-menu-link.is-here { color: var(--panel); background: var(--nav-raised); box-shadow: inset 3px 0 var(--copper); }
+
+@media (max-width: 767px) {
+  .ad-side {
+    position: sticky; top: 0; width: auto; height: auto; inset: auto;
+    flex-direction: row; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+    overflow: visible;
+  }
+  .ad-side .ad-brand-sub, .ad-side-foot, .ad-nav { display: none; }
+  .ad-side .ad-brand-name { font-size: 15px; }
+  .ad-menu { display: block; }
+  .ad-body { margin-left: 0; }
+  .ad-top {
+    padding: 8px max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left));
+    height: auto; min-height: 56px; flex-wrap: wrap; gap: 8px 12px;
+  }
+  .ad-crumb-mid { display: none; }
+  .ad-top .ad-signout { display: inline-flex; min-height: 44px; align-items: center; }
+  .ad-me { min-width: 0; flex: 1 1 auto; justify-content: flex-end; }
+  .ad-me-name { max-width: 46vw; }
+  .ad-main { padding: 18px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left)); }
+  .ad-gate { min-height: auto; padding-top: 40px; }
+  .ad-head h1 { font-size: 23px; }
+  .ad-editor-fields .ad-field--wide { grid-column: auto; }
+}
+
+@media (max-width: 899px) {
+  /* Fields big enough that an iPhone does not zoom in when one is tapped,
+     and buttons big enough to hit. */
+  .ad-input, .ad select, .ad textarea, .ad input[type="text"], .ad input[type="email"],
+  .ad input[type="password"], .ad input[type="date"], .ad input[type="number"], .ad input:not([type]) {
+    font-size: 16px; min-height: 44px;
+  }
+  .ad-btn { min-height: 44px; padding-top: 10px; padding-bottom: 10px; }
+
+  /* Search and filters, one above the other, full width. */
+  .ad-toolbar { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
+  .ad-toolbar > label, .ad-toolbar select { width: 100%; }
+  .ad-toolbar .ad-search { flex: none; }
+
+  /* The sessions list as cards: deal and vehicle on top, then each fact on
+     its own labeled line, then the actions. */
+  .ad-scroll:has(#ad-sessions) { overflow: visible; }
+  #ad-sessions, #ad-sessions tbody { display: block; width: 100%; }
+  #ad-sessions thead { display: none; }
+  #ad-sessions tr[data-row]:not([hidden]) {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; align-items: baseline;
+    padding: 16px; border-bottom: 1px solid var(--line);
+  }
+  #ad-sessions tr[data-row] > td { display: block; padding: 0; border: 0; white-space: normal !important; min-width: 0; }
+  #ad-sessions td.ad-deal { font-size: 15px; }
+  #ad-sessions td.ad-vehicle { overflow-wrap: anywhere; }
+  #ad-sessions td.ad-vehicle .ad-strong { font-size: 14px; }
+  #ad-sessions tr[data-row] > td[data-label] { grid-column: 1 / -1; position: relative; padding-left: 84px; min-height: 22px; }
+  #ad-sessions td[data-label]::before {
+    content: attr(data-label); position: absolute; left: 0; top: 3px; width: 76px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: var(--muted);
+  }
+  #ad-sessions td.ad-row-actions { grid-column: 1 / -1; margin-top: 8px; }
+  #ad-sessions .ad-actions { flex-wrap: wrap; gap: 8px; }
+  #ad-sessions .ad-actions > .ad-btn, #ad-sessions .ad-actions > form { flex: 1 1 calc(50% - 4px); min-width: 120px; }
+  #ad-sessions .ad-actions form .ad-btn { width: 100%; }
+  #ad-sessions .ad-why { max-width: none; }
+  #ad-sessions tr[data-none]:not([hidden]) { display: block; }
+}

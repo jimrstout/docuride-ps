@@ -26,6 +26,7 @@ import { Brand } from "@/components/admin/Parts";
 import { Icon } from "@/components/admin/Icon";
 import { signOut } from "@/app/console-actions";
 import { WorkingArea } from "@/components/Working";
+import AdminMenu from "@/components/admin/AdminMenu";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <Link href={HOME_HREF} prefetch={false} className="ad-brand-link">
           <Brand />
         </Link>
+        {/* A phone or a narrow tablet: the sections by name, behind a Menu button. */}
+        <AdminMenu sections={ADMIN_SECTIONS} here={here?.href ?? null} />
         <nav className="ad-nav" aria-label="Admin sections">
           {ADMIN_SECTIONS.map((s) => (
             <Link
@@ -87,8 +90,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <header className="ad-top">
           <p className="ad-crumb">
             <HomeLink />
+            {/* Left out on a small screen: the home link and the page are enough. */}
+            <span className="ad-crumb-mid">
+              <span className="ad-slash" aria-hidden="true">/</span>
+              Administration
+            </span>
             <span className="ad-slash" aria-hidden="true">/</span>
-            Administration<span className="ad-slash" aria-hidden="true">/</span>
             <strong>{here?.label ?? "Sessions"}</strong>
           </p>
           <div className="ad-me">
