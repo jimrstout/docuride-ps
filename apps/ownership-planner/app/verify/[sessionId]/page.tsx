@@ -22,6 +22,7 @@
 // factory warranty months (which nothing answers).
 
 import Link from "next/link";
+import HomeLink from "@/components/HomeLink";
 import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { currentOperator } from "@/lib/admin-session";
@@ -338,13 +339,13 @@ export default async function VerifyPage({
       <header className="vh-top">
         <div className="vh-crumb">
           <h1 className="sr-only">Verify deal {sheet.session.deal_number ?? "(no number)"}</h1>
-          <span aria-hidden="true">
-            Verify<span className="vh-slash">/</span>
-            <strong>Deal {sheet.session.deal_number ?? "(no number)"}</strong>
-          </span>
-          <Link className="console-back" href="/admin/sessions" prefetch={false}>
-            Session browser
-          </Link>
+          <nav aria-label="Breadcrumb">
+            <HomeLink />
+            <span className="vh-slash" aria-hidden="true">/</span>
+            Deal {sheet.session.deal_number ?? "(no number)"}
+            <span className="vh-slash" aria-hidden="true">/</span>
+            <strong>Verify</strong>
+          </nav>
         </div>
         <div className="console-who">
           {/* Who is checking this deal. One box, once per device, remembered in a
