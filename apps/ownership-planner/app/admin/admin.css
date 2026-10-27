@@ -158,6 +158,10 @@
 .ad-table tr[data-row][hidden] + tr.ad-why-row { display: none; }
 .ad-empty { padding: 28px 17px; font-size: 12px; color: var(--muted); }
 
+/* Stores: a time zone picker on each row. */
+.ad-inline-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ad-panel-intro { margin: 0; padding: 16px 17px 4px; }
+
 /* Badges. */
 .ad-badge {
   display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
@@ -404,6 +408,14 @@
   #ad-sessions .ad-actions form .ad-btn { width: 100%; }
   #ad-sessions .ad-why { max-width: none; }
   #ad-sessions tr[data-none]:not([hidden]) { display: block; }
+  /* Stores, one card each: the name, then the picker full width. */
+  #ad-stores, #ad-stores tbody, #ad-stores tr, #ad-stores td { display: block; width: 100%; }
+  #ad-stores thead { display: none; }
+  #ad-stores tr { padding: 16px; border-bottom: 1px solid var(--line); }
+  #ad-stores td { padding: 0; border: 0; }
+  #ad-stores td + td { margin-top: 8px; }
+  #ad-stores .ad-inline-form select { flex: 1 1 12rem; }
+  #ad-stores td.ad-today::before { content: "Today there: "; color: var(--muted); }
   #ad-sessions .ad-linkbtn { min-height: 44px; font-size: 13px; }
   #ad-sessions tr[data-row]:has(+ tr.ad-why-row:not([hidden])) { border-bottom: 0; padding-bottom: 8px; }
   #ad-sessions tr.ad-why-row:not([hidden]) { display: block; padding: 0 16px 16px; border-bottom: 1px solid var(--line); }

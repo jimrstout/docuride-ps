@@ -81,7 +81,7 @@ test("slots: products from the catalog, in order; Best Match or Side by Side", (
 
 test("the admin menu lists the new sections, each page checks the operator first", () => {
   assert.deepEqual(ADMIN_SECTIONS.map((s) => s.href), [
-    "/admin/sessions", "/admin/pricing", "/admin/providers", "/admin/menus", "/admin/price-sheets", "/admin/wording",
+    "/admin/sessions", "/admin/pricing", "/admin/providers", "/admin/menus", "/admin/price-sheets", "/admin/wording", "/admin/stores",
   ]);
   for (const page of [
     "../apps/ownership-planner/app/admin/providers/page.tsx",
