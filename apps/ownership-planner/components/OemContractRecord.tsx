@@ -63,6 +63,7 @@ export default function OemContractRecord({
 
     path.value = started.document_path;
     setState("saving");
+    area?.resend();
     form.current?.requestSubmit();
   }
 

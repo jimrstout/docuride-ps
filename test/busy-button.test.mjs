@@ -27,3 +27,14 @@ test("PendingButton shows one spinner and its working label, and is disabled whi
   assert.match(b, /disabled=\{disabled \|\| busy\}/);
   assert.match(b, /<span className="btn-spinner" aria-hidden="true" \/>\s*\{pending\}/);
 });
+
+test("a second tap on a running form is stopped before anything is sent", () => {
+  const w = src("components/Working.tsx");
+  assert.match(w, /if \(state\.running\.form === form && state\.running\.resendAllowed\) \{\s*state\.running\.resendAllowed = false;\s*return;\s*\}\s*e\.preventDefault\(\);\s*e\.stopImmediatePropagation\(\);/);
+  assert.match(w, /resendAllowed: false,/);
+  assert.match(w, /function resend\(\) \{\s*if \(state\.running\) state\.running\.resendAllowed = true;\s*\}/);
+  // The two forms that upload first and then save say when the save may go.
+  for (const f of ["components/OemContractRecord.tsx", "components/admin/SheetUpload.tsx"]) {
+    assert.match(src(f), /area\?\.resend\(\);\s*form\.current\?\.requestSubmit\(\);/, f);
+  }
+});
