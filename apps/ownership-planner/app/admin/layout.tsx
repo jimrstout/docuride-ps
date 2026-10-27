@@ -17,6 +17,7 @@
 
 import "./admin.css";
 import Link from "next/link";
+import HomeLink, { HOME_HREF } from "@/components/HomeLink";
 import { headers } from "next/headers";
 import { currentOperator } from "@/lib/admin-session";
 import { ADMIN_SECTIONS, initialsFor, safeAdminPath, sectionFor } from "@/lib/admin-sections";
@@ -53,7 +54,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="ad">
       <aside className="ad-side">
-        <Link href="/admin/sessions" prefetch={false} className="ad-brand-link">
+        <Link href={HOME_HREF} prefetch={false} className="ad-brand-link">
           <Brand />
         </Link>
         <nav className="ad-nav" aria-label="Admin sections">
@@ -79,6 +80,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <div className="ad-body">
         <header className="ad-top">
           <p className="ad-crumb">
+            <HomeLink />
+            <span className="ad-slash" aria-hidden="true">/</span>
             Administration<span className="ad-slash" aria-hidden="true">/</span>
             <strong>{here?.label ?? "Sessions"}</strong>
           </p>

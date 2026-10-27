@@ -50,10 +50,12 @@ test("every action that landed on / or /settings lands on the new page", () => {
   assert.match(actions, /redirect\(`\$\{WORDING\}\?refused=\$\{encodeURIComponent/);
 });
 
-test("Verify's Session browser and sign-in links point at the admin area", () => {
+test("the deal page's way home is the DocuRide PS crumb", () => {
+  // "/" opens the session browser; HomeLink is the one link to it
+  // (test/staff-home-link.test.mjs).
   const verify = src("app/verify/[sessionId]/page.tsx");
-  assert.doesNotMatch(verify, /href="\/"/);
-  assert.match(verify, /<Link className="console-back" href="\/admin\/sessions" prefetch=\{false\}>\s*Session browser/);
+  assert.match(verify, /<HomeLink \/>/);
+  assert.doesNotMatch(verify, /Session browser/);
 });
 
 // ── Sign-in ────────────────────────────────────────────────────────────────
