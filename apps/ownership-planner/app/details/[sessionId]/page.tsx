@@ -57,6 +57,7 @@ import {
   moveDocumentsToDealJacket,
 } from "@/app/console-actions";
 import PendingButton from "@/components/PendingButton";
+import LongText from "@/components/LongText";
 import { Working, WorkingArea } from "@/components/Working";
 import { SUBMIT_LEAVE, VOID_LEAVE } from "@/lib/working";
 import VehicleTypeChoice from "@/components/VehicleTypeChoice";
@@ -455,12 +456,12 @@ export default async function DetailsPage({
                   ? `${sheet.rating.product_count} products, ${stamp(sheet.rating.rated_at)}`
                   : (sheet.rating.providers?.length ?? 0) > 1
                     ? "No provider rated this deal."
-                    : sheet.rating.detail ?? "No rate yet."}
+                    : sheet.rating.detail ? <LongText text={sheet.rating.detail} /> : "No rate yet."}
               </small>
               {(sheet.rating.providers?.length ?? 0) > 1 ? (
                 <ul className="vproviders">
                   {sheet.rating.providers!.map((p) => (
-                    <li key={p.name}>{p.line}</li>
+                    <li key={p.name}><LongText text={p.line} /></li>
                   ))}
                 </ul>
               ) : null}
@@ -492,7 +493,7 @@ export default async function DetailsPage({
 
         {sheet.not_ready_reason ? (
           <p className="console-flash console-flash--bad" role="alert">
-            {sheet.not_ready_reason}
+            <LongText text={sheet.not_ready_reason} />
           </p>
         ) : null}
 
@@ -536,7 +537,7 @@ export default async function DetailsPage({
               will be. Check the deal in TecAssured. If contracts were created,
               void the ones that should not stand, then clear this.
             </p>
-            {sheet.submit_detail ? <p><small>{sheet.submit_detail}</small></p> : null}
+            {sheet.submit_detail ? <p><small><LongText text={sheet.submit_detail} /></small></p> : null}
             {operator ? (
             <form action={clearSubmitUnknown}>
               <Working />

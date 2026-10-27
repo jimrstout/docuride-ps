@@ -1317,3 +1317,35 @@ button.is-busy, .btn.is-busy, .ad-btn.is-busy { cursor: progress; }
   .longtext-narrow { display: block; }
   .longtext-narrow summary { display: inline; }
 }
+
+/* ── Details on a phone or a narrow tablet ───────────────────────────────
+   Nothing here applies at 900px and wider, so the desktop is untouched. */
+@media (max-width: 899px) {
+  /* Buttons big enough to hit, fields big enough that an iPhone does not
+     zoom in when one is tapped. */
+  .vh .btn { min-height: var(--tap); padding: var(--s2) var(--s4); font-size: var(--fs-base); }
+  .vh input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), .vh select, .vh textarea { font-size: 16px; min-height: var(--tap); }
+  .vh input[type="checkbox"], .vh input[type="radio"] { width: 20px; height: 20px; }
+  .vtype-choice { min-height: var(--tap); }
+
+  /* The Checked by box and the CRM button share the top bar's width. */
+  .console-who, .vwho { width: 100%; flex-wrap: wrap; }
+  .vwho input { width: auto; flex: 1 1 10rem; min-width: 0; }
+  .vh-top {
+    padding-left: max(var(--s3), env(safe-area-inset-left));
+    padding-right: max(var(--s3), env(safe-area-inset-right));
+  }
+  .console--verify {
+    padding-left: max(var(--s3), env(safe-area-inset-left));
+    padding-right: max(var(--s3), env(safe-area-inset-right));
+  }
+
+  /* A contract's void form: the reason box takes the width, the button its own line. */
+  .oem-record { flex-wrap: wrap; }
+  .oem-record label { flex: 1 1 100%; }
+  .oem-record input:not([type="checkbox"]) { width: 100%; }
+  .vcontracts-actions { display: grid; gap: var(--s2); }
+
+  /* Long product names and contract numbers wrap rather than push. */
+  .vcontracts-head, .vcontracts-chosen li { overflow-wrap: anywhere; }
+}
