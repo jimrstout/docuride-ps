@@ -16,6 +16,8 @@
 // ?addslot=1 opens the slot form, ?new=1 the new-menu form.
 
 import Link from "next/link";
+import PendingButton from "@/components/PendingButton";
+import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
 import type { TemplateRow, TemplateSlotRow, TemplatesPayload } from "@/lib/types";
@@ -43,6 +45,7 @@ function TemplateForm({ t, payload }: { t: TemplateRow | null; payload: Template
   const has = (list: string[] | undefined, v: string) => (list ?? []).includes(v);
   return (
     <form action={saveTemplate} className="ad-editor-fields">
+      <Working />
       {t ? <input type="hidden" name="template_id" value={t.id} /> : null}
       <label className="ad-field">
         <span>Name</span>
@@ -88,7 +91,7 @@ function TemplateForm({ t, payload }: { t: TemplateRow | null; payload: Template
         <input type="checkbox" name="active" defaultChecked={t?.active ?? true} /> Active
       </label>
       <div className="ad-editor-actions ad-field--wide">
-        <button type="submit" className="ad-btn ad-btn--primary">{t ? "Save menu" : "Create menu"}</button>
+        <PendingButton className="ad-btn ad-btn--primary" pending="Saving the menu...">{t ? "Save menu" : "Create menu"}</PendingButton>
         <Link href={t ? `/admin/menus?template=${t.id}` : "/admin/menus"} prefetch={false} className="ad-btn ad-btn--secondary">Cancel</Link>
       </div>
     </form>
@@ -105,6 +108,7 @@ function SlotForm({ t, slot, payload }: { t: TemplateRow; slot: TemplateSlotRow 
       <div className="ad-panel-head"><h2 id="slot-form">{slot ? `Edit "${slot.title}"` : "Add a slot"}</h2></div>
       <div className="ad-panel-body">
         <form action={saveSlot} className="ad-editor-fields">
+          <Working />
           <input type="hidden" name="template_id" value={t.id} />
           {slot ? <input type="hidden" name="slot_id" value={slot.id} /> : null}
           <label className="ad-field">
@@ -158,7 +162,7 @@ function SlotForm({ t, slot, payload }: { t: TemplateRow; slot: TemplateSlotRow 
             </div>
           </div>
           <div className="ad-editor-actions ad-field--wide">
-            <button type="submit" className="ad-btn ad-btn--primary">{slot ? "Save slot" : "Add slot"}</button>
+            <PendingButton className="ad-btn ad-btn--primary" pending="Saving the slot...">{slot ? "Save slot" : "Add slot"}</PendingButton>
             <Link href={`/admin/menus?template=${t.id}`} prefetch={false} className="ad-btn ad-btn--secondary">Cancel</Link>
           </div>
         </form>
@@ -231,18 +235,20 @@ function MenuDetail({ t, payload, params }: { t: TemplateRow; payload: Templates
                     <div className="ad-actions">
                       {i > 0 ? (
                         <form action={moveSlot}>
+                          <Working />
                           <input type="hidden" name="template_id" value={t.id} />
                           <input type="hidden" name="slot_id" value={s.id} />
                           <input type="hidden" name="direction" value="up" />
-                          <button type="submit" className="ad-btn ad-btn--secondary" aria-label={`Move ${s.title} up`}>Up</button>
+                          <PendingButton className="ad-btn ad-btn--secondary" pending="Moving..." aria-label={`Move ${s.title} up`}>Up</PendingButton>
                         </form>
                       ) : null}
                       {i < t.slots.length - 1 ? (
                         <form action={moveSlot}>
+                          <Working />
                           <input type="hidden" name="template_id" value={t.id} />
                           <input type="hidden" name="slot_id" value={s.id} />
                           <input type="hidden" name="direction" value="down" />
-                          <button type="submit" className="ad-btn ad-btn--secondary" aria-label={`Move ${s.title} down`}>Down</button>
+                          <PendingButton className="ad-btn ad-btn--secondary" pending="Moving..." aria-label={`Move ${s.title} down`}>Down</PendingButton>
                         </form>
                       ) : null}
                       <Link href={`/admin/menus?template=${t.id}&slot=${s.id}`} prefetch={false} className="ad-btn ad-btn--secondary">Edit</Link>

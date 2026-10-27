@@ -57,6 +57,8 @@ import {
   moveDocumentsToDealJacket,
 } from "@/app/console-actions";
 import PendingButton from "@/components/PendingButton";
+import { Working, WorkingArea } from "@/components/Working";
+import { SUBMIT_LEAVE, VOID_LEAVE } from "@/lib/working";
 import VehicleTypeChoice from "@/components/VehicleTypeChoice";
 import { money } from "@/lib/money";
 import OemContractRecord from "@/components/OemContractRecord";
@@ -338,7 +340,8 @@ export default async function DetailsPage({
   // short-lived cookie, not in the URL, so a provider refusal or a contract
   // number never ends up in the address bar in front of a customer or in a
   // pasted link. See lib/verify-flash.ts.
-  const flash = flashMessage(decodeVerifyFlash((await cookies()).get(VERIFY_FLASH_COOKIE)?.value));
+  const flashCookie = (await cookies()).get(VERIFY_FLASH_COOKIE)?.value ?? null;
+  const flash = flashMessage(decodeVerifyFlash(flashCookie));
 
   const verified = sheet.verification.state === "Verified";
   // Verified, and nothing a rate depends on has moved since. Only then is there
@@ -355,6 +358,7 @@ export default async function DetailsPage({
     : "tag--quiet";
 
   return (
+    <WorkingArea>
     <div className="vh">
       {/* The house top bar, without the admin sidebar: Details is opened from
           the CRM and is not part of the signed-in admin area. */}
@@ -375,6 +379,7 @@ export default async function DetailsPage({
               refuses a verification with nobody's name on it, so the name has to
               come from somewhere, and with no accounts it comes from here. */}
           <form action={setCheckerName} className="vwho">
+            <Working />
             <label htmlFor="checker_name">Checked by</label>
             <input
               id="checker_name"
@@ -385,15 +390,16 @@ export default async function DetailsPage({
               autoComplete="name"
               aria-label="Your name, recorded on the verification"
             />
-            <button type="submit" className="btn btn--quiet">
+            <PendingButton pending="Saving your name...">
               {checker ? "Change" : "Save"}
-            </button>
+            </PendingButton>
           </form>
           <form action={refreshFromCrm}>
+            <Working />
             <input type="hidden" name="session_id" value={sheet.session.id} />
-            <button type="submit" className="btn btn--quiet">
+            <PendingButton working="page" pending="Refreshing from CRM...">
               Refresh from CRM
-            </button>
+            </PendingButton>
           </form>
         </div>
       </header>
@@ -403,6 +409,8 @@ export default async function DetailsPage({
           <p
             className={flash.tone === "ok" ? "console-flash" : "console-flash console-flash--bad"}
             role="status"
+            data-working-result={flash.tone}
+            data-working-result-id={flashCookie ?? undefined}
           >
             {flash.text}
           </p>
@@ -531,15 +539,16 @@ export default async function DetailsPage({
             {sheet.submit_detail ? <p><small>{sheet.submit_detail}</small></p> : null}
             {operator ? (
             <form action={clearSubmitUnknown}>
+              <Working />
               <input type="hidden" name="session_id" value={sheet.session.id} />
               <input
                 type="text"
                 name="note"
                 placeholder="What you found in TecAssured (optional)"
               />
-              <button type="submit" className="btn btn--quiet">
+              <PendingButton working="page" pending="Clearing the notice...">
                 I have checked TecAssured
-              </button>
+              </PendingButton>
             </form>
             ) : (
               <p className="vfield-note">
@@ -597,6 +606,7 @@ export default async function DetailsPage({
                             <small>No number to void by. Ask TecAssured.</small>
                           ) : operator ? (
                             <form action={voidContract} className="oem-record">
+                              <Working />
                               <input type="hidden" name="session_id" value={sheet.session.id} />
                               <input
                                 type="hidden"
@@ -610,7 +620,7 @@ export default async function DetailsPage({
                               <label className="vcontracts-confirm">
                                 <input type="checkbox" name="confirm" required /> Cancel with TecAssured
                               </label>
-                              <PendingButton pending="Voiding…">Void</PendingButton>
+                              <PendingButton working="page" pending="Voiding..." leave={VOID_LEAVE}>Void</PendingButton>
                             </form>
                           ) : (
                             <Link className="btn btn--quiet" href="/admin/sessions" prefetch={false}>
@@ -656,6 +666,7 @@ export default async function DetailsPage({
               <p className="console-note">Submitting is paused until the Submit Status Unknown notice above is cleared.</p>
             ) : operator ? (
               <form action={submitContracts}>
+                <Working />
                 <input type="hidden" name="session_id" value={sheet.session.id} />
                 {sheet.contracts_panel.cobuyer_probe_available ? (
                   // TEMPORARY: the co-buyer field test. Test sessions on the
@@ -681,7 +692,7 @@ export default async function DetailsPage({
                     </label>
                   </fieldset>
                 ) : null}
-                <PendingButton className="btn" pending="Submitting…">
+                <PendingButton className="btn" working="page" pending="Submitting contracts..." leave={SUBMIT_LEAVE}>
                   Submit contracts to {sheet.contracts_panel.provider_name}
                 </PendingButton>
               </form>
@@ -694,7 +705,7 @@ export default async function DetailsPage({
             {sheet.contracts_panel.contracts.length > 0 ? (
               <ul className="vcontracts-list">
                 {sheet.contracts_panel.contracts.map((c) => (
-                  <li key={`${c.contract_number}-${c.document_position}`}>
+                  <li key={`${c.contract_number}-${c.document_position}`} data-working-panel="">
                     <p className="vcontracts-head">
                       <strong>{c.contract_number ?? "No number returned"}</strong> {c.product_name}{" "}
                       <ProgramLabel name={c.program_name} />{" "}
@@ -736,13 +747,15 @@ export default async function DetailsPage({
                     ) : operator && c.contract_number ? (
                       <div className="vcontracts-actions">
                         <form action={getContractDocument}>
+                          <Working />
                           <input type="hidden" name="session_id" value={sheet.session.id} />
                           <input type="hidden" name="contract_number" value={c.contract_number} />
-                          <PendingButton pending="Getting the document…">
+                          <PendingButton pending="Getting the document...">
                             {c.workdrive_url ? "Get document again" : "Get document"}
                           </PendingButton>
                         </form>
                         <form action={voidContract} className="oem-record">
+                          <Working />
                           <input type="hidden" name="session_id" value={sheet.session.id} />
                           <input type="hidden" name="contract_number" value={c.contract_number} />
                           <label>
@@ -752,7 +765,7 @@ export default async function DetailsPage({
                           <label className="vcontracts-confirm">
                             <input type="checkbox" name="confirm" required /> Cancel this contract with TecAssured
                           </label>
-                          <PendingButton pending="Voiding…">Void</PendingButton>
+                          <PendingButton working="page" pending="Voiding..." leave={VOID_LEAVE}>Void</PendingButton>
                         </form>
                       </div>
                     ) : null}
@@ -763,8 +776,11 @@ export default async function DetailsPage({
 
             {operator && sheet.contracts_panel.waiting_count > 0 ? (
               <form action={moveDocumentsToDealJacket} className="vcontracts-move">
+                <Working />
                 <input type="hidden" name="session_id" value={sheet.session.id} />
-                <PendingButton pending="Moving documents...">Move documents to Deal Jacket</PendingButton>
+                <PendingButton working="page" pending="Moving documents to the Deal Jacket...">
+                  Move documents to Deal Jacket
+                </PendingButton>
                 <small>
                   {sheet.contracts_panel.waiting_count}{" "}
                   {sheet.contracts_panel.waiting_count === 1 ? "document is" : "documents are"} waiting. The CRM will
@@ -810,13 +826,14 @@ export default async function DetailsPage({
                       </p>
                       {operator ? (
                         <form action={voidOemContract} className="oem-record">
+                          <Working />
                           <input type="hidden" name="session_id" value={sheet.session.id} />
                           <input type="hidden" name="contract_number" value={o.contract.contract_number} />
                           <label>
                             <span>Why it is being voided</span>
                             <input name="void_reason" required />
                           </label>
-                          <button type="submit" className="btn btn--quiet">Void record</button>
+                          <PendingButton working="page" pending="Voiding the record...">Void record</PendingButton>
                         </form>
                       ) : null}
                     </>
@@ -868,7 +885,17 @@ export default async function DetailsPage({
         ) : null}
 
         {/* Each field keeps its permanent location in the review sheet. */}
-        <form action={saveVerifyFields} id="vsheet" className="vsheet">
+        {/* Enter in a box sends this form with "Save changes" as its button;
+            a vehicle type choice sends it as a whole-deal change
+            (components/VehicleTypeChoice.tsx). */}
+        <form
+          action={saveVerifyFields}
+          id="vsheet"
+          className="vsheet"
+          data-working="panel"
+          data-working-label="Saving changes..."
+        >
+          <Working />
           <input type="hidden" name="session_id" value={sheet.session.id} />
 
           {GROUPS.map(({ group, blurb }) => {
@@ -898,19 +925,20 @@ export default async function DetailsPage({
             form. They stay separate forms on purpose: a VIN decode is not a save
             and must not post half-typed values, and Discard throws work away. */}
         <div className="vtools">
-          <button type="submit" form="vsheet" className="btn btn--quiet">
+          <PendingButton form="vsheet" pending="Saving changes...">
             Save changes
-          </button>
+          </PendingButton>
 
           <form
             id="vin-decode"
             action={decodeVin}
             title="Asks TecAssured what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed. This page also does this once on its own, the first time it opens."
           >
+            <Working />
             <input type="hidden" name="session_id" value={sheet.session.id} />
-            <button type="submit" className="btn btn--quiet">
+            <PendingButton working="page" pending="Decoding the VIN...">
               Decode the VIN
-            </button>
+            </PendingButton>
           </form>
 
           {decodeDidNotAnswer(sheet) ? (
@@ -924,10 +952,11 @@ export default async function DetailsPage({
               action={discardEdits}
               title="Puts the CRM deal back in charge of every field it carries. Engine size, factory warranty and fuel type are kept, since the CRM does not carry them and there would be nothing to reload them from."
             >
+              <Working />
               <input type="hidden" name="session_id" value={sheet.session.id} />
-              <button type="submit" className="btn btn--quiet">
+              <PendingButton working="page" pending="Reloading from CRM...">
                 Discard my edits and reload from CRM
-              </button>
+              </PendingButton>
             </form>
           ) : null}
 
@@ -945,6 +974,7 @@ export default async function DetailsPage({
 
         {/* ── The gate ───────────────────────────────────────────────────── */}
         <form action={verifyAndRate} className="vgate">
+          <Working />
           <input type="hidden" name="session_id" value={sheet.session.id} />
 
           {/* ── Values that no longer match the deal ──────────────────────────
@@ -1029,13 +1059,14 @@ export default async function DetailsPage({
               motion works. The action writes it back to the cookie. */}
           <input type="hidden" name="checker_name" value={checker} />
 
-          <button
-            type="submit"
+          <PendingButton
             className="btn btn--go"
+            working="page"
+            pending="Confirming and rating..."
             disabled={!sheet.ready || checker === ""}
           >
             Confirm and Continue
-          </button>
+          </PendingButton>
 
           <p className="vfield-note">
             {checker === ""
@@ -1072,5 +1103,6 @@ export default async function DetailsPage({
         </form>
       </main>
     </div>
+    </WorkingArea>
   );
 }

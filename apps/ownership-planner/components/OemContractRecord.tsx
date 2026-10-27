@@ -9,6 +9,7 @@
 // the contract was written on the OEM's own system.
 
 import { useRef, useState } from "react";
+import { useWorking, Working } from "@/components/Working";
 import { oemContractUploadUrl, recordOemContract } from "@/app/console-actions";
 
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -23,6 +24,9 @@ export default function OemContractRecord({
   const form = useRef<HTMLFormElement>(null);
   const [state, setState] = useState<"idle" | "uploading" | "saving">("idle");
   const [problem, setProblem] = useState<string | null>(null);
+  // The page's working state: the upload is work of this form's own, so it
+  // starts the job itself and the save that follows ends it.
+  const area = useWorking();
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     const f = e.currentTarget;
@@ -38,9 +42,11 @@ export default function OemContractRecord({
     if (file.size > MAX_BYTES) return setProblem("The file is larger than 20 MB.");
 
     setState("uploading");
+    area?.start({ scope: "panel", label: "Uploading the signed contract...", leave: null }, f, (e.nativeEvent as SubmitEvent).submitter as HTMLElement | null);
     const started = await oemContractUploadUrl(sessionId, file.name);
     if ("error" in started) {
       setState("idle");
+      area?.done();
       return setProblem(started.error);
     }
 
@@ -51,6 +57,7 @@ export default function OemContractRecord({
     const res = await fetch(started.signed_url, { method: "PUT", body, headers: { "x-upsert": "false" } });
     if (!res.ok) {
       setState("idle");
+      area?.done();
       return setProblem("The file could not be uploaded. Try again shortly.");
     }
 
@@ -61,6 +68,7 @@ export default function OemContractRecord({
 
   return (
     <form ref={form} action={recordOemContract} onSubmit={onSubmit} className="oem-record">
+      <Working />
       <input type="hidden" name="session_id" value={sessionId} />
       <input type="hidden" name="selected_product_id" value={selectedProductId} />
       <input type="hidden" name="document_path" defaultValue="" />
@@ -73,7 +81,8 @@ export default function OemContractRecord({
         <input type="file" name="document" accept=".pdf,.jpg,.jpeg,.png" required />
       </label>
       {problem ? <p className="note note--flag" role="alert">{problem}</p> : null}
-      <button type="submit" className="btn btn--quiet" disabled={state !== "idle"}>
+      <button type="submit" className="btn btn--quiet" disabled={state !== "idle"} aria-busy={state !== "idle" || undefined}>
+        {state !== "idle" ? <span className="btn-spinner" aria-hidden="true" /> : null}
         {state === "uploading" ? "Uploading…" : state === "saving" ? "Recording…" : "Record contract"}
       </button>
     </form>

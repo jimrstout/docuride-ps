@@ -9,6 +9,7 @@
 // the server records the sheet and starts reading it.
 
 import { useRef, useState } from "react";
+import { useWorking, Working } from "@/components/Working";
 import { createPriceSheet, priceSheetUploadUrl } from "@/app/console-actions";
 
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -23,6 +24,9 @@ export default function SheetUpload({
   const form = useRef<HTMLFormElement>(null);
   const [state, setState] = useState<"idle" | "uploading" | "saving">("idle");
   const [problem, setProblem] = useState<string | null>(null);
+  // The page's working state: the upload is work of this form's own, so it
+  // starts the job itself and the save that follows ends it.
+  const area = useWorking();
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     const f = e.currentTarget;
@@ -37,9 +41,11 @@ export default function SheetUpload({
     if (file.size > MAX_BYTES) return setProblem("The file is larger than 20 MB.");
 
     setState("uploading");
+    area?.start({ scope: "panel", label: "Uploading the price sheet...", leave: null }, f, (e.nativeEvent as SubmitEvent).submitter as HTMLElement | null);
     const started = await priceSheetUploadUrl(provider, file.name);
     if ("error" in started) {
       setState("idle");
+      area?.done();
       return setProblem(started.error);
     }
 
@@ -50,6 +56,7 @@ export default function SheetUpload({
     const res = await fetch(started.signed_url, { method: "PUT", body, headers: { "x-upsert": "false" } });
     if (!res.ok) {
       setState("idle");
+      area?.done();
       return setProblem("The file could not be uploaded. Try again shortly.");
     }
 
@@ -61,6 +68,7 @@ export default function SheetUpload({
 
   return (
     <form ref={form} action={createPriceSheet} onSubmit={onSubmit} className="ad-editor-fields">
+      <Working />
       <input type="hidden" name="file_path" defaultValue="" />
       <input type="hidden" name="file_name" defaultValue="" />
       <label className="ad-field">
@@ -87,7 +95,8 @@ export default function SheetUpload({
       </label>
       {problem ? <p className="ad-badge ad-badge--warn ad-field--wide" role="alert">{problem}</p> : null}
       <div className="ad-editor-actions ad-field--wide">
-        <button type="submit" className="ad-btn ad-btn--primary" disabled={state !== "idle"}>
+        <button type="submit" className="ad-btn ad-btn--primary" disabled={state !== "idle"} aria-busy={state !== "idle" || undefined}>
+          {state !== "idle" ? <span className="btn-spinner" aria-hidden="true" /> : null}
           {state === "uploading" ? "Uploading…" : state === "saving" ? "Saving…" : "Upload and read"}
         </button>
         <p className="ad-help">

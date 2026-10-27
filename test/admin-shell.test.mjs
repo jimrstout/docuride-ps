@@ -62,7 +62,7 @@ test("the deal page's way home is the DocuRide PS crumb", () => {
 
 test("/admin/* shows the sign-in form when signed out, and returns to the page", () => {
   // The layout checks once and, signed out, renders SignIn instead of the page.
-  assert.match(layout, /const operator = await currentOperator\(\);\s*if \(!operator\) \{[\s\S]*?return <SignIn notice=\{[^}]+\} next=\{path\} \/>;/);
+  assert.match(layout, /const operator = await currentOperator\(\);\s*if \(!operator\) \{[\s\S]*?return \(\s*<WorkingArea>\s*<SignIn notice=\{[^}]+\} next=\{path\} \/>/);
   assert.match(src("components/admin/SignIn.tsx"), /<input type="hidden" name="next" value=\{next\} \/>/);
   assert.match(src("components/admin/SignIn.tsx"), /<form className="ad-panel" action=\{signIn\}>/);
   // signIn sends them back to it.

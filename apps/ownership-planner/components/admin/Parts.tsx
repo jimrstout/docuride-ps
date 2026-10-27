@@ -48,6 +48,7 @@ export function Notice({ tone, children }: { tone: "good" | "warn"; children: Re
     <p
       className={`ad-badge ad-notice ${tone === "good" ? "ad-badge--good" : "ad-badge--warn"}`}
       role={tone === "good" ? "status" : "alert"}
+      data-working-result={tone === "good" ? "ok" : "bad"}
     >
       {children}
     </p>

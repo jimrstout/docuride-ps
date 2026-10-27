@@ -17,6 +17,8 @@
 // adds a door; it does not add a route to the data.
 
 import Link from "next/link";
+import PendingButton from "@/components/PendingButton";
+import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge } from "@/lib/edge";
 import type { ConsoleListPayload, ConsoleSessionRow, PricingPayload } from "@/lib/types";
@@ -210,7 +212,8 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
       </td>
 
       <td>
-        <div className="ad-actions">
+        {/* The panel +24h locks while it runs (components/Working.tsx). */}
+        <div className="ad-actions" data-working-panel="">
           {/* The customer's menu opens in a new tab, so this list stays where
               it was and one person can work several deals at once. */}
           <a
@@ -222,10 +225,11 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
             Open
           </a>
           <form action={extendSession}>
+            <Working />
             <input type="hidden" name="session_id" value={row.id} />
-            <button type="submit" className="ad-btn ad-btn--secondary">
+            <PendingButton className="ad-btn ad-btn--secondary" pending="Adding 24 hours...">
               +24h
-            </button>
+            </PendingButton>
           </form>
           {/* Details is where rating starts now, so it is the button that is
               always here. Rate on its own is for re-asking after a failure on a
@@ -235,10 +239,11 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
           </Link>
           {row.rating?.state === "Failed" ? (
             <form action={rateSession}>
+              <Working />
               <input type="hidden" name="session_id" value={row.id} />
-              <button type="submit" className="ad-btn ad-btn--secondary">
+              <PendingButton className="ad-btn ad-btn--secondary" working="page" pending="Rating...">
                 Rate
-              </button>
+              </PendingButton>
             </form>
           ) : null}
         </div>

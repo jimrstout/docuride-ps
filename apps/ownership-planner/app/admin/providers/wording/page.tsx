@@ -10,6 +10,8 @@
 // (&product=<id>) to open its form under the table.
 
 import Link from "next/link";
+import PendingButton from "@/components/PendingButton";
+import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
 import type { ProvidersPayload, WordingProductRow } from "@/lib/types";
@@ -44,6 +46,7 @@ function WordingForm({ p }: { p: WordingProductRow }) {
       </div>
       <div className="ad-panel-body">
         <form action={saveWording} className="ad-editor-fields">
+          <Working />
           <input type="hidden" name="provider_id" value={p.provider_id} />
           <input type="hidden" name="product_id" value={p.id} />
           <label className="ad-field">
@@ -78,7 +81,7 @@ function WordingForm({ p }: { p: WordingProductRow }) {
             <input type="checkbox" name="active" defaultChecked={p.active} /> Active
           </label>
           <div className="ad-editor-actions ad-field--wide">
-            <button type="submit" className="ad-btn ad-btn--primary">Save wording</button>
+            <PendingButton className="ad-btn ad-btn--primary" pending="Saving the wording...">Save wording</PendingButton>
             <Link href={`/admin/providers/wording?provider=${p.provider_id}`} prefetch={false} className="ad-btn ad-btn--secondary">Cancel</Link>
             <p className="ad-help">
               Write these from the provider&apos;s approved language. The planner shows a product only when every answer

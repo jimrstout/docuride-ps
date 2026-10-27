@@ -559,7 +559,13 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   // a failed submit still leaves a record of what was presented and agreed --
   // and generated even when nothing was included, because that is the session
   // most worth having a record of.
+  //
+  // Once only: a second tap on Finish while the first is saving would ask for
+  // a second record. A failure allows another try.
+  const finishing = useRef(false);
   const finish = useCallback(async () => {
+    if (finishing.current) return;
+    finishing.current = true;
     setAckState("working");
     try {
       await save(true);
@@ -567,8 +573,10 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
         method: "POST",
       });
       setAckState(res.ok ? "done" : "error");
+      if (!res.ok) finishing.current = false;
     } catch {
       setAckState("error");
+      finishing.current = false;
     }
   }, [save, session.id]);
 
@@ -639,6 +647,8 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   // ── Footer wiring ───────────────────────────────────────────────────────
   const onBack = () => goTo(Math.max(0, at - 1));
   const onNext = () => {
+    // Accepting is once: the button is out of reach while it saves.
+    if (ackState === "working") return;
     if (screen.kind === "plan") void finish();
     if (at < screens.length - 1) goTo(at + 1);
   };
@@ -656,7 +666,12 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
 
   const status =
     undecidedHere ? "Choose one to continue"
-    : saveState === "saving" ? "Saving…"
+    : saveState === "saving" ? (
+        <span className="calm-status">
+          <span className="calm-spinner" aria-hidden="true" />
+          One moment...
+        </span>
+      )
     : saveState === "error" ? "We couldn't save that. We'll keep trying."
     : saveState === "saved" ? "Saved. You can come back to this later."
     : step === 1 && presentable.length > 0 ? `${decided} of ${presentable.length} decided`
@@ -720,12 +735,23 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
           onNext={onNext}
           nextLabel={nextLabel}
           showNext={at < screens.length - 1}
-          nextDisabled={undecidedHere}
+          nextDisabled={undecidedHere || ackState === "working"}
           status={status}
           saved={status !== null && saveState === "saved" && !undecidedHere}
         />
       }
     >
+      {/* Accepting the plan: a calm pause while it saves, so it cannot be
+          accepted twice. */}
+      {ackState === "working" ? (
+        <div className="calm-wait" role="status" aria-live="polite">
+          <div className="calm-wait-box">
+            <span className="calm-spinner calm-spinner--large" aria-hidden="true" />
+            <p>One moment...</p>
+          </div>
+        </div>
+      ) : null}
+
       {screen.kind !== "product" && (
         <p className="eyebrow eyebrow--rule">{EYEBROWS[step]}</p>
       )}
@@ -843,8 +869,14 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
         </section>
       )}
 
+      {/* While a choice is saving, the choices hold still: a second tap
+          cannot land on a choice that is still on its way. */}
       {screen.kind === "product" && (
-        <section className="screen screen--wide">
+        <section
+          className="screen screen--wide"
+          inert={saveState === "saving" || undefined}
+          aria-busy={saveState === "saving" || undefined}
+        >
           <FamilyScreen
             family={presentable[screen.pIndex]}
             index={screen.pIndex + 1}

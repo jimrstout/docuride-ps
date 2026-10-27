@@ -98,7 +98,7 @@ test("Verify shows the choice first in the Vehicle panel, and a change needs Con
   assert.match(page, /`Entered by Staff: /);
   const choice = src("../apps/ownership-planner/components/VehicleTypeChoice.tsx");
   assert.match(choice, /type="radio" name="vehicle_type"/);
-  assert.match(choice, /closest\("form"\)\?\.requestSubmit\(\)/);
+  assert.match(choice, /closest\("form"\);[\s\S]*?form\.requestSubmit\(\);/);
   // The two lists agree.
   for (const v of VEHICLE_TYPES) assert.match(choice, new RegExp(`"${v}"`));
 });

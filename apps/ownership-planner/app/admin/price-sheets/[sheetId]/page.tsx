@@ -11,6 +11,8 @@
 // narrows the table.
 
 import Link from "next/link";
+import PendingButton from "@/components/PendingButton";
+import { Working } from "@/components/Working";
 import { notFound } from "next/navigation";
 import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
@@ -61,6 +63,7 @@ function RateForm({ sheetId, r }: { sheetId: string; r: PriceSheetRateRow }) {
       <div className="ad-panel-head"><h2 id="rate-form">Correct {r.product_name}</h2></div>
       <div className="ad-panel-body">
         <form action={editSheetRate} className="ad-editor-fields">
+          <Working />
           <input type="hidden" name="sheet_id" value={sheetId} />
           <input type="hidden" name="rate_id" value={r.id} />
           {field("product_code", "Product code", r.product_code)}
@@ -91,7 +94,7 @@ function RateForm({ sheetId, r }: { sheetId: string; r: PriceSheetRateRow }) {
           {field("dealer_cost", "Dealer cost ($)", numText(r.dealer_cost))}
           {field("suggested_retail", "Suggested retail ($)", numText(r.suggested_retail))}
           <div className="ad-editor-actions ad-field--wide">
-            <button type="submit" className="ad-btn ad-btn--primary">Save correction</button>
+            <PendingButton className="ad-btn ad-btn--primary" pending="Saving the correction...">Save correction</PendingButton>
             <Link href={`/admin/price-sheets/${sheetId}`} prefetch={false} className="ad-btn ad-btn--secondary">Cancel</Link>
           </div>
         </form>
@@ -172,23 +175,31 @@ export default async function SheetPage({
           <div className="ad-actions">
             {draft && rates.length === 0 && sheet.parse_status !== "Parsing" ? (
               <form action={parsePriceSheet}>
+                <Working />
                 <input type="hidden" name="sheet_id" value={sheet.id} />
-                <button type="submit" className="ad-btn ad-btn--primary">Read with Claude</button>
+                <PendingButton className="ad-btn ad-btn--primary" working="page" pending="Reading the price sheet with Claude...">Read with Claude</PendingButton>
               </form>
             ) : null}
             {draft && sheet.parse_status === "Parsed" ? (
               <form action={publishSheet}>
+                <Working />
                 <input type="hidden" name="sheet_id" value={sheet.id} />
-                <button type="submit" className="ad-btn ad-btn--primary" disabled={flagged > 0 || counted.length === 0}>
+                <PendingButton
+                  className="ad-btn ad-btn--primary"
+                  working="page"
+                  pending="Publishing the price sheet..."
+                  disabled={flagged > 0 || counted.length === 0}
+                >
                   Publish {counted.length} {counted.length === 1 ? "rate" : "rates"}
-                </button>
+                </PendingButton>
               </form>
             ) : null}
             {sheet.status !== "Retired" ? (
               <form action={retireSheet} className="ad-row">
+                <Working />
                 <input type="hidden" name="sheet_id" value={sheet.id} />
                 <input name="reason" placeholder="Why it is being retired" aria-label="Why it is being retired" required />
-                <button type="submit" className="ad-btn ad-btn--secondary">Retire</button>
+                <PendingButton className="ad-btn ad-btn--secondary" working="page" pending="Retiring the price sheet...">Retire</PendingButton>
               </form>
             ) : null}
           </div>
@@ -246,16 +257,18 @@ export default async function SheetPage({
                         <Link href={`/admin/price-sheets/${sheet.id}?edit=${r.id}`} prefetch={false} className="ad-btn ad-btn--secondary">Correct</Link>
                         {r.left_out ? (
                           <form action={includeRate}>
+                            <Working />
                             <input type="hidden" name="sheet_id" value={sheet.id} />
                             <input type="hidden" name="rate_id" value={r.id} />
-                            <button type="submit" className="ad-btn ad-btn--secondary">Include</button>
+                            <PendingButton className="ad-btn ad-btn--secondary" pending="Saving...">Include</PendingButton>
                           </form>
                         ) : (
                           <form action={leaveOutRate} className="ad-row">
+                            <Working />
                             <input type="hidden" name="sheet_id" value={sheet.id} />
                             <input type="hidden" name="rate_id" value={r.id} />
                             <input name="reason" placeholder="Why" aria-label={`Why ${r.product_name} is left out`} required />
-                            <button type="submit" className="ad-btn ad-btn--secondary">Leave out</button>
+                            <PendingButton className="ad-btn ad-btn--secondary" pending="Saving...">Leave out</PendingButton>
                           </form>
                         )}
                       </div>

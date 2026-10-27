@@ -41,7 +41,9 @@ export function encodeVerifyFlash(code: string, detail?: string | null): string 
   const clean = typeof detail === "string" && detail.trim() !== ""
     ? detail.replace(/\s+/g, " ").trim().slice(0, MAX_DETAIL)
     : null;
-  return encodeURIComponent(JSON.stringify({ c: code, d: clean }));
+  // t makes each message its own, so the page can tell a new "Saved." from the
+  // last one and show it where the person is looking (components/Working.tsx).
+  return encodeURIComponent(JSON.stringify({ c: code, d: clean, t: Date.now() }));
 }
 
 export function decodeVerifyFlash(raw: string | null | undefined): VerifyFlash | null {

@@ -5,6 +5,8 @@
 // back to it, so a bookmark to /admin/wording still lands on Wording.
 
 import { signIn } from "@/app/console-actions";
+import PendingButton from "@/components/PendingButton";
+import { Working } from "@/components/Working";
 import { Brand, Notice } from "@/components/admin/Parts";
 
 /** What the sign-in actions redirect with, in words. */
@@ -28,6 +30,7 @@ export function SignIn({ notice, next }: { notice: string | null; next: string }
         <main className="ad-gate">
           <div className="ad-signin">
             <form className="ad-panel" action={signIn}>
+              <Working />
               <div className="ad-panel-body">
                 <div>
                   <h1>Sign in</h1>
@@ -51,9 +54,9 @@ export function SignIn({ notice, next }: { notice: string | null; next: string }
                   <input type="password" name="password" autoComplete="current-password" required />
                 </label>
 
-                <button type="submit" className="ad-btn ad-btn--primary">
+                <PendingButton className="ad-btn ad-btn--primary" pending="Signing in...">
                   Sign in
-                </button>
+                </PendingButton>
               </div>
             </form>
           </div>
