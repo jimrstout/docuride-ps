@@ -478,7 +478,15 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
       out_of_date: summary.out_of_date,
       rated_at: summary.rated_at,
       detail: summary.state === "Rated" ? null : summary.detail,
-      providers: summary.providers.map((p) => ({ name: p.name, state: p.state, line: p.line })),
+      providers: summary.providers.map((p) => ({
+        name: p.name,
+        state: p.state,
+        line: p.line,
+        error: p.error,
+        error_at: p.error_at,
+        kept_error: p.kept_error,
+        kept_error_at: p.kept_error_at,
+      })),
     },
     // The template the deal matches now. Rating records it on the session.
     menu_template: menu.template ? { name: menu.template.name } : null,
