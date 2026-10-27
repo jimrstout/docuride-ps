@@ -98,7 +98,7 @@ test("the whole-deal actions cover the page, Submit and Void warn before leaving
   ]) {
     assert.match(page, new RegExp(`working="page"[^>]*pending="${label.replace(/\./g, "\\.")}"`), label);
   }
-  assert.match(page, /pending="Submitting contracts\.\.\." leave=\{SUBMIT_LEAVE\}/);
+  assert.match(page, /pending="Submitting contracts\.\.\."\s+leave=\{SUBMIT_LEAVE\}/);
   assert.equal((page.match(/pending="Voiding\.\.\." leave=\{VOID_LEAVE\}/g) ?? []).length, 2);
   // Smaller ones lock their panel.
   assert.match(page, /<PendingButton pending="Getting the document\.\.\.">/);

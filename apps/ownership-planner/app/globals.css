@@ -941,6 +941,15 @@ button { cursor: pointer; }
 }
 .vstate dd { margin: 0; font-size: var(--fs-xs); font-weight: 600; display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
 .vstate dd small { font-size: var(--fs-xs); font-weight: 400; color: var(--muted); }
+/* The planned sale date: a small form beside when the session ends. */
+.vplanned { display: inline-flex; align-items: center; gap: var(--s2); flex-wrap: wrap; font-weight: 400; }
+.vplanned label { color: var(--muted); }
+.vplanned input[type="date"] {
+  min-height: 2.25rem; padding: 0 var(--s2);
+  border: var(--bw) solid var(--line-strong); border-radius: var(--r-control); background: var(--panel);
+  font: inherit; color: var(--ink);
+}
+.vplanned input[type="date"]:focus { outline: none; border-color: var(--copper); }
 /* One line per provider under the rating, when the menu needs more than one. */
 .vproviders { flex-basis: 100%; list-style: none; margin: var(--s1) 0 0; padding: 0; font-size: var(--fs-xs); color: var(--muted); }
 .vproviders li { margin: 0; line-height: 1.35; }

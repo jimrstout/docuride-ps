@@ -47,6 +47,8 @@ import {
   decodeVin,
   discardEdits,
   refreshFromCrm,
+  setPlannedSaleDate,
+  clearPlannedSaleDate,
   saveVerifyFields,
   setCheckerName,
   verifyAndRate,
@@ -59,6 +61,7 @@ import {
 import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
 import RatingErrorText from "@/components/RatingErrorText";
+import { dayLabel, storeTime } from "@/lib/store-time";
 import {
   hasMoreDetail,
   ratingErrorHeadline,
@@ -526,6 +529,40 @@ export default async function DetailsPage({
               ) : null}
             </dd>
           </div>
+          {sheet.day ? (
+            <div>
+              <dt>Open until</dt>
+              <dd>
+                {storeTime(sheet.day.expires_at, sheet.day.time_zone) || "Not set"}
+                <small>
+                  {sheet.day.planned_sale_date
+                    ? `Planned sale date ${dayLabel(sheet.day.planned_sale_date)}.`
+                    : `Today at this store is ${dayLabel(sheet.day.today)}.`}
+                </small>
+                {/* Preparing the deal the night before: the session stays open to
+                    the end of the planned day. Never sent to a provider. */}
+                <form action={setPlannedSaleDate} className="vplanned" data-working-panel="">
+                  <Working />
+                  <input type="hidden" name="session_id" value={sheet.session.id} />
+                  <label htmlFor="planned_sale_date">Planned sale date</label>
+                  <input
+                    id="planned_sale_date"
+                    type="date"
+                    name="planned_sale_date"
+                    min={sheet.day.today}
+                    defaultValue={sheet.day.planned_sale_date ?? ""}
+                    required
+                  />
+                  <PendingButton pending="Saving the date...">Save date</PendingButton>
+                  {sheet.day.planned_sale_date ? (
+                    <PendingButton formAction={clearPlannedSaleDate} formNoValidate pending="Clearing the date...">
+                      Clear
+                    </PendingButton>
+                  ) : null}
+                </form>
+              </dd>
+            </div>
+          ) : null}
           {sheet.menu_template ? (
             <div>
               <dt>Menu</dt>
@@ -752,7 +789,19 @@ export default async function DetailsPage({
                     </label>
                   </fieldset>
                 ) : null}
-                <PendingButton className="btn" working="page" pending="Submitting contracts..." leave={SUBMIT_LEAVE}>
+                {/* Contracts go out only on the day of the sale at this store
+                    (_shared/store-day.ts). Submit refuses it too; this says why
+                    before anyone presses it. */}
+                {sheet.day?.submit_problem ? (
+                  <p className="console-flash console-flash--bad" role="alert">{sheet.day.submit_problem}</p>
+                ) : null}
+                <PendingButton
+                  className="btn"
+                  working="page"
+                  pending="Submitting contracts..."
+                  leave={SUBMIT_LEAVE}
+                  disabled={!!sheet.day?.submit_problem}
+                >
                   Submit contracts to {sheet.contracts_panel.provider_name}
                 </PendingButton>
               </form>
