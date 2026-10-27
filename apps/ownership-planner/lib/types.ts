@@ -273,6 +273,8 @@ export interface ConsoleSessionRow {
     state: "Rated" | "Not Offered" | "Failed" | "Pending";
     detail: string | null;
     at: string | null;
+    /** Each failed provider's exact text, for "Show details" (lib/rating-error.ts). */
+    failures?: { provider: string; text: string; at: string | null }[];
   };
 }
 

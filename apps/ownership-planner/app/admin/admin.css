@@ -143,6 +143,19 @@
 .ad-strong { font-weight: 650; }
 .ad-deal { color: var(--copper); font-weight: 700; white-space: nowrap; }
 .ad-why { max-width: 32ch; overflow-wrap: anywhere; }
+
+/* A failed rating: one line in the column, the full text under the row. */
+.ad-linkbtn {
+  display: inline-block; margin-top: 4px; padding: 0; background: none; border: 0; cursor: pointer;
+  font: inherit; font-size: 11px; font-weight: 600; color: var(--copper);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.ad-linkbtn:hover { color: var(--nav); }
+.ad-linkbtn:focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; border-radius: 2px; }
+.ad-table tr[data-row]:has(+ tr.ad-why-row:not([hidden])) > td { border-bottom: 0; }
+.ad-table tr.ad-why-row > td { padding: 0 17px 20px; }
+/* A session the filters hide takes its open error with it. */
+.ad-table tr[data-row][hidden] + tr.ad-why-row { display: none; }
 .ad-empty { padding: 28px 17px; font-size: 12px; color: var(--muted); }
 
 /* Badges. */
@@ -391,4 +404,8 @@
   #ad-sessions .ad-actions form .ad-btn { width: 100%; }
   #ad-sessions .ad-why { max-width: none; }
   #ad-sessions tr[data-none]:not([hidden]) { display: block; }
+  #ad-sessions .ad-linkbtn { min-height: 44px; font-size: 13px; }
+  #ad-sessions tr[data-row]:has(+ tr.ad-why-row:not([hidden])) { border-bottom: 0; padding-bottom: 8px; }
+  #ad-sessions tr.ad-why-row:not([hidden]) { display: block; padding: 0 16px 16px; border-bottom: 1px solid var(--line); }
+  #ad-sessions tr.ad-why-row > td { display: block; padding: 0; border: 0; }
 }

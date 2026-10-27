@@ -1367,3 +1367,36 @@ button.is-busy, .btn.is-busy, .ad-btn.is-busy { cursor: progress; }
   /* Long product names and contract numbers wrap rather than push. */
   .vcontracts-head, .vcontracts-chosen li { overflow-wrap: anywhere; }
 }
+
+/* ── A failed rating's full text, for staff (components/RatingErrorText) ──
+   The provider's own words exactly as stored, in a box that scrolls rather
+   than grows, with "Copy error" beside it. */
+.rating-error-full {
+  display: grid; gap: 12px; padding: 12px 14px;
+  background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--copper);
+  border-radius: 6px; min-width: 0; max-width: 100%;
+}
+.rating-error-item { display: grid; gap: 6px; min-width: 0; }
+.rating-error-who { margin: 0; font-size: 0.85em; font-weight: 600; color: var(--nav); }
+.rating-error-who span { font-weight: 400; color: var(--muted); }
+.rating-error-text {
+  margin: 0; max-height: 12rem; overflow: auto; padding: 8px 10px;
+  background: var(--page); border: 1px solid var(--line); border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.5;
+  color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+}
+.rating-error-text:focus-visible { outline: 2px solid var(--copper); outline-offset: 1px; }
+.copy-error { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.copy-error-btn {
+  min-height: 32px; padding: 4px 12px; cursor: pointer;
+  background: var(--panel); color: var(--nav); border: 1px solid var(--line-strong); border-radius: 6px;
+  font: inherit; font-size: 12px; font-weight: 600;
+}
+.copy-error-btn:hover { border-color: var(--copper); color: var(--copper-ink); }
+.copy-error-btn:focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; }
+.copy-error-said { font-size: 12px; color: var(--muted); }
+.copy-error-fallback { width: 100%; min-height: 6rem; font: 12px ui-monospace, monospace; }
+@media (max-width: 899px) {
+  .copy-error-btn { min-height: var(--tap); padding: 8px 16px; font-size: 14px; }
+  .rating-error-text { max-height: 16rem; }
+}
