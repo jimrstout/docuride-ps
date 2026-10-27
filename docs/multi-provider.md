@@ -1008,3 +1008,19 @@ in `lib/working.ts`):
 A form joins this by carrying one `<Working />` marker and a `PendingButton`
 with `working="page"` or `"panel"` (the default) and its label. A test sweeps
 every staff form for both.
+
+**Double sends, checked on the server.** Disabling a button is not enough on
+its own (a double click can land first, and a second tab has its own button):
+
+- **Submit** was already safe. It takes its lock with a conditional UPDATE
+  (`submit_state` from Idle to In Progress), so of two submits for one session
+  exactly one goes on. The other is answered "Another submit for this session
+  started first. Wait for it to finish, then reload to see the result."
+- **Void** had no such guard: two Voids of one contract both read it as Live
+  and both called TecAssured. It now claims the contract row first
+  (`agreement_products.void_started_at`, migration 0037,
+  `_shared/void-claim.ts`), so only one reaches TecAssured. The other is told
+  "... is already being voided. Wait a moment, then reload the page to see the
+  result. Nothing more was sent to TecAssured." The claim is cleared when the
+  void ends, whatever the outcome; one older than three minutes counts as
+  abandoned.
