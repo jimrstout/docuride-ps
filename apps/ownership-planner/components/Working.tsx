@@ -258,10 +258,15 @@ export function WorkingArea({ children }: { children: React.ReactNode }) {
     const trigger = running.submitter;
     trigger?.setAttribute("data-working-trigger", "");
     const panel = running.panel;
+    // A button inside the panel that started the job already shows a spinner
+    // and says what it is doing. The panel then locks without saying it again:
+    // two labels drawn one over the other was the doubled "Adding 24 hours...".
+    const quiet = !!(panel && trigger && panel.contains(trigger));
     if (panel) {
       panel.inert = true;
       panel.setAttribute("aria-busy", "true");
       panel.classList.add("is-working");
+      if (quiet) panel.classList.add("is-working--quiet");
     }
     // Submit and Void: leaving now could leave them half done.
     const onLeave = (e: BeforeUnloadEvent) => {
@@ -275,7 +280,7 @@ export function WorkingArea({ children }: { children: React.ReactNode }) {
       if (panel) {
         panel.inert = false;
         panel.removeAttribute("aria-busy");
-        panel.classList.remove("is-working");
+        panel.classList.remove("is-working", "is-working--quiet");
         delete panel.dataset.workingText;
       }
       window.removeEventListener("beforeunload", onLeave);
