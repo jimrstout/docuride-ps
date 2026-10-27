@@ -17,7 +17,8 @@ test("a panel whose own button is busy locks without a second label", () => {
   const css = src("app/globals.css");
   assert.match(css, /\.is-working--quiet::before, \.is-working--quiet::after \{ content: none; \}/);
   assert.match(css, /\.is-working--quiet > :has\(\[data-working-trigger\]\), \.is-working--quiet > \[data-working-trigger\] \{ opacity: 1; \}/);
-  assert.match(css, /button\.is-busy, \.btn\.is-busy, \.ad-btn\.is-busy, button\[aria-busy="true"\] \{ max-width: 100%; white-space: normal; overflow-wrap: anywhere; \}/);
+  assert.match(css, /button\.is-busy, \.btn\.is-busy, \.ad-btn\.is-busy, button\[aria-busy="true"\] \{ flex: none; max-width: 100%; white-space: nowrap; \}/);
+  assert.match(css, /button\[aria-busy="true"\] \{ flex: initial; white-space: normal; overflow-wrap: anywhere; \}/);
   // A panel started from a button outside it (Details' Save changes) still says what it is doing.
   assert.match(css, /\.is-working::after \{\s*content: attr\(data-working-text\);/);
 });
