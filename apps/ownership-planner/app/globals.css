@@ -1273,8 +1273,12 @@ button.is-busy, .btn.is-busy, .ad-btn.is-busy { cursor: progress; }
    button stays clear while the rest of the panel dims. */
 .is-working--quiet::before, .is-working--quiet::after { content: none; }
 .is-working--quiet > :has([data-working-trigger]), .is-working--quiet > [data-working-trigger] { opacity: 1; }
-/* A busy button keeps its label inside its own edges at any width. */
-button.is-busy, .btn.is-busy, .ad-btn.is-busy, button[aria-busy="true"] { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+/* A busy button keeps its label inside its own edges at any width: on one
+   line where there is room, wrapped within the button on a narrow screen. */
+button.is-busy, .btn.is-busy, .ad-btn.is-busy, button[aria-busy="true"] { flex: none; max-width: 100%; white-space: nowrap; }
+@media (max-width: 899px) {
+  button.is-busy, .btn.is-busy, .ad-btn.is-busy, button[aria-busy="true"] { flex: initial; white-space: normal; overflow-wrap: anywhere; }
+}
 
 /* The result, where the person is looking: bottom of the screen. */
 .working-result {
