@@ -42,7 +42,7 @@ test("the panel shows once the planner is finished, and every button says what i
   const verify = src("../supabase/functions/fni-session-verify/index.ts");
   assert.match(verify, /const PLANNER_DONE = \["Products Selected", "Agreement Created", "Finalized"\];/);
   assert.match(verify, /contracts_panel: panel,/);
-  const page = src("../apps/ownership-planner/app/verify/[sessionId]/page.tsx");
+  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
   assert.match(page, /Submit contracts to \{sheet\.contracts_panel\.provider_name\}/);
   assert.match(page, /pending="Submitting…"/);
   assert.match(page, /pending="Getting the document…"/);

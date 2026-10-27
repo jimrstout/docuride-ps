@@ -93,10 +93,10 @@ returns.
 
 ### What the button opens (changed 2026-09-27)
 
-`menu_url` is the **Verify screen**, not the presentation:
+`menu_url` is the **Details screen** (formerly Verify; `/verify/<id>` redirects to `/details/<id>`), not the presentation:
 
 ```
-https://ps.docuride.com/verify/<session_id>
+https://ps.docuride.com/details/<session_id>
 ```
 
 Every launch from the CRM lands there, whatever state the session is in: new or
@@ -111,11 +111,11 @@ says which bases it resolved.
 
 The response also carries `plan_url`, the presentation link. That is the link a
 customer keeps, and reopening it goes straight to the presentation when the
-session is verified. Nothing redirects a customer to Verify.
+session is verified. Nothing redirects a customer to Details.
 
 ### Sign-in, and where it still applies
 
-The Verify screen has no sign-in. It is protected the way the presentation is:
+The Details screen has no sign-in. It is protected the way the presentation is:
 by holding an unguessable session link. "Checked by" is a name typed once per
 device and remembered in an unsigned cookie; it is attribution on the
 verification record and authorises nothing.

@@ -227,11 +227,11 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
               +24h
             </button>
           </form>
-          {/* Verify is where rating starts now, so it is the button that is
+          {/* Details is where rating starts now, so it is the button that is
               always here. Rate on its own is for re-asking after a failure on a
               deal that is already verified. */}
-          <Link className="ad-btn ad-btn--secondary" href={`/verify/${row.id}`} prefetch={false}>
-            Verify
+          <Link className="ad-btn ad-btn--secondary" href={`/details/${row.id}`} prefetch={false}>
+            Details
           </Link>
           {row.rating?.state === "Failed" ? (
             <form action={rateSession}>
@@ -348,7 +348,7 @@ async function SessionList({ notice }: { notice: string | null }) {
           The list shows the {rows.length === 1 ? "most recent session" : `${rows.length} most recent sessions`},
           newest first. Times are UTC. Extending adds 24 hours from now, which
           reopens a session that has already lapsed. Rating says whether the
-          customer has a menu, and why not when they do not. Verify is where you
+          customer has a menu, and why not when they do not. Details is where you
           check what a rate would be built from; nothing is rated until somebody
           has.
         </p>

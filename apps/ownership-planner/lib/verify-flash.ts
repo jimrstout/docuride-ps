@@ -8,7 +8,7 @@
 // session link is meant to be shareable; an error message is not part of it.
 //
 // So the message travels in a short-lived cookie instead and the URL stays
-// exactly `/verify/<session_id>`. No JavaScript is involved, which matters: the
+// exactly `/details/<session_id>`. No JavaScript is involved, which matters: the
 // console works with none.
 //
 // The cookie expires on its own after twenty seconds rather than being deleted

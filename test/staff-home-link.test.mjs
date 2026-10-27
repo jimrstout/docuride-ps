@@ -21,7 +21,7 @@ test("the admin area starts its breadcrumb with it, and the sidebar brand goes h
 });
 
 test("the deal page starts its breadcrumb with it", () => {
-  const p = src(existsDetails() ? "app/details/[sessionId]/page.tsx" : "app/verify/[sessionId]/page.tsx");
+  const p = src(existsDetails() ? "app/details/[sessionId]/page.tsx" : "app/details/[sessionId]/page.tsx");
   const crumb = p.slice(p.indexOf('<nav aria-label="Breadcrumb">'), p.indexOf("</nav>", p.indexOf('<nav aria-label="Breadcrumb">')));
   assert.ok(crumb.startsWith('<nav aria-label="Breadcrumb">'));
   assert.ok(crumb.indexOf("<HomeLink />") < crumb.indexOf("Deal {sheet.session.deal_number"));

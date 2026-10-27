@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const src = (f) => readFileSync(new URL(f, import.meta.url), "utf8");
-const page = src("../apps/ownership-planner/app/verify/[sessionId]/page.tsx");
+const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
 const css = src("../apps/ownership-planner/app/globals.css");
 
 const fieldFn = page.slice(

@@ -36,6 +36,13 @@ const nextConfig = {
   // These sources are relative to basePath -- Next applies it for us, so
   // "/plan/:path*" matches /plan/... on ps.docuride.com today, and would match
   // /ps/plan/... unchanged if BASE_PATH were set again.
+  // The deal page was /verify/<session id> until it became Details. The CRM
+  // and old bookmarks still link to the old address, so it redirects for good
+  // (308, query string kept) and must never be removed.
+  async redirects() {
+    return [{ source: "/verify/:path*", destination: "/details/:path*", permanent: true }];
+  },
+
   async headers() {
     return [
       {

@@ -93,7 +93,7 @@ test("the menu template is matched on the vehicle type as staff see it", () => {
 test("Verify shows the choice first in the Vehicle panel, and a change needs Confirm and Continue", () => {
   const ver = src("../supabase/functions/_shared/verification.ts");
   assert.ok(ver.indexOf('key: "vehicle_type", label: "Vehicle type"') < ver.indexOf('key: "vin", label: "VIN"'));
-  const page = src("../apps/ownership-planner/app/verify/[sessionId]/page.tsx");
+  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
   assert.match(page, /<VehicleTypeChoice value=\{field\.value\} line=\{editedLine \?\? field\.note\} edited=\{edited\} \/>/);
   assert.match(page, /`Entered by Staff: /);
   const choice = src("../apps/ownership-planner/components/VehicleTypeChoice.tsx");

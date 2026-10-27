@@ -427,7 +427,7 @@ test("no verify action puts a message in the URL", () => {
 
 test("the verify page no longer reads searchParams", () => {
   const page = readFileSync(
-    new URL("../apps/ownership-planner/app/verify/[sessionId]/page.tsx", import.meta.url),
+    new URL("../apps/ownership-planner/app/details/[sessionId]/page.tsx", import.meta.url),
     "utf8"
   );
   assert.ok(!page.includes("searchParams"), "the page still reads the query string");
