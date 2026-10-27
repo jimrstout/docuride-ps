@@ -1268,6 +1268,13 @@ button.is-busy, .btn.is-busy, .ad-btn.is-busy { cursor: progress; }
   border: 2px solid var(--copper-edge); border-top-color: var(--copper); border-radius: 50%;
   animation: working-spin 0.9s linear infinite;
 }
+/* The button that started it is inside the panel and already shows the
+   spinner and the label: the panel locks without a second copy, and that
+   button stays clear while the rest of the panel dims. */
+.is-working--quiet::before, .is-working--quiet::after { content: none; }
+.is-working--quiet > :has([data-working-trigger]), .is-working--quiet > [data-working-trigger] { opacity: 1; }
+/* A busy button keeps its label inside its own edges at any width. */
+button.is-busy, .btn.is-busy, .ad-btn.is-busy, button[aria-busy="true"] { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 
 /* The result, where the person is looking: bottom of the screen. */
 .working-result {
