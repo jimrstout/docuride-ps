@@ -27,7 +27,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
-import { currentRows, ratingSummary, type RatingRow } from "../_shared/rating-summary.ts";
+import { currentRows, ratingSummary, type RatingFailure, type RatingRow } from "../_shared/rating-summary.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -146,13 +146,13 @@ async function list(url: URL): Promise<Response> {
     .map((s) => s.id)
     .filter((v): v is string => typeof v === "string");
 
-  const rating = new Map<string, { state: string; detail: string | null; at: string | null }>();
+  const rating = new Map<string, { state: string; detail: string | null; at: string | null; failures: RatingFailure[] }>();
   if (sessionIds.length > 0) {
     const { data: offers } = await supabase
       .schema("fni")
       .from("rated_offers")
       // Every provider's attempt per session, summed the way Verify sums them.
-      .select("session_id, provider_id, state, error_detail, last_failure_detail, product_count, rated_at, out_of_date, provider:providers(id, name, kind, adapter)")
+      .select("session_id, provider_id, state, error_detail, last_failure_detail, last_failure_at, product_count, rated_at, out_of_date, provider:providers(id, name, kind, adapter)")
       .in("session_id", sessionIds);
 
     const bySession = new Map<string, RatingRow[]>();
@@ -170,6 +170,9 @@ async function list(url: URL): Promise<Response> {
         state: summary.state,
         detail: summary.state === "Rated" ? null : summary.detail,
         at: summary.rated_at,
+        // The exact provider text behind the one-line summary the console
+        // shows. Read by apps/ownership-planner/lib/rating-error.ts.
+        failures: summary.state === "Rated" ? [] : summary.failures,
       });
     }
   }
@@ -199,7 +202,7 @@ async function list(url: URL): Promise<Response> {
       // No row means nobody has asked the provider yet. That is a real and
       // common state on a session created moments ago, so it is named rather
       // than folded into one of the outcomes.
-      rating: rating.get(String(s.id)) ?? { state: "Pending", detail: null, at: null },
+      rating: rating.get(String(s.id)) ?? { state: "Pending", detail: null, at: null, failures: [] },
     })),
   });
 }

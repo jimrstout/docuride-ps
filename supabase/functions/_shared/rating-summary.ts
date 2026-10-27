@@ -24,6 +24,7 @@ export interface RatingRow {
   response_payload: unknown;
   /** Why the last re-rate failed, when these offers were kept through it. */
   last_failure_detail?: string | null;
+  last_failure_at?: string | null;
   provider: { id: string; name: string; kind: string; adapter: string | null } | null;
 }
 
@@ -93,12 +94,37 @@ export interface RatingSummary {
     product_count: number;
     out_of_date: boolean;
     line: string;
+    /**
+     * The provider's own words when this attempt failed, exactly as stored,
+     * and when. The planner turns them into one plain line and keeps these
+     * behind "Show details" (apps/ownership-planner/lib/rating-error.ts).
+     */
+    error: string | null;
+    error_at: string | null;
+    /** Why the last re-rate failed when the earlier offers were kept. */
+    kept_error: string | null;
+    kept_error_at: string | null;
   }[];
+  /** Every current provider's failure, exact, for the session list. */
+  failures: RatingFailure[];
+}
+
+export interface RatingFailure {
+  provider: string;
+  text: string;
+  at: string | null;
+}
+
+/** A failed attempt's exact text, or null when the row did not fail. */
+function failureText(row: RatingRow): string | null {
+  if (row.state === "Rated" || row.state === "Not Offered") return null;
+  const text = (row.error_detail ?? "").trim();
+  return text === "" ? null : text;
 }
 
 export function ratingSummary(rows: RatingRow[]): RatingSummary {
   if (rows.length === 0) {
-    return { state: "Pending", product_count: 0, out_of_date: false, rated_at: null, detail: null, providers: [] };
+    return { state: "Pending", product_count: 0, out_of_date: false, rated_at: null, detail: null, providers: [], failures: [] };
   }
   const sorted = [...rows].sort((a, b) => (a.provider?.name ?? "").localeCompare(b.provider?.name ?? ""));
   const rated = sorted.filter((r) => r.state === "Rated");
@@ -121,6 +147,14 @@ export function ratingSummary(rows: RatingRow[]): RatingSummary {
       product_count: r.product_count ?? 0,
       out_of_date: r.out_of_date,
       line: providerLine(r),
+      error: failureText(r),
+      error_at: failureText(r) === null ? null : r.rated_at,
+      kept_error: r.state === "Rated" ? (r.last_failure_detail ?? "").trim() || null : null,
+      kept_error_at: r.state === "Rated" && r.last_failure_detail ? r.last_failure_at ?? null : null,
     })),
+    failures: sorted.flatMap((r) => {
+      const text = failureText(r);
+      return text === null ? [] : [{ provider: r.provider?.name ?? "A provider", text, at: r.rated_at }];
+    }),
   };
 }
