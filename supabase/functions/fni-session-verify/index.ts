@@ -56,6 +56,8 @@ import {
   type StaffEdits,
 } from "../_shared/staff-edits.ts";
 import { parseRequiredProperties, readRateProperties } from "../_shared/rate-properties.ts";
+import { dealDates, type DealDateSource } from "../_shared/deal-dates.ts";
+import { plannedDateProblem, storeToday, submitDateProblem } from "../_shared/store-day.ts";
 import { capChange, editFor, MAX_AMOUNT_FINANCED } from "./save-edits.ts";
 import {
   duplicateVinWarning,
@@ -119,6 +121,9 @@ const COLUMNS = [
   // For the duplicate warnings and the submit lock, both of which the verify
   // screen now shows.
   "expires_at", "submit_state", "submit_detail",
+  // The day the deal is planned to be sold, for preparing it the night
+  // before. Migration 0038.
+  "planned_sale_date",
   // The staff layer over the CRM's figures. Migration 0016.
   "staff_edits",
   // Which providers the latest rating covered. Multi-provider Part 4.
@@ -524,6 +529,10 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
     })),
     submit_state: s.submit_state ?? "Idle",
     submit_detail: s.submit_detail ?? null,
+    // The store's day: when this session ends, the planned sale date, and
+    // whether Submit would be refused on the deal's dates today
+    // (_shared/store-day.ts). Submit checks the same thing again itself.
+    day: await dayFor(supabase, s, edited),
     // Why nothing is required, when nothing is. Shown instead of a sheet that
     // looks complete because it is asking for nothing.
     not_ready_reason: reason,
@@ -790,6 +799,60 @@ async function discardEdits(
   });
 }
 
+// ── The store's day ───────────────────────────────────────────────────────
+
+async function storeTimeZone(supabase: SupabaseClient, storeId: unknown): Promise<string | null> {
+  if (typeof storeId !== "string") return null;
+  const { data } = await supabase.from("stores").select("time_zone").eq("id", storeId).maybeSingle();
+  return (data as { time_zone?: string } | null)?.time_zone ?? null;
+}
+
+async function dayFor(supabase: SupabaseClient, s: Record<string, unknown>, edited: DealDateSource) {
+  const timeZone = await storeTimeZone(supabase, s.store_id);
+  const today = storeToday(timeZone);
+  const planned = typeof s.planned_sale_date === "string" ? s.planned_sale_date : null;
+  const dates = dealDates(edited);
+  return {
+    time_zone: timeZone,
+    today,
+    expires_at: s.expires_at ?? null,
+    planned_sale_date: planned,
+    sale_date: dates.sale,
+    submit_problem: submitDateProblem({ sale: dates.sale, inService: dates.inService, planned, today }),
+  };
+}
+
+/**
+ * Set or clear the planned sale date. The session then lasts to the end of
+ * that day, or of today when it is cleared (fni.renew_session, migration 0038).
+ * Never sent to a provider: the sale date is the deal's own.
+ */
+async function setPlannedSaleDate(
+  supabase: SupabaseClient,
+  s: Record<string, unknown>,
+  value: unknown
+): Promise<Response> {
+  const raw = typeof value === "string" ? value.trim() : "";
+  const planned = raw === "" ? null : raw;
+  const today = storeToday(await storeTimeZone(supabase, s.store_id));
+  const problem = plannedDateProblem(planned, today);
+  if (problem) return json(400, { error: problem });
+
+  const { error } = await supabase
+    .schema("fni")
+    .from("sessions")
+    .update({ planned_sale_date: planned })
+    .eq("id", s.id as string);
+  if (error) return json(500, { error: error.message });
+
+  const { error: renewErr } = await supabase.schema("fni").rpc("renew_session", { p_session: s.id as string });
+  if (renewErr) return json(500, { error: renewErr.message });
+
+  console.log(`fni-session-verify planned_sale_date ${s.id} = ${planned ?? "(cleared)"}`);
+  const fresh = (await loadSession(supabase, s.id as string))!;
+  return json(200, await sheetFor(supabase, fresh));
+}
+
 // ── refresh: re-pull the deal from the CRM ────────────────────────────────
 
 async function refresh(
@@ -1012,6 +1075,7 @@ serve(async (req: Request) => {
     }
 
       if (action === "refresh") return await refresh(supabase, s);
+    if (action === "planned_sale_date") return await setPlannedSaleDate(supabase, s, body.value);
     if (action === "discard_edits") return await discardEdits(supabase, s);
 
     if (action === "verify") {
@@ -1024,7 +1088,7 @@ serve(async (req: Request) => {
     }
 
     return json(400, {
-      error: "action must be one of save, refresh, discard_edits, verify",
+      error: "action must be one of save, refresh, discard_edits, verify, planned_sale_date",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

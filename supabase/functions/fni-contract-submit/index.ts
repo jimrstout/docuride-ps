@@ -71,6 +71,7 @@ import { contractCallRefusal } from "../_shared/contract-guard.ts";
 import { atMaximum, pricePolicy } from "../_shared/price-cap.ts";
 import { readSubmitResponse } from "../_shared/submit-outcome.ts";
 import { alignContractDates, dealDates, SALE_DATE_MISSING } from "../_shared/deal-dates.ts";
+import { storeToday, submitDateProblem } from "../_shared/store-day.ts";
 import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
 import { applyCobuyerProbe, probeDecision, type MarkerRow } from "../_shared/cobuyer-probe.ts";
 import { programName } from "../_shared/program-names.ts";
@@ -334,6 +335,24 @@ serve(async (req: Request) => {
     if (dates.problem || dates.sale === null || dates.inService === null) {
       return await refuse(400, { error: dates.problem ?? SALE_DATE_MISSING });
     }
+
+    // ── Step 3d: Only on the day of the sale ───────────────────────────
+    // Today in the store's own zone (public.stores.time_zone). A planned sale
+    // date, set for preparing the deal the night before, must be that day too,
+    // and the unit cannot go into service after it was sold (_shared/store-day.ts).
+    const { data: storeRow } = await supabase
+      .from("stores")
+      .select("time_zone")
+      .eq("id", session.store_id)
+      .maybeSingle();
+    const today = storeToday((storeRow as { time_zone?: string } | null)?.time_zone ?? null);
+    const dayProblem = submitDateProblem({
+      sale: dates.sale,
+      inService: dates.inService,
+      planned: typeof session.planned_sale_date === "string" ? session.planned_sale_date : null,
+      today,
+    });
+    if (dayProblem) return await refuse(400, { error: dayProblem });
 
     // ── Step 4: Cut the quote down to what is being bought ────────────
     // Pruned, not flagged: see _shared/offer-selections.ts. Sending all

@@ -89,3 +89,21 @@ test("Renew for Today replaces +24h and never adds hours", () => {
   assert.match(f, /\.rpc\("session_renew_targets", \{ p_ids: sessionIds \}\)/);
   assert.match(f, /renewable: renewable\(s\),/);
 });
+
+test("submit refuses a sale date that is not today at the store", () => {
+  const f = src("supabase/functions/fni-contract-submit/index.ts");
+  assert.match(f, /const today = storeToday\(/);
+  assert.match(f, /const dayProblem = submitDateProblem\(\{/);
+  assert.match(f, /if \(dayProblem\) return await refuse\(400, \{ error: dayProblem \}\);/);
+  // After the dates check and before anything is sent.
+  assert.ok(f.indexOf("const dayProblem") > f.indexOf("const dates = dealDates("));
+  assert.ok(f.indexOf("const dayProblem") < f.indexOf("Step 4: Cut the quote down"));
+});
+
+test("Details reads and sets the planned sale date, and says what Submit would", () => {
+  const f = src("supabase/functions/fni-session-verify/index.ts");
+  assert.match(f, /"planned_sale_date",/);
+  assert.match(f, /day: await dayFor\(supabase, s, edited\),/);
+  assert.match(f, /if \(action === "planned_sale_date"\) return await setPlannedSaleDate\(supabase, s, body\.value\);/);
+  assert.match(f, /\.rpc\("renew_session", \{ p_session: s\.id as string \}\)/);
+});
