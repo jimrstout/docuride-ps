@@ -1121,6 +1121,8 @@ button { cursor: pointer; }
 .vgate-say { margin: 0; flex: 1 1 22rem; font-size: var(--fs-base); line-height: var(--lh-body); }
 .vgate-say--blocked { color: var(--ink-soft); }
 .vgate .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+/* Submit held off the sale day: plainly not pressable. A busy Submit keeps its look. */
+.vcontracts .btn[disabled]:not(.is-busy) { opacity: 0.45; cursor: not-allowed; }
 .vgate > .vfield-note { flex: 1 1 100%; margin: 0; }
 .vgate-open { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; flex: 1 1 100%; }
 .vgate-open .vfield-note { margin: 0; }

@@ -161,3 +161,7 @@ test("Administration > Stores sets each store's time zone", () => {
   const sections = src("apps/ownership-planner/lib/admin-sections.ts");
   assert.match(sections, /\{ href: "\/admin\/stores", label: "Stores", icon: "stores" \},/);
 });
+
+test("a Submit held off the sale day looks disabled", () => {
+  assert.match(src("apps/ownership-planner/app/globals.css"), /\.vcontracts \.btn\[disabled\]:not\(\.is-busy\) \{ opacity: 0\.45; cursor: not-allowed; \}/);
+});
