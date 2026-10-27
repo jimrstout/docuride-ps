@@ -58,6 +58,14 @@ import {
 } from "@/app/console-actions";
 import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
+import RatingErrorText from "@/components/RatingErrorText";
+import {
+  hasMoreDetail,
+  ratingErrorHeadline,
+  ratingErrorSummary,
+  ratingFailures,
+  type RatingFailureText,
+} from "@/lib/rating-error";
 import { Working, WorkingArea } from "@/components/Working";
 import { SUBMIT_LEAVE, VOID_LEAVE } from "@/lib/working";
 import VehicleTypeChoice from "@/components/VehicleTypeChoice";
@@ -342,7 +350,34 @@ export default async function DetailsPage({
   // number never ends up in the address bar in front of a customer or in a
   // pasted link. See lib/verify-flash.ts.
   const flashCookie = (await cookies()).get(VERIFY_FLASH_COOKIE)?.value ?? null;
-  const flash = flashMessage(decodeVerifyFlash(flashCookie));
+
+  // ── A failed rating, in one plain line (lib/rating-error.ts) ──────────
+  // The provider's own words, often a long fault, are kept behind "Show
+  // details" in the one banner, not repeated under Rating or in the notice.
+  const providers = sheet.rating.providers ?? [];
+  const failedNow: RatingFailureText[] =
+    sheet.rating.state !== "Failed" ? []
+    : providers.some((p) => p.error)
+      ? providers.filter((p) => p.error).map((p) => ({ provider: p.name, text: p.error!, at: p.error_at ?? null }))
+      : ratingFailures({ detail: sheet.rating.detail, at: sheet.rating.rated_at });
+  const failedKept: RatingFailureText[] = providers
+    .filter((p) => p.kept_error)
+    .map((p) => ({ provider: p.name, text: p.kept_error!, at: p.kept_error_at ?? null }));
+  const ratingFailuresShown = [...failedNow, ...failedKept];
+  const ratingHeadline =
+    failedNow.length > 0 ? ratingErrorHeadline(failedNow)
+    : failedKept.length > 0
+      ? `The last re-rate failed, so the earlier offers are kept. ${ratingErrorHeadline(failedKept)}`
+      : null;
+
+  const decoded = decodeVerifyFlash(flashCookie);
+  // A rating notice with no banner to defer to still says why in one line.
+  const flash = flashMessage(
+    decoded && decoded.code === "notrated" && decoded.detail && ratingFailuresShown.length === 0
+      ? { ...decoded, detail: ratingErrorHeadline(ratingFailures({ detail: decoded.detail })) }
+      : decoded,
+    { ratingShown: ratingFailuresShown.length > 0 }
+  );
 
   const verified = sheet.verification.state === "Verified";
   // Verified, and nothing a rate depends on has moved since. Only then is there
@@ -417,6 +452,22 @@ export default async function DetailsPage({
           </p>
         ) : null}
 
+        {/* ── Why the rating failed: one line, the provider's text on request ── */}
+        {ratingHeadline ? (
+          <div className="console-flash console-flash--bad rating-banner" role="alert">
+            <p className="rating-banner-say">{ratingHeadline}</p>
+            {ratingFailuresShown.some(hasMoreDetail) ? (
+              <details className="rating-banner-more">
+                <summary>
+                  <span className="rating-banner-toggle rating-banner-toggle--show">Show details</span>
+                  <span className="rating-banner-toggle rating-banner-toggle--hide">Hide details</span>
+                </summary>
+                <RatingErrorText deal={sheet.session.deal_number} failures={ratingFailuresShown} />
+              </details>
+            ) : null}
+          </div>
+        ) : null}
+
         {/* ── Where this session stands ──────────────────────────────────── */}
         <dl className="vstate">
           <div>
@@ -456,12 +507,20 @@ export default async function DetailsPage({
                   ? `${sheet.rating.product_count} products, ${stamp(sheet.rating.rated_at)}`
                   : (sheet.rating.providers?.length ?? 0) > 1
                     ? "No provider rated this deal."
-                    : sheet.rating.detail ? <LongText text={sheet.rating.detail} /> : "No rate yet."}
+                    : sheet.rating.state === "Failed"
+                      ? ratingErrorHeadline(failedNow) ?? "Rating failed."
+                      : sheet.rating.detail ? <LongText text={sheet.rating.detail} /> : "No rate yet."}
               </small>
               {(sheet.rating.providers?.length ?? 0) > 1 ? (
                 <ul className="vproviders">
                   {sheet.rating.providers!.map((p) => (
-                    <li key={p.name}><LongText text={p.line} /></li>
+                    <li key={p.name}>
+                      {p.error
+                        ? ratingErrorSummary(p.name, p.error)
+                        : p.kept_error
+                          ? p.line.replace(/ The last re-rate failed \(.*\), so these/s, " The last re-rate failed, so these")
+                          : <LongText text={p.line} />}
+                    </li>
                   ))}
                 </ul>
               ) : null}

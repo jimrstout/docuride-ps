@@ -1395,6 +1395,19 @@ button.is-busy, .btn.is-busy, .ad-btn.is-busy { cursor: progress; }
 .copy-error-btn:hover { border-color: var(--copper); color: var(--copper-ink); }
 .copy-error-btn:focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; }
 .copy-error-said { font-size: 12px; color: var(--muted); }
+/* The one rating banner on Details. */
+.rating-banner { display: grid; gap: 6px; min-width: 0; }
+.rating-banner-say { margin: 0; }
+.rating-banner-more { min-width: 0; font-weight: 400; }
+.rating-banner-more summary { cursor: pointer; list-style: none; display: inline-block; }
+.rating-banner-more summary::-webkit-details-marker { display: none; }
+.rating-banner-toggle { color: var(--copper-ink); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.rating-banner-toggle--hide, .rating-banner-more[open] .rating-banner-toggle--show { display: none; }
+.rating-banner-more[open] .rating-banner-toggle--hide { display: inline; }
+.rating-banner-more .rating-error-full { margin-top: 8px; }
+@media (max-width: 899px) {
+  .rating-banner-more summary { min-height: var(--tap); display: inline-flex; align-items: center; }
+}
 .copy-error-fallback { width: 100%; min-height: 6rem; font: 12px ui-monospace, monospace; }
 @media (max-width: 899px) {
   .copy-error-btn { min-height: var(--tap); padding: 8px 16px; font-size: 14px; }

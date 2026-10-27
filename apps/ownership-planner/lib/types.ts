@@ -438,7 +438,17 @@ export interface VerifySheet {
     rated_at: string | null;
     detail: string | null;
     /** One line per provider the latest rating covered, in plain English. */
-    providers?: { name: string; state: string; line: string }[];
+    providers?: {
+      name: string;
+      state: string;
+      line: string;
+      /** The provider's exact text when this attempt failed, and when. */
+      error?: string | null;
+      error_at?: string | null;
+      /** Why the last re-rate failed when the earlier offers were kept. */
+      kept_error?: string | null;
+      kept_error_at?: string | null;
+    }[];
   };
   /** The menu template this deal matches. Null when the dealer group has none. */
   menu_template?: { name: string } | null;

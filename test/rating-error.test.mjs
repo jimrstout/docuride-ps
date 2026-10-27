@@ -118,3 +118,44 @@ test("the session list shows the summary and opens the full text under the row",
   const g = src("app/globals.css");
   assert.match(g, /\.rating-error-text \{[^}]*max-height: 12rem; overflow: auto;[^}]*overflow-wrap: anywhere/);
 });
+
+// ── Details ──────────────────────────────────────────────────────────────
+
+test("Details shows one banner with the summary and the full text behind Show details", () => {
+  const page = src("app/details/[sessionId]/page.tsx");
+  assert.match(page, /className="console-flash console-flash--bad rating-banner"/);
+  assert.match(page, /<p className="rating-banner-say">\{ratingHeadline\}<\/p>/);
+  assert.match(page, /<details className="rating-banner-more">/);
+  assert.match(page, /<RatingErrorText deal=\{sheet\.session\.deal_number\} failures=\{ratingFailuresShown\} \/>/);
+  // Under Rating, the badge and the summary only: no second copy of the text.
+  assert.match(page, /\? ratingErrorHeadline\(failedNow\) \?\? "Rating failed\."/);
+  assert.match(page, /ratingErrorSummary\(p\.name, p\.error\)/);
+});
+
+test("the notice after Rate leaves the reason to the rating banner", async () => {
+  const { flashMessage } = await import("../apps/ownership-planner/lib/verify-flash.ts");
+  const SOAPLINE = `Riders Advantage: ${SOAP}`;
+  const shown = flashMessage({ code: "notrated", detail: SOAPLINE }, { ratingShown: true });
+  assert.equal(shown.text, "Verified, but not rated. You can still open the presentation. The customer will see a neutral message.");
+  assert.doesNotMatch(shown.text, /SOAP/);
+  assert.equal(
+    flashMessage({ code: "ratedkept", detail: "Riders Advantage could not rate again (x)." }, { ratingShown: true }).text,
+    "Verified. The re-rate failed, and the last good offers are kept."
+  );
+  // With no banner the old wording stands, and other notices are untouched.
+  assert.match(flashMessage({ code: "notrated", detail: "Sale date is missing." }).text, /^Verified, but not rated\. Sale date is missing\./);
+  assert.equal(flashMessage({ code: "saved", detail: null }, { ratingShown: true }).text, "Saved.");
+});
+
+test("the banner's toggle and box fit a phone", () => {
+  const g = src("app/globals.css");
+  assert.match(g, /\.rating-banner-more\[open\] \.rating-banner-toggle--hide \{ display: inline; \}/);
+  assert.match(g, /\.rating-banner \{ display: grid; gap: 6px; min-width: 0; \}/);
+  assert.match(g, /\.copy-error-btn \{ min-height: var\(--tap\)/);
+});
+
+test("the customer's page logs the same summary and still sends no reason to the browser", () => {
+  const page = src("app/plan/[sessionId]/page.tsx");
+  assert.match(page, /summary=\$\{JSON\.stringify\(ratingErrorHeadline\(ratingFailures\(\{ detail: status\.detail, at: status\.attempted_at \}\)\)\)\}/);
+  assert.match(page, /offer_status: \{ \.\.\.status, detail: null \}/);
+});

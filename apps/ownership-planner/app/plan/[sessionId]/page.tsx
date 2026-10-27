@@ -6,6 +6,7 @@
 
 import { edge, EdgeError, isSessionId } from "@/lib/edge";
 import type { SessionPayload } from "@/lib/types";
+import { ratingErrorHeadline, ratingFailures } from "@/lib/rating-error";
 import Planner from "./Planner";
 import Gate from "./Gate";
 
@@ -66,12 +67,15 @@ export default async function PlanPage({
   //
   // So it is logged here, where Vercel's runtime logs keep it, and removed from
   // what crosses to the browser. The staff console reads the same field from the
-  // database, which is the copy staff actually go looking at.
+  // database, which is the copy staff actually go looking at. The log carries
+  // the same one-line summary the console shows (lib/rating-error.ts), so the
+  // two read alike. The customer's screen is neutral whatever the reason.
   const status = payload.offer_status;
   if (status && status.state !== "Rated") {
     console.error(
       `FNI_RATE_NOT_READY session=${sessionId} deal=${payload.session.deal_number ?? "?"} ` +
         `vtype=${payload.session.vehicle.tecassured_code ?? "none"} state=${status.state} ` +
+        `summary=${JSON.stringify(ratingErrorHeadline(ratingFailures({ detail: status.detail, at: status.attempted_at })))} ` +
         `detail=${JSON.stringify(status.detail)}`
     );
   }
