@@ -211,9 +211,16 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
 
       <td>
         <div className="ad-actions">
-          <Link className="ad-btn ad-btn--secondary ad-btn--main" href={`/plan/${row.id}`} prefetch={false}>
+          {/* The customer's menu opens in a new tab, so this list stays where
+              it was and one person can work several deals at once. */}
+          <a
+            className="ad-btn ad-btn--secondary ad-btn--main"
+            href={`/plan/${row.id}`}
+            target="_blank"
+            rel="noopener"
+          >
             Open
-          </Link>
+          </a>
           <form action={extendSession}>
             <input type="hidden" name="session_id" value={row.id} />
             <button type="submit" className="ad-btn ad-btn--secondary">

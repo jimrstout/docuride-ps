@@ -171,13 +171,12 @@ test("a failed rate still returns to Verify with a flash, not an error page", ()
   assert.match(flash, /Verified and rated\. Open the presentation when you are ready/);
 });
 
-test("Open presentation is a named-target link to the plan, with no rel", () => {
+test("Open presentation opens the plan in a new tab, with no handle back", () => {
   const link = between(page, "<a\n", "</a>");
   assert.match(link, /href=\{`\/plan\/\$\{sessionId\}`\}/);
-  // A named target, so pressing it again reloads the same customer tab.
-  assert.match(link, /target=\{`docuride-plan-\$\{sessionId\}`\}/);
-  // Either of these forces a new tab every time and defeats that reuse.
-  assert.doesNotMatch(link, /rel=|noopener|noreferrer/);
+  // A new tab, so this page stays where it was (navigation fixes, 2026-10-27).
+  assert.match(link, /target="_blank"/);
+  assert.match(link, /rel="noopener"/);
   assert.match(link, /Open presentation/);
   // Shown only once verified and current, and the planner still opens at step 1.
   assert.match(page, /presentable = verified && !sheet\.rating\.out_of_date/);

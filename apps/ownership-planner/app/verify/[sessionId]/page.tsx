@@ -1022,11 +1022,10 @@ export default async function VerifyPage({
           </p>
 
           {/* ── Open presentation ──────────────────────────────────────────
-              A plain link into its own tab. The target is NAMED, so pressing it
-              again reloads the same customer tab rather than opening another.
-              No rel="noopener" or rel="noreferrer": either one forces a new tab
-              every time and defeats that reuse. It is the same site, so there is
-              no opener risk, and the site already sends no referrer.
+              A plain link into a new tab (target="_blank", rel="noopener"), so
+              this page stays where it was and one person can work several
+              deals at once. noopener leaves the customer's tab no handle back
+              to this one. Pressing it again opens another tab.
 
               A tab opened this way has no history, so the customer cannot press
               Back into this screen, and the planner has no link of any kind to
@@ -1037,7 +1036,8 @@ export default async function VerifyPage({
               <a
                 className="btn btn--go"
                 href={`/plan/${sessionId}`}
-                target={`docuride-plan-${sessionId}`}
+                target="_blank"
+                rel="noopener"
               >
                 Open presentation
               </a>
