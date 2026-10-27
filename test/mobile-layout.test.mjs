@@ -53,3 +53,17 @@ test("the sessions list is cards on a small screen, with every fact and action",
   // Search and filters stack.
   assert.match(css, /\.ad-toolbar \{ flex-direction: column; align-items: stretch;/);
 });
+
+test("Details shortens its long messages and fits a phone", () => {
+  const page = src("app/details/[sessionId]/page.tsx");
+  assert.match(page, /<LongText text=\{sheet\.rating\.detail\} \/>/);
+  assert.match(page, /<LongText text=\{p\.line\} \/>/);
+  assert.match(page, /<LongText text=\{sheet\.not_ready_reason\} \/>/);
+  assert.match(page, /<LongText text=\{sheet\.submit_detail\} \/>/);
+  const css = src("app/globals.css");
+  const phone = css.slice(css.indexOf("/* ── Details on a phone or a narrow tablet"));
+  assert.match(phone, /@media \(max-width: 899px\)/);
+  assert.match(phone, /\.vh \.btn \{ min-height: var\(--tap\);/);
+  assert.match(phone, /font-size: 16px; min-height: var\(--tap\);/);
+  assert.match(phone, /env\(safe-area-inset-left\)/);
+});
