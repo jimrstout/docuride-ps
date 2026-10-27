@@ -203,7 +203,7 @@ test("fni-oem-contracts never calls a provider and never deletes", () => {
 });
 
 test("Verify shows hidden slots, and records OEM contracts from the browser straight to the bucket", () => {
-  const page = src("../apps/ownership-planner/app/verify/[sessionId]/page.tsx");
+  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
   assert.match(page, /sheet\.hidden_slots!\.map/);
   assert.match(page, /<OemContractRecord sessionId=\{sheet\.session\.id\}/);
   assert.match(page, /c\.status === "Recorded" \?/);

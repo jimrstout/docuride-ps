@@ -72,7 +72,7 @@ test("no em or en dashes in the staff console either", () => {
   // a clause held open.
   const STAFF = [
     "app/page.tsx", "app/settings", "app/admin", "components/admin",
-    "app/verify", "app/console-actions.ts", "lib/admin-sections.ts",
+    "app/details", "app/console-actions.ts", "lib/admin-sections.ts",
   ];
   const offenders = [];
 

@@ -308,7 +308,7 @@ export async function setCheckerName(formData: FormData): Promise<void> {
   else jar.set(CHECKER_COOKIE, name, CHECKER_COOKIE_OPTIONS);
 
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
-  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath(`/details/${sessionId}`);
   return backToVerify(sessionId, name === "" ? "whocleared" : "who");
 }
 
@@ -332,7 +332,7 @@ async function backToVerify(
     const jar = await cookies();
     jar.set(VERIFY_FLASH_COOKIE, encodeVerifyFlash(code, detail), VERIFY_FLASH_OPTIONS);
   }
-  redirect(`/verify/${sessionId}`);
+  redirect(`/details/${sessionId}`);
 }
 
 async function verifyAction(
@@ -356,7 +356,7 @@ async function verifyAction(
     return backToVerify(sessionId, "refused", message);
   }
 
-  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath(`/details/${sessionId}`);
   revalidatePath(SESSIONS);
   return backToVerify(sessionId, onOk);
 }
@@ -437,7 +437,7 @@ export async function decodeVin(formData: FormData): Promise<void> {
     return backToVerify(sessionId, "refused", message);
   }
 
-  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath(`/details/${sessionId}`);
   return backToVerify(sessionId, "decoded");
 }
 
@@ -501,7 +501,7 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
     reason = err instanceof EdgeError ? err.message : "The rate did not come back.";
   }
 
-  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath(`/details/${sessionId}`);
   revalidatePath(`/plan/${sessionId}`);
   revalidatePath(SESSIONS);
 
@@ -558,7 +558,7 @@ export async function voidContract(formData: FormData): Promise<void> {
     return backToVerify(sessionId, "refused", message);
   }
 
-  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath(`/details/${sessionId}`);
   revalidatePath(SESSIONS);
   return message ? backToVerify(sessionId, "contracts", message) : backToVerify(sessionId, "voided", contractNumber);
 }
@@ -618,7 +618,7 @@ export async function submitContracts(formData: FormData): Promise<void> {
       probe ? `Co-buyer field test: the submit did not go through. ${message}` : message
     );
   }
-  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath(`/details/${sessionId}`);
   revalidatePath(SESSIONS);
   return backToVerify(sessionId, partial ? "refused" : "contracts", detail);
 }
@@ -640,7 +640,7 @@ export async function moveDocumentsToDealJacket(formData: FormData): Promise<voi
     console.error(`move to Deal Jacket failed for ${sessionId}:`, err);
     return backToVerify(sessionId, "refused", err instanceof EdgeError ? err.message : "Something went wrong. Try again.");
   }
-  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath(`/details/${sessionId}`);
   const notMoved = (done.files ?? []).filter((f) => !/^(Saved to Deal Jacket|Already in the Deal Jacket)/.test(f.outcome));
   const detail =
     (done.message ?? "Done.") + (notMoved.length > 0 ? ` Not moved: ${notMoved.map((f) => f.outcome).join(" ")}` : "");
@@ -672,7 +672,7 @@ export async function getContractDocument(formData: FormData): Promise<void> {
     return backToVerify(sessionId, "refused", err instanceof EdgeError ? err.message : "Something went wrong. Try again.");
   }
   const doc = done.documents?.[0];
-  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath(`/details/${sessionId}`);
   if (!doc || (doc.error && !doc.document_status)) {
     return backToVerify(sessionId, "refused", doc?.error ?? `The document for ${contractNumber} was not saved. Try again.`);
   }
@@ -729,7 +729,7 @@ async function oemWrite(fd: FormData, build: (by: string) => Record<string, unkn
     console.error(`OEM contract write failed for ${sessionId}:`, err);
     return backToVerify(sessionId, "refused", err instanceof EdgeError ? err.message : "Something went wrong. Try again.");
   }
-  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath(`/details/${sessionId}`);
   return backToVerify(sessionId, "oem", message);
 }
 
@@ -783,7 +783,7 @@ export async function clearSubmitUnknown(formData: FormData): Promise<void> {
     return backToVerify(sessionId, "refused", message);
   }
 
-  revalidatePath(`/verify/${sessionId}`);
+  revalidatePath(`/details/${sessionId}`);
   revalidatePath(SESSIONS);
   return backToVerify(sessionId, "cleared");
 }

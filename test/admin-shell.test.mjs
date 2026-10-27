@@ -53,7 +53,7 @@ test("every action that landed on / or /settings lands on the new page", () => {
 test("the deal page's way home is the DocuRide PS crumb", () => {
   // "/" opens the session browser; HomeLink is the one link to it
   // (test/staff-home-link.test.mjs).
-  const verify = src("app/verify/[sessionId]/page.tsx");
+  const verify = src("app/details/[sessionId]/page.tsx");
   assert.match(verify, /<HomeLink \/>/);
   assert.doesNotMatch(verify, /Session browser/);
 });

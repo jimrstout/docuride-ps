@@ -36,7 +36,7 @@ test("the sheet gives a ten-minute link to a held PDF and never the storage path
 });
 
 test("the panel says the status in plain English, and the move button says what it is doing", () => {
-  const page = src("../apps/ownership-planner/app/verify/[sessionId]/page.tsx");
+  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
   assert.match(page, />Waiting for Deal Jacket</);
   assert.match(page, />Saved to Deal Jacket</);
   assert.match(page, /View PDF/);

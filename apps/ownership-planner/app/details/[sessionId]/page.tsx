@@ -22,6 +22,7 @@
 // factory warranty months (which nothing answers).
 
 import Link from "next/link";
+import type { Metadata } from "next";
 import HomeLink from "@/components/HomeLink";
 import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
@@ -253,7 +254,28 @@ function Field({ field }: { field: VerifyField }) {
   );
 }
 
-export default async function VerifyPage({
+/**
+ * The tab says which deal, so several open tabs can be told apart: "Deal 15029
+ * Details". The same GET as the page's first read, which Next memoizes within
+ * the render, so it costs no second call.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ sessionId: string }>;
+}): Promise<Metadata> {
+  const { sessionId } = await params;
+  if (!isSessionId(sessionId)) return { title: "Details" };
+  try {
+    const sheet = await edge.verifySheet<VerifySheet>(sessionId);
+    const deal = sheet.session.deal_number;
+    return { title: deal ? `Deal ${deal} Details` : "Details" };
+  } catch {
+    return { title: "Details" };
+  }
+}
+
+export default async function DetailsPage({
   params,
 }: {
   params: Promise<{ sessionId: string }>;
@@ -334,17 +356,17 @@ export default async function VerifyPage({
 
   return (
     <div className="vh">
-      {/* The house top bar, without the admin sidebar: Verify is opened from
+      {/* The house top bar, without the admin sidebar: Details is opened from
           the CRM and is not part of the signed-in admin area. */}
       <header className="vh-top">
         <div className="vh-crumb">
-          <h1 className="sr-only">Verify deal {sheet.session.deal_number ?? "(no number)"}</h1>
+          <h1 className="sr-only">Deal {sheet.session.deal_number ?? "(no number)"} details</h1>
           <nav aria-label="Breadcrumb">
             <HomeLink />
             <span className="vh-slash" aria-hidden="true">/</span>
             Deal {sheet.session.deal_number ?? "(no number)"}
             <span className="vh-slash" aria-hidden="true">/</span>
-            <strong>Verify</strong>
+            <strong>Details</strong>
           </nav>
         </div>
         <div className="console-who">
@@ -484,7 +506,7 @@ export default async function VerifyPage({
             {sheet.duplicate_vin.sessions.map((other, i) => (
               <span key={other.id}>
                 {i > 0 ? " " : ""}
-                <Link href={`/verify/${other.id}`} prefetch={false}>
+                <Link href={`/details/${other.id}`} prefetch={false}>
                   Open deal {other.deal_number ?? "(no number)"}
                 </Link>
                 {" "}({other.status})
@@ -883,7 +905,7 @@ export default async function VerifyPage({
           <form
             id="vin-decode"
             action={decodeVin}
-            title="Asks TecAssured what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed. Verify also does this once on its own, the first time it opens."
+            title="Asks TecAssured what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed. This page also does this once on its own, the first time it opens."
           >
             <input type="hidden" name="session_id" value={sheet.session.id} />
             <button type="submit" className="btn btn--quiet">

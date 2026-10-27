@@ -100,7 +100,7 @@ confidence, and a flag with its reason.
 ### OEM contracts (Part 7)
 
 A "Recorded by Staff" product is contracted in the OEM's own portal. Staff
-record the contract number and upload the contract PDF on Verify; the agreement
+record the contract number and upload the contract PDF on Details; the agreement
 product is then Recorded, and Void marks it Voided with a reason and a name.
 See section 10.
 
@@ -162,7 +162,7 @@ interface ProviderAdapter {
 ```
 
 Built in Part 2 under `_shared/adapters/`: `types.ts` (the interface, with
-inputs named the way Verify names them: "make", "new.used", "engine.ccs"),
+inputs named the way Details names them: "make", "new.used", "engine.ccs"),
 `tecassured.ts` and `tecassured-offers.ts`, and `price-sheet.ts`.
 `normalizeOffer` is now `groupOffers(tecAssuredOffers(quote))`, and a test holds
 its output on a recorded quote to the byte against the code before Part 2.
@@ -208,7 +208,7 @@ Slots:
   an offer for.
 - **Side by Side** shows every product in its list that got an offer, together.
 - A slot with no offers is hidden from the customer and listed for staff on
-  Verify.
+  Details.
 
 Today's family screen, with its tier buttons (Bronze, Silver, Gold, Platinum),
 is a Side by Side slot. So "All deals" seeds five Side by Side slots, one per
@@ -233,7 +233,7 @@ in Part 4; the planner starts rendering slots in Part 7.
 4. Write one `rated_offers` row per provider. A provider that fails gets a
    Failed row and does not stop the others; its slots fall back or hide.
 
-Verify asks for the union of the required inputs of those providers (with the
+Details asks for the union of the required inputs of those providers (with the
 Gasoline default and the automatic VIN decode as today), shows the matched
 template's name, and gives the rating per provider in plain English: "Riders
 Advantage: Rated, 11 products. BRP: No price sheet published." Open
@@ -247,7 +247,7 @@ migration 0024 adding `sessions.rated_provider_ids`:
 
 - The session records the matched template (`menu_template_id`) and the
   providers this rating covered (`rated_provider_ids`). The menu, the save and
-  Verify read only those providers' rows, so a provider an earlier rating needed
+  Details read only those providers' rows, so a provider an earlier rating needed
   (before the deal's make was corrected, say) can neither add products nor hold
   the menu back as out of date. Its row stays as a record.
 - With no template at all, the TecAssured provider alone is rated, as before.
@@ -394,7 +394,7 @@ each shown slot into one decision, in the slot's order:
   becomes one decision of its own (family code `slot-<position>`), its tiers
   cheapest first, each tier naming its provider. Prices, the provider's maximum,
   copy and the saved selection all follow the tier's provider.
-- A slot nothing was offered for is not shown to the customer. Verify lists it
+- A slot nothing was offered for is not shown to the customer. Details lists it
   under Menu with the reason ("Theft: none of its 2 products got an offer for
   this deal, so it is not shown.").
 
@@ -410,7 +410,7 @@ in its coverage log. Staff write the wording under Providers, Product wording.
 Nothing writes it for them.
 
 **OEM contracts are recorded by staff** (migration 0027, fni-oem-contracts).
-Verify lists the customer's OEM selections under OEM contracts. Staff write the
+Details lists the customer's OEM selections under OEM contracts. Staff write the
 contract on the OEM's own system, then type its number and upload the signed
 contract (PDF, JPG or PNG), which the browser puts straight into the private
 oem-contracts bucket. The record is an fni.agreement_products row with status
@@ -425,7 +425,7 @@ holds. Voiding a record needs a reason and changes the row only.
 - Its duplicate check reads only this provider's API contracts, so a recorded
   OEM contract with the same product code never blocks a Riders Advantage one.
 - fni-contract-void refuses a recorded contract before it opens a TecAssured
-  client, and points to OEM contracts on Verify.
+  client, and points to OEM contracts on Details.
 
 ### Part 7 decisions
 
@@ -442,7 +442,7 @@ holds. Voiding a record needs a reason and changes the row only.
 - **Recording and voiding need an admin sign-in,** like Void for TecAssured
   contracts: they are paperwork, not a customer decision.
 - **The signed contract is required** to record. A ten-minute link to it is
-  shown on Verify.
+  shown on Details.
 
 ## 11. Test contracts on the QA server
 
@@ -479,7 +479,7 @@ a resubmit was refused as a duplicate. Now each product is one of:
 
 A clear no for every product hands the lock back, as before. A contract
 number that matches nothing we sent is named, and also parks the session at
-Submit Status Unknown (the whole answer is kept on the agreement). Verify
+Submit Status Unknown (the whole answer is kept on the agreement). Details
 shows the result one product per line, for example: "TecAssured created 2 of
 3 contracts. Tire and Wheel: not created. TecAssured would not accept Tire
 and Wheel: it has no rate for this product that matches the vehicle ...
@@ -551,7 +551,7 @@ permission names the scope.
 renames the file by adding " VOID" before the first pipe. The file is never
 deleted.
 
-**Staff contracts panel on Verify.** Shown once the customer has finished the
+**Staff contracts panel on Details.** Shown once the customer has finished the
 planner (session Products Selected or later) and chose something from a
 provider contracted through its API:
 
@@ -578,7 +578,7 @@ provider contracted through its API:
 - **What TecAssured returned is kept whole**: signatures as returned, and
   every other field except the PDF.
 - **The planner's saved choices are what Submit sends.** Staff do not
-  re-pick products on Verify.
+  re-pick products on Details.
 
 ## 13. Holding documents until the Deal Jacket exists
 
@@ -662,7 +662,7 @@ Example answer (200):
 Each `outcome` is a sentence; anything other than "Saved to Deal Jacket..." or
 "Already in the Deal Jacket..." means that file did not move and says why.
 
-**On Verify,** each contract on the Contracts panel says where its document
+**On Details,** each contract on the Contracts panel says where its document
 is, in plain English:
 
 - "Waiting for Deal Jacket", with "View PDF": a ten-minute signed link to
@@ -690,17 +690,17 @@ it is.
   not it has reached the Deal Jacket yet.
 - **The buyer's name** comes from DocuRide DC when the deal is there, and
   from the session otherwise, so a document can be held before DC has the deal.
-- **Verify's button sends the session id**; the CRM sends the record id or
+- **The Details page's button sends the session id**; the CRM sends the record id or
   deal number. Both reach the same move.
 
-## 14. Vehicle type on Verify
+## 14. Vehicle type on Details
 
 TecAssured offers each Riders Advantage product in vehicle-specific versions
 (On-Road, Off-Road MC, UTV/ATV) and enforces the match when the contract goes
 in, not when it is quoted. Deal 13437, a 2010 Kawasaki Vulcan 900 street bike,
 was shown the Off-Road Tire and Wheel and TecAssured refused the contract
 ("no rate found matching criteria"). So the vehicle type is a choice on
-Verify, first in the Vehicle panel, stored exactly as shown
+Details, first in the Vehicle panel, stored exactly as shown
 (sessions.vehicle_type, migration 0031):
 
     ATV, UTV, On-Road Motorcycle, Off-Road Motorcycle, Scooter, Personal Watercraft, Snowmobile, Other
@@ -750,7 +750,7 @@ staff write it.
 **Telling twins apart** (migration 0034). Our one product name covers several
 TecAssured versions, so wherever staff see products (Admin > Menus, both the
 product list and each slot; Admin > Product wording; the pricing scopes; and
-Verify's Contracts panel) a small grey label shows TecAssured's own program
+the Details Contracts panel) a small grey label shows TecAssured's own program
 name next to ours, for example "USED BRONZE ON-ROAD NON-EU". It is the rated
 offer's product label up to " - ", kept on `product_catalog.provider_program_name`:
 filled from the offers already held, and refreshed by every successful
@@ -777,15 +777,15 @@ already chosen from, and the deal could no longer be submitted. Now
   before any request was built keeps the mark the row had.
 - **Status and choices stand.** fni-rate-vehicle answers 200 with the kept
   count and a `warning`, and leaves the session status alone.
-- **Staff are told.** Verify says "Verified. Riders Advantage could not rate
+- **Staff are told.** Details says "Verified. Riders Advantage could not rate
   again (...). The last good offers are kept, so the deal can still go ahead
-  on them." The provider line on Verify and in Admin > Sessions adds "The
+  on them." The provider line on Details and in Admin > Sessions adds "The
   last re-rate failed (...), so these are the earlier offers, kept." The
   customer sees the offers, never the warning.
 
 **A re-rate after the customer has chosen** (fix 4d). A successful rating
 used to set the session to Rated whatever it was, so re-rating a Products
-Selected deal sent it back a step and Verify stopped offering Submit. Now
+Selected deal sent it back a step and Details stopped offering Submit. Now
 (`statusAfterRating` in `_shared/rerate.ts`) the session keeps its status
 while every product the customer took (Included in selected_products) is
 still offered by the same provider at the same rate id. TecAssured's rate ids
@@ -803,7 +803,7 @@ likely answer is that TecAssured holds no co-buyer at all and iTap stamps it on
 the PDF itself.
 
 **This is temporary.** Once the contract has been read, `_shared/cobuyer-probe.ts`,
-the request flags and the Verify checkbox are deleted. If a field worked, it is
+the request flags and the Details checkbox are deleted. If a field worked, it is
 replaced by the real mapping from `cobuyer_first_name` / `cobuyer_last_name`.
 If none did, DocuRide will stamp co-buyer names on the PDF in a later task.
 
@@ -837,7 +837,7 @@ marker table. If TecAssured rejects the submit, its error text is returned
 verbatim, with no retry, no stripping and no switch to the batches: an "unknown
 field" error is information, and Jim decides whether to run the batches.
 
-**On Verify.** On a test session whose store points at the QA server, the
+**On Details.** On a test session whose store points at the QA server, the
 Contracts panel shows a "Co-buyer field test" checkbox next to Submit, off by
 default and explained in plain English, with a batch picker (All, Batch 1,
 Batch 2, Batch 3) defaulting to All. It is never shown otherwise.
@@ -909,11 +909,11 @@ request filled a missing sale date with today. That is the likely cause of a
 maintenance contract showing today instead of the sale date.
 
 The rule, in `_shared/deal-dates.ts`, used by the rate request, the
-TecAssured adapter, the price-sheet path, the Verify sheet and the submit:
+TecAssured adapter, the price-sheet path, the Details sheet and the submit:
 
 | Date | Where it comes from | When it is missing |
 |---|---|---|
-| Sale date | the session (the CRM's Sale_Date, or a staff entry on Verify) | No rate and no submit: "Sale date is missing. Add it on the deal and refresh from CRM, or enter it on Verify." |
+| Sale date | the session (the CRM's Sale_Date, or a staff entry on Details) | No rate and no submit: "Sale date is missing. Add it on the deal and refresh from CRM, or enter it on Verify." (the Edge Function wording, unchanged in the navigation work) |
 | In-service date | the session's own; for a New unit, the sale date | Used unit: no rate and no submit, with a plain-English message asking for it |
 | rateDate | today | Never missing. It says when we asked, not anything about the deal. |
 
@@ -921,10 +921,10 @@ TecAssured adapter, the price-sheet path, the Verify sheet and the submit:
   `inServiceDate` and `vehiclePurchaseDate` at the top level, and `sale.date`
   and `inservice.date` in the properties, whether or not TecAssured lists them
   for the vehicle type.
-- **Verify needs both dates for every vehicle type,** and says what is missing
+- **Details needs both dates for every vehicle type,** and says what is missing
   in the words above.
 - **The CRM has no in-service date field.** So the CRM mappings now give a New
-  unit its sale date and a Used unit none; staff enter it on Verify. Existing
+  unit its sale date and a Used unit none; staff enter it on Details. Existing
   sessions keep the value they have until their next Refresh or reopen.
 - **The price-sheet path needs a sale date too,** since that date decides which
   sheet is in force. It never uses today instead.
@@ -946,3 +946,24 @@ Each vehicle's `effectiveDate`, and each rate's `expireDate` (ten years on),
 are TecAssured's own stamps of the moment of rating. They are left as they
 are. If a contract still shows the rating day after this change, they are
 the next place to look.
+
+## 18. Navigation, and the Details page
+
+- **The page is called Details.** It was called Verify. It holds the facts the
+  menu runs on, the settings that shape it, and the record of contracts and
+  documents afterward. Its address is `/details/<session id>`. The
+  verification step inside it keeps its own words ("Verified", "Checked by",
+  "Confirm and Continue"). The browser tab reads "Deal 15029 Details".
+- **Old addresses still work.** `/verify/<session id>` redirects permanently
+  (308, query string kept) to `/details/<session id>`, in
+  `apps/ownership-planner/next.config.mjs`. The CRM button and old bookmarks
+  use the old address, so the redirect must never be removed.
+  `fni-session-start` still builds `verify_url` and `menu_url` as
+  `/verify/<id>`, which lands on Details through the redirect.
+- **A way home.** Every staff page's top bar starts with "DocuRide PS",
+  linking to the main screen (`/`, the session browser): "DocuRide PS / Deal
+  15029 / Details" on the deal page, and "DocuRide PS / Administration /
+  Sessions" in the admin area. The customer's menu never shows it.
+- **Menus open in a new tab.** Admin > Sessions "Open" and the Details page's
+  "Open presentation" both use `target="_blank"` with `rel="noopener"`. The
+  staff page stays where it was, so one person can work several deals at once.

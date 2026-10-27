@@ -62,7 +62,7 @@ test("Lender is shown first in Financial, and nothing else about it changes", ()
   assert.equal(lender.editable, false);
   assert.equal(lender.provider_property, null);
   // The Money group is headed Financial on the page.
-  assert.match(src("../apps/ownership-planner/app/verify/[sessionId]/page.tsx"),
+  assert.match(src("../apps/ownership-planner/app/details/[sessionId]/page.tsx"),
     /\{group === "Money" \? "Financial" : group\}/);
 });
 
@@ -212,11 +212,11 @@ test("the warning appears only when a maximum is set and already exceeded", () =
   const sheet = buildVerification(financed({ max_amount_financed: "27000" }), UTV);
   assert.match(sheet.over_cap_warning, /\$547\.64 over/);
   assert.equal(sheet.ready, true);
-  const page = src("../apps/ownership-planner/app/verify/[sessionId]/page.tsx");
+  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
   assert.match(page, /\{group === "Money" && sheet\.over_cap_warning \? \(\s*<p className="vgroup-warn" role="status">\{sheet\.over_cap_warning\}<\/p>/);
 });
 
 test("an empty maximum is never marked Missing", () => {
-  const page = src("../apps/ownership-planner/app/verify/[sessionId]/page.tsx");
+  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
   assert.match(page, /const OPTIONAL_FIELDS = new Set\(\["max_amount_financed"\]\);/);
 });

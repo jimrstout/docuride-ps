@@ -1,5 +1,8 @@
 # The CRM button now opens Verify
 
+> **Since 2026-10-27 the page is called Details**, at `/details/<id>`. The
+> `/verify/<id>` links below still work: they redirect permanently to Details.
+
 Everything below is live as of 2026-09-27. Edge Function `fni-session-start` is at
 version 8, and the Vercel production deployment is commit `326c6dc`.
 
