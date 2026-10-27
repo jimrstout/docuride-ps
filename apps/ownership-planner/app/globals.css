@@ -1301,3 +1301,19 @@ button.is-busy, .btn.is-busy, .ad-btn.is-busy { cursor: progress; }
 .calm-wait-box { display: grid; justify-items: center; gap: var(--s2); color: var(--ink-soft); }
 .calm-wait-box p { margin: 0; font-size: 1rem; }
 @media (prefers-reduced-motion: reduce) { .calm-spinner { animation-duration: 2.6s; } }
+
+/* ── A long message that does not take over a phone (components/LongText) ──
+   Wide screens show the whole message, as they always have. Below 900px the
+   first couple of lines show, with a Show details toggle. */
+.longtext-narrow { display: none; }
+.longtext-narrow summary { cursor: pointer; list-style: none; }
+.longtext-narrow summary::-webkit-details-marker { display: none; }
+.longtext-toggle { color: var(--copper-ink); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.longtext-toggle--hide, .longtext-narrow[open] .longtext-toggle--show, .longtext-narrow[open] .longtext-short { display: none; }
+.longtext-narrow[open] .longtext-toggle--hide { display: inline; }
+.longtext-full { display: block; margin-top: 4px; overflow-wrap: anywhere; }
+@media (max-width: 899px) {
+  .longtext-wide { display: none; }
+  .longtext-narrow { display: block; }
+  .longtext-narrow summary { display: inline; }
+}
