@@ -77,8 +77,25 @@ export interface FlashMessage {
  * the screen needs, and a second wording of the same problem is one more thing
  * to keep in step.
  */
-export function flashMessage(flash: VerifyFlash | null): FlashMessage | null {
+export function flashMessage(
+  flash: VerifyFlash | null,
+  opts: { ratingShown?: boolean } = {}
+): FlashMessage | null {
   if (!flash) return null;
+
+  // The rating's own banner on Details says why, in one plain line with the
+  // provider's text behind "Show details" (lib/rating-error.ts). When it is on
+  // the page, a rating notice says what happened and leaves the why to it, so
+  // the reason is not said twice.
+  if (opts.ratingShown && flash.code === "notrated") {
+    return {
+      tone: "bad",
+      text: "Verified, but not rated. You can still open the presentation. The customer will see a neutral message.",
+    };
+  }
+  if (opts.ratingShown && flash.code === "ratedkept") {
+    return { tone: "bad", text: "Verified. The re-rate failed, and the last good offers are kept." };
+  }
 
   switch (flash.code) {
     case "refused":
