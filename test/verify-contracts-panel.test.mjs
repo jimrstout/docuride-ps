@@ -44,14 +44,16 @@ test("the panel shows once the planner is finished, and every button says what i
   assert.match(verify, /contracts_panel: panel,/);
   const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
   assert.match(page, /Submit contracts to \{sheet\.contracts_panel\.provider_name\}/);
-  assert.match(page, /pending="Submitting…"/);
-  assert.match(page, /pending="Getting the document…"/);
-  assert.match(page, /pending="Voiding…"/);
+  assert.match(page, /pending="Submitting contracts\.\.\."/);
+  assert.match(page, /pending="Getting the document\.\.\."/);
+  assert.match(page, /pending="Voiding\.\.\."/);
   assert.match(page, /name="confirm" required \/> Cancel this contract with TecAssured/);
   assert.match(page, /sheet\.submit_state === "In Progress" \?/);
   assert.doesNotMatch(page, /—/);
   const button = src("../apps/ownership-planner/components/PendingButton.tsx");
-  assert.match(button, /disabled=\{status\.pending\}/);
+  // Disabled while its own send is with the server (components/Working.tsx).
+  assert.match(button, /disabled=\{disabled \|\| busy\}/);
+  assert.match(button, /: status\.pending;/);
   const actions = src("../apps/ownership-planner/app/console-actions.ts");
   assert.match(actions, /use_saved_selections: true,/);
   assert.match(actions, /if \(formData\.get\("confirm"\) !== "on"\)/);

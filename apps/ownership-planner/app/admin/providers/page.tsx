@@ -14,6 +14,8 @@
 // table (?edit=<id>), so the page works with no JavaScript.
 
 import Link from "next/link";
+import PendingButton from "@/components/PendingButton";
+import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
 import type { ProviderRow, ProvidersPayload } from "@/lib/types";
@@ -50,6 +52,7 @@ function ProviderForm({ p, stores }: { p: ProviderRow | null; stores: ProvidersP
       </div>
       <div className="ad-panel-body">
         <form action={p ? saveProvider : addProvider} className="ad-editor-fields">
+          <Working />
           {p ? <input type="hidden" name="provider_id" value={p.id} /> : null}
           <label className="ad-field">
             <span>Name</span>
@@ -77,13 +80,14 @@ function ProviderForm({ p, stores }: { p: ProviderRow | null; stores: ProvidersP
             </p>
           )}
           <div className="ad-editor-actions ad-field--wide">
-            <button type="submit" className="ad-btn ad-btn--primary">{p ? "Save" : "Add provider"}</button>
+            <PendingButton className="ad-btn ad-btn--primary" pending="Saving...">{p ? "Save" : "Add provider"}</PendingButton>
             <Link href="/admin/providers" prefetch={false} className="ad-btn ad-btn--secondary">Cancel</Link>
           </div>
         </form>
 
         {p && p.kind === "Price Sheet" ? (
           <form action={setProviderStores} className="ad-form">
+            <Working />
             <input type="hidden" name="provider_id" value={p.id} />
             <h3>Stores that sell {p.name}</h3>
             <div className="ad-checks">
@@ -99,7 +103,7 @@ function ProviderForm({ p, stores }: { p: ProviderRow | null; stores: ProvidersP
                 </label>
               ))}
             </div>
-            <button type="submit" className="ad-btn ad-btn--secondary">Save stores</button>
+            <PendingButton className="ad-btn ad-btn--secondary" pending="Saving the stores...">Save stores</PendingButton>
           </form>
         ) : p ? (
           <p className="ad-help">

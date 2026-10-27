@@ -25,6 +25,8 @@
 // pop-up dialogs.
 
 import Link from "next/link";
+import PendingButton from "@/components/PendingButton";
+import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
 import type { PricingPayload, PricingPreviewRow, PricingRuleRow, PricingStoreStatus } from "@/lib/types";
@@ -227,6 +229,7 @@ function RuleForm({
 
   return (
     <form action={savePricingRule} className="ad-editor" id="rule-form">
+      <Working />
       <h3>{rule ? "Edit rule" : "Add a rule"}</h3>
       {rule ? <p className="ad-help">{rule.summary}</p> : null}
       <input type="hidden" name="scope" value={scope} />
@@ -285,14 +288,14 @@ function RuleForm({
       </p>
 
       <div className="ad-editor-actions">
-        <button type="submit" className="ad-btn ad-btn--primary">{rule ? "Save" : "Add rule"}</button>
+        <PendingButton className="ad-btn ad-btn--primary" pending="Saving the rule...">{rule ? "Save" : "Add rule"}</PendingButton>
         <Link className="ad-btn ad-btn--secondary" href={cancelHref} prefetch={false}>
           Cancel
         </Link>
         {rule ? (
-          <button type="submit" formAction={deletePricingRule} className="ad-btn ad-btn--secondary ad-push" formNoValidate>
+          <PendingButton className="ad-btn ad-btn--secondary ad-push" pending="Deleting the rule..." formAction={deletePricingRule} formNoValidate>
             Delete
-          </button>
+          </PendingButton>
         ) : null}
       </div>
     </form>
@@ -303,11 +306,12 @@ function RuleForm({
 function CopyButton({ from, to, label, primary }: { from: string; to: string; label: string; primary?: boolean }) {
   return (
     <form action={copyPricingRules}>
+      <Working />
       <input type="hidden" name="scope" value={from} />
       <input type="hidden" name="to_scope" value={to} />
-      <button type="submit" className={primary ? "ad-btn ad-btn--primary" : "ad-btn ad-btn--secondary"}>
+      <PendingButton className={primary ? "ad-btn ad-btn--primary" : "ad-btn ad-btn--secondary"} working="page" pending="Copying the rules...">
         {label}
-      </button>
+      </PendingButton>
     </form>
   );
 }
@@ -554,6 +558,7 @@ async function Pricing({ params }: { params: Params }) {
             </span>
             {payload.rules.length > 0 && payload.copy_targets.length > 0 ? (
               <form action={copyPricingRules} className="ad-copy">
+                <Working />
                 <input type="hidden" name="scope" value={scope} />
                 <label>
                   <span>Copy these rules to...</span>{" "}
@@ -566,7 +571,7 @@ async function Pricing({ params }: { params: Params }) {
                     ))}
                   </select>
                 </label>
-                <button type="submit" className="ad-btn ad-btn--secondary">Copy</button>
+                <PendingButton className="ad-btn ad-btn--secondary" working="page" pending="Copying the rules...">Copy</PendingButton>
               </form>
             ) : null}
           </footer>

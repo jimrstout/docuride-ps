@@ -9,6 +9,7 @@
 // the deal asks for Confirm and Continue again, like any rating input.
 
 import { useRef } from "react";
+import { VEHICLE_TYPE_INTENT } from "@/lib/working";
 
 export const VEHICLE_TYPE_CHOICES = [
   "ATV",
@@ -34,7 +35,12 @@ export default function VehicleTypeChoice({
   const group = useRef<HTMLFieldSetElement>(null);
 
   function onChange() {
-    group.current?.closest("form")?.requestSubmit();
+    const form = group.current?.closest("form");
+    if (!form) return;
+    // A vehicle type change re-matches the menu and needs Confirm again: a
+    // whole-deal change, so the page shows it as one (components/Working.tsx).
+    form.dataset.workingIntent = VEHICLE_TYPE_INTENT;
+    form.requestSubmit();
   }
 
   return (

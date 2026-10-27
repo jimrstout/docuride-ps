@@ -967,3 +967,44 @@ the next place to look.
 - **Menus open in a new tab.** Admin > Sessions "Open" and the Details page's
   "Open presentation" both use `target="_blank"` with `rel="noopener"`. The
   staff page stays where it was, so one person can work several deals at once.
+
+## 19. Showing when the system is working
+
+Rating, refreshing from the CRM, submitting and voiding take seconds, and the
+staff pages used to look idle meanwhile. Now (`components/Working.tsx`, rules
+in `lib/working.ts`):
+
+- **The button that started it** shows a spinner and a plain working label
+  ("Rating...", "Submitting contracts...", "Voiding..."), and is disabled
+  (`components/PendingButton.tsx`).
+- **Whole-deal actions cover the page.** A navy overlay shows the same
+  message, and nothing underneath can be clicked or edited. These are:
+  Confirm and Continue, Refresh from CRM, a vehicle type change, Decode the
+  VIN, Discard my edits, Submit, Void (TecAssured and OEM), Move to Deal
+  Jacket, clearing Submit Status Unknown, and in the admin area Rate, reading,
+  publishing or retiring a price sheet, and copying pricing rules.
+- **Smaller actions lock their own panel** with a spinner and the message:
+  Get document, the sheet's Save changes, Checked by, +24h (that row's
+  actions), OEM contract recording, a price sheet upload, and each admin
+  editor's save.
+- **One at a time.** While anything runs, no other form on the page can be
+  sent: buttons are out of reach, and a send is stopped before it leaves.
+- **After 10 seconds** the overlay or panel adds "Still working. This can take
+  up to a minute." After two minutes it says it is taking longer than it
+  should, and offers a reload. It never gives up silently.
+- **During Submit and Void,** leaving or reloading the page asks first:
+  "Contracts are still being submitted. Leaving now may leave them half done."
+- **Screen readers:** busy areas carry `aria-busy`, and a live region
+  announces the start and the result.
+- **When it ends,** the page unlocks, and the result line (the page's own
+  success or error notice) is also shown at the bottom of the screen. On an
+  error, the person's entries are put back so nothing has to be retyped.
+- **The customer's menu** holds its choices still while one saves (with a
+  calm spinner and "One moment..." in the footer), and accepting the plan
+  shows a calm "One moment..." pause and can only happen once.
+- **View PDF** opens a ready-made link in a new tab, so nothing on the page
+  waits for it, and it has no working state.
+
+A form joins this by carrying one `<Working />` marker and a `PendingButton`
+with `working="page"` or `"panel"` (the default) and its label. A test sweeps
+every staff form for both.

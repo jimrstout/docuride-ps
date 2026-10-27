@@ -40,7 +40,7 @@ test("the panel says the status in plain English, and the move button says what 
   assert.match(page, />Waiting for Deal Jacket</);
   assert.match(page, />Saved to Deal Jacket</);
   assert.match(page, /View PDF/);
-  assert.match(page, /<PendingButton pending="Moving documents\.\.\.">Move documents to Deal Jacket<\/PendingButton>/);
+  assert.match(page, /<PendingButton working="page" pending="Moving documents to the Deal Jacket\.\.\.">\s*Move documents to Deal Jacket\s*<\/PendingButton>/);
   assert.doesNotMatch(page, /—/);
   const actions = src("../apps/ownership-planner/app/console-actions.ts");
   // The button makes the same call the CRM will.

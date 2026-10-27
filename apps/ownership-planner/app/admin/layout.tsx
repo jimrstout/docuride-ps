@@ -25,6 +25,7 @@ import { SignIn, SIGN_IN_NOTICES } from "@/components/admin/SignIn";
 import { Brand } from "@/components/admin/Parts";
 import { Icon } from "@/components/admin/Icon";
 import { signOut } from "@/app/console-actions";
+import { WorkingArea } from "@/components/Working";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!operator) {
     const query = new URLSearchParams(h.get("x-admin-search") ?? "");
     const key = Object.keys(SIGN_IN_NOTICES).find((k) => query.has(k));
-    return <SignIn notice={key ? SIGN_IN_NOTICES[key] : null} next={path} />;
+    return (
+      <WorkingArea>
+        <SignIn notice={key ? SIGN_IN_NOTICES[key] : null} next={path} />
+      </WorkingArea>
+    );
   }
 
   const here = sectionFor(path);
@@ -52,6 +57,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   );
 
   return (
+    <WorkingArea>
     <div className="ad">
       <aside className="ad-side">
         <Link href={HOME_HREF} prefetch={false} className="ad-brand-link">
@@ -94,5 +100,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <main className="ad-main">{children}</main>
       </div>
     </div>
+    </WorkingArea>
   );
 }

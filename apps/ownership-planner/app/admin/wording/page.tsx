@@ -15,6 +15,8 @@
 // secret. The browser holds no Supabase key here either.
 
 import { currentOperator } from "@/lib/admin-session";
+import PendingButton from "@/components/PendingButton";
+import { Working } from "@/components/Working";
 import { edge } from "@/lib/edge";
 import type { ConsoleSettingsPayload, ConsoleTemplateRow } from "@/lib/types";
 import { saveSettings } from "@/app/console-actions";
@@ -143,6 +145,7 @@ async function Settings({ params }: {
       {flash ? <Notice tone={flash.tone}>{flash.text}</Notice> : null}
 
       <form action={saveSettings} className="ad-form">
+        <Working />
         <section className="ad-panel">
           <div className="ad-panel-head">
             <h2>
@@ -176,9 +179,9 @@ async function Settings({ params }: {
         ))}
 
         <div className="ad-form-actions">
-          <button type="submit" className="ad-btn ad-btn--primary">
+          <PendingButton className="ad-btn ad-btn--primary" pending="Saving the wording...">
             Save
-          </button>
+          </PendingButton>
         </div>
       </form>
     </>
