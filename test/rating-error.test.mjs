@@ -153,3 +153,9 @@ test("the banner's toggle and box fit a phone", () => {
   assert.match(g, /\.rating-banner \{ display: grid; gap: 6px; min-width: 0; \}/);
   assert.match(g, /\.copy-error-btn \{ min-height: var\(--tap\)/);
 });
+
+test("the customer's page logs the same summary and still sends no reason to the browser", () => {
+  const page = src("app/plan/[sessionId]/page.tsx");
+  assert.match(page, /summary=\$\{JSON\.stringify\(ratingErrorHeadline\(ratingFailures\(\{ detail: status\.detail, at: status\.attempted_at \}\)\)\)\}/);
+  assert.match(page, /offer_status: \{ \.\.\.status, detail: null \}/);
+});
