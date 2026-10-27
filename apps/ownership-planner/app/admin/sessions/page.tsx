@@ -19,6 +19,9 @@
 import Link from "next/link";
 import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
+import RatingErrorText from "@/components/RatingErrorText";
+import RowDetailsToggle from "@/components/admin/RowDetailsToggle";
+import { hasMoreDetail, ratingErrorHeadline, ratingFailures } from "@/lib/rating-error";
 import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge } from "@/lib/edge";
@@ -143,19 +146,47 @@ const RATING: Record<string, { label: string; tone: Tone; note: string }> = {
   },
 };
 
+/** A failed rating's providers, with the exact text, from the list's row. */
+function failuresOf(row: ConsoleSessionRow) {
+  return row.rating?.state === "Failed" ? ratingFailures(row.rating) : [];
+}
+
+/** The id of the row under a session that holds its full rating error. */
+const whyRowId = (row: ConsoleSessionRow) => `ad-why-${row.id}`;
+
 function Rating({ row, now }: { row: ConsoleSessionRow; now: number }) {
   const r = row.rating ?? { state: "Pending", detail: null, at: null };
   const meta = RATING[r.state] ?? RATING.Pending;
+  const failures = failuresOf(row);
 
   return (
     <>
       <Badge tone={meta.tone}>{meta.label}</Badge>
       {r.at ? <small>{since(r.at, now)}</small> : null}
-      {/* The provider's own words, or the field nobody filled in. This is the
-          whole point of the column, so it is shown rather than hidden behind a
-          hover: a reason you have to discover is a reason nobody reads. */}
-      {r.detail ? <small className="ad-why"><LongText text={r.detail} /></small> : null}
+      {/* Why, in one plain line. A failure's own words, often a long provider
+          fault, open under the row on request (lib/rating-error.ts). */}
+      {r.state === "Failed" ? (
+        <>
+          <small className="ad-why">{ratingErrorHeadline(failures) ?? "Rating failed."}</small>
+          {failures.some(hasMoreDetail) ? <RowDetailsToggle target={whyRowId(row)} /> : null}
+        </>
+      ) : r.detail ? (
+        <small className="ad-why"><LongText text={r.detail} /></small>
+      ) : null}
     </>
+  );
+}
+
+/** The full rating error, across the whole table under its session. */
+function WhyRow({ row }: { row: ConsoleSessionRow }) {
+  const failures = failuresOf(row);
+  if (!failures.some(hasMoreDetail)) return null;
+  return (
+    <tr className="ad-why-row" id={whyRowId(row)} hidden>
+      <td colSpan={8}>
+        <RatingErrorText deal={row.deal_number} failures={failures} />
+      </td>
+    </tr>
   );
 }
 
@@ -173,83 +204,86 @@ function searchText(row: ConsoleSessionRow): string {
 function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
   const ratingState = row.rating?.state ?? "Pending";
   return (
-    <tr
-      data-row=""
-      data-store={row.store_name ?? ""}
-      data-status={row.status ?? ""}
-      data-rating={ratingState}
-      data-search={searchText(row)}
-    >
-      <td className="ad-deal">{row.deal_number ?? "Not set"}</td>
+    <>
+      <tr
+        data-row=""
+        data-store={row.store_name ?? ""}
+        data-status={row.status ?? ""}
+        data-rating={ratingState}
+        data-search={searchText(row)}
+      >
+        <td className="ad-deal">{row.deal_number ?? "Not set"}</td>
 
-      <td className="ad-vehicle">
-        <span className="ad-strong">{vehicle(row)}</span>
-        {row.stock_number ? <small>Stock {row.stock_number}</small> : null}
-      </td>
+        <td className="ad-vehicle">
+          <span className="ad-strong">{vehicle(row)}</span>
+          {row.stock_number ? <small>Stock {row.stock_number}</small> : null}
+        </td>
 
-      <td data-label="Store">{row.store_name ?? "Not set"}</td>
+        <td data-label="Store">{row.store_name ?? "Not set"}</td>
 
-      <td data-label="Status">
-        <Badge tone={statusTone(row.status)}>{row.status ?? "Not set"}</Badge>
-        {row.mode ? <small>{row.mode}</small> : null}
-      </td>
+        <td data-label="Status">
+          <Badge tone={statusTone(row.status)}>{row.status ?? "Not set"}</Badge>
+          {row.mode ? <small>{row.mode}</small> : null}
+        </td>
 
-      <td data-label="Rating">
-        <Rating row={row} now={now} />
-      </td>
+        <td data-label="Rating">
+          <Rating row={row} now={now} />
+        </td>
 
-      <td data-label="Created" style={{ whiteSpace: "nowrap" }}>
-        {day(row.created_at)}
-        <small>{clock(row.created_at)}</small>
-      </td>
+        <td data-label="Created" style={{ whiteSpace: "nowrap" }}>
+          {day(row.created_at)}
+          <small>{clock(row.created_at)}</small>
+        </td>
 
-      <td data-label="Expires" style={{ whiteSpace: "nowrap" }}>
-        {row.expired ? (
-          <Badge tone="warn">Expired</Badge>
-        ) : (
-          <Badge tone="good">Active</Badge>
-        )}
-        <small>{row.expired ? "Extension available" : since(row.expires_at, now)}</small>
-      </td>
+        <td data-label="Expires" style={{ whiteSpace: "nowrap" }}>
+          {row.expired ? (
+            <Badge tone="warn">Expired</Badge>
+          ) : (
+            <Badge tone="good">Active</Badge>
+          )}
+          <small>{row.expired ? "Extension available" : since(row.expires_at, now)}</small>
+        </td>
 
-      <td className="ad-row-actions">
-        {/* The panel +24h locks while it runs (components/Working.tsx). */}
-        <div className="ad-actions" data-working-panel="">
-          {/* The customer's menu opens in a new tab, so this list stays where
-              it was and one person can work several deals at once. */}
-          <a
-            className="ad-btn ad-btn--secondary ad-btn--main"
-            href={`/plan/${row.id}`}
-            target="_blank"
-            rel="noopener"
-          >
-            Open
-          </a>
-          <form action={extendSession}>
-            <Working />
-            <input type="hidden" name="session_id" value={row.id} />
-            <PendingButton className="ad-btn ad-btn--secondary" pending="Adding 24 hours...">
-              +24h
-            </PendingButton>
-          </form>
-          {/* Details is where rating starts now, so it is the button that is
-              always here. Rate on its own is for re-asking after a failure on a
-              deal that is already verified. */}
-          <Link className="ad-btn ad-btn--secondary" href={`/details/${row.id}`} prefetch={false}>
-            Details
-          </Link>
-          {row.rating?.state === "Failed" ? (
-            <form action={rateSession}>
+        <td className="ad-row-actions">
+          {/* The panel +24h locks while it runs (components/Working.tsx). */}
+          <div className="ad-actions" data-working-panel="">
+            {/* The customer's menu opens in a new tab, so this list stays where
+                it was and one person can work several deals at once. */}
+            <a
+              className="ad-btn ad-btn--secondary ad-btn--main"
+              href={`/plan/${row.id}`}
+              target="_blank"
+              rel="noopener"
+            >
+              Open
+            </a>
+            <form action={extendSession}>
               <Working />
               <input type="hidden" name="session_id" value={row.id} />
-              <PendingButton className="ad-btn ad-btn--secondary" working="page" pending="Rating...">
-                Rate
+              <PendingButton className="ad-btn ad-btn--secondary" pending="Adding 24 hours...">
+                +24h
               </PendingButton>
             </form>
-          ) : null}
-        </div>
-      </td>
-    </tr>
+            {/* Details is where rating starts now, so it is the button that is
+                always here. Rate on its own is for re-asking after a failure on a
+                deal that is already verified. */}
+            <Link className="ad-btn ad-btn--secondary" href={`/details/${row.id}`} prefetch={false}>
+              Details
+            </Link>
+            {row.rating?.state === "Failed" ? (
+              <form action={rateSession}>
+                <Working />
+                <input type="hidden" name="session_id" value={row.id} />
+                <PendingButton className="ad-btn ad-btn--secondary" working="page" pending="Rating...">
+                  Rate
+                </PendingButton>
+              </form>
+            ) : null}
+          </div>
+        </td>
+      </tr>
+      <WhyRow row={row} />
+    </>
   );
 }
 
