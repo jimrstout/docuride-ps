@@ -48,6 +48,7 @@ import { secretsMatch } from "../_shared/supabase.ts";
 import { describeContract, type ContractRef } from "../_shared/duplicates.ts";
 import { isRecorded } from "../_shared/oem-contracts.ts";
 import { contractCallRefusal } from "../_shared/contract-guard.ts";
+import { alreadyVoidingMessage, unclaimedFilter } from "../_shared/void-claim.ts";
 import { voidedBaseName, voidedName } from "../_shared/document-names.ts";
 import { renameFile, workDriveProblem } from "../_shared/workdrive.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -142,6 +143,21 @@ serve(async (req: Request) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
+
+  // The contract row this request has claimed for voiding, if any, and how to
+  // let it go again whatever happens (_shared/void-claim.ts).
+  let claimedRowId: string | null = null;
+  const releaseClaim = async () => {
+    if (!claimedRowId) return;
+    const id = claimedRowId;
+    claimedRowId = null;
+    const { error } = await supabase
+      .schema("fni")
+      .from("agreement_products")
+      .update({ void_started_at: null })
+      .eq("id", id);
+    if (error) console.error(`fni-contract-void: claim not released (${error.code ?? "error"})`);
+  };
 
   try {
     const { data: session, error: sessErr } = await supabase
@@ -300,6 +316,25 @@ serve(async (req: Request) => {
       });
     }
 
+    // ── One void at a time ──────────────────────────────────────────────
+    // A double click or a second tab must not reach TecAssured twice. The row
+    // is claimed with a conditional UPDATE, which Postgres applies atomically:
+    // of two requests, exactly one gets it. See _shared/void-claim.ts.
+    const { data: claimed, error: claimErr } = await supabase
+      .schema("fni")
+      .from("agreement_products")
+      .update({ void_started_at: new Date().toISOString() })
+      .eq("id", row.id)
+      .neq("status", "Voided")
+      .or(unclaimedFilter(new Date()))
+      .select("id")
+      .maybeSingle();
+    if (claimErr) return json(500, { error: `The void could not be started: ${claimErr.message}` });
+    if (!claimed) {
+      return json(409, { error: alreadyVoidingMessage(describeContract(row)), contract_number: contractNumber });
+    }
+    claimedRowId = row.id;
+
     // TecAssured first, the row second. The other order would free the
     // one-live-contract slot while the contract was still live over there.
     const response = await client.voidContract(
@@ -309,6 +344,7 @@ serve(async (req: Request) => {
 
     const err = providerError(response);
     if (err) {
+      await releaseClaim();
       return json(400, {
         error: `TecAssured refused to void ${contractNumber}: ${err}`,
         contract_number: contractNumber,
@@ -324,6 +360,8 @@ serve(async (req: Request) => {
         voided_at: new Date().toISOString(),
         voided_by: staffEmail,
         void_reason: reason,
+        // The void is done: the claim goes with it.
+        void_started_at: null,
         // A held document is marked too, so if it ever moves to the Deal
         // Jacket it lands with " VOID" before the first pipe. The bucket copy
         // itself is kept as it is.
@@ -342,6 +380,7 @@ serve(async (req: Request) => {
       // this again, which is safe because voiding an already-void contract is
       // refused by the provider and handled above.
       console.error(`Voided at TecAssured but not recorded: ${updErr.message}`);
+      await releaseClaim();
       return json(500, {
         error:
           `Contract ${contractNumber} was voided at TecAssured but the record could not be ` +
@@ -369,6 +408,8 @@ serve(async (req: Request) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("fni-contract-void error:", message);
+    // A void that stopped part way leaves nothing claimed.
+    await releaseClaim();
     return json(500, { error: message });
   }
 });
