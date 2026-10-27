@@ -116,3 +116,19 @@ test("Administration sets each store's time zone, from the listed zones only", (
   assert.match(stores, /if \(!isStoreTimeZone\(body\.time_zone\)\) \{/);
   assert.match(stores, /\.update\(\{ time_zone: body\.time_zone \}\)\s*\.eq\("id", body\.store_id\)\s*\.eq\("tenant_id", tenantId\)/);
 });
+
+test("Sessions offers Renew for Today, not +24h, and only when it gives longer", async () => {
+  const page = src("apps/ownership-planner/app/admin/sessions/page.tsx");
+  assert.match(page, /\{row\.renewable \? \(\s*<form action=\{renewSession\}>/);
+  assert.match(page, /pending="Renewing for today\.\.\."/);
+  assert.match(page, />\s*Renew for Today\s*<\/PendingButton>/);
+  assert.doesNotMatch(page, />\s*\+24h\s*<|extendSession|Adding 24 hours/);
+  const actions = src("apps/ownership-planner/app/console-actions.ts");
+  assert.match(actions, /await edge\.adminRenew<\{ expires_at: string \}>\(sessionId\);/);
+  assert.doesNotMatch(actions, /EXTEND_HOURS|adminExtend/);
+  const { storeTime } = await import("../apps/ownership-planner/lib/store-time.ts");
+  assert.equal(storeTime("2026-10-28T03:59:59Z", "America/New_York"), "11:59 PM, 27 Oct (EDT)");
+  assert.equal(storeTime("2026-10-28T04:59:59Z", "America/Chicago"), "11:59 PM, 27 Oct (CDT)");
+  assert.equal(storeTime("2026-10-28T03:59:59Z", "Not/AZone"), "11:59 PM, 27 Oct (EDT)");
+  assert.equal(storeTime(null, "America/Chicago"), "");
+});

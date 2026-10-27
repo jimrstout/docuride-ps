@@ -37,11 +37,11 @@ test("every action that landed on / or /settings lands on the new page", () => {
   assert.doesNotMatch(actions, /"\/settings/, 'no redirect to "/settings" is left');
   assert.doesNotMatch(actions, /revalidatePath\("\/"\)/);
   // The same notices as before, on the new paths.
-  assert.equal(withNotice("/admin/sessions", "extendfailed"), "/admin/sessions?extendfailed=1");
+  assert.equal(withNotice("/admin/sessions", "renewfailed"), "/admin/sessions?renewfailed=1");
   for (const n of ["denied", "slow", "broken"]) {
     assert.match(actions, new RegExp(`withNotice\\(next, "${n}"\\)`), n);
   }
-  for (const n of ["bad", "extendfailed"]) {
+  for (const n of ["bad", "renewfailed"]) {
     assert.match(actions, new RegExp(`withNotice\\(SESSIONS, "${n}"\\)`), n);
   }
   for (const n of ["saved", "savefailed"]) {
@@ -122,7 +122,7 @@ test("the old pages keep no copy of their own", () => {
   // Sessions and Wording behave as before, from their new homes.
   const sessions = src("app/admin/sessions/page.tsx");
   assert.match(sessions, /edge\.adminSessions<ConsoleListPayload>\(LIMIT\)/);
-  assert.match(sessions, /extendSession/);
+  assert.match(sessions, /renewSession/);
   assert.match(sessions, /rateSession/);
   const wording = src("app/admin/wording/page.tsx");
   assert.match(wording, /<form action=\{saveSettings\} className="ad-form">/);

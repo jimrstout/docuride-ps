@@ -14,7 +14,7 @@ export const SIGN_IN_NOTICES: Record<string, string> = {
   denied: "Those details don't match an account with access.",
   slow: "Too many attempts. Wait a minute and try again.",
   broken: "Sign-in is unavailable right now. Try again shortly.",
-  extendfailed: "That session's expiry could not be extended. Try again.",
+  renewfailed: "That session could not be renewed. Try again.",
   bad: "That wasn't a valid session.",
 };
 

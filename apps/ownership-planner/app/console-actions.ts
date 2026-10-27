@@ -39,10 +39,6 @@ import {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/** How much one press of Extend is worth. The same 24 hours a session starts
- *  with, so "extend" restores a session to the state it was created in. */
-const EXTEND_HOURS = 24;
-
 export async function signIn(formData: FormData): Promise<void> {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
@@ -81,7 +77,12 @@ export async function signOut(): Promise<void> {
   redirect(SESSIONS);
 }
 
-export async function extendSession(formData: FormData): Promise<void> {
+/**
+ * Renew for Today: the session lasts to 23:59:59 on its store's day, or on its
+ * planned sale date when that is later. It never adds hours, so a second press
+ * changes nothing (+24h stacked: deal 13437 gained 48 hours).
+ */
+export async function renewSession(formData: FormData): Promise<void> {
   // Checked here and not only on the page: a Server Action is a POST endpoint
   // like any other, and the page having rendered the button is not evidence
   // that whoever called it was allowed to.
@@ -92,10 +93,10 @@ export async function extendSession(formData: FormData): Promise<void> {
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
   try {
-    await edge.adminExtend<{ expires_at: string }>(sessionId, EXTEND_HOURS);
+    await edge.adminRenew<{ expires_at: string }>(sessionId);
   } catch (err) {
-    console.error(`console extend failed for ${sessionId}:`, err);
-    redirect(withNotice(SESSIONS, "extendfailed"));
+    console.error(`console renew failed for ${sessionId}:`, err);
+    redirect(withNotice(SESSIONS, "renewfailed"));
   }
 
   // The list is the feedback: the row's expiry moves and the Expired mark
