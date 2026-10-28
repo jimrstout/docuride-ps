@@ -173,3 +173,9 @@ test("fni-session-verify locks the panels and refuses edits while a contract is 
   assert.match(v, /if \(\(await liveContracts\(supabase, s\.id as string\)\)\.length > 0\) \{\s*return json\(409, \{ error: LOCK_REASON \}\);/);
   assert.match(v, /if \(key && isPartyKey\(key\) && \(await liveContracts\(supabase, s\.id as string\)\)\.length > 0\) \{/);
 });
+
+test("Discard my edits keeps city, state and ZIP edits while a contract is live", () => {
+  const v = src("supabase/functions/fni-session-verify/index.ts");
+  assert.match(v, /const locked = \(await liveContracts\(supabase, s\.id as string\)\)\.length > 0;\s*const kept: StaffEdits = \{\};/);
+  assert.match(v, /if \(crmOwned\.has\(key\) && !\(locked && isPartyKey\(key\)\)\) discarded\.push\(labelFor\(key\)\);/);
+});

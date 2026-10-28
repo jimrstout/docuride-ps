@@ -795,10 +795,13 @@ async function discardEdits(
   const base = buildVerification(s as unknown as VerificationSource, []);
   const crmOwned = new Set(base.fields.filter((f) => f.in_crm).map((f) => f.key));
 
+  // City, state and ZIP are contract details too: while a contract is live
+  // they are locked, so a discard keeps them (_shared/contract-parties.ts).
+  const locked = (await liveContracts(supabase, s.id as string)).length > 0;
   const kept: StaffEdits = {};
   const discarded: string[] = [];
   for (const [key, edit] of Object.entries(edits)) {
-    if (crmOwned.has(key)) discarded.push(labelFor(key));
+    if (crmOwned.has(key) && !(locked && isPartyKey(key))) discarded.push(labelFor(key));
     else kept[key] = edit;
   }
 
