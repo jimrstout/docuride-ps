@@ -75,9 +75,8 @@ import { alignContractDates, dealDates, SALE_DATE_MISSING } from "../_shared/dea
 import { storeToday, submitDateProblem } from "../_shared/store-day.ts";
 import { renewedBy, STALE_TEST_SUBMIT_EVENT, staleRatingProblem } from "../_shared/sale-date.ts";
 import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
+import { buyerPhoneKeys, cobuyerKeys } from "../_shared/submit-parties.ts";
 import { DX1_CONFIRMATION, partyChanges } from "../_shared/contract-parties.ts";
-import { applyCobuyerProbe, probeDecision, type MarkerRow } from "../_shared/cobuyer-probe.ts";
-import { programName } from "../_shared/program-names.ts";
 import { savedSelections, SUBMIT_ROW_COLUMNS, type SubmitRow } from "../_shared/saved-selections.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -90,10 +89,6 @@ interface ContractSubmitRequest {
    * list sent with the request. What Verify's Submit button sends.
    */
   use_saved_selections?: boolean;
-  /** TEMPORARY: the co-buyer field probe (_shared/cobuyer-probe.ts). */
-  cobuyer_probe?: boolean;
-  /** "All", 1, 2 or 3. "All" when left out. */
-  cobuyer_probe_batch?: unknown;
   /**
    * The person submitting confirms the contract details changed on Details
    * have been made in DX1 too, or are not needed there. Required only when
@@ -536,19 +531,6 @@ serve(async (req: Request) => {
       });
     }
 
-    // ── Step 4a: The co-buyer field probe (TEMPORARY) ──────────────────
-    // Only past the QA-only guard above, only on a test session, only when
-    // asked for, and only for forms that print a co-buyer name. Asked for
-    // anywhere else, the flag is ignored. See _shared/cobuyer-probe.ts.
-    const probe = probeDecision({
-      requested: body.cobuyer_probe,
-      batch: body.cobuyer_probe_batch,
-      isTest: session.is_test === true,
-      guardPassed: notCleared === null,
-      products: resolved.map((r) => ({ name: r.productName, program: programName(r.productName) })),
-    });
-    if (probe.kind === "Refuse") return await refuse(400, { error: probe.message });
-
     // ── Step 4b: A product that already has paperwork ──────────────────
     //
     // Jim's rule, and the one the schema now also enforces: there is never more
@@ -665,13 +647,18 @@ serve(async (req: Request) => {
       toSubmit.map((r) => r.selection)
     );
 
-    // ── Step 5: Buyer and lienholder ───────────────────────────────────
+    // ── Step 5: Buyer, co-buyer and lienholder ─────────────────────────
     // The staff value wherever one exists: the CRM's, corrected on Details,
     // and blank for a lienholder staff removed (_shared/contract-parties.ts).
     const party = applyStaffEdits(session as Record<string, unknown>, parseStaffEdits(session.staff_edits)) as Record<string, string | null>;
     if (party.buyer_first_name) submitQuote.buyerFirstName = party.buyer_first_name;
     if (party.buyer_last_name) submitQuote.buyerLastName = party.buyer_last_name;
     if (party.buyer_address) submitQuote.buyerAddress = party.buyer_address;
+    // The buyer telephone, digits only, when there is one.
+    Object.assign(submitQuote, buyerPhoneKeys(party));
+    // The co-buyer, on the contract's second contract holder line, only when
+    // there is one (_shared/submit-parties.ts).
+    Object.assign(submitQuote, cobuyerKeys(party));
 
     const lienholder: Record<string, string> = {};
     if (party.lienholder_name) lienholder.lienholderName = party.lienholder_name;
@@ -694,33 +681,6 @@ serve(async (req: Request) => {
     // made the session's own, so a contract never carries another day.
     const datesChanged = alignContractDates(submitQuote, { sale: dates.sale, inService: dates.inService });
     if (datesChanged.length > 0) console.log(`fni-contract-submit dates aligned: ${datesChanged.join("; ")}`);
-
-    // ── Step 5b: The co-buyer field probe (TEMPORARY) ──────────────────
-    // Marker codes only, added after the real buyer and never over any key
-    // already there. Recorded on the session before anything is sent, so the
-    // record exists even if the call never answers.
-    let probeMarkers: MarkerRow[] | null = null;
-    if (probe.kind === "On") {
-      probeMarkers = applyCobuyerProbe(submitQuote, submitPayload, probe.batch);
-      const { error: eventErr } = await supabase
-        .schema("fni")
-        .from("session_events")
-        .insert({
-          session_id,
-          event: "Co-buyer field probe sent",
-          detail: {
-            batch: probe.batch === "All" ? "All" : `Batch ${probe.batch}`,
-            products: toSubmit.map((r) => r.productName),
-            markers: probeMarkers,
-          },
-          created_by: "fni-contract-submit",
-        });
-      if (eventErr) {
-        return await refuse(500, {
-          error: `The co-buyer field test could not be recorded on the session (${eventErr.code ?? "error"}), so nothing was sent.`,
-        });
-      }
-    }
 
     // ── Step 6: Submit ─────────────────────────────────────────────────
     //
@@ -752,23 +712,6 @@ serve(async (req: Request) => {
 
     if (reading.refusedOutright) {
       await keepAnswer("Submit refused", reading.message);
-      if (probe.kind === "On") {
-        // TecAssured's own words, exactly. An "unknown field" error says
-        // something about the probe, and Jim decides whether to run the
-        // batches. Nothing is retried, stripped or switched here.
-        const verbatim = [
-          typeof response.error === "string" ? response.error : "",
-          ...(Array.isArray(response.contracts) ? response.contracts : [])
-            .map((c) => (c && typeof c === "object" ? (c as Record<string, unknown>).error : null))
-            .filter((e): e is string => typeof e === "string" && e.trim() !== ""),
-        ].filter((e) => e.trim() !== "");
-        return await refuse(400, {
-          error: verbatim.length > 0 ? verbatim.join(" | ") : JSON.stringify(response),
-          tecassured_error: response.error ?? null,
-          cobuyer_probe: { batch: probe.batch, markers: probeMarkers },
-          products: reading.products,
-        });
-      }
       return await refuse(400, {
         error: reading.message,
         tecassured_error: response.error ?? null,
@@ -1017,8 +960,6 @@ serve(async (req: Request) => {
       message: reading.message,
       // The provider record's name, for the console's own line.
       provider_name: vendor,
-      // TEMPORARY: which markers went out, to read the contract against.
-      ...(probe.kind === "On" ? { cobuyer_probe: { batch: probe.batch, markers: probeMarkers } } : {}),
       products: reading.products,
       partial: reading.products.some((p) => p.outcome !== "Created"),
       submit_state: reading.unknown ? "Submit Status Unknown" : "Idle",

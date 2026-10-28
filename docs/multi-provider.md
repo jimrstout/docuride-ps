@@ -792,121 +792,26 @@ still offered by the same provider at the same rate id. TecAssured's rate ids
 are stable across quotes. A choice that is gone, or offered only at another
 rate, sends the session back to Rated, as before.
 
-## 16. The co-buyer field probe (TEMPORARY)
-
-**Round 2 (2026-10-28): the phone field.** Round 1 answered the co-buyer: on
-deal 15029 only CB03 printed (contract VLBT3440876-42153), so `cobuyerFirstName`
-and `cobuyerLastName` on the quote fill the co-buyer name boxes, and TecAssured
-ignored every other key. No co-buyer signature location came back. Round 2
-reuses the same flag, guards and checkbox to find the buyer's phone field:
-twenty guessed keys on the quote (`buyerPhone`, `phone`, `customerPhone` and the
-rest), each carrying a fictional, digits-only 304-555-01xx number whose last
-two digits name the guess (P01 is 3045550101), plus CB03 again to confirm round
-1 repeats. Nothing goes at the top level, and never a buyers or customers array.
+## 16. The co-buyer and phone field probe (finished, removed)
 
 TecAssured's Shop API documents only `buyerFirstName`, `buyerLastName` and
-`buyerAddress`. Another front end (iTap) gets co-buyers printed on contracts
-through the same TecAssured back end, so an undocumented field may exist. The
-probe sends many guessed field names in ONE test submit, each carrying its own
-marker code, and the contract says which one worked. If no marker prints, the
-likely answer is that TecAssured holds no co-buyer at all and iTap stamps it on
-the PDF itself.
+`buyerAddress`, yet iTap prints co-buyers on contracts through the same back
+end. A temporary probe, on test sessions on the QA server only, sent guessed
+field names in one submit, each carrying its own made-up marker, and the
+contract showed which one printed.
 
-**This is temporary.** Once the contract has been read, `_shared/cobuyer-probe.ts`,
-the request flags and the Details checkbox are deleted. If a field worked, it is
-replaced by the real mapping from `cobuyer_first_name` / `cobuyer_last_name`.
-If none did, DocuRide will stamp co-buyer names on the PDF in a later task.
+- **Round 1, the co-buyer** (probe added 26 Oct 2026, read before round 2 on
+  28 Oct 2026). Deal 15029, contract VLBT3440876-42153. Of 44 guessed keys
+  only CB03 printed: `cobuyerFirstName` and `cobuyerLastName` on the quote
+  fill the Riders Advantage contract's second contract holder line.
+- **Round 2, the buyer's phone** (28 Oct 2026). Deal 15029, contract
+  VLBT3440876-42274. CB03 printed on the second contract holder line again,
+  and the buyer telephone printed as (304) 555-0104: probe key P04,
+  `buyerHomePhone` on the quote, sent digits only.
 
-**When it applies** (`probeDecision`). fni-contract-submit takes
-`cobuyer_probe: true` and `cobuyer_probe_batch` ("All", 1, 2 or 3, "All" when
-left out). The probe goes on only when all of these hold:
-
-- the QA-only contract guard passed (ratessys-qa.com; deal 14957 never),
-- the session is is_test,
-- `cobuyer_probe` is true, and
-- every selected product is Battery Standard or Care Coverage, matched on
-  TecAssured's program name (`RA BATTERY STANDARD ...`, or any `... CARE ...`
-  program). These are the only forms with a co-buyer name row. Tire and Wheel
-  has a co-buyer signature line but no name row, and Priority Maintenance has
-  neither, so a winning marker could print nowhere on them.
-
-If the flag is set on a test session on QA and any other product is selected,
-the submit is refused in plain English. Anywhere else the flag is ignored.
-
-**What is sent.** Marker codes only, never a real name or any CRM data. The
-first and last name both carry the code ("CB07" / "CB07"); a single full-name
-field carries it twice ("CB26 CB26"). Quote variants go beside
-`buyerFirstName`; R variants go at the top level of the payload. The keys are
-added after the buyer and lienholder (Step 5b), and never over a key that is
-already there. No `buyers` or `customers` array is sent, because one could
-overwrite the real buyer.
-
-**What is recorded.** Before the call, a `fni.session_events` row (migration
-0036) reads "Co-buyer field probe sent", with the batch, the products and the
-marker table. If TecAssured rejects the submit, its error text is returned
-verbatim, with no retry, no stripping and no switch to the batches: an "unknown
-field" error is information, and Jim decides whether to run the batches.
-
-**On Details.** On a test session whose store points at the QA server, the
-Contracts panel shows a "Co-buyer field test" checkbox next to Submit, off by
-default and explained in plain English, with a batch picker (All, Batch 1,
-Batch 2, Batch 3) defaulting to All. It is never shown otherwise.
-
-**Signatures.** fni-contract-documents stores the signature data exactly as
-TecAssured returns it (`agreement_products.provider_signatures`), whatever its
-shape, and its answer names any signature type other than buyer and seller
-(`other_signature_types`), such as "cobuyer".
-
-**Batches**, used only if TecAssured rejects the full set, and only when Jim
-says so: Batch 1 is CB01 to CB12, Batch 2 is CB13 to CB25, Batch 3 is CB26 to
-CB41 plus R01 to R03.
-
-| Marker | Where | Field names | Sent | Batch |
-|---|---|---|---|---|
-| CB01 | Quote | `coBuyerFirstName / coBuyerLastName` | CB01 / CB01 | 1 |
-| CB02 | Quote | `CoBuyerFirstName / CoBuyerLastName` | CB02 / CB02 | 1 |
-| CB03 | Quote | `cobuyerFirstName / cobuyerLastName` | CB03 / CB03 | 1 |
-| CB04 | Quote | `coBuyerFirstname / coBuyerLastname` | CB04 / CB04 | 1 |
-| CB05 | Quote | `cobuyerfirstname / cobuyerlastname` | CB05 / CB05 | 1 |
-| CB06 | Quote | `co_buyer_first_name / co_buyer_last_name` | CB06 / CB06 | 1 |
-| CB07 | Quote | `coBuyer_FirstName / coBuyer_LastName` | CB07 / CB07 | 1 |
-| CB08 | Quote | `co-buyerFirstName / co-buyerLastName` | CB08 / CB08 | 1 |
-| CB09 | Quote | `Co-BuyerFirstName / Co-BuyerLastName` | CB09 / CB09 | 1 |
-| CB10 | Quote | `co-buyer-first-name / co-buyer-last-name` | CB10 / CB10 | 1 |
-| CB11 | Quote | `coFirstName / coLastName` | CB11 / CB11 | 1 |
-| CB12 | Quote | `CoFirstName / CoLastName` | CB12 / CB12 | 1 |
-| CB13 | Quote | `coFirstname / coLastname` | CB13 / CB13 | 2 |
-| CB14 | Quote | `co_first_name / co_last_name` | CB14 / CB14 | 2 |
-| CB15 | Quote | `co-FirstName / co-LastName` | CB15 / CB15 | 2 |
-| CB16 | Quote | `Co-FirstName / Co-LastName` | CB16 / CB16 | 2 |
-| CB17 | Quote | `cobuyerFName / cobuyerLName` | CB17 / CB17 | 2 |
-| CB18 | Quote | `coBuyerFName / coBuyerLName` | CB18 / CB18 | 2 |
-| CB19 | Quote | `secondBuyerFirstName / secondBuyerLastName` | CB19 / CB19 | 2 |
-| CB20 | Quote | `buyer2FirstName / buyer2LastName` | CB20 / CB20 | 2 |
-| CB21 | Quote | `Buyer2FirstName / Buyer2LastName` | CB21 / CB21 | 2 |
-| CB22 | Quote | `jointBuyerFirstName / jointBuyerLastName` | CB22 / CB22 | 2 |
-| CB23 | Quote | `coApplicantFirstName / coApplicantLastName` | CB23 / CB23 | 2 |
-| CB24 | Quote | `coOwnerFirstName / coOwnerLastName` | CB24 / CB24 | 2 |
-| CB25 | Quote | `coPurchaserFirstName / coPurchaserLastName` | CB25 / CB25 | 2 |
-| CB26 | Quote | `coBuyerName` | CB26 CB26 | 3 |
-| CB27 | Quote | `cobuyerName` | CB27 CB27 | 3 |
-| CB28 | Quote | `CoBuyerName` | CB28 CB28 | 3 |
-| CB29 | Quote | `coBuyerFullName` | CB29 CB29 | 3 |
-| CB30 | Quote | `coBuyer: { firstName, lastName }` | { CB30, CB30 } | 3 |
-| CB31 | Quote | `cobuyer: { firstName, lastName }` | { CB31, CB31 } | 3 |
-| CB32 | Quote | `CoBuyer: { FirstName, LastName }` | { CB32, CB32 } | 3 |
-| CB33 | Quote | `co-buyer: { firstName, lastName }` | { CB33, CB33 } | 3 |
-| CB34 | Quote | `contractHolder2FirstName / contractHolder2LastName` | CB34 / CB34 | 3 |
-| CB35 | Quote | `coContractHolderFirstName / coContractHolderLastName` | CB35 / CB35 | 3 |
-| CB36 | Quote | `secondContractHolderFirstName / secondContractHolderLastName` | CB36 / CB36 | 3 |
-| CB37 | Quote | `COBuyerFirstName / COBuyerLastName` | CB37 / CB37 | 3 |
-| CB38 | Quote | `Co_BuyerFirstName / Co_BuyerLastName` | CB38 / CB38 | 3 |
-| CB39 | Quote | `additionalBuyerFirstName / additionalBuyerLastName` | CB39 / CB39 | 3 |
-| CB40 | Quote | `secondaryBuyerFirstName / secondaryBuyerLastName` | CB40 / CB40 | 3 |
-| CB41 | Quote | `owner2FirstName / owner2LastName` | CB41 / CB41 | 3 |
-| R01 | Top level | `coBuyerFirstName / coBuyerLastName` | R01 / R01 | 3 |
-| R02 | Top level | `CoBuyerFirstName / CoBuyerLastName` | R02 / R02 | 3 |
-| R03 | Top level | `coBuyer: { firstName, lastName }` | { R03, R03 } | 3 |
+The probe, its request flags, the Details checkbox and batch picker, and the
+redaction exception for its made-up values were deleted on 28 Oct 2026. The
+submit now sends the real values under those keys (section 21).
 
 ## 17. Dates are always sent and never invented
 
@@ -1056,8 +961,7 @@ success (unknown, refused, partly refused, or a failure the provider answered)
 keeps the status, request ID and body as the session event "Provider's answer
 kept", once per submit. Before it is kept, any buyer, co-buyer or lienholder
 name, address, email or phone is taken out, by key and by the session's own
-values wherever they appear; the co-buyer probe's made-up values (304-555-01xx,
-CB03) stay; credentials, tokens and session IDs are removed; the body is cut at
+values wherever they appear; credentials, tokens and session IDs are removed; the body is cut at
 50,000 characters. Details shows the latest one behind Show details, with Copy
 error, in the Submit Status Unknown notice or the Contracts panel. A rating the
 provider answers with an HTTP failure keeps the same with the attempt
@@ -1164,6 +1068,8 @@ sign-in). `_shared/contract-parties.ts` holds the rules.
 | Edits | A staff edit in `staff_edits`, keyed on the column, with who, when and the value replaced, shown as "Entered by Staff: name, time. Was old value." Removing a co-buyer or lienholder is the edit `cobuyer` or `lienholder` = "Removed". |
 | Refresh from CRM | Writes the columns, never the edits, so the staff value stands. If the CRM later says something new, both are shown ("CRM now says ...") with Keep staff value and Use CRM value. |
 | Submit | Sends the staff value wherever one exists. If any contract detail was changed here, each change is listed in the Submit confirmation and Confirm Submit needs "I have made these changes in DX1, or they are not needed there."; fni-contract-submit refuses without it and records it as the session event "Contract detail changes confirmed for DX1". |
+| Co-buyer on the contract | The quote carries `cobuyerFirstName` and `cobuyerLastName`, which print on the second contract holder line (section 16), from the contract parties, staff value over CRM value, only when there is a co-buyer; with none, or one removed on Details, neither key is sent. A Company co-buyer sends its business name (name as it prints) in `cobuyerLastName` and an empty `cobuyerFirstName`, as the Co-buyer panel leads with the business name; the buyer has no company rule of its own on the submit (`_shared/submit-parties.ts`). |
+| Buyer phone on the contract | The quote carries `buyerHomePhone` (probe key P04, section 16), which prints as the buyer telephone, from the contract parties, staff value over CRM value, digits only: formatting is stripped and a leading 1 on an eleven-digit number is dropped. No phone, no key (`_shared/submit-parties.ts`). |
 | Missing | Named beside the field ("Missing: buyer last name"). Not blocking yet. |
 | Locked | While any contract on the deal is live (Live or Submit Status Unknown), the panels are read-only, edits are refused, and Discard keeps city, state and ZIP. Voiding every live contract unlocks them. |
 | Reopened | When a void leaves the session with no live contract (none Live or Submit Status Unknown) and its own submit is idle, a session at Agreement Created or Finalized goes back to Products Selected, so Submit takes it again (`_shared/session-reopen.ts`, both voids). Only the status changes. The session event "Session reopened: all contracts voided" names the signed-in person's initials, or System. |

@@ -13,10 +13,8 @@
 // ── What is never kept ────────────────────────────────────────────────────
 // Personal details: any buyer, co-buyer or lienholder name, address, email or
 // phone, whether under a key that names one or written inside a message. The
-// session's own values are also searched for wherever they appear. The
-// co-buyer field probe's made-up values (304-555-0101 to 0120, CB01, R01 and
-// the like) stay, since they are what the probe reads for. Credentials,
-// tokens and session IDs are removed outright. The answer is cut at 50,000
+// session's own values are also searched for wherever they appear.
+// Credentials, tokens and session IDs are removed outright. The answer is cut at 50,000
 // characters.
 //
 // Pure, so a Node test can hold it.
@@ -53,15 +51,8 @@ function personalKey(key: string): boolean {
 /** Keys that hold a secret. Their values are never kept. */
 const SECRET_KEY = /session_?id|token|password|passwd|secret|api_?key|authori[sz]ation|cookie|nonce|digest|salt|username|credential/i;
 
-/** The co-buyer field probe's made-up values, which may stay. */
-const PROBE_VALUE = /^(\(?304\)?[-. ]?555[-. ]?01\d\d|(CB|R|P)\d{2}( (CB|R|P)\d{2})?|(CB|R|P)\d{2} \/ (CB|R|P)\d{2})$/;
-
 const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const PHONE = /(?<!\d)(?:\+?1[-. ]?)?\(?\d{3}\)?[-. ]?\d{3}[-. ]?\d{4}(?!\d)/g;
-
-function isProbe(v: string): boolean {
-  return PROBE_VALUE.test(v.trim());
-}
 
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -69,18 +60,18 @@ function escapeRe(s: string): string {
 
 /**
  * Personal text removed from free text: the session's own values, then any
- * email, then any phone number that is not a probe number.
+ * email, then any phone number.
  */
 function scrubText(text: string, known: RegExp | null): string {
   let out = known ? text.replace(known, REDACTED) : text;
   out = out.replace(EMAIL, REDACTED);
-  out = out.replace(PHONE, (m) => (isProbe(m) ? m : REDACTED));
+  out = out.replace(PHONE, REDACTED);
   return out;
 }
 
 /** A pattern matching any of the session's personal values, or null. */
 function knownPattern(known: (string | null | undefined)[]): RegExp | null {
-  const vals = [...new Set(known.map((v) => (typeof v === "string" ? v.trim() : "")).filter((v) => v.length >= 3 && !isProbe(v)))];
+  const vals = [...new Set(known.map((v) => (typeof v === "string" ? v.trim() : "")).filter((v) => v.length >= 3))];
   if (vals.length === 0) return null;
   // Longest first, so "Sample Buyer" goes before "Sample".
   vals.sort((a, b) => b.length - a.length);
@@ -96,12 +87,11 @@ function walk(v: unknown, key: string | null, known: RegExp | null): unknown {
     return out;
   }
   if (typeof v === "string") {
-    if (isProbe(v)) return v;
     if (key !== null && personalKey(key) && v.trim() !== "") return REDACTED;
     return scrubText(v, known);
   }
   if (typeof v === "number" && key !== null && personalKey(key)) {
-    return isProbe(String(v)) ? v : REDACTED;
+    return REDACTED;
   }
   return v;
 }

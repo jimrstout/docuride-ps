@@ -164,17 +164,6 @@ test("personal details are taken out, by key and by the session's own values", (
   assert.equal(a.body.contracts[0].dealerName, "Mock Dealer");
 });
 
-test("the probe's made-up values stay", () => {
-  const a = providerAnswer({
-    kind: "Submit outcome unknown",
-    http_status: 200,
-    body: { quote: { buyerPhone: "3045550101", phone: "304-555-0114", cobuyerFirstName: "CB03", cobuyerLastName: "CB03", coBuyerName: "CB26 CB26" }, message: "unknown field buyerPhone 3045550120" },
-    known: ["Sample Buyer"],
-  });
-  assert.deepEqual(a.body.quote, { buyerPhone: "3045550101", phone: "304-555-0114", cobuyerFirstName: "CB03", cobuyerLastName: "CB03", coBuyerName: "CB26 CB26" });
-  assert.equal(a.body.message, "unknown field buyerPhone 3045550120");
-});
-
 test("credentials, tokens and session IDs are never kept", () => {
   const a = providerAnswer({
     kind: "Submit outcome unknown",

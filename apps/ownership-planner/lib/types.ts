@@ -744,8 +744,6 @@ export interface OemContractSelection {
 /** Verify's staff contracts panel: the customer's choices and their contracts. */
 export interface ContractsPanel {
   provider_name: string;
-  /** TEMPORARY: a test session on the QA server can run the co-buyer field test. */
-  cobuyer_probe_available?: boolean;
   selections: {
     product_name: string;
     /** TecAssured's program name. Staff only. */
