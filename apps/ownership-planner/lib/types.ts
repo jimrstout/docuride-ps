@@ -806,6 +806,16 @@ export interface SubmitConfirmation {
   }[];
   total: number;
   total_cents: number;
+  /**
+   * Products whose rate a voided contract was made from, with no rating
+   * since that void (supabase/functions/_shared/spent-rates.ts). Any at all,
+   * and Submit contracts refreshes the rating before the modal opens.
+   */
+  spent?: string[];
+  /** Said in the modal when the last refresh left every price unchanged. */
+  refresh_note?: string | null;
+  /** The last refresh found a price change: Confirm Submit stays disabled. */
+  held?: { message: string; differences: string[] } | null;
 }
 
 // ── Who goes on the contracts ──────────────────────────────────────────────

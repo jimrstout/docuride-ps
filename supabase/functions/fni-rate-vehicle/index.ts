@@ -59,12 +59,33 @@ import { tecAssuredProviderId } from "../_shared/provider-rows.ts";
 import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
 import { rateSession, recordOutcome, type ProviderOutcome } from "../_shared/rate-session.ts";
 import { choicesStillOffered, rateKey, statusAfterRating, type ChosenRate } from "../_shared/rerate.ts";
+import { offerRowsFor } from "../_shared/provider-rows.ts";
+import { familiesFromRow, familiesFromRows, type RatingRow } from "../_shared/rating-summary.ts";
+import { priceFamilies } from "../_shared/plan-prices.ts";
+import type { PricingRule } from "../_shared/planner-pricing.ts";
+import { renewedBy } from "../_shared/sale-date.ts";
+import {
+  compareRefreshed,
+  REFRESHED_HELD_EVENT,
+  REFRESHED_UNCHANGED_EVENT,
+  spentSelections,
+  type SpentSelection,
+  type VoidedContract,
+} from "../_shared/spent-rates.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
 interface RateRequest {
   session_id: string;
   overrides?: Record<string, unknown>;
+  /**
+   * Before the Submit confirmation: rate again if a selected rate is spent
+   * (its contract was voided), and move the selections onto the fresh rates
+   * when nothing about their price changed (_shared/spent-rates.ts).
+   */
+  refresh_spent?: boolean;
+  /** The signed-in person's initials, for the session event. */
+  refreshed_by?: string;
 }
 
 interface SessionRow {
@@ -224,6 +245,10 @@ serve(async (req: Request) => {
       }
     }
 
+    if (body.refresh_spent === true) {
+      return await refreshSpent(supabase, sess, rateSource, body.refreshed_by);
+    }
+
     // ── Step 3: Rate every provider the menu needs ────────────────────
     //
     // Which login and Dealer ID TecAssured is called with is still resolved by
@@ -365,3 +390,135 @@ serve(async (req: Request) => {
     return json(500, { error: message });
   }
 });
+
+// ── Refreshing spent rates before a submit (2026-10-28) ──────────────────
+//
+// A rate whose contract was voided is spent: the provider refuses it ("One or
+// more of these products have been voided. Please re-rate and try again"). In
+// iTap a voided contract is written again with no re-rate a person sees, so
+// before the Submit confirmation opens, a deal with a spent rate is rated
+// again here, through the same rateSession staff use, and its offers stored
+// the usual way. Every selection the submit will send is matched to the fresh
+// offer (a fresh quote can renumber every rate) and compared to the cent
+// (_shared/spent-rates.ts):
+//
+//   unchanged  each selection moves onto its fresh rate (rate ID and
+//              snapshot; no price column is written), and the session event
+//              "Rating refreshed after a void: prices unchanged" is recorded
+//   otherwise  nothing moves, the submit is held, and "Rating refreshed after
+//              a void: prices changed, submit held" records each difference
+//   failed     the provider's error is answered; the last good offers are
+//              kept as any failed re-rate keeps them, and nothing is submitted
+//
+// The session's status is left as it is: the customer's choices stand until
+// staff review them. This runs once per press of Submit and never retries.
+
+async function refreshSpent(
+  supabase: SupabaseClient,
+  sess: SessionRow,
+  rateSource: Record<string, unknown>,
+  by: unknown
+): Promise<Response> {
+  const who = renewedBy(by);
+
+  // What the submit will send: the Included selections from providers whose
+  // contracts go through their API.
+  const { data: chosen, error: chosenErr } = await supabase
+    .schema("fni")
+    .from("selected_products")
+    .select("id, provider_id, provider_product_id, product_name, rate_unique_id, selected_options, customer_price, retail_price, providers!inner(contract_method)")
+    .eq("session_id", sess.id)
+    .eq("disposition", "Included")
+    .eq("providers.contract_method", "Through API");
+  if (chosenErr) return json(500, { error: `The customer's choices could not be read: ${chosenErr.message}` });
+  const selections = (chosen ?? []) as unknown as (SpentSelection & { id: string })[];
+
+  const { data: agreements } = await supabase.schema("fni").from("agreements").select("id").eq("session_id", sess.id);
+  const agreementIds = ((agreements ?? []) as { id: string }[]).map((a) => a.id);
+  const { data: contractRows } = agreementIds.length > 0
+    ? await supabase
+        .schema("fni")
+        .from("agreement_products")
+        .select("provider_product_id, rate_unique_id, status, voided_at")
+        .in("agreement_id", agreementIds)
+    : { data: [] };
+
+  const beforeRows = await offerRowsFor(supabase, sess.id);
+  const taBefore = beforeRows.find((r) => r.provider?.adapter === "TecAssured") ?? null;
+  const spent = spentSelections(selections, (contractRows ?? []) as VoidedContract[], taBefore?.rated_at ?? null);
+  if (spent.length === 0) return json(200, { session_id: sess.id, outcome: "not_spent" });
+
+  // The quote the selections were made from, read before it is replaced.
+  const oldFamilies = beforeRows.flatMap((r) => familiesFromRow({ ...(r as unknown as RatingRow), out_of_date: false }));
+
+  // ── Rate again, the way staff do ──────────────────────────────────────
+  const { template, outcomes } = await rateSession(
+    supabase,
+    { id: sess.id, tenant_id: sess.tenant_id, store_id: sess.store_id },
+    rateSource
+  );
+  const ta = outcomes.find((o) => o.tecassured);
+  if (!ta || ta.result.state !== "Rated") {
+    const reason = ta ? (ta.result.state === "Rated" ? "" : ta.result.reason) : "No provider rated this deal.";
+    return json(502, {
+      session_id: sess.id,
+      outcome: "failed",
+      error: `The rating could not be refreshed, so nothing was submitted. ${reason}`.trim(),
+    });
+  }
+
+  // The same session fields a rating writes, except the status.
+  await supabase
+    .schema("fni")
+    .from("sessions")
+    .update({
+      menu_template_id: template?.id ?? null,
+      rated_provider_ids: outcomes.map((o) => o.provider.id),
+      ...(ta.tecassured ? { credential_id: ta.tecassured.credentialId, dealer_code_used: ta.tecassured.dealer_code } : {}),
+    })
+    .eq("id", sess.id);
+
+  // ── The fresh offer, priced as the planner prices it ─────────────────
+  const { data: ruleRows } = await supabase
+    .schema("fni")
+    .from("pricing_rules")
+    .select("*")
+    .eq("tenant_id", sess.tenant_id)
+    .or(`store_id.eq.${sess.store_id},store_id.is.null`)
+    .eq("active", true);
+  const freshPriced = priceFamilies(
+    familiesFromRows((await offerRowsFor(supabase, sess.id)) as unknown as RatingRow[]),
+    (ruleRows ?? []) as unknown as PricingRule[]
+  );
+
+  const { lines, unchanged } = compareRefreshed(selections, oldFamilies, freshPriced);
+  const record = lines.map(({ snapshot: _snapshot, ...l }) => l);
+
+  if (unchanged) {
+    for (const [i, l] of lines.entries()) {
+      if (l.from_rate === l.to_rate) continue;
+      const { error: moveErr } = await supabase
+        .schema("fni")
+        .from("selected_products")
+        .update({ rate_unique_id: l.to_rate, rate_snapshot: l.snapshot })
+        .eq("id", selections[i].id)
+        .eq("rate_unique_id", l.from_rate);
+      if (moveErr) {
+        return json(500, { session_id: sess.id, outcome: "failed", error: `The selections could not be moved onto the fresh rating: ${moveErr.message}` });
+      }
+    }
+  }
+
+  const { error: eventErr } = await supabase
+    .schema("fni")
+    .from("session_events")
+    .insert({
+      session_id: sess.id,
+      event: unchanged ? REFRESHED_UNCHANGED_EVENT : REFRESHED_HELD_EVENT,
+      detail: { lines: record, spent: spent.map((s) => s.rate_unique_id) },
+      created_by: who,
+    });
+  if (eventErr) console.error(`fni-rate-vehicle refresh event not recorded for ${sess.id}: ${eventErr.message}`);
+
+  return json(200, { session_id: sess.id, outcome: unchanged ? "unchanged" : "held", lines: record });
+}

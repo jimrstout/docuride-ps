@@ -672,6 +672,42 @@ function providerSays(name: string | undefined): string {
   return v.charAt(0).toUpperCase() + v.slice(1);
 }
 
+/**
+ * Submit contracts, when a voided contract has spent a rate the submit would
+ * send (supabase/functions/_shared/spent-rates.ts). Rates the deal again the
+ * way staff do, and moves the selections onto the fresh rates only when every
+ * price is unchanged to the cent. Never submits: the page comes back with the
+ * confirmation open, saying what the refresh found. A refresh that fails
+ * leaves the provider's error on the page, behind Show details.
+ */
+export async function refreshSpentRates(formData: FormData): Promise<void> {
+  const operator = await currentOperator();
+  if (!operator) redirect(SESSIONS);
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
+
+  let outcome: string | undefined;
+  try {
+    const done = await edge.rate<{ outcome?: string }>({
+      session_id: sessionId,
+      refresh_spent: true,
+      // For the session event: the person's initials, or System.
+      refreshed_by: initialsFor(operator.email),
+    });
+    outcome = done.outcome;
+  } catch (err) {
+    console.error(`rating refresh failed for ${sessionId}:`, err);
+    revalidatePath(`/details/${sessionId}`);
+    return backToVerify(
+      sessionId,
+      "refreshfailed",
+      err instanceof EdgeError ? err.message : "The rating could not be refreshed, so nothing was submitted. Try again."
+    );
+  }
+  revalidatePath(`/details/${sessionId}`);
+  return backToVerify(sessionId, outcome === "unchanged" ? "spentrefreshed" : outcome === "held" ? "spentheld" : "submitready");
+}
+
 export async function submitContracts(formData: FormData): Promise<void> {
   const operator = await currentOperator();
   if (!operator) redirect(SESSIONS);

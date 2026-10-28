@@ -32,6 +32,18 @@ import { menuFor, ratingDeal } from "../_shared/rate-session.ts";
 import { priceSheetRequiredInputs } from "../_shared/adapters/price-sheet.ts";
 import { publishedSheetDates, publishedSheetFor } from "../_shared/price-sheet-rows.ts";
 import { PROVIDER_ANSWER_EVENT, providerAnswerText, type ProviderAnswer } from "../_shared/provider-answer.ts";
+import {
+  HELD_MESSAGE,
+  REFRESHED_HELD_EVENT,
+  REFRESHED_NOTE,
+  REFRESHED_UNCHANGED_EVENT,
+  refreshState,
+  spentSelections,
+  type RefreshEvent,
+  type SpentSelection,
+  type VoidedContract,
+} from "../_shared/spent-rates.ts";
+import { money } from "../_shared/money.ts";
 import { resolvedSlotsFor } from "../_shared/menu-template-rows.ts";
 import { oemContractList } from "../_shared/oem-contract-rows.ts";
 import { contractStateLabel } from "../_shared/oem-contracts.ts";
@@ -340,7 +352,42 @@ async function submitConfirmationFor(supabase: SupabaseClient, s: Record<string,
     // (pricePolicy's "Test at maximum", _shared/price-cap.ts), and the modal
     // says so beside these prices.
     test_at_maximum: s.is_test === true && onQa,
+    // A rate whose contract was voided, and the last refresh of it
+    // (_shared/spent-rates.ts): Submit rates the deal again first when one is
+    // spent, and the confirmation says what that refresh found.
+    ...(await spentStateFor(supabase, s, (data ?? []) as unknown as (SpentSelection & { providers: { contract_method: string | null } | null })[])),
     ...submitConfirmation((data ?? []) as unknown as SubmitRow[]),
+  };
+}
+
+/** Whether a selected rate is spent, and what the last refresh found. */
+async function spentStateFor(
+  supabase: SupabaseClient,
+  s: Record<string, unknown>,
+  rows: (SpentSelection & { providers: { contract_method: string | null } | null })[]
+) {
+  const selections = rows.filter((r) => r.providers?.contract_method !== "Recorded by Staff");
+  const { data: agreements } = await supabase.schema("fni").from("agreements").select("id").eq("session_id", s.id as string);
+  const ids = ((agreements ?? []) as { id: string }[]).map((a) => a.id);
+  const { data: contracts } = ids.length > 0
+    ? await supabase.schema("fni").from("agreement_products").select("provider_product_id, rate_unique_id, status, voided_at").in("agreement_id", ids)
+    : { data: [] };
+  const offers = await offerRowsFor(supabase, s.id as string);
+  const ratedAt = offers.find((o) => o.provider?.adapter === "TecAssured")?.rated_at ?? null;
+  const { data: latest } = await supabase
+    .schema("fni")
+    .from("session_events")
+    .select("event, created_at, detail")
+    .eq("session_id", s.id as string)
+    .in("event", [REFRESHED_UNCHANGED_EVENT, REFRESHED_HELD_EVENT])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const state = refreshState(selections, (latest as RefreshEvent | null) ?? null, money);
+  return {
+    spent: spentSelections(selections, (contracts ?? []) as VoidedContract[], ratedAt).map((x) => x.product_name ?? x.provider_product_id),
+    refresh_note: state?.kind === "refreshed" ? REFRESHED_NOTE : null,
+    held: state?.kind === "held" ? { message: HELD_MESSAGE, differences: state.differences } : null,
   };
 }
 

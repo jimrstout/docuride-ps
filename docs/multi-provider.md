@@ -1204,3 +1204,26 @@ Confirm Submit.
   rating: test session", with the signed-in person's initials, before
   anything is sent, and sends nothing if it cannot. A real session is still
   refused. The sale day check applies to every session as before.
+- **Spent rates after a void** (2026-10-28). A voided contract spends the
+  rate it was made from: the provider refuses it again with "One or more of
+  these products have been voided. Please re-rate and try again" (deal
+  15029). iTap rates again without showing it, and so does Submit contracts
+  (`_shared/spent-rates.ts`). A rate is spent when a contract made from it is
+  Voided and the deal has not been rated since that void. Then pressing
+  Submit contracts rates the deal again, the way staff do, before the modal
+  opens, and matches every selection the submit sends to the fresh offer by
+  product, term months, term miles, deductible and surcharges. When dealer
+  cost, option cost and customer price are identical to the cent, each
+  selection moves onto its fresh rate and the modal says "The rating was
+  refreshed because an earlier contract was voided. Prices are unchanged."
+  Otherwise nothing moves, the modal lists each difference (old and new
+  figures, or "no longer offered"), says "Prices changed since this deal was
+  rated. Review the products on Details before submitting.", and Confirm
+  Submit stays disabled. A refresh never submits. If it fails, the
+  provider's error is on the page behind Show details, with Copy error. The
+  session events are "Rating refreshed after a void: prices unchanged" and
+  "Rating refreshed after a void: prices changed, submit held", by the
+  signed-in person's initials or System. A refresh leaves the session status
+  alone, applies in any month, and does not change the same-month rule. Once
+  rated after the void the rate is not spent, so a provider that still
+  refuses is shown as a refusal and nothing retries.
