@@ -20,6 +20,7 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { secretsMatch } from "../_shared/supabase.ts";
 import { documentPathFor, OEM_BUCKET, parseRecord, parseVoid } from "../_shared/oem-contracts.ts";
 import { agreementId, contractsFor, oemContractList, oemSelections } from "../_shared/oem-contract-rows.ts";
+import { reopenIfAllVoided } from "../_shared/session-reopen.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -123,11 +124,15 @@ async function voidRecorded(supabase: SupabaseClient, sessionId: string, body: R
     .eq("id", row.id as string)
     .eq("status", "Live");
   if (error) return json(500, { error: `The contract could not be voided: ${error.message}` });
+  // The last live contract on the session: it is open again (_shared/session-reopen.ts).
+  const reopened = await reopenIfAllVoided(supabase, sessionId, body.staff_initials);
   return json(200, {
     ok: true,
+    reopened,
     message:
       `Contract ${f.contract_number} is voided here. Nothing was sent to any provider: ` +
-      `void it on the OEM's own system too, if that has not been done.`,
+      `void it on the OEM's own system too, if that has not been done.` +
+      (reopened ? " No contract on this deal is live now, so it is open for Submit again." : ""),
   });
 }
 
