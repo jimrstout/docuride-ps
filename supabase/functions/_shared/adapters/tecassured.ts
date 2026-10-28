@@ -9,7 +9,8 @@
 // same messages, so staff read the same reasons they always have.
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { EndpointNotFoundError, type StoreClient } from "../tecassured.ts";
+import { EndpointNotFoundError, ProviderHttpError, type StoreClient } from "../tecassured.ts";
+import { providerAnswer } from "../provider-answer.ts";
 import {
   parseRequiredProperties,
   readRateProperties,
@@ -125,6 +126,19 @@ export function tecAssuredAdapter(
           state: "Failed",
           request,
           reason: `Rating failed: ${err instanceof Error ? err.message : String(err)}`,
+          // An answer the provider gave as a failure: its status, request ID
+          // and body, redacted, kept with the attempt (_shared/provider-answer.ts).
+          // A refusal sent as HTTP 200 is kept whole below, as before.
+          ...(err instanceof ProviderHttpError
+            ? {
+                response: providerAnswer({
+                  kind: "Rating failed",
+                  http_status: err.exchange.status,
+                  request_ids: err.exchange.request_ids,
+                  body: err.exchange.raw,
+                }),
+              }
+            : {}),
         };
       }
 

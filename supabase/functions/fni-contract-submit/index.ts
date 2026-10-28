@@ -51,7 +51,8 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createTecAssuredClient } from "../_shared/tecassured.ts";
+import { createTecAssuredClient, ProviderHttpError } from "../_shared/tecassured.ts";
+import { PROVIDER_ANSWER_EVENT, personalValues, providerAnswer } from "../_shared/provider-answer.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { offerRowsFor, tecAssuredProviderName, tecAssuredRow } from "../_shared/provider-rows.ts";
 import {
@@ -203,6 +204,34 @@ serve(async (req: Request) => {
   // The provider these contracts go to, by its record's name, for every
   // message below and in the catch. No message has a provider's name written in.
   let vendor = "the provider";
+  // The provider's answer to the submit, and the session's personal values to
+  // take out of it before it is kept (_shared/provider-answer.ts).
+  let lastAnswer: { status: number | null; request_ids: Record<string, string>; body: unknown } | null = null;
+  let personal: string[] = [];
+  let answerKept = false;
+
+  /**
+   * Keep the provider's answer as a session event, once per submit, whenever
+   * the submit reached the provider and did not end in a clean success.
+   * Redacted first. A failure to keep it is logged and never changes the outcome.
+   */
+  const keepAnswer = async (kind: string, note: string | null) => {
+    if (answerKept || !providerWasCalled) return;
+    answerKept = true;
+    const answer = providerAnswer({
+      kind,
+      http_status: lastAnswer?.status ?? null,
+      request_ids: lastAnswer?.request_ids ?? {},
+      body: lastAnswer?.body ?? null,
+      note,
+      known: personal,
+    });
+    const { error } = await supabase
+      .schema("fni")
+      .from("session_events")
+      .insert({ session_id, event: PROVIDER_ANSWER_EVENT, detail: answer, created_by: "fni-contract-submit" });
+    if (error) console.error(`fni-contract-submit could not keep the provider's answer for ${session_id}: ${error.message}`);
+  };
 
   /** Put the session back to Idle. Used on every path that did not reach the
    *  provider, and on the ones that reached it and got a clear answer. */
@@ -240,6 +269,8 @@ serve(async (req: Request) => {
       })
       .eq("id", session_id)
       .eq("submit_token", lockToken);
+    // What the provider actually said, so it can be read and quoted to them.
+    await keepAnswer("Submit outcome unknown", detail);
   };
 
   /** Refuse, and hand the lock back, because nothing was sent. */
@@ -258,6 +289,11 @@ serve(async (req: Request) => {
       .single();
 
     if (sessErr || !session) return json(404, { error: `Session ${session_id} not found` });
+    // Both the CRM's values and any staff corrections, so either is taken out.
+    personal = [
+      ...personalValues(session as Record<string, unknown>),
+      ...personalValues(applyStaffEdits(session as Record<string, unknown>, parseStaffEdits(session.staff_edits))),
+    ];
 
     // The real vocabulary, from the CHECK on fni.sessions.status.
     //
@@ -694,7 +730,9 @@ serve(async (req: Request) => {
     // what the catch does: Idle if we never asked, Submit Status Unknown if we
     // did and did not get an answer.
     providerWasCalled = true;
-    const submitResponse = await client.submitContract(submitPayload);
+    const exchange = await client.submitContractDetailed(submitPayload);
+    lastAnswer = { status: exchange.status, request_ids: exchange.request_ids, body: exchange.body };
+    const submitResponse = exchange.body;
     const response = (submitResponse ?? {}) as Record<string, unknown>;
 
     // ── Step 6b: Read the answer, product by product ──────────────────
@@ -713,6 +751,7 @@ serve(async (req: Request) => {
     );
 
     if (reading.refusedOutright) {
+      await keepAnswer("Submit refused", reading.message);
       if (probe.kind === "On") {
         // TecAssured's own words, exactly. An "unknown field" error says
         // something about the probe, and Jim decides whether to run the
@@ -966,6 +1005,10 @@ serve(async (req: Request) => {
     // unless part of the answer cannot be accounted for.
     if (reading.unknown) await markUnknown(reading.message);
     else await releaseLock();
+    // Some went through and some were refused: what the provider said is kept.
+    if (!reading.unknown && reading.products.some((p) => p.outcome !== "Created")) {
+      await keepAnswer("Submit partly refused", reading.message);
+    }
 
     return json(200, {
       session_id,
@@ -1019,6 +1062,11 @@ serve(async (req: Request) => {
     // So: release the lock if we never asked, and park the session at Submit
     // Status Unknown if we did. Nothing retries on its own -- a person checks
     // TecAssured, then voids or clears.
+    // An answer the provider gave as a failure (an HTTP error, a body that
+    // was not JSON) carries its status, request ID and text; keep them.
+    if (providerWasCalled && err instanceof ProviderHttpError) {
+      lastAnswer = { status: err.exchange.status, request_ids: err.exchange.request_ids, body: err.exchange.raw };
+    }
     if (lockHeld) {
       if (providerWasCalled) {
         await markUnknown(`The submit call failed after reaching the provider: ${message}`);

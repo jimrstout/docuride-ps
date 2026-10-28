@@ -133,6 +133,58 @@ function isSessionRefusal(parsed: unknown): boolean {
  * caller that can carry on without this particular call needs to be able to
  * tell it apart from one that genuinely failed.
  */
+/**
+ * The provider's answer to one call: the parsed body, the HTTP status, its
+ * request ID headers, and the body as text. No other header is kept, so a
+ * cookie or anything like a credential never leaves this file.
+ */
+export interface ProviderExchange<T = unknown> {
+  body: T;
+  status: number;
+  request_ids: Record<string, string>;
+  raw: string;
+}
+
+/** A call the provider answered with a failure, with what it said. */
+export class ProviderHttpError extends Error {
+  constructor(message: string, readonly exchange: { status: number; request_ids: Record<string, string>; raw: string }) {
+    super(message);
+    this.name = "ProviderHttpError";
+  }
+}
+
+type HeaderSource = { headers: { forEach(cb: (value: string, key: string) => void): void } };
+
+/** Header names that carry a request ID: x-request-id, request-id, x-correlation-id, cf-ray and the like. */
+const REQUEST_ID_HEADER = /(^|-)(request|correlation|trace)-?id$|^x-amzn-requestid$|^cf-ray$/i;
+
+/** The response's request ID headers, by name, and nothing else. */
+export function requestIds(res: HeaderSource): Record<string, string> {
+  const out: Record<string, string> = {};
+  res.headers.forEach((value, key) => {
+    if (REQUEST_ID_HEADER.test(key)) out[key.toLowerCase()] = value;
+  });
+  return out;
+}
+
+/** ", x-request-id abc" for an error message, or "". */
+function requestIdNote(res: HeaderSource): string {
+  const ids = Object.entries(requestIds(res));
+  return ids.length > 0 ? `, ${ids.map(([k, v]) => `${k} ${v}`).join(", ")}` : "";
+}
+
+/** The body as JSON, as res.json() read it. A body that is not JSON is a failure that keeps its text. */
+function parseJson(raw: string, res: HeaderSource & { status: number }): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new ProviderHttpError(
+      `TecAssured answered ${res.status} with something that is not JSON${requestIdNote(res)}: ${raw.slice(0, 2000)}`,
+      { status: res.status, request_ids: requestIds(res), raw }
+    );
+  }
+}
+
 export class EndpointNotFoundError extends Error {
   constructor(readonly url: string) {
     super(`TecAssured endpoint not found: ${url}`);
@@ -281,6 +333,17 @@ export class TecAssuredClient {
    * check is what actually catches it.
    */
   async apiCall<T>(method: string, path: string, body?: Record<string, unknown>): Promise<T> {
+    return (await this.apiCallDetailed<T>(method, path, body)).body;
+  }
+
+  /**
+   * apiCall, with the HTTP status and the provider's request ID headers kept
+   * beside the parsed body (2026-10-28). A submit whose outcome is unknown
+   * keeps them, so it can be quoted to the provider. A failure throws
+   * ProviderHttpError, which carries the same three. The body is parsed and
+   * returned exactly as apiCall always returned it.
+   */
+  async apiCallDetailed<T>(method: string, path: string, body?: Record<string, unknown>): Promise<ProviderExchange<T>> {
     if (!this.isCachedSessionValid()) await this.getSession();
 
     const url = `${this.baseUrl}${path}`;
@@ -305,10 +368,13 @@ export class TecAssuredClient {
     if (!refusedByStatus) {
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(`TecAssured API call failed (${res.status}): ${text}`);
+        throw new ProviderHttpError(`TecAssured API call failed (${res.status}${requestIdNote(res)}): ${text}`, {
+          status: res.status, request_ids: requestIds(res), raw: text,
+        });
       }
-      parsed = await res.json();
-      if (!isSessionRefusal(parsed)) return parsed as T;
+      const raw = await res.text();
+      parsed = parseJson(raw, res);
+      if (!isSessionRefusal(parsed)) return { body: parsed as T, status: res.status, request_ids: requestIds(res), raw };
     }
 
     // ── The fall-through ───────────────────────────────────────────
@@ -345,10 +411,13 @@ export class TecAssuredClient {
     if (!retryRes.ok) {
       const text = await retryRes.text();
       mark(`failed status=${retryRes.status}`);
-      throw new Error(`TecAssured API call failed after re-auth (${retryRes.status}): ${text}`);
+      throw new ProviderHttpError(`TecAssured API call failed after re-auth (${retryRes.status}${requestIdNote(retryRes)}): ${text}`, {
+        status: retryRes.status, request_ids: requestIds(retryRes), raw: text,
+      });
     }
 
-    const retryParsed = await retryRes.json();
+    const retryRaw = await retryRes.text();
+    const retryParsed = parseJson(retryRaw, retryRes);
 
     if (isSessionRefusal(retryParsed)) {
       // A login that had just succeeded, refused on the very next call. That is
@@ -361,7 +430,7 @@ export class TecAssuredClient {
     }
 
     mark("succeeded");
-    return retryParsed as T;
+    return { body: retryParsed as T, status: retryRes.status, request_ids: requestIds(retryRes), raw: retryRaw };
   }
 
   /**
@@ -436,6 +505,11 @@ export class TecAssuredClient {
 
   async submitContract(submitRequest: Record<string, unknown>): Promise<unknown> {
     return await this.apiCall("POST", "/contract/submit", submitRequest);
+  }
+
+  /** submitContract, with the HTTP status and request ID headers kept. */
+  async submitContractDetailed(submitRequest: Record<string, unknown>): Promise<ProviderExchange<unknown>> {
+    return await this.apiCallDetailed("POST", "/contract/submit", submitRequest);
   }
 
   async getContractDocument(

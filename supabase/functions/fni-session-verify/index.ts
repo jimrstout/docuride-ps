@@ -31,6 +31,7 @@ import { currentRows, familiesFromRows, ratingSummary, type RatingRow } from "..
 import { menuFor, ratingDeal } from "../_shared/rate-session.ts";
 import { priceSheetRequiredInputs } from "../_shared/adapters/price-sheet.ts";
 import { publishedSheetDates, publishedSheetFor } from "../_shared/price-sheet-rows.ts";
+import { PROVIDER_ANSWER_EVENT, providerAnswerText, type ProviderAnswer } from "../_shared/provider-answer.ts";
 import { resolvedSlotsFor } from "../_shared/menu-template-rows.ts";
 import { oemContractList } from "../_shared/oem-contract-rows.ts";
 import { contractStateLabel } from "../_shared/oem-contracts.ts";
@@ -344,6 +345,26 @@ async function submitConfirmationFor(supabase: SupabaseClient, s: Record<string,
 }
 
 /**
+ * The provider's answer to the last submit that did not simply succeed, as
+ * fni-contract-submit kept it (already redacted), for Show details and Copy
+ * error on Details. Null when there is none.
+ */
+async function lastProviderAnswer(supabase: SupabaseClient, sessionId: string) {
+  const { data } = await supabase
+    .schema("fni")
+    .from("session_events")
+    .select("created_at, detail")
+    .eq("session_id", sessionId)
+    .eq("event", PROVIDER_ANSWER_EVENT)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const row = data as { created_at: string; detail: ProviderAnswer | null } | null;
+  if (!row?.detail) return null;
+  return { at: row.created_at, kind: row.detail.kind, text: providerAnswerText(row.detail) };
+}
+
+/**
  * Does this store's TecAssured login point at the QA server? Reads the base
  * URL only, never the login itself.
  */
@@ -518,11 +539,12 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
       )
     : null;
 
-  const [duplicates, contracts, oemContracts, panel] = await Promise.all([
+  const [duplicates, contracts, oemContracts, panel, providerAnswer] = await Promise.all([
     duplicateVinSessions(supabase, s),
     liveContracts(supabase, s.id as string),
     oemContractList(supabase, s.id as string),
     contractsPanel(supabase, s),
+    lastProviderAnswer(supabase, s.id as string),
   ]);
 
   return {
@@ -600,6 +622,8 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
     })),
     submit_state: s.submit_state ?? "Idle",
     submit_detail: s.submit_detail ?? null,
+    // What the provider said to the last submit that did not simply succeed.
+    provider_answer: providerAnswer,
     // The store's day: when this session ends, the planned sale date, and
     // whether Submit would be refused on the deal's dates today
     // (_shared/store-day.ts). Submit checks the same thing again itself.

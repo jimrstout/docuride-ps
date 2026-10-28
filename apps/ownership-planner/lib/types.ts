@@ -503,6 +503,11 @@ export interface VerifySheet {
    *  person has checked TecAssured. */
   submit_state: "Idle" | "In Progress" | "Submit Status Unknown";
   submit_detail: string | null;
+  /**
+   * The provider's answer to the last submit that did not simply succeed:
+   * HTTP status, request ID and body, redacted (supabase/functions/_shared/provider-answer.ts).
+   */
+  provider_answer?: { at: string; kind: string; text: string } | null;
   /** Why nothing is required, when nothing is. Null when the sheet is normal. */
   not_ready_reason: string | null;
   /**
