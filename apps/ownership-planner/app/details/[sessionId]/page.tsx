@@ -804,33 +804,7 @@ export default async function DetailsPage({
                   submitBlocked ??
                   (sheet.contracts_panel.confirmation ? null : "The confirmation could not be loaded. Reload the page to submit.")
                 }
-              >
-                {sheet.contracts_panel.cobuyer_probe_available ? (
-                  // TEMPORARY: the co-buyer field test. Test sessions on the
-                  // QA server only; see docs/multi-provider.md, section 16.
-                  <fieldset className="vprobe">
-                    <label className="vprobe-check">
-                      <input type="checkbox" name="cobuyer_probe" value="1" /> Phone and co-buyer field test
-                    </label>
-                    <p className="vprobe-note">
-                      A one-off test on this test deal. It sends made-up phone numbers (304-555-0101
-                      to 304-555-0120, one per guessed phone field) and the co-buyer marker CB03 again,
-                      so the contract shows which phone field {vendor} prints, if any. No real names
-                      or numbers are sent. Only Battery Standard or Care Coverage can be submitted with
-                      it on. Leave it off for a normal submit.
-                    </p>
-                    <label className="vprobe-batch">
-                      Batch{" "}
-                      <select name="cobuyer_probe_batch" defaultValue="All">
-                        <option value="All">All</option>
-                        <option value="1">Batch 1</option>
-                        <option value="2">Batch 2</option>
-                        <option value="3">Batch 3</option>
-                      </select>
-                    </label>
-                  </fieldset>
-                ) : null}
-              </SubmitConfirm>
+              />
             ) : (
               <Link className="btn btn--quiet" href="/admin/sessions" prefetch={false}>
                 Sign in to submit

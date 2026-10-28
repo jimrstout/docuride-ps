@@ -315,9 +315,6 @@ async function contractsPanel(supabase: SupabaseClient, s: Record<string, unknow
     selections,
     contracts,
     waiting_count: waiting,
-    // TEMPORARY: the co-buyer field test is offered on test sessions on the
-    // QA server only (_shared/cobuyer-probe.ts).
-    cobuyer_probe_available: onQa,
     confirmation: await submitConfirmationFor(supabase, s, onQa),
   };
 }

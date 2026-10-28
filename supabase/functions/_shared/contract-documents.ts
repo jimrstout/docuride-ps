@@ -97,8 +97,8 @@ export function buyerNameFor(deal: Pick<DealFolders, "buyer_display_name"> | nul
 // /contract/document answers with `signatures`, an array of buyer and seller
 // blocks (TECASSURED_SHOP_API.md). It is stored as it comes, whatever shape it
 // takes next: an array, an object, a singular `signature`, or a new type such
-// as "cobuyer". A type other than buyer and seller is reported, because it is
-// what the co-buyer field probe (_shared/cobuyer-probe.ts) is looking for.
+// as "cobuyer". A type other than buyer and seller is reported, so a co-buyer
+// signature is seen the day TecAssured starts sending one.
 
 /** The signature data in a /contract/document answer, untouched. */
 export function signatureData(doc: Record<string, unknown>): unknown {

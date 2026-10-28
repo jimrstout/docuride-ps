@@ -716,11 +716,6 @@ export async function submitContracts(formData: FormData): Promise<void> {
 
   let detail: string;
   let partial = false;
-  // TEMPORARY: the co-buyer field test, off unless ticked. The Edge Function
-  // ignores it anywhere but a test session on the QA server.
-  const probe = formData.get("cobuyer_probe") === "1";
-  const batchRaw = String(formData.get("cobuyer_probe_batch") ?? "All");
-  const probeBatch = batchRaw === "All" ? "All" : Number(batchRaw);
   try {
     const done = await edge.submit<{
       contract_count?: number;
@@ -731,13 +726,11 @@ export async function submitContracts(formData: FormData): Promise<void> {
       partial?: boolean;
       /** The provider record's name. */
       provider_name?: string;
-      cobuyer_probe?: { batch: string | number } | null;
     }>({
       session_id: sessionId,
       use_saved_selections: true,
       // For the session event if a test session submits on an out-of-date rating.
       submitted_by: initialsFor(operator.email),
-      ...(probe ? { cobuyer_probe: true, cobuyer_probe_batch: probeBatch } : {}),
       // Ticked when contract details were changed on Details: the person
       // confirms DX1 matches. The Edge Function refuses without it then.
       ...(formData.get("dx1_confirmed") === "1"
@@ -752,19 +745,10 @@ export async function submitContracts(formData: FormData): Promise<void> {
       : partial && done.message
         ? `${done.message} Get the document for each contract created.`
         : `Submitted. ${providerSays(done.provider_name)} returned ${done.contract_count ?? 0} ${done.contract_count === 1 ? "contract" : "contracts"}: ${numbers}. Get each document next.`;
-    if (done.cobuyer_probe) {
-      detail +=
-        ` Phone and co-buyer field test sent (${done.cobuyer_probe.batch === "All" ? "all fields" : `batch ${done.cobuyer_probe.batch}`}).` +
-        " Get the document, then read it for a 555-01 number and the CB03 marker.";
-    }
   } catch (err) {
     console.error(`submit failed for ${sessionId}:`, err);
     const message = err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
-    return backToVerify(
-      sessionId,
-      "refused",
-      probe ? `Co-buyer field test: the submit did not go through. ${message}` : message
-    );
+    return backToVerify(sessionId, "refused", message);
   }
   revalidatePath(`/details/${sessionId}`);
   revalidatePath(SESSIONS);

@@ -1321,12 +1321,6 @@ button { cursor: pointer; }
   border-radius: 4px; padding: 0 var(--s1); vertical-align: middle; white-space: nowrap;
 }
 
-/* TEMPORARY: the co-buyer field test on Verify (docs section 16). */
-.vprobe { border: var(--bw) dashed var(--line-strong); border-radius: 6px; padding: var(--s2) var(--s3); margin: 0 0 var(--s3); }
-.vprobe-check { font-weight: 600; }
-.vprobe-note { color: var(--ink-soft); font-size: 0.85rem; margin: var(--s1) 0; max-width: 70ch; }
-.vprobe-batch { font-size: 0.9rem; }
-
 /* The way home: the first crumb of every staff top bar (components/HomeLink). */
 .home-link { color: var(--nav); font-weight: 700; text-decoration: none; letter-spacing: 0.01em; }
 .home-link span { color: var(--copper-ink); }
