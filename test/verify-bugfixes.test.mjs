@@ -12,6 +12,7 @@
 //   4. Refusal messages travelled in the URL query string.
 
 import { test } from "node:test";
+import { PARTY_KEYS } from "../supabase/functions/_shared/contract-parties.ts";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
@@ -133,9 +134,13 @@ test("a blank box is still sent, because that is how a value is put back", () =>
 test("the console's field list matches EDIT_TARGETS on the Deno side", () => {
   // The Next build cannot import from supabase/functions/_shared, so this test
   // is what stops the two lists drifting. Same reasoning as lib/money.ts.
+  // The buyer, co-buyer and lienholder columns are edit targets too, edited in
+  // their own panels (_shared/contract-parties.ts). City, state and ZIP are
+  // both: rating inputs on the sheet and contract details in the Buyer panel.
+  const contractOnly = PARTY_KEYS.filter((k) => !["buyer_city", "buyer_state", "buyer_zip"].includes(k));
   assert.deepEqual(
     [...RATING_INPUT_NAMES].sort(),
-    Object.keys(EDIT_TARGETS).sort()
+    Object.keys(EDIT_TARGETS).filter((k) => !contractOnly.includes(k)).sort()
   );
 });
 

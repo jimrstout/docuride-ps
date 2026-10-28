@@ -616,10 +616,10 @@ const SPECS: Spec[] = [
   },
 
   // ── Customer ───────────────────────────────────────────────────────────
-  // City, state and ZIP only. Nothing on this screen needs the customer's name,
-  // street, phone or email to check a rate, and a staff screen that shows them
-  // is a staff screen that leaks them. All three reach the rate request, so all
-  // three are editable.
+  // City, state and ZIP: the three that reach the rate request, so all three
+  // are rating inputs here. The rest of the buyer, and the co-buyer and
+  // lienholder, are contract details with their own panels on Details
+  // (_shared/contract-parties.ts), shown only to a signed-in operator.
   {
     key: "buyer_city", label: "City", group: "Customer", provider_property: null,
     resolve: (s) => fromCrm(text(s.buyer_city)),
