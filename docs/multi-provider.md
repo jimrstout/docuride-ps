@@ -1147,6 +1147,8 @@ sign-in). `_shared/contract-parties.ts` holds the rules.
 | Submit | Sends the staff value wherever one exists. If any contract detail was changed here, each change is listed in the Submit confirmation and Confirm Submit needs "I have made these changes in DX1, or they are not needed there."; fni-contract-submit refuses without it and records it as the session event "Contract detail changes confirmed for DX1". |
 | Missing | Named beside the field ("Missing: buyer last name"). Not blocking yet. |
 | Locked | While any contract on the deal is live (Live or Submit Status Unknown), the panels are read-only, edits are refused, and Discard keeps city, state and ZIP. Voiding every live contract unlocks them. |
+| Reopened | When a void leaves the session with no live contract (none Live or Submit Status Unknown) and its own submit is idle, a session at Agreement Created or Finalized goes back to Products Selected, so Submit takes it again (`_shared/session-reopen.ts`, both voids). Only the status changes. The session event "Session reopened: all contracts voided" names the signed-in person's initials, or System. |
+| Reopened, existing | Sessions voided before that rule were reopened once (migration 0040, 28 Oct 2026): 15029, whose only contract is voided. 13759 stayed Finalized; its contracts are live. Deal 14957 was excluded. |
 
 City, state and ZIP are also rating inputs on the sheet: one edit, shown in
 both places, and a change sends the deal back through Confirm and Continue.

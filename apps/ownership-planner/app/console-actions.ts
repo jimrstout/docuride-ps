@@ -643,6 +643,8 @@ export async function voidContract(formData: FormData): Promise<void> {
       action: "Void",
       contract_number: contractNumber,
       staff_email: operator.email,
+      // For the event if this void reopens the session.
+      staff_initials: initialsFor(operator.email),
       void_reason: reason,
     });
     message = done.message ?? null;
@@ -833,7 +835,12 @@ async function oemWrite(fd: FormData, build: (by: string) => Record<string, unkn
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
   let message = "Done.";
   try {
-    const done = await edge.oemContractWrite<{ message?: string }>({ session_id: sessionId, ...build(operator.email) });
+    const done = await edge.oemContractWrite<{ message?: string }>({
+      session_id: sessionId,
+      ...build(operator.email),
+      // For the event if a void reopens the session.
+      staff_initials: initialsFor(operator.email),
+    });
     message = done.message ?? message;
   } catch (err) {
     console.error(`OEM contract write failed for ${sessionId}:`, err);

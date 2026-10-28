@@ -51,6 +51,7 @@ import { contractCallRefusal } from "../_shared/contract-guard.ts";
 import { alreadyVoidingMessage, unclaimedFilter } from "../_shared/void-claim.ts";
 import { voidedBaseName, voidedName } from "../_shared/document-names.ts";
 import { renameFile, workDriveProblem } from "../_shared/workdrive.ts";
+import { reopenIfAllVoided } from "../_shared/session-reopen.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ACTION_VOID = "Void";
@@ -64,6 +65,8 @@ interface VoidRequest {
   note?: string;
   /** Why the contract is being voided, in the staff member's words. Required to void. */
   void_reason?: string;
+  /** The signed-in person's initials, for the event if the session reopens. */
+  staff_initials?: string;
 }
 
 /**
@@ -266,10 +269,13 @@ serve(async (req: Request) => {
     if (row.status === "Voided") {
       // A rename that failed last time is tried again; nothing goes to TecAssured.
       const fileNote = await markFileVoid(supabase, row);
+      // So is reopening the session, if this was its last live contract.
+      const reopened = await reopenIfAllVoided(supabase, session_id, body.staff_initials);
       return json(200, {
         session_id,
         action: ACTION_VOID,
         already_voided: true,
+        reopened,
         contract_number: contractNumber,
         message: `${describeContract(row)} was already voided. Nothing was sent to TecAssured.${fileNote}`,
       });
@@ -391,9 +397,14 @@ serve(async (req: Request) => {
 
     const fileNote = await markFileVoid(supabase, row);
 
+    // The last live contract on the session: it is open again, Products
+    // Selected, so Submit takes it (_shared/session-reopen.ts).
+    const reopened = await reopenIfAllVoided(supabase, session_id, body.staff_initials);
+
     return json(200, {
       session_id,
       action: ACTION_VOID,
+      reopened,
       contract_number: contractNumber,
       provider_product_id: row.provider_product_id,
       product_name: row.product_name,
@@ -402,7 +413,9 @@ serve(async (req: Request) => {
       dealer_code: dealerCode,
       is_test: session.is_test === true,
       message:
-        `${describeContract(row)} is voided. This product can be submitted again on this deal.${fileNote}`,
+        `${describeContract(row)} is voided. This product can be submitted again on this deal.` +
+        (reopened ? " No contract on this deal is live now, so it is open for Submit again." : "") +
+        fileNote,
       tecassured_response: response,
     });
   } catch (error) {
