@@ -73,6 +73,7 @@ import { readSubmitResponse } from "../_shared/submit-outcome.ts";
 import { alignContractDates, dealDates, SALE_DATE_MISSING } from "../_shared/deal-dates.ts";
 import { storeToday, submitDateProblem } from "../_shared/store-day.ts";
 import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
+import { DX1_CONFIRMATION, partyChanges } from "../_shared/contract-parties.ts";
 import { applyCobuyerProbe, probeDecision, type MarkerRow } from "../_shared/cobuyer-probe.ts";
 import { programName } from "../_shared/program-names.ts";
 import { savedSelections, type SavedSelection } from "../_shared/saved-selections.ts";
@@ -91,6 +92,14 @@ interface ContractSubmitRequest {
   cobuyer_probe?: boolean;
   /** "All", 1, 2 or 3. "All" when left out. */
   cobuyer_probe_batch?: unknown;
+  /**
+   * The person submitting confirms the contract details changed on Details
+   * have been made in DX1 too, or are not needed there. Required only when
+   * something was changed (_shared/contract-parties.ts).
+   */
+  dx1_confirmed?: boolean;
+  /** Who confirmed, for the session event. */
+  confirmed_by?: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -354,6 +363,36 @@ serve(async (req: Request) => {
     });
     if (dayProblem) return await refuse(400, { error: dayProblem });
 
+    // ── Step 3e: Contract details changed here, and DX1 ────────────────
+    // The finance contract comes from DX1. Anything about the buyer, co-buyer
+    // or lienholder changed on Details must be changed there too, so the
+    // person submitting confirms it, and the confirmation is recorded.
+    const changes = partyChanges(session as Record<string, unknown>, parseStaffEdits(session.staff_edits));
+    if (changes.length > 0) {
+      if (body.dx1_confirmed !== true) {
+        return await refuse(400, {
+          error:
+            `These contract details were changed on Details: ${changes.map((c) => c.label).join(", ")}. ` +
+            `Confirm "${DX1_CONFIRMATION}" and submit again.`,
+          changes,
+        });
+      }
+      const { error: confirmErr } = await supabase
+        .schema("fni")
+        .from("session_events")
+        .insert({
+          session_id,
+          event: "Contract detail changes confirmed for DX1",
+          detail: { confirmation: DX1_CONFIRMATION, changes },
+          created_by: typeof body.confirmed_by === "string" && body.confirmed_by.trim() !== ""
+            ? body.confirmed_by.trim()
+            : "fni-contract-submit",
+        });
+      if (confirmErr) {
+        return await refuse(500, { error: `The confirmation could not be recorded, so nothing was sent: ${confirmErr.message}` });
+      }
+    }
+
     // ── Step 4: Cut the quote down to what is being bought ────────────
     // Pruned, not flagged: see _shared/offer-selections.ts. Sending all
     // eleven products with flags is a request to submit all eleven, and the
@@ -550,17 +589,20 @@ serve(async (req: Request) => {
     );
 
     // ── Step 5: Buyer and lienholder ───────────────────────────────────
-    if (session.buyer_first_name) submitQuote.buyerFirstName = session.buyer_first_name;
-    if (session.buyer_last_name) submitQuote.buyerLastName = session.buyer_last_name;
-    if (session.buyer_address) submitQuote.buyerAddress = session.buyer_address;
+    // The staff value wherever one exists: the CRM's, corrected on Details,
+    // and blank for a lienholder staff removed (_shared/contract-parties.ts).
+    const party = applyStaffEdits(session as Record<string, unknown>, parseStaffEdits(session.staff_edits)) as Record<string, string | null>;
+    if (party.buyer_first_name) submitQuote.buyerFirstName = party.buyer_first_name;
+    if (party.buyer_last_name) submitQuote.buyerLastName = party.buyer_last_name;
+    if (party.buyer_address) submitQuote.buyerAddress = party.buyer_address;
 
     const lienholder: Record<string, string> = {};
-    if (session.lienholder_name) lienholder.lienholderName = session.lienholder_name;
-    if (session.lienholder_address) lienholder.lienholderAddress = session.lienholder_address;
-    if (session.lienholder_city) lienholder.lienholderCity = session.lienholder_city;
-    if (session.lienholder_state) lienholder.lienholderState = session.lienholder_state;
-    if (session.lienholder_zip) lienholder.lienholderZip = session.lienholder_zip;
-    if (session.lienholder_phone) lienholder.lienholderPhone = session.lienholder_phone;
+    if (party.lienholder_name) lienholder.lienholderName = party.lienholder_name;
+    if (party.lienholder_address) lienholder.lienholderAddress = party.lienholder_address;
+    if (party.lienholder_city) lienholder.lienholderCity = party.lienholder_city;
+    if (party.lienholder_state) lienholder.lienholderState = party.lienholder_state;
+    if (party.lienholder_zip) lienholder.lienholderZip = party.lienholder_zip;
+    if (party.lienholder_phone) lienholder.lienholderPhone = party.lienholder_phone;
 
     // dealerCode is required at the top level and is NOT inferred from the
     // session. Without it the server answers {"error":"Missing Dealer Code."},
