@@ -9,67 +9,55 @@ import {
 
 const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 
-test("41 quote variants and 3 top-level ones, each with its own marker", () => {
-  assert.equal(QUOTE_VARIANTS.length, 41);
-  assert.equal(ROOT_VARIANTS.length, 3);
-  const markers = [...QUOTE_VARIANTS, ...ROOT_VARIANTS].map((v) => v.marker);
-  assert.equal(new Set(markers).size, markers.length);
-  assert.deepEqual(QUOTE_VARIANTS.map((v) => v.marker), Array.from({ length: 41 }, (_, i) => `CB${String(i + 1).padStart(2, "0")}`));
-  assert.deepEqual(ROOT_VARIANTS.map((v) => v.marker), ["R01", "R02", "R03"]);
+// Round 2 (2026-10-28): the phone field, and CB03 again.
+const PHONES = [
+  ["P01", "buyerPhone"], ["P02", "buyerPhoneNumber"], ["P03", "buyerTelephone"], ["P04", "buyerHomePhone"],
+  ["P05", "buyerCellPhone"], ["P06", "buyerMobilePhone"], ["P07", "buyerMobile"], ["P08", "buyerPhone1"],
+  ["P09", "buyerDayPhone"], ["P10", "buyerWorkPhone"], ["P11", "BuyerPhone"], ["P12", "buyerphone"],
+  ["P13", "buyer_phone"], ["P14", "phone"], ["P15", "phoneNumber"], ["P16", "telephone"],
+  ["P17", "customerPhone"], ["P18", "contactPhone"], ["P19", "buyerPrimaryPhone"], ["P20", "buyerEveningPhone"],
+];
+
+test("twenty phone guesses and CB03, all on the quote, none at the top level", () => {
+  assert.deepEqual(QUOTE_VARIANTS.map((v) => v.marker), [...PHONES.map(([m]) => m), "CB03"]);
+  assert.equal(ROOT_VARIANTS.length, 0);
+  assert.ok(QUOTE_VARIANTS.every((v) => v.level === "Quote"));
 });
 
-test("the batches are CB01-12, CB13-25, and CB26-41 with R01-03, covering everything once", () => {
-  assert.deepEqual(BATCHES[1].map((v) => v.marker), QUOTE_VARIANTS.slice(0, 12).map((v) => v.marker));
-  assert.deepEqual(BATCHES[2].map((v) => v.marker), QUOTE_VARIANTS.slice(12, 25).map((v) => v.marker));
-  assert.deepEqual(BATCHES[3].map((v) => v.marker), [...QUOTE_VARIANTS.slice(25).map((v) => v.marker), "R01", "R02", "R03"]);
-  assert.equal(BATCHES[1].length + BATCHES[2].length + BATCHES[3].length, 44);
-});
-
-test("every variant carries its marker in first and last name; full names carry it twice", () => {
+test("each phone key carries a digits-only 304-555-01xx number named by its last two digits", () => {
   const quote = { buyerFirstName: "REAL", buyerLastName: "BUYER", products: [] };
   const payload = { dealerCode: "3-306", quote };
   const rows = applyCobuyerProbe(quote, payload, "All");
-  assert.equal(rows.length, 44);
-  assert.equal(quote.coBuyerFirstName, "CB01");
-  assert.equal(quote.coBuyerLastName, "CB01");
-  assert.equal(quote.coBuyer_FirstName, "CB07");
-  assert.equal(quote["co-buyer-last-name"], "CB10");
-  assert.equal(quote.coBuyerName, "CB26 CB26");
-  assert.equal(quote.coBuyerFullName, "CB29 CB29");
-  assert.deepEqual(quote.coBuyer, { firstName: "CB30", lastName: "CB30" });
-  assert.deepEqual(quote.CoBuyer, { FirstName: "CB32", LastName: "CB32" });
-  assert.deepEqual(quote["co-buyer"], { firstName: "CB33", lastName: "CB33" });
-  assert.equal(quote.owner2LastName, "CB41");
-  assert.equal(payload.coBuyerFirstName, "R01");
-  assert.equal(payload.CoBuyerLastName, "R02");
-  assert.deepEqual(payload.coBuyer, { firstName: "R03", lastName: "R03" });
-  // The real buyer and the payload's own keys are untouched; no arrays.
+  assert.equal(rows.length, 21);
+  for (const [m, key] of PHONES) {
+    assert.equal(quote[key], `30455501${m.slice(1)}`, key);
+    assert.match(quote[key], /^\d{10}$/);
+  }
+  assert.equal(quote.buyerPhone, "3045550101");
+  assert.equal(quote.buyerEveningPhone, "3045550120");
+  assert.equal(quote.cobuyerFirstName, "CB03");
+  assert.equal(quote.cobuyerLastName, "CB03");
+  // The real buyer and the payload's own keys are untouched; nothing at the top level; no arrays.
   assert.equal(quote.buyerFirstName, "REAL");
-  assert.equal(payload.dealerCode, "3-306");
+  assert.deepEqual(Object.keys(payload), ["dealerCode", "quote"]);
   assert.ok(!("buyers" in quote) && !("customers" in quote) && !("buyers" in payload) && !("customers" in payload));
-  // Every value is a marker: no names, no CRM data.
-  const values = JSON.stringify([...Object.entries(quote), ...Object.entries(payload)].filter(([k]) => !["buyerFirstName", "buyerLastName", "products", "dealerCode", "quote"].includes(k)));
-  assert.doesNotMatch(values.replace(/CB\d\d|R0\d|firstName|lastName|FirstName|LastName/g, ""), /[A-Za-z]{3,}[^"]*":/);
 });
 
-test("a batch adds only its own variants", () => {
-  const quote = {}; const payload = {};
-  applyCobuyerProbe(quote, payload, 2);
-  assert.equal(quote.coFirstname, "CB13");
-  assert.equal(quote.coPurchaserLastName, "CB25");
-  assert.ok(!("coBuyerFirstName" in quote) && !("coBuyerName" in quote));
-  assert.deepEqual(Object.keys(payload), []);
+test("the batches split the phones in two, each with CB03; batch 3 is CB03 alone", () => {
+  assert.deepEqual(BATCHES[1].map((v) => v.marker), [...PHONES.slice(0, 10).map(([m]) => m), "CB03"]);
+  assert.deepEqual(BATCHES[2].map((v) => v.marker), [...PHONES.slice(10).map(([m]) => m), "CB03"]);
+  assert.deepEqual(BATCHES[3].map((v) => v.marker), ["CB03"]);
 });
 
 test("the probe never overwrites a key that is already there", () => {
-  assert.throws(() => applyCobuyerProbe({ coBuyerName: "x" }, {}, "All"), /would overwrite coBuyerName, so nothing was sent/);
+  assert.throws(() => applyCobuyerProbe({ phone: "x" }, {}, "All"), /would overwrite phone, so nothing was sent/);
 });
 
-test("the marker table lists markers and field names only", () => {
+test("the marker table lists markers, field names and the made-up numbers only", () => {
   const t = markerTable("All");
-  assert.deepEqual(t[0], { marker: "CB01", level: "Quote", fields: "coBuyerFirstName / coBuyerLastName", sent: "CB01 / CB01" });
-  assert.deepEqual(t[25], { marker: "CB26", level: "Quote", fields: "coBuyerName", sent: "CB26 CB26" });
-  assert.deepEqual(t[43], { marker: "R03", level: "Top level", fields: "coBuyer: { firstName, lastName }", sent: "{ R03, R03 }" });
+  assert.deepEqual(t[0], { marker: "P01", level: "Quote", fields: "buyerPhone", sent: "3045550101" });
+  assert.deepEqual(t[19], { marker: "P20", level: "Quote", fields: "buyerEveningPhone", sent: "3045550120" });
+  assert.deepEqual(t[20], { marker: "CB03", level: "Quote", fields: "cobuyerFirstName / cobuyerLastName", sent: "CB03 / CB03" });
 });
 
 test("batch values", () => {
@@ -104,7 +92,7 @@ test("asked for with another product, the submit is refused in plain English", (
     ],
   });
   assert.equal(d.kind, "Refuse");
-  assert.match(d.message, /^The co-buyer field test only works on Battery Standard or Care Coverage, the forms that print a co-buyer name\. RIDER'S ADVANTAGE T&W ON-ROAD - RA is also selected, so nothing was sent\./);
+  assert.match(d.message, /^The field test only works on Battery Standard or Care Coverage, the forms that print a co-buyer name\. RIDER'S ADVANTAGE T&W ON-ROAD - RA is also selected, so nothing was sent\./);
   assert.equal(probeDecision({ requested: true, batch: 7, isTest: true, guardPassed: true, products: [] }).kind, "Refuse");
 });
 

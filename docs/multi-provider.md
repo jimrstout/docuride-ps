@@ -794,6 +794,16 @@ rate, sends the session back to Rated, as before.
 
 ## 16. The co-buyer field probe (TEMPORARY)
 
+**Round 2 (2026-10-28): the phone field.** Round 1 answered the co-buyer: on
+deal 15029 only CB03 printed (contract VLBT3440876-42153), so `cobuyerFirstName`
+and `cobuyerLastName` on the quote fill the co-buyer name boxes, and TecAssured
+ignored every other key. No co-buyer signature location came back. Round 2
+reuses the same flag, guards and checkbox to find the buyer's phone field:
+twenty guessed keys on the quote (`buyerPhone`, `phone`, `customerPhone` and the
+rest), each carrying a fictional, digits-only 304-555-01xx number whose last
+two digits name the guess (P01 is 3045550101), plus CB03 again to confirm round
+1 repeats. Nothing goes at the top level, and never a buyers or customers array.
+
 TecAssured's Shop API documents only `buyerFirstName`, `buyerLastName` and
 `buyerAddress`. Another front end (iTap) gets co-buyers printed on contracts
 through the same TecAssured back end, so an undocumented field may exist. The

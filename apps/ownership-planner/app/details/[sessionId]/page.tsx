@@ -770,13 +770,14 @@ export default async function DetailsPage({
                   // QA server only; see docs/multi-provider.md, section 16.
                   <fieldset className="vprobe">
                     <label className="vprobe-check">
-                      <input type="checkbox" name="cobuyer_probe" value="1" /> Co-buyer field test
+                      <input type="checkbox" name="cobuyer_probe" value="1" /> Phone and co-buyer field test
                     </label>
                     <p className="vprobe-note">
-                      A one-off test on this test deal. It sends made-up marker codes (CB01, CB02 and
-                      so on) in many guessed co-buyer fields, so the contract shows which field
-                      TecAssured prints, if any. No real names are sent. Only Battery Standard or Care
-                      Coverage can be submitted with it on. Leave it off for a normal submit.
+                      A one-off test on this test deal. It sends made-up phone numbers (304-555-0101
+                      to 304-555-0120, one per guessed phone field) and the co-buyer marker CB03 again,
+                      so the contract shows which phone field TecAssured prints, if any. No real names
+                      or numbers are sent. Only Battery Standard or Care Coverage can be submitted with
+                      it on. Leave it off for a normal submit.
                     </p>
                     <label className="vprobe-batch">
                       Batch{" "}
