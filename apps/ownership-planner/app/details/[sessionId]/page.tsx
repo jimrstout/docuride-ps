@@ -59,7 +59,7 @@ import {
   keepStaffSaleDate,
   useCrmSaleDate,
 } from "@/app/console-actions";
-import { submitBlock } from "@/lib/submit-check";
+import { submitCheck } from "@/lib/submit-check";
 import SubmitConfirm from "@/components/SubmitConfirm";
 import { sentenceStart, testServerName, vendorName } from "@/lib/vendor";
 import PendingButton from "@/components/PendingButton";
@@ -390,7 +390,9 @@ export default async function DetailsPage({
   const verified = sheet.verification.state === "Verified";
   // Why Submit is disabled, if it is: not the day of the sale, or a rating
   // that is out of date (lib/submit-check.ts). Submit refuses both itself.
-  const submitBlocked = submitBlock(sheet);
+  // On a test session on the QA server an out-of-date rating is a note, not
+  // a block (lib/submit-check.ts).
+  const { block: submitBlocked, note: submitNote } = submitCheck(sheet);
   // The contract provider by its record's name ("Riders Advantage"), never
   // written in here, so another provider reads correctly (lib/vendor.ts).
   const vendor = vendorName(sheet);
@@ -783,6 +785,7 @@ export default async function DetailsPage({
                   sale_date_label: null, test_at_maximum: false, lines: [], total: 0, total_cents: 0,
                 }}
                 changes={sheet.contract_parties?.changes ?? []}
+                note={submitNote}
                 blocked={
                   submitBlocked ??
                   (sheet.contracts_panel.confirmation ? null : "The confirmation could not be loaded. Reload the page to submit.")

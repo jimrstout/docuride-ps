@@ -1174,3 +1174,12 @@ Confirm Submit.
   or Escape, closes it and sends nothing.
 - **Phones.** The modal is never wider than the screen less 16px a side; the
   product list scrolls inside it and the buttons stay in view.
+- **Test sessions on an out-of-date rating** (2026-10-28). On a test session
+  whose store points at the QA server (`pricePolicy` "Test at maximum"), an
+  out-of-date rating no longer blocks Submit. Details says, in amber and not
+  as an error, "The rating is out of date. This is a test session, so you can
+  still submit.", and the modal says the same above the products.
+  fni-contract-submit records the session event "Submitted on an out-of-date
+  rating: test session", with the signed-in person's initials, before
+  anything is sent, and sends nothing if it cannot. A real session is still
+  refused. The sale day check applies to every session as before.

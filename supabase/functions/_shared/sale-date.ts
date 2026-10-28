@@ -231,6 +231,15 @@ export function onlySameMonthSaleDateMove(
   return !saleDateMoveNeedsRerate(before.sale_date, after.sale_date, boundaries);
 }
 
+/**
+ * The session event when a test session on the QA server submits on an
+ * out-of-date rating, which only a test session may do (fni-contract-submit).
+ */
+export const STALE_TEST_SUBMIT_EVENT = "Submitted on an out-of-date rating: test session";
+
+/** What Details and the Submit confirmation say on such a session. */
+export const STALE_TEST_NOTE = "The rating is out of date. This is a test session, so you can still submit.";
+
 export const RATING_OUT_OF_DATE =
   "The rating is out of date because something it was rated on has changed, such as the sale date. " +
   "Press Confirm and Continue on Details to rate the deal again before submitting.";

@@ -141,7 +141,7 @@ test("Details shows when the deal ends, sets the planned sale date, and holds Su
   assert.match(page, /<PendingButton formAction=\{clearPlannedSaleDate\} formNoValidate pending="Clearing the date\.\.\.">/);
   // The reason (not the sale day, or a rating out of date) is said beside a
   // disabled Submit (lib/submit-check.ts).
-  assert.match(page, /const submitBlocked = submitBlock\(sheet\);/);
+  assert.match(page, /const \{ block: submitBlocked, note: submitNote \} = submitCheck\(sheet\);/);
   assert.match(page, /blocked=\{\s*submitBlocked \?\?/);
   const modal = src("apps/ownership-planner/components/SubmitConfirm.tsx");
   assert.match(modal, /\{blocked \? \(\s*<p className="console-flash console-flash--bad" role="alert">\{blocked\}<\/p>/);
