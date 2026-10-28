@@ -53,10 +53,15 @@ test("every field is editable, read-only when locked, with its history and the C
 });
 
 test("the Submit confirmation appears only when something was edited", () => {
+  // In the Submit modal now (components/SubmitConfirm.tsx, 2026-10-28).
   const page = src("app/details/[sessionId]/page.tsx");
-  assert.match(page, /\{\(sheet\.contract_parties\?\.changes\.length \?\? 0\) > 0 \? \(\s*<fieldset className="vdx1">/);
-  assert.match(page, /<input type="checkbox" name="dx1_confirmed" value="1" required \/> \{DX1_CONFIRMATION\}/);
-  assert.match(page, /<strong>\{c\.label\}<\/strong>: \{c\.was \?\? "not set"\} to \{c\.now \?\? "removed"\}/);
+  assert.match(page, /changes=\{sheet\.contract_parties\?\.changes \?\? \[\]\}/);
+  const modal = src("components/SubmitConfirm.tsx");
+  assert.match(modal, /const needsDx1 = changes\.length > 0;/);
+  assert.match(modal, /\{needsDx1 \? \(\s*<label className="vdx1-confirm vconfirm-dx1">/);
+  assert.match(modal, /name="dx1_confirmed"\s+value="1"\s+required/);
+  assert.match(modal, /\{DX1_CONFIRMATION\}/);
+  assert.match(src("components/SubmitSummary.tsx"), /<strong>\{ch\.label\}<\/strong>: \{ch\.was \?\? "not set"\} to \{ch\.now \?\? "removed"\}/);
   const actions = src("app/console-actions.ts");
   assert.match(actions, /\.\.\.\(formData\.get\("dx1_confirmed"\) === "1"\s*\? \{ dx1_confirmed: true, confirmed_by:/);
 });

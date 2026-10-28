@@ -67,9 +67,10 @@ import {
   REMOVED,
   type PartyName,
 } from "../_shared/contract-parties.ts";
-import { plannedDateProblem, storeToday, submitDateProblem } from "../_shared/store-day.ts";
+import { dayLabel, plannedDateProblem, storeToday, submitDateProblem } from "../_shared/store-day.ts";
 import { capChange, editFor, MAX_AMOUNT_FINANCED } from "./save-edits.ts";
 import { keepStaffSaleDate, saleDateChoice } from "../_shared/sale-date.ts";
+import { SUBMIT_ROW_COLUMNS, submitConfirmation, type SubmitRow } from "../_shared/saved-selections.ts";
 import {
   duplicateVinWarning,
   occupiesSlot,
@@ -289,6 +290,8 @@ async function contractsPanel(supabase: SupabaseClient, s: Record<string, unknow
   }
   // Held documents not in the Deal Jacket yet, voided ones included.
   const waiting = contracts.filter((c) => c.held && !c.workdrive_file_id).length;
+  // Asked only of a test session: nothing else depends on it.
+  const onQa = s.is_test === true && (await onQaServer(supabase, String(s.store_id)));
   return {
     provider_name: selections[0].provider_name,
     selections,
@@ -296,7 +299,42 @@ async function contractsPanel(supabase: SupabaseClient, s: Record<string, unknow
     waiting_count: waiting,
     // TEMPORARY: the co-buyer field test is offered on test sessions on the
     // QA server only (_shared/cobuyer-probe.ts).
-    cobuyer_probe_available: s.is_test === true && (await onQaServer(supabase, String(s.store_id))),
+    cobuyer_probe_available: onQa,
+    confirmation: await submitConfirmationFor(supabase, s, onQa),
+  };
+}
+
+/**
+ * What the Submit confirmation shows: the deal, the buyer, the sale date, and
+ * each product with the price the submit sends for it. Read with the same
+ * columns and the same function as fni-contract-submit's own selections
+ * (_shared/saved-selections.ts), so the modal and the payload cannot differ.
+ * The buyer's name and the sale date are the staff values where there are
+ * any, as the submit sends them.
+ */
+async function submitConfirmationFor(supabase: SupabaseClient, s: Record<string, unknown>, onQa: boolean) {
+  const { data } = await supabase
+    .schema("fni")
+    .from("selected_products")
+    .select(SUBMIT_ROW_COLUMNS)
+    .eq("session_id", s.id as string)
+    .eq("disposition", "Included")
+    .order("product_name");
+  const edited = applyStaffEdits(s, parseStaffEdits(s.staff_edits), editTargetFor);
+  const sale = dealDates(edited).sale;
+  const text = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
+  return {
+    deal_number: s.deal_number ?? null,
+    buyer_name:
+      text(edited.buyer_display_name) ??
+      ([text(edited.buyer_first_name), text(edited.buyer_last_name)].filter(Boolean).join(" ") || null),
+    sale_date: sale,
+    sale_date_label: sale ? dayLabel(sale) : null,
+    // A test session on the QA server is sent at the provider's maximum
+    // (pricePolicy's "Test at maximum", _shared/price-cap.ts), and the modal
+    // says so beside these prices.
+    test_at_maximum: s.is_test === true && onQa,
+    ...submitConfirmation((data ?? []) as unknown as SubmitRow[]),
   };
 }
 

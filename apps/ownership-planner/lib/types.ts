@@ -771,6 +771,33 @@ export interface ContractsPanel {
   }[];
   /** Held documents not in the Deal Jacket yet, voided ones included. */
   waiting_count: number;
+  /** What the Submit confirmation shows, from the rows the submit sends. */
+  confirmation?: SubmitConfirmation;
+}
+
+/**
+ * The Submit confirmation (supabase/functions/_shared/saved-selections.ts):
+ * the same rows and prices fni-contract-submit sends, to the cent.
+ */
+export interface SubmitConfirmation {
+  deal_number: string | null;
+  buyer_name: string | null;
+  /** The sale date the submit sends, and as staff read it ("28 Oct 2026"). */
+  sale_date: string | null;
+  sale_date_label: string | null;
+  /** A test session on the QA server, sent at the provider's maximum instead. */
+  test_at_maximum: boolean;
+  lines: {
+    product_name: string;
+    vendor: string | null;
+    term_months: number | null;
+    term_miles: number | null;
+    customer_price: number;
+    customer_price_cents: number;
+    rate_unique: string;
+  }[];
+  total: number;
+  total_cents: number;
 }
 
 // ── Who goes on the contracts ──────────────────────────────────────────────

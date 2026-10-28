@@ -54,19 +54,18 @@ import {
   verifyAndRate,
   voidContract,
   voidOemContract,
-  submitContracts,
   getContractDocument,
   moveDocumentsToDealJacket,
   keepStaffSaleDate,
   useCrmSaleDate,
 } from "@/app/console-actions";
 import { submitBlock } from "@/lib/submit-check";
+import SubmitConfirm from "@/components/SubmitConfirm";
 import { sentenceStart, testServerName, vendorName } from "@/lib/vendor";
 import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
 import RatingErrorText from "@/components/RatingErrorText";
 import ContractParties from "@/components/ContractParties";
-import { DX1_CONFIRMATION } from "@/lib/contract-parties";
 import { dayLabel, storeTime } from "@/lib/store-time";
 import {
   hasMoreDetail,
@@ -76,7 +75,7 @@ import {
   type RatingFailureText,
 } from "@/lib/rating-error";
 import { Working, WorkingArea } from "@/components/Working";
-import { SUBMIT_LEAVE, VOID_LEAVE } from "@/lib/working";
+import { VOID_LEAVE } from "@/lib/working";
 import VehicleTypeChoice from "@/components/VehicleTypeChoice";
 import { money } from "@/lib/money";
 import OemContractRecord from "@/components/OemContractRecord";
@@ -774,9 +773,21 @@ export default async function DetailsPage({
             ) : sheet.submit_state === "Submit Status Unknown" ? (
               <p className="console-note">Submitting is paused until the Submit Status Unknown notice above is cleared.</p>
             ) : operator ? (
-              <form action={submitContracts}>
-                <Working />
-                <input type="hidden" name="session_id" value={sheet.session.id} />
+              // Submit opens a confirmation first, and only Confirm Submit
+              // sends (components/SubmitConfirm.tsx). Its figures are the
+              // ones the submit sends, from the same rows.
+              <SubmitConfirm
+                sessionId={sheet.session.id}
+                confirmation={sheet.contracts_panel.confirmation ?? {
+                  deal_number: sheet.session.deal_number, buyer_name: null, sale_date: null,
+                  sale_date_label: null, test_at_maximum: false, lines: [], total: 0, total_cents: 0,
+                }}
+                changes={sheet.contract_parties?.changes ?? []}
+                blocked={
+                  submitBlocked ??
+                  (sheet.contracts_panel.confirmation ? null : "The confirmation could not be loaded. Reload the page to submit.")
+                }
+              >
                 {sheet.contracts_panel.cobuyer_probe_available ? (
                   // TEMPORARY: the co-buyer field test. Test sessions on the
                   // QA server only; see docs/multi-provider.md, section 16.
@@ -802,40 +813,7 @@ export default async function DetailsPage({
                     </label>
                   </fieldset>
                 ) : null}
-                {/* Contract details changed on Details: each listed, and the
-                    person submitting confirms DX1 matches. The Edge Function
-                    refuses without it and records it (contract-parties.ts). */}
-                {(sheet.contract_parties?.changes.length ?? 0) > 0 ? (
-                  <fieldset className="vdx1">
-                    <legend>Changed on Details</legend>
-                    <ul className="vdx1-list">
-                      {sheet.contract_parties!.changes.map((c) => (
-                        <li key={c.key}>
-                          <strong>{c.label}</strong>: {c.was ?? "not set"} to {c.now ?? "removed"}
-                        </li>
-                      ))}
-                    </ul>
-                    <label className="vdx1-confirm">
-                      <input type="checkbox" name="dx1_confirmed" value="1" required /> {DX1_CONFIRMATION}
-                    </label>
-                  </fieldset>
-                ) : null}
-                {/* Contracts go out only on the day of the sale at this store
-                    (_shared/store-day.ts). Submit refuses it too; this says why
-                    before anyone presses it. */}
-                {submitBlocked ? (
-                  <p className="console-flash console-flash--bad" role="alert">{submitBlocked}</p>
-                ) : null}
-                <PendingButton
-                  className="btn"
-                  working="page"
-                  pending="Submitting contracts..."
-                  leave={SUBMIT_LEAVE}
-                  disabled={!!submitBlocked}
-                >
-                  Submit contracts
-                </PendingButton>
-              </form>
+              </SubmitConfirm>
             ) : (
               <Link className="btn btn--quiet" href="/admin/sessions" prefetch={false}>
                 Sign in to submit

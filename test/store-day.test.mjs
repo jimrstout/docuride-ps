@@ -142,10 +142,12 @@ test("Details shows when the deal ends, sets the planned sale date, and holds Su
   // The reason (not the sale day, or a rating out of date) is said beside a
   // disabled Submit (lib/submit-check.ts).
   assert.match(page, /const submitBlocked = submitBlock\(sheet\);/);
-  assert.match(page, /\{submitBlocked \? \(\s*<p className="console-flash console-flash--bad" role="alert">\{submitBlocked\}<\/p>/);
-  assert.match(page, /disabled=\{!!submitBlocked\}/);
+  assert.match(page, /blocked=\{\s*submitBlocked \?\?/);
+  const modal = src("apps/ownership-planner/components/SubmitConfirm.tsx");
+  assert.match(modal, /\{blocked \? \(\s*<p className="console-flash console-flash--bad" role="alert">\{blocked\}<\/p>/);
+  assert.match(modal, /onClick=\{show\} disabled=\{!!blocked\}/);
   // Submit and Confirm and Continue (which rates) are busy buttons.
-  assert.match(page, /pending="Submitting contracts\.\.\."/);
+  assert.match(modal, /pending="Submitting contracts\.\.\."/);
   const actions = src("apps/ownership-planner/app/console-actions.ts");
   assert.match(actions, /\(session_id\) => \(\{ session_id, action: "planned_sale_date", value \}\)/);
   const { flashMessage } = await import("../apps/ownership-planner/lib/verify-flash.ts");

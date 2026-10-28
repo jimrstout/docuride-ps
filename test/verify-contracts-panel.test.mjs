@@ -43,10 +43,12 @@ test("the panel shows once the planner is finished, and every button says what i
   assert.match(verify, /const PLANNER_DONE = \["Products Selected", "Agreement Created", "Finalized"\];/);
   assert.match(verify, /contracts_panel: panel,/);
   const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
-  // No provider name on the button (2026-10-28).
-  assert.match(page, />\s*Submit contracts\s*</);
-  assert.doesNotMatch(page, /Submit contracts to/);
-  assert.match(page, /pending="Submitting contracts\.\.\."/);
+  // No provider name on the button, and a confirmation first (2026-10-28).
+  const modal = src("../apps/ownership-planner/components/SubmitConfirm.tsx");
+  assert.match(page, /<SubmitConfirm\s/);
+  assert.match(modal, />\s*Submit contracts\s*</);
+  assert.doesNotMatch(page + modal, /Submit contracts to/);
+  assert.match(modal, /pending="Submitting contracts\.\.\."/);
   assert.match(page, /pending="Getting the document\.\.\."/);
   assert.match(page, /pending="Voiding\.\.\."/);
   assert.match(page, /name="confirm" required \/> Cancel this contract with \{vendor\}/);

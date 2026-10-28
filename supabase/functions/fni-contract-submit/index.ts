@@ -77,7 +77,7 @@ import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
 import { DX1_CONFIRMATION, partyChanges } from "../_shared/contract-parties.ts";
 import { applyCobuyerProbe, probeDecision, type MarkerRow } from "../_shared/cobuyer-probe.ts";
 import { programName } from "../_shared/program-names.ts";
-import { savedSelections, type SavedSelection } from "../_shared/saved-selections.ts";
+import { savedSelections, SUBMIT_ROW_COLUMNS, type SubmitRow } from "../_shared/saved-selections.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -145,11 +145,13 @@ serve(async (req: Request) => {
     const { data: saved, error: savedErr } = await supabase
       .schema("fni")
       .from("selected_products")
-      .select("provider_product_id, rate_unique_id, selected_options, customer_price, retail_price")
+      // The same rows, read the same way, as the confirmation Details shows
+      // before this is pressed (_shared/saved-selections.ts).
+      .select(SUBMIT_ROW_COLUMNS)
       .eq("session_id", session_id)
       .eq("disposition", "Included");
     if (savedErr) return json(500, { error: `The customer's choices could not be read: ${savedErr.message}` });
-    body.selections = savedSelections((saved ?? []) as SavedSelection[]);
+    body.selections = savedSelections((saved ?? []) as unknown as SubmitRow[]);
     if (body.selections.length === 0) {
       return json(400, { error: "The customer has not chosen any products in the planner yet, so there is nothing to submit." });
     }

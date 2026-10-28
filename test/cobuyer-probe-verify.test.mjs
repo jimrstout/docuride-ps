@@ -8,14 +8,15 @@ const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 
 test("offered on test sessions on the QA server only, read from the base URL alone", () => {
   const v = src("../supabase/functions/fni-session-verify/index.ts");
-  assert.match(v, /cobuyer_probe_available: s\.is_test === true && \(await onQaServer\(supabase, String\(s\.store_id\)\)\),/);
+  assert.match(v, /const onQa = s\.is_test === true && \(await onQaServer\(supabase, String\(s\.store_id\)\)\);/);
+  assert.match(v, /cobuyer_probe_available: onQa,/);
   assert.match(v, /\.from\("provider_credentials"\)\s+\.select\("api_base_url"\)/);
   assert.match(v, /\?\.api_base_url\) === QA_HOST;/);
 });
 
 test("the checkbox is off by default, explained, with a batch picker defaulting to All", () => {
   const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
-  const block = page.slice(page.indexOf("{sheet.contracts_panel.cobuyer_probe_available ? ("), page.indexOf("{/* Contract details changed on Details"));
+  const block = page.slice(page.indexOf("{sheet.contracts_panel.cobuyer_probe_available ? ("), page.indexOf("</SubmitConfirm>"));
   assert.match(block, /<input type="checkbox" name="cobuyer_probe" value="1" \/> Phone and co-buyer field test/);
   assert.doesNotMatch(block, /defaultChecked|checked=/);
   assert.match(block, /No real names\s+or numbers are sent\./);

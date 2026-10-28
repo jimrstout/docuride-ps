@@ -19,6 +19,8 @@ const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8"
 const SWEPT = [
   "apps/ownership-planner/app/details/[sessionId]/page.tsx",
   "apps/ownership-planner/components/ContractParties.tsx",
+  "apps/ownership-planner/components/SubmitConfirm.tsx",
+  "apps/ownership-planner/components/SubmitSummary.tsx",
   "apps/ownership-planner/components/VehicleTypeChoice.tsx",
   "apps/ownership-planner/components/OemContractRecord.tsx",
   "apps/ownership-planner/components/VerifySidebarFields.tsx",
@@ -67,9 +69,11 @@ function brandedText(src) {
 }
 
 test("the submit button says Submit contracts, with no provider name", () => {
-  const page = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
-  assert.match(page, />\s*Submit contracts\s*</);
-  assert.doesNotMatch(page, /Submit contracts to/);
+  const button = read("apps/ownership-planner/components/SubmitConfirm.tsx");
+  assert.match(button, />\s*Submit contracts\s*</);
+  for (const f of ["apps/ownership-planner/app/details/[sessionId]/page.tsx", "apps/ownership-planner/components/SubmitConfirm.tsx"]) {
+    assert.doesNotMatch(read(f), /Submit contracts to/, f);
+  }
 });
 
 test("no provider name is written into a label, button or message in the swept files", () => {
