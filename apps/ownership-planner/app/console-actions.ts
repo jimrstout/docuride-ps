@@ -626,8 +626,8 @@ export async function submitContracts(formData: FormData): Promise<void> {
         : `Submitted. TecAssured returned ${done.contract_count ?? 0} ${done.contract_count === 1 ? "contract" : "contracts"}: ${numbers}. Get each document next.`;
     if (done.cobuyer_probe) {
       detail +=
-        ` Co-buyer field test sent (${done.cobuyer_probe.batch === "All" ? "all fields" : `batch ${done.cobuyer_probe.batch}`}).` +
-        " Get the document, then read it for the CB and R marker codes.";
+        ` Phone and co-buyer field test sent (${done.cobuyer_probe.batch === "All" ? "all fields" : `batch ${done.cobuyer_probe.batch}`}).` +
+        " Get the document, then read it for a 555-01 number and the CB03 marker.";
     }
   } catch (err) {
     console.error(`submit failed for ${sessionId}:`, err);

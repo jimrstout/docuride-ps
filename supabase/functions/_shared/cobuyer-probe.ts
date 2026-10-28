@@ -19,6 +19,15 @@
 // only for products whose form prints a co-buyer name row (PROBE_PRODUCTS).
 // Delete this file, and the flag that reaches it, once the answer is in
 // (docs/multi-provider.md, section 16).
+//
+// ── Round 2: the phone field (2026-10-28) ────────────────────────────────
+// Round 1 answered the co-buyer: only CB03 printed, so cobuyerFirstName and
+// cobuyerLastName on the quote fill the co-buyer name boxes, and TecAssured
+// ignored every other key. The one blank left on the contract is the buyer's
+// phone. Round 2 sends twenty guessed phone keys on the quote, each a
+// fictional 304-555-01xx number whose last two digits name the guess (P01 is
+// ...0101), digits only, and CB03 again to confirm round 1 repeats. Nothing
+// goes at the top level, and never a buyers or customers array.
 
 /** Where a variant's keys go: the quote (beside buyerFirstName) or the top level. */
 export type ProbeLevel = "Quote" | "Top level";
@@ -30,7 +39,8 @@ export interface ProbeVariant {
   shape:
     | { kind: "Pair"; first: string; last: string }
     | { kind: "Full name"; key: string }
-    | { kind: "Object"; key: string; first: string; last: string };
+    | { kind: "Object"; key: string; first: string; last: string }
+    | { kind: "Value"; key: string; value: string };
 }
 
 const pair = (marker: string, first: string, last: string, level: ProbeLevel = "Quote"): ProbeVariant => ({
@@ -45,72 +55,58 @@ const obj = (marker: string, key: string, first: string, last: string, level: Pr
   shape: { kind: "Object", key, first, last },
 });
 
+const phone = (marker: string, key: string): ProbeVariant => ({
+  marker,
+  level: "Quote",
+  // Digits only. A fictional 555-01xx number: its last two digits are the marker's.
+  shape: { kind: "Value", key, value: `30455501${marker.slice(1)}` },
+});
+
 /** Keys added to the quote object, where buyerFirstName lives. */
 export const QUOTE_VARIANTS: readonly ProbeVariant[] = [
-  pair("CB01", "coBuyerFirstName", "coBuyerLastName"),
-  pair("CB02", "CoBuyerFirstName", "CoBuyerLastName"),
+  phone("P01", "buyerPhone"),
+  phone("P02", "buyerPhoneNumber"),
+  phone("P03", "buyerTelephone"),
+  phone("P04", "buyerHomePhone"),
+  phone("P05", "buyerCellPhone"),
+  phone("P06", "buyerMobilePhone"),
+  phone("P07", "buyerMobile"),
+  phone("P08", "buyerPhone1"),
+  phone("P09", "buyerDayPhone"),
+  phone("P10", "buyerWorkPhone"),
+  phone("P11", "BuyerPhone"),
+  phone("P12", "buyerphone"),
+  phone("P13", "buyer_phone"),
+  phone("P14", "phone"),
+  phone("P15", "phoneNumber"),
+  phone("P16", "telephone"),
+  phone("P17", "customerPhone"),
+  phone("P18", "contactPhone"),
+  phone("P19", "buyerPrimaryPhone"),
+  phone("P20", "buyerEveningPhone"),
+  // Round 1's winner, again, to confirm it repeats.
   pair("CB03", "cobuyerFirstName", "cobuyerLastName"),
-  pair("CB04", "coBuyerFirstname", "coBuyerLastname"),
-  pair("CB05", "cobuyerfirstname", "cobuyerlastname"),
-  pair("CB06", "co_buyer_first_name", "co_buyer_last_name"),
-  pair("CB07", "coBuyer_FirstName", "coBuyer_LastName"),
-  pair("CB08", "co-buyerFirstName", "co-buyerLastName"),
-  pair("CB09", "Co-BuyerFirstName", "Co-BuyerLastName"),
-  pair("CB10", "co-buyer-first-name", "co-buyer-last-name"),
-  pair("CB11", "coFirstName", "coLastName"),
-  pair("CB12", "CoFirstName", "CoLastName"),
-  pair("CB13", "coFirstname", "coLastname"),
-  pair("CB14", "co_first_name", "co_last_name"),
-  pair("CB15", "co-FirstName", "co-LastName"),
-  pair("CB16", "Co-FirstName", "Co-LastName"),
-  pair("CB17", "cobuyerFName", "cobuyerLName"),
-  pair("CB18", "coBuyerFName", "coBuyerLName"),
-  pair("CB19", "secondBuyerFirstName", "secondBuyerLastName"),
-  pair("CB20", "buyer2FirstName", "buyer2LastName"),
-  pair("CB21", "Buyer2FirstName", "Buyer2LastName"),
-  pair("CB22", "jointBuyerFirstName", "jointBuyerLastName"),
-  pair("CB23", "coApplicantFirstName", "coApplicantLastName"),
-  pair("CB24", "coOwnerFirstName", "coOwnerLastName"),
-  pair("CB25", "coPurchaserFirstName", "coPurchaserLastName"),
-  full("CB26", "coBuyerName"),
-  full("CB27", "cobuyerName"),
-  full("CB28", "CoBuyerName"),
-  full("CB29", "coBuyerFullName"),
-  obj("CB30", "coBuyer", "firstName", "lastName"),
-  obj("CB31", "cobuyer", "firstName", "lastName"),
-  obj("CB32", "CoBuyer", "FirstName", "LastName"),
-  obj("CB33", "co-buyer", "firstName", "lastName"),
-  pair("CB34", "contractHolder2FirstName", "contractHolder2LastName"),
-  pair("CB35", "coContractHolderFirstName", "coContractHolderLastName"),
-  pair("CB36", "secondContractHolderFirstName", "secondContractHolderLastName"),
-  pair("CB37", "COBuyerFirstName", "COBuyerLastName"),
-  pair("CB38", "Co_BuyerFirstName", "Co_BuyerLastName"),
-  pair("CB39", "additionalBuyerFirstName", "additionalBuyerLastName"),
-  pair("CB40", "secondaryBuyerFirstName", "secondaryBuyerLastName"),
-  pair("CB41", "owner2FirstName", "owner2LastName"),
 ];
 
-/** Keys added to the top-level submit payload: the same names, other markers. */
-export const ROOT_VARIANTS: readonly ProbeVariant[] = [
-  pair("R01", "coBuyerFirstName", "coBuyerLastName", "Top level"),
-  pair("R02", "CoBuyerFirstName", "CoBuyerLastName", "Top level"),
-  obj("R03", "coBuyer", "firstName", "lastName", "Top level"),
-];
+/** Nothing goes at the top level of the payload in round 2. */
+export const ROOT_VARIANTS: readonly ProbeVariant[] = [];
 
 export type ProbeBatch = "All" | 1 | 2 | 3;
 
+const CB03 = QUOTE_VARIANTS.filter((v) => v.marker === "CB03");
 const ALL_VARIANTS = [...QUOTE_VARIANTS, ...ROOT_VARIANTS];
-const range = (from: number, to: number) =>
+const phones = (from: number, to: number) =>
   QUOTE_VARIANTS.filter((v) => {
-    const n = Number(v.marker.slice(2));
+    if (!v.marker.startsWith("P")) return false;
+    const n = Number(v.marker.slice(1));
     return n >= from && n <= to;
   });
 
 /** Used only if TecAssured rejects the full set, and only when Jim says so. */
 export const BATCHES: Readonly<Record<1 | 2 | 3, readonly ProbeVariant[]>> = {
-  1: range(1, 12),
-  2: range(13, 25),
-  3: [...range(26, 41), ...ROOT_VARIANTS],
+  1: [...phones(1, 10), ...CB03],
+  2: [...phones(11, 20), ...CB03],
+  3: CB03,
 };
 
 /** "All", 1, 2 or 3, from a request. Anything else is null. A missing value is "All". */
@@ -134,6 +130,8 @@ function entriesOf(v: ProbeVariant): [string, unknown][] {
       return [[v.shape.key, `${code} ${code}`]];
     case "Object":
       return [[v.shape.key, { [v.shape.first]: code, [v.shape.last]: code }]];
+    case "Value":
+      return [[v.shape.key, v.shape.value]];
   }
 }
 
@@ -159,6 +157,8 @@ export function markerRow(v: ProbeVariant): MarkerRow {
         fields: `${v.shape.key}: { ${v.shape.first}, ${v.shape.last} }`,
         sent: `{ ${code}, ${code} }`,
       };
+    case "Value":
+      return { marker: code, level: v.level, fields: v.shape.key, sent: v.shape.value };
   }
 }
 
@@ -232,7 +232,7 @@ export function probeDecision(input: {
   if (batch === null) {
     return {
       kind: "Refuse",
-      message: `The co-buyer field test batch must be All, 1, 2 or 3. Nothing was sent.`,
+      message: `The field test batch must be All, 1, 2 or 3. Nothing was sent.`,
     };
   }
   const others = input.products.filter((p) => !probeAllows(p.program));
@@ -240,7 +240,7 @@ export function probeDecision(input: {
     return {
       kind: "Refuse",
       message:
-        `The co-buyer field test only works on ${PROBE_PRODUCTS}, the forms that print a co-buyer name. ` +
+        `The field test only works on ${PROBE_PRODUCTS}, the forms that print a co-buyer name. ` +
         `${others.map((p) => p.name).join(", ")} ${others.length === 1 ? "is" : "are"} also selected, ` +
         `so nothing was sent. Submit with only Battery Standard or Care Coverage chosen, or turn the test off.`,
     };
