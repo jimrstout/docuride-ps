@@ -1051,3 +1051,22 @@ of that store's day rather than for a fixed number of hours. Migration 0038.
 The day boundary is worked out in Postgres (`fni.store_day_end`), so a session
 made by any path ends at the same moment; "today" for the submit check is
 `storeToday` in `_shared/store-day.ts`, from the same zone.
+
+## 21. Who goes on the contracts
+
+Details shows the buyer, co-buyer and lienholder exactly as the service
+contracts are sent with them, to a signed-in operator only (the page itself
+needs only the session link, so names, addresses and phone numbers wait for a
+sign-in). `_shared/contract-parties.ts` holds the rules.
+
+| What | How |
+|---|---|
+| Fields | Every buyer, co-buyer and lienholder column on `fni.sessions`, in plain English. All editable. A business buyer (type Company) leads with the business name; no lienholder reads "Cash deal, no lienholder". |
+| Edits | A staff edit in `staff_edits`, keyed on the column, with who, when and the value replaced, shown as "Entered by Staff: name, time. Was old value." Removing a co-buyer or lienholder is the edit `cobuyer` or `lienholder` = "Removed". |
+| Refresh from CRM | Writes the columns, never the edits, so the staff value stands. If the CRM later says something new, both are shown ("CRM now says ...") with Keep staff value and Use CRM value. |
+| Submit | Sends the staff value wherever one exists. If any contract detail was changed here, each change is listed and Submit needs "I have made these changes in DX1, or they are not needed there."; fni-contract-submit refuses without it and records it as the session event "Contract detail changes confirmed for DX1". |
+| Missing | Named beside the field ("Missing: buyer last name"). Not blocking yet. |
+| Locked | While any contract on the deal is live (Live or Submit Status Unknown), the panels are read-only, edits are refused, and Discard keeps city, state and ZIP. Voiding every live contract unlocks them. |
+
+City, state and ZIP are also rating inputs on the sheet: one edit, shown in
+both places, and a change sends the deal back through Confirm and Continue.
