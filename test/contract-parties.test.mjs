@@ -152,6 +152,20 @@ test("locked while a contract is live, unlocked once every live contract is void
   assert.equal(contractParties(DEAL, {}, false).locked, false);
 });
 
+test("fni-contract-submit sends the staff values", () => {
+  const sub = src("supabase/functions/fni-contract-submit/index.ts");
+  assert.match(sub, /const party = applyStaffEdits\(session as Record<string, unknown>, parseStaffEdits\(session\.staff_edits\)\)/);
+  assert.match(sub, /if \(party\.buyer_last_name\) submitQuote\.buyerLastName = party\.buyer_last_name;/);
+  assert.match(sub, /if \(party\.lienholder_name\) lienholder\.lienholderName = party\.lienholder_name;/);
+  assert.doesNotMatch(sub, /session\.buyer_first_name|session\.lienholder_name/);
+});
+
+test("fni-contract-submit asks for the DX1 confirmation only when something was changed", () => {
+  const sub = src("supabase/functions/fni-contract-submit/index.ts");
+  assert.match(sub, /if \(changes\.length > 0\) \{\s*if \(body\.dx1_confirmed !== true\) \{\s*return await refuse\(400,/);
+  assert.match(sub, /event: "Contract detail changes confirmed for DX1",/);
+});
+
 test("fni-session-verify locks the panels and refuses edits while a contract is live", () => {
   const v = src("supabase/functions/fni-session-verify/index.ts");
   // The lock is the live-contract list: Live or Submit Status Unknown (duplicates.ts).
