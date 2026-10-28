@@ -155,7 +155,7 @@ test("submit refuses on a bad date and aligns the quote before sending", () => {
   const sub = src("../supabase/functions/fni-contract-submit/index.ts");
   const refuse = sub.indexOf("if (dates.problem || dates.sale === null || dates.inService === null)");
   const align = sub.indexOf("alignContractDates(submitQuote,");
-  const call = sub.indexOf("await client.submitContract(submitPayload)");
+  const call = sub.indexOf("await client.submitContractDetailed(submitPayload)");
   assert.ok(refuse > 0 && refuse < align && align < call);
   assert.match(sub, /dealDates\(applyStaffEdits\(session as Record<string, unknown>, parseStaffEdits\(session\.staff_edits\)\)\)/);
 });

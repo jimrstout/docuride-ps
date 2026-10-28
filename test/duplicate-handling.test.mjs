@@ -249,7 +249,7 @@ test("contracts are written as Live, which is what holds the slot", () => {
 
 test("providerWasCalled is set immediately before the provider call, not after", () => {
   const flag = contractSubmit.indexOf("providerWasCalled = true");
-  const call = contractSubmit.indexOf("client.submitContract(");
+  const call = contractSubmit.indexOf("client.submitContractDetailed(");
   assert.ok(flag > 0 && call > 0);
   assert.ok(flag < call, "the flag must be set before the call it is about");
   assert.ok(call - flag < 400, "nothing may come between the flag and the call");

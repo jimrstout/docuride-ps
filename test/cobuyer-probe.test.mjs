@@ -101,11 +101,11 @@ test("submit applies it after the buyer, records it first, and returns refusals 
   const step5 = sub.indexOf("// ── Step 5: Buyer and lienholder");
   const apply = sub.indexOf("probeMarkers = applyCobuyerProbe(submitQuote, submitPayload, probe.batch);");
   const event = sub.indexOf('event: "Co-buyer field probe sent",');
-  const call = sub.indexOf("await client.submitContract(submitPayload)");
+  const call = sub.indexOf("await client.submitContractDetailed(submitPayload)");
   assert.ok(step5 > 0 && step5 < apply && apply < event && event < call);
   assert.match(sub, /guardPassed: notCleared === null,/);
   assert.match(sub, /error: verbatim\.length > 0 \? verbatim\.join\(" \| "\) : JSON\.stringify\(response\),/);
   // Nothing retries, strips or switches batches.
   assert.equal((sub.match(/applyCobuyerProbe\(/g) ?? []).length, 1);
-  assert.equal((sub.match(/client\.submitContract\(/g) ?? []).length, 1);
+  assert.equal((sub.match(/client\.submitContractDetailed\(/g) ?? []).length, 1);
 });

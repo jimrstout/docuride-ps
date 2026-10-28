@@ -1045,6 +1045,25 @@ its own (a double click can land first, and a second tab has its own button):
   void ends, whatever the outcome; one older than three minutes counts as
   abandoned.
 
+**The provider's answer is kept** (2026-10-28, `_shared/provider-answer.ts`).
+A submit on deal 15029 at 17:29 UTC on 28 Oct ended in Submit Status Unknown,
+and only the one-line summary was saved, so it could not be diagnosed. Now
+`apiCallDetailed` (`_shared/tecassured.ts`) keeps the HTTP status and any
+request ID header beside the parsed body, and a failure the provider answers
+throws `ProviderHttpError` carrying the same; successful calls read exactly as
+before. Every submit that reaches the provider and does not end in a clean
+success (unknown, refused, partly refused, or a failure the provider answered)
+keeps the status, request ID and body as the session event "Provider's answer
+kept", once per submit. Before it is kept, any buyer, co-buyer or lienholder
+name, address, email or phone is taken out, by key and by the session's own
+values wherever they appear; the co-buyer probe's made-up values (304-555-01xx,
+CB03) stay; credentials, tokens and session IDs are removed; the body is cut at
+50,000 characters. Details shows the latest one behind Show details, with Copy
+error, in the Submit Status Unknown notice or the Contracts panel. A rating the
+provider answers with an HTTP failure keeps the same with the attempt
+(`rated_offers.response_payload`); a refusal sent as HTTP 200 was already kept
+whole.
+
 ## 20. Session dates: the store's day
 
 A deal is sold on a day, in a store, so a planning session lasts until the end

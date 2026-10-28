@@ -61,6 +61,7 @@ import {
 } from "@/app/console-actions";
 import { submitCheck } from "@/lib/submit-check";
 import SubmitConfirm from "@/components/SubmitConfirm";
+import ProviderAnswer from "@/components/ProviderAnswer";
 import { sentenceStart, testServerName, vendorName } from "@/lib/vendor";
 import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
@@ -647,6 +648,16 @@ export default async function DetailsPage({
               void the ones that should not stand, then clear this.
             </p>
             {sheet.submit_detail ? <p><small><LongText text={sheet.submit_detail} /></small></p> : null}
+            {/* What the provider actually said: status, request ID and body,
+                with personal details taken out. */}
+            {sheet.provider_answer ? (
+              <ProviderAnswer
+                deal={sheet.session.deal_number}
+                provider={sentenceStart(vendor)}
+                answer={sheet.provider_answer}
+                lead={`${sentenceStart(vendor)}'s answer, with its status and request ID, to quote when you check with them.`}
+              />
+            ) : null}
             {operator ? (
             <form action={clearSubmitUnknown}>
               <Working />
@@ -822,6 +833,17 @@ export default async function DetailsPage({
                 Sign in to submit
               </Link>
             )}
+
+            {/* The last submit that did not simply succeed: what the provider said.
+                While the outcome is unknown it is shown in that notice instead. */}
+            {sheet.provider_answer && sheet.submit_state !== "Submit Status Unknown" ? (
+              <ProviderAnswer
+                deal={sheet.session.deal_number}
+                provider={sentenceStart(vendor)}
+                answer={sheet.provider_answer}
+                lead={`${sentenceStart(vendor)}'s answer to the last submit that did not go through.`}
+              />
+            ) : null}
 
             {sheet.contracts_panel.contracts.length > 0 ? (
               <ul className="vcontracts-list">
