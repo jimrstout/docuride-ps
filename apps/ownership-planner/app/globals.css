@@ -1052,6 +1052,10 @@ button { cursor: pointer; }
 }
 
 /* The planned sale date: a small form beside when the session ends. */
+/* Rate again on Details, in the Rating line. */
+.vrate-again { display: inline-flex; margin-left: var(--s2); vertical-align: middle; }
+.vrate-differences { margin-top: var(--s2); color: var(--warn-fg); font-size: 0.9rem; }
+.vrate-differences ul { margin: var(--s1) 0 0; padding-left: 1.2em; }
 .vplanned { display: inline-flex; align-items: center; gap: var(--s2); flex-wrap: wrap; font-weight: 400; }
 .vplanned label { color: var(--muted); }
 .vplanned input[type="date"] {

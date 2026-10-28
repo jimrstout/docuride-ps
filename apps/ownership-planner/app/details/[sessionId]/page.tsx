@@ -59,7 +59,9 @@ import {
   moveDocumentsToDealJacket,
   keepStaffSaleDate,
   useCrmSaleDate,
+  rateAgain,
 } from "@/app/console-actions";
+import { rateAgainAvailable } from "@/lib/rate-again";
 import { submitCheck } from "@/lib/submit-check";
 import SubmitConfirm from "@/components/SubmitConfirm";
 import ProviderAnswer from "@/components/ProviderAnswer";
@@ -541,6 +543,30 @@ export default async function DetailsPage({
                     </li>
                   ))}
                 </ul>
+              ) : null}
+              {sheet.rating_differences ? (
+                // Rate again could not keep these: choose them again.
+                <div className="vrate-differences" role="alert">
+                  <p>{sheet.rating_differences.message}</p>
+                  <ul>
+                    {sheet.rating_differences.differences.map((d) => (
+                      <li key={d}>Out of date. {d}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {rateAgainAvailable({
+                signedIn: !!operator,
+                submitState: sheet.submit_state,
+                liveContracts: sheet.contracts.length,
+              }) ? (
+                // The rating staff run, any time, with the deal's current
+                // inputs (fni-rate-vehicle, rate_again). Never submits.
+                <form action={rateAgain} className="vrate-again" data-working-panel="">
+                  <Working />
+                  <input type="hidden" name="session_id" value={sheet.session.id} />
+                  <PendingButton pending="Rating again...">Rate again</PendingButton>
+                </form>
               ) : null}
             </dd>
           </div>

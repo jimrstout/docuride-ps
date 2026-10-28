@@ -673,6 +673,49 @@ function providerSays(name: string | undefined): string {
 }
 
 /**
+ * Rate again, from the Rating line on Details: the same rating staff run,
+ * with the session's current inputs, any time. Each selection the fresh
+ * offer matches to the cent is kept on its fresh rate; any other is marked
+ * out of date and listed under Rating (fni-rate-vehicle, rate_again). Never
+ * submits. A rating error stays on the page behind Show details.
+ */
+export async function rateAgain(formData: FormData): Promise<void> {
+  const operator = await currentOperator();
+  if (!operator) redirect(SESSIONS);
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
+
+  let done: { outcome?: string; product_count?: number; lines?: unknown[] };
+  try {
+    done = await edge.rate<typeof done>({
+      session_id: sessionId,
+      rate_again: true,
+      // For "Rated again by": the person's initials, or System.
+      rated_by: initialsFor(operator.email),
+    });
+  } catch (err) {
+    console.error(`rate again failed for ${sessionId}:`, err);
+    revalidatePath(`/details/${sessionId}`);
+    return backToVerify(
+      sessionId,
+      "rateagainfailed",
+      err instanceof EdgeError ? err.message : "The deal could not be rated again. Try again."
+    );
+  }
+  revalidatePath(`/details/${sessionId}`);
+  revalidatePath(`/plan/${sessionId}`);
+  revalidatePath(SESSIONS);
+  if (done.outcome === "changed") return backToVerify(sessionId, "ratedagainheld");
+  const count = done.product_count ?? 0;
+  return backToVerify(
+    sessionId,
+    "ratedagain",
+    `Rated again: ${count} ${count === 1 ? "product" : "products"}.` +
+      ((done.lines?.length ?? 0) > 0 ? " Every selected product still matches to the cent, so the selections are kept." : "")
+  );
+}
+
+/**
  * Submit contracts, when a voided contract has spent a rate the submit would
  * send (supabase/functions/_shared/spent-rates.ts). Rates the deal again the
  * way staff do, and moves the selections onto the fresh rates only when every

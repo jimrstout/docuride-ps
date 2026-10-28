@@ -118,12 +118,24 @@ export function flashMessage(
     return { tone: "bad", text: "Verified. The re-rate failed, and the last good offers are kept." };
   }
 
+  if (opts.ratingShown && flash.code === "rateagainfailed") {
+    return { tone: "bad", text: "The deal could not be rated again. The provider's error is below." };
+  }
   // The rating's banner holds the provider's error, with Show details and Copy error.
   if (opts.ratingShown && flash.code === "refreshfailed") {
     return { tone: "bad", text: "The rating could not be refreshed, so nothing was submitted. The provider's error is below." };
   }
 
   switch (flash.code) {
+    case "ratedagain":
+      return { tone: "ok", text: flash.detail ?? "Rated again." };
+    case "ratedagainheld":
+      return {
+        tone: "bad",
+        text: "Rated again. Some products no longer match the fresh rating to the cent, so they are marked out of date under Rating. Choose them again before submitting.",
+      };
+    case "rateagainfailed":
+      return { tone: "bad", text: flash.detail ?? "The deal could not be rated again." };
     case "submitready":
       return { tone: "ok", text: "Review the products, then press Confirm Submit." };
     case "spentrefreshed":

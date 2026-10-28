@@ -38,6 +38,22 @@ import { customerPriceFor, surchargeCost } from "./plan-prices.ts";
 export const REFRESHED_UNCHANGED_EVENT = "Rating refreshed after a void: prices unchanged";
 export const REFRESHED_HELD_EVENT = "Rating refreshed after a void: prices changed, submit held";
 
+/**
+ * Rate again on Details (2026-10-28): any time, by a signed-in person. The
+ * same matching, but selection by selection: one that matches to the cent
+ * moves onto its fresh rate, one that does not stays where it was, out of
+ * date, until staff choose again.
+ */
+export const RATED_AGAIN_PREFIX = "Rated again by ";
+export function ratedAgainEvent(by: string): string {
+  return `${RATED_AGAIN_PREFIX}${by}`;
+}
+export function isRatedAgainEvent(event: string): boolean {
+  return event.startsWith(RATED_AGAIN_PREFIX);
+}
+export const OUT_OF_DATE_MESSAGE =
+  "Rated again, and some products no longer match the fresh rating to the cent. Choose them again before submitting.";
+
 export const REFRESHED_NOTE = "The rating was refreshed because an earlier contract was voided. Prices are unchanged.";
 export const HELD_MESSAGE = "Prices changed since this deal was rated. Review the products on Details before submitting.";
 
@@ -211,6 +227,9 @@ export interface RefreshEvent {
  *   refreshed  it moved the selections, and they are still on the fresh rates:
  *              the note that prices are unchanged
  *
+ * After Rate again, held while any selection that did not match is still on
+ * its old rate, with only those listed.
+ *
  * Null once the selections have moved on (re-presented, rated again by staff),
  * so an old refresh never speaks for a new state of the deal.
  */
@@ -227,6 +246,11 @@ export function refreshState(
     return still
       ? { kind: "held", differences: lines.filter((l) => l.status !== "unchanged").map((l) => differenceText(l, money)) }
       : null;
+  }
+  if (isRatedAgainEvent(latest.event)) {
+    // Selection by selection: the ones that did not match, still where they were.
+    const out = lines.filter((l) => l.status !== "unchanged" && now.get(l.provider_product_id) === l.from_rate);
+    return out.length > 0 ? { kind: "held", differences: out.map((l) => differenceText(l, money)) } : null;
   }
   if (latest.event === REFRESHED_UNCHANGED_EVENT) {
     return lines.every((l) => now.get(l.provider_product_id) === l.to_rate) ? { kind: "refreshed" } : null;
