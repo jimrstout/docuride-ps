@@ -24,7 +24,7 @@ import {
   cleanCheckerName,
 } from "@/lib/checker";
 import { ratingInputsFrom } from "@/lib/verify-fields";
-import { ADMIN_HOME, safeAdminPath, withNotice } from "@/lib/admin-sections";
+import { ADMIN_HOME, initialsFor, safeAdminPath, withNotice } from "@/lib/admin-sections";
 
 // The admin area's pages, as the actions below send people back to them.
 const SESSIONS = ADMIN_HOME;
@@ -82,6 +82,11 @@ export async function signOut(): Promise<void> {
  * Renew for Today: the session lasts to 23:59:59 on its store's day, or on its
  * planned sale date when that is later. It never adds hours, so a second press
  * changes nothing (+24h stacked: deal 13437 gained 48 hours).
+ *
+ * A sale date or planned sale date before today moves to today first, recorded
+ * against the signed-in person's initials, the ones their admin avatar shows.
+ * Never the Checked by name: that is a label typed on Details, not who is
+ * signed in (supabase/functions/_shared/sale-date.ts).
  */
 export async function renewSession(formData: FormData): Promise<void> {
   // Checked here and not only on the page: a Server Action is a POST endpoint
@@ -94,7 +99,7 @@ export async function renewSession(formData: FormData): Promise<void> {
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
   try {
-    await edge.adminRenew<{ expires_at: string }>(sessionId);
+    await edge.adminRenew<{ expires_at: string }>(sessionId, initialsFor(operator.email));
   } catch (err) {
     console.error(`console renew failed for ${sessionId}:`, err);
     redirect(withNotice(SESSIONS, "renewfailed"));
@@ -511,6 +516,26 @@ export async function useCrmValue(formData: FormData): Promise<void> {
   await partyAction(formData, (session_id) => ({ session_id, action: "party_use_crm", key }), "partycrm");
 }
 
+/**
+ * The CRM holds a different sale date from the staff one: keep the staff date,
+ * or drop it and use the CRM's. Named like a sheet edit, by Checked by.
+ */
+async function saleDateChoice(formData: FormData, action: string, onOk: string): Promise<void> {
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
+  const who = await checkerFor(formData);
+  if (who === "") return backToVerify(sessionId, "needname");
+  await verifyAction(formData, (session_id) => ({ session_id, action, edited_by: who }), onOk);
+}
+
+export async function keepStaffSaleDate(formData: FormData): Promise<void> {
+  await saleDateChoice(formData, "sale_date_keep_staff", "saledatekept");
+}
+
+export async function useCrmSaleDate(formData: FormData): Promise<void> {
+  await saleDateChoice(formData, "sale_date_use_crm", "saledatecrm");
+}
+
 /** Clear the planned sale date: the session stays open to the end of today. */
 export async function clearPlannedSaleDate(formData: FormData): Promise<void> {
   await verifyAction(formData, (session_id) => ({ session_id, action: "planned_sale_date", value: "" }), "plannedcleared");
@@ -564,7 +589,7 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
       // A provider failed and its last good offers were kept: said in words.
       warning = typeof result?.warning === "string" ? result.warning : null;
     } else {
-      reason = "TecAssured did not offer any plans for this deal.";
+      reason = "No provider offered any plans for this deal.";
     }
   } catch (err) {
     console.error(`rate after verify failed for ${sessionId}:`, err);
@@ -608,7 +633,7 @@ export async function voidContract(formData: FormData): Promise<void> {
   const reason = String(formData.get("void_reason") ?? "").trim();
   if (!reason) return backToVerify(sessionId, "refused", "Say why this contract is being voided.");
   if (formData.get("confirm") !== "on") {
-    return backToVerify(sessionId, "refused", "Tick the box to confirm. Voiding cancels the contract with TecAssured.");
+    return backToVerify(sessionId, "refused", "Tick the box to confirm. Voiding cancels the contract with the provider.");
   }
 
   let message: string | null = null;
@@ -639,6 +664,12 @@ export async function voidContract(formData: FormData): Promise<void> {
  * while DocuRide is being tested). fni-contract-submit's lock refuses a second
  * submit for the session while one is running.
  */
+/** The provider as the start of a sentence, by its record's name. */
+function providerSays(name: string | undefined): string {
+  const v = name?.trim() || "the provider";
+  return v.charAt(0).toUpperCase() + v.slice(1);
+}
+
 export async function submitContracts(formData: FormData): Promise<void> {
   const operator = await currentOperator();
   if (!operator) redirect(SESSIONS);
@@ -660,6 +691,8 @@ export async function submitContracts(formData: FormData): Promise<void> {
       /** Product by product: created, refused, or not known. */
       message?: string;
       partial?: boolean;
+      /** The provider record's name. */
+      provider_name?: string;
       cobuyer_probe?: { batch: string | number } | null;
     }>({
       session_id: sessionId,
@@ -678,7 +711,7 @@ export async function submitContracts(formData: FormData): Promise<void> {
       ? `These products were already submitted: ${numbers}. Nothing new was sent.`
       : partial && done.message
         ? `${done.message} Get the document for each contract created.`
-        : `Submitted. TecAssured returned ${done.contract_count ?? 0} ${done.contract_count === 1 ? "contract" : "contracts"}: ${numbers}. Get each document next.`;
+        : `Submitted. ${providerSays(done.provider_name)} returned ${done.contract_count ?? 0} ${done.contract_count === 1 ? "contract" : "contracts"}: ${numbers}. Get each document next.`;
     if (done.cobuyer_probe) {
       detail +=
         ` Phone and co-buyer field test sent (${done.cobuyer_probe.batch === "All" ? "all fields" : `batch ${done.cobuyer_probe.batch}`}).` +

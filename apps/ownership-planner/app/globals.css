@@ -996,6 +996,55 @@ button { cursor: pointer; }
   .vparty-confirm input, .vdx1-confirm input { width: 20px; height: 20px; flex: none; }
 }
 
+/* Submit's confirmation (components/SubmitConfirm.tsx). Fits a 390px phone:
+   never wider than the screen less 16px a side, never taller than it, the
+   product list scrolls inside and the buttons stay in view. */
+.vconfirm {
+  width: min(36rem, calc(100vw - 32px)); max-width: none;
+  max-height: calc(100dvh - 32px); margin: auto; padding: 0;
+  border: 0; border-top: var(--bw-accent) solid var(--copper); border-radius: 10px;
+  background: var(--panel); color: var(--ink);
+  box-shadow: 0 12px 40px rgba(19, 34, 50, 0.35); overflow: hidden;
+}
+.vconfirm[open] { display: flex; flex-direction: column; }
+.vconfirm::backdrop { background: rgba(19, 34, 50, 0.55); }
+/* The modal's own busy button says what is happening; the page veil would be a
+   second spinner and label behind it. */
+.working-area:has(dialog.vconfirm[open]) + .working-overlay { display: none; }
+.vconfirm-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: var(--s4); overflow-wrap: anywhere;
+}
+.vconfirm-title { margin: 0 0 var(--s3); font-size: var(--fs-title); font-weight: var(--fw-head); color: var(--nav); }
+.vconfirm-deal { display: grid; gap: var(--s1); margin: 0 0 var(--s3); font-size: var(--fs-xs); }
+.vconfirm-deal > div { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--s2); }
+.vconfirm-deal dt { color: var(--ink-soft); }
+.vconfirm-deal dd { margin: 0; font-weight: 600; }
+.vconfirm-lines { list-style: none; margin: 0; padding: 0; border-top: var(--bw) solid var(--line); }
+.vconfirm-line {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--s3);
+  padding: var(--s2) 0; border-bottom: var(--bw) solid var(--line); font-size: var(--fs-xs);
+}
+.vconfirm-name { font-weight: 600; min-width: 0; }
+.vconfirm-price { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vconfirm-meta { grid-column: 1 / -1; color: var(--ink-soft); min-width: 0; }
+.vconfirm-total {
+  display: flex; justify-content: space-between; gap: var(--s3); margin: var(--s3) 0 0;
+  font-size: var(--fs-base); font-variant-numeric: tabular-nums;
+}
+.vconfirm-note { margin: var(--s3) 0 0; font-size: var(--fs-xs); color: var(--ink-soft); }
+.vconfirm-changes { margin: var(--s3) 0 0; padding: var(--s3); border: var(--bw) solid var(--copper-edge); border-radius: var(--r-control); background: var(--copper-wash); }
+.vconfirm-changes-head { margin: 0 0 var(--s1); font-weight: 600; color: var(--nav); font-size: var(--fs-xs); }
+.vconfirm-dx1 { margin: var(--s3) 0 0; }
+.vconfirm-actions {
+  flex: none; display: flex; justify-content: flex-end; gap: var(--s2); flex-wrap: wrap;
+  padding: var(--s3) var(--s4); border-top: var(--bw) solid var(--line); background: var(--tint);
+}
+@media (max-width: 899px) {
+  .vconfirm-actions .btn { flex: 1 1 0; min-height: var(--tap); }
+  .vconfirm-dx1 input { width: 20px; height: 20px; flex: none; }
+}
+
 /* The planned sale date: a small form beside when the session ends. */
 .vplanned { display: inline-flex; align-items: center; gap: var(--s2); flex-wrap: wrap; font-weight: 400; }
 .vplanned label { color: var(--muted); }

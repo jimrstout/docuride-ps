@@ -102,11 +102,11 @@ export function lockIsStale(state: SubmitLockState, now = Date.now()): boolean {
  * to match. Releasing it on a timer would be guessing that nothing was created,
  * which is the guess that produces duplicates.
  */
-export function submitRefusal(state: SubmitLockState, now = Date.now()): string | null {
+export function submitRefusal(state: SubmitLockState, now = Date.now(), vendor = "the provider"): string | null {
   if (state.submit_state === "Submit Status Unknown") {
     return (
-      "A previous submit on this session reached TecAssured and we never learned " +
-      "whether it created contracts. Check in TecAssured before submitting again. " +
+      `A previous submit on this session reached ${vendor} and we never learned ` +
+      `whether it created contracts. Check with ${vendor} before submitting again. ` +
       (state.submit_detail ? `Detail: ${state.submit_detail}` : "")
     ).trim();
   }
@@ -114,7 +114,7 @@ export function submitRefusal(state: SubmitLockState, now = Date.now()): string 
   if (state.submit_state === "In Progress") {
     return lockIsStale(state, now)
       ? "A previous submit on this session started and never finished, so its " +
-        "outcome is unknown. Check in TecAssured before submitting again."
+        `outcome is unknown. Check with ${vendor} before submitting again.`
       : "A submit is already in progress for this session. Wait for it to finish.";
   }
 

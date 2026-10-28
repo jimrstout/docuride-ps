@@ -17,7 +17,9 @@ test("deal 13759 and test sessions may use the QA server", () => {
 
 test("anything but the QA server is refused, for every deal", () => {
   for (const url of ["https://ratessys.com/rs/", "https://ratessys-qa.com.evil.example/", "not a url", null]) {
-    assert.match(contractCallRefusal({ deal_number: "13759", is_test: true }, url, "voided"), /only be voided on the TecAssured test server/);
+    assert.match(contractCallRefusal({ deal_number: "13759", is_test: true }, url, "voided"), /only be voided on the provider's test server/);
+    // Named from the provider record where the caller has it.
+    assert.match(contractCallRefusal({ deal_number: "13759", is_test: true }, url, "submitted", "Sample Provider"), /only be submitted on the Sample Provider test server \(ratessys-qa\.com\)/);
   }
 });
 
@@ -31,7 +33,7 @@ test("deal 14957 is never sent, even as a test session; other deals need is_test
 
 test("submit, documents and void each check before calling TecAssured", () => {
   const submit = src("../supabase/functions/fni-contract-submit/index.ts");
-  const guard = submit.indexOf('contractCallRefusal(session, credentials.api_base_url, "submitted")');
+  const guard = submit.indexOf('contractCallRefusal(session, credentials.api_base_url, "submitted", vendor)');
   assert.ok(guard > 0 && guard < submit.indexOf("client.submitContract") && guard < submit.indexOf("buildSubmitQuote("));
   assert.match(submit, /if \(notCleared\) return await refuse\(403, \{ error: notCleared \}\);/);
   for (const [f, verb, call] of [

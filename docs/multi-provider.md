@@ -978,6 +978,16 @@ the next place to look.
   "Open presentation" both use `target="_blank"` with `rel="noopener"`. The
   staff page stays where it was, so one person can work several deals at once.
 
+- **No provider names written in** (2026-10-28). The button reads "Submit
+  contracts". No label, button or message on Details, its components or the
+  submit flow names a provider in its text. Where a name is needed (Void,
+  Submit Status Unknown, the test session banner, submit results and
+  refusals), it is the provider record's name (`fni.providers.name`), sent by
+  fni-session-verify as `provider_name` and used by fni-contract-submit for
+  its messages; without one the words say "the provider". Product names are
+  the provider's own and are shown as they come. A test
+  (`test/no-provider-branding.test.mjs`) sweeps those files.
+
 ## 19. Showing when the system is working
 
 Rating, refreshing from the CRM, submitting and voiding take seconds, and the
@@ -1052,6 +1062,32 @@ The day boundary is worked out in Postgres (`fni.store_day_end`), so a session
 made by any path ends at the same moment; "today" for the submit check is
 `storeToday` in `_shared/store-day.ts`, from the same zone.
 
+**Renew for Today also moves past dates to today** (2026-10-28,
+`_shared/sale-date.ts`). Before renewing, `fni-admin-sessions` compares the
+session's sale date (the staff date where there is one) and planned sale date
+with today at the store:
+
+| Date | Before today | Today or later | Not set |
+|---|---|---|---|
+| Sale date | Moved to today, as a staff edit over the CRM's | Left alone | Left alone (still missing) |
+| Planned sale date | Moved to today | Left alone, so a deal prepared for tomorrow keeps tomorrow | Left alone (stays empty) |
+
+- The in-service date is never touched.
+- Each move is a session event: "Sale date moved from 27 Oct 2026 to 28 Oct
+  2026 by JS". JS is the signed-in person's initials, as their admin avatar
+  shows them; with nobody signed in it is "System". Never the Checked by name.
+- Refresh from CRM writes the columns, never the edit, so the moved date
+  stands. While the CRM holds a different date, Details shows "CRM now says
+  ..." with Keep staff value and Use CRM value, as on the contract panels.
+  Keeping records which CRM date was kept over, so it is not asked again until
+  the CRM changes.
+- The sale date is sent in the rate request, so a move marks the rated offers
+  out of date (kept, prices unchanged) and a verified deal goes back through
+  Confirm and Continue. Submit already refused only off the sale day; it now
+  also refuses an out-of-date rating, or one rated on a different sale date
+  than the deal now has, so the quote's dates are never quietly realigned over
+  a re-rate. Details disables Submit and says why.
+
 ## 21. Who goes on the contracts
 
 Details shows the buyer, co-buyer and lienholder exactly as the service
@@ -1064,9 +1100,33 @@ sign-in). `_shared/contract-parties.ts` holds the rules.
 | Fields | Every buyer, co-buyer and lienholder column on `fni.sessions`, in plain English. All editable. A business buyer (type Company) leads with the business name; no lienholder reads "Cash deal, no lienholder". |
 | Edits | A staff edit in `staff_edits`, keyed on the column, with who, when and the value replaced, shown as "Entered by Staff: name, time. Was old value." Removing a co-buyer or lienholder is the edit `cobuyer` or `lienholder` = "Removed". |
 | Refresh from CRM | Writes the columns, never the edits, so the staff value stands. If the CRM later says something new, both are shown ("CRM now says ...") with Keep staff value and Use CRM value. |
-| Submit | Sends the staff value wherever one exists. If any contract detail was changed here, each change is listed and Submit needs "I have made these changes in DX1, or they are not needed there."; fni-contract-submit refuses without it and records it as the session event "Contract detail changes confirmed for DX1". |
+| Submit | Sends the staff value wherever one exists. If any contract detail was changed here, each change is listed in the Submit confirmation and Confirm Submit needs "I have made these changes in DX1, or they are not needed there."; fni-contract-submit refuses without it and records it as the session event "Contract detail changes confirmed for DX1". |
 | Missing | Named beside the field ("Missing: buyer last name"). Not blocking yet. |
 | Locked | While any contract on the deal is live (Live or Submit Status Unknown), the panels are read-only, edits are refused, and Discard keeps city, state and ZIP. Voiding every live contract unlocks them. |
 
 City, state and ZIP are also rating inputs on the sheet: one edit, shown in
 both places, and a change sends the deal back through Confirm and Continue.
+
+### The Submit confirmation (2026-10-28)
+
+"Submit contracts" opens a modal (`components/SubmitConfirm.tsx`) and sends
+nothing. It shows the deal number, the buyer's name, the sale date at the
+store ("28 Oct 2026"), a row per product (name, vendor from the provider
+record, term, customer price) and the total customer price, with Cancel and
+Confirm Submit.
+
+- **Same figures as the submit.** fni-session-verify reads the customer's
+  Included choices with the columns fni-contract-submit reads
+  (`SUBMIT_ROW_COLUMNS`) and prices each line with `savedSelections`, the
+  function that builds the submit's selections; the total is summed in whole
+  cents (`submitConfirmation`, `_shared/saved-selections.ts`). OEM products,
+  which are never sent, are left out of both. On a QA test session, where the
+  test server is sent the provider's maximum instead, the modal says so.
+- **The DX1 confirmation** moves into the modal when the panels have staff
+  edits, and Confirm Submit stays disabled until it is ticked.
+- **Busy.** Confirm Submit is the usual busy button (one spinner, one label,
+  a second tap cannot send). The modal cannot be closed while it runs, and
+  closes when the submit answers, so the result shows on the page. Cancel,
+  or Escape, closes it and sends nothing.
+- **Phones.** The modal is never wider than the screen less 16px a side; the
+  product list scrolls inside it and the buttons stay in view.

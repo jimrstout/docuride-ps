@@ -69,6 +69,10 @@ export function editFor(
   now: string
 ): StaffEdit | null {
   if (sameAsUnedited(target, posted, unedited?.value ?? null)) return null;
+  // The form posts every field, so an edit posted back unchanged is not a new
+  // edit. It keeps who made it, and a Keep staff value choice on it, rather
+  // than being re-stamped with whoever pressed Save changes.
+  if (existing && sameAsUnedited(target, posted, existing.value)) return existing;
 
   return {
     value: posted,

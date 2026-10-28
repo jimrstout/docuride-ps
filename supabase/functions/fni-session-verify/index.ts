@@ -25,7 +25,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
-import { offerRowsFor, tecAssuredAccount } from "../_shared/provider-rows.ts";
+import { offerRowsFor, tecAssuredAccount, tecAssuredProviderName } from "../_shared/provider-rows.ts";
 import { hostOf, QA_HOST } from "../_shared/contract-guard.ts";
 import { currentRows, familiesFromRows, ratingSummary, type RatingRow } from "../_shared/rating-summary.ts";
 import { menuFor, ratingDeal } from "../_shared/rate-session.ts";
@@ -67,8 +67,10 @@ import {
   REMOVED,
   type PartyName,
 } from "../_shared/contract-parties.ts";
-import { plannedDateProblem, storeToday, submitDateProblem } from "../_shared/store-day.ts";
+import { dayLabel, plannedDateProblem, storeToday, submitDateProblem } from "../_shared/store-day.ts";
 import { capChange, editFor, MAX_AMOUNT_FINANCED } from "./save-edits.ts";
+import { keepStaffSaleDate, saleDateChoice } from "../_shared/sale-date.ts";
+import { SUBMIT_ROW_COLUMNS, submitConfirmation, type SubmitRow } from "../_shared/saved-selections.ts";
 import {
   duplicateVinWarning,
   occupiesSlot,
@@ -288,6 +290,8 @@ async function contractsPanel(supabase: SupabaseClient, s: Record<string, unknow
   }
   // Held documents not in the Deal Jacket yet, voided ones included.
   const waiting = contracts.filter((c) => c.held && !c.workdrive_file_id).length;
+  // Asked only of a test session: nothing else depends on it.
+  const onQa = s.is_test === true && (await onQaServer(supabase, String(s.store_id)));
   return {
     provider_name: selections[0].provider_name,
     selections,
@@ -295,7 +299,42 @@ async function contractsPanel(supabase: SupabaseClient, s: Record<string, unknow
     waiting_count: waiting,
     // TEMPORARY: the co-buyer field test is offered on test sessions on the
     // QA server only (_shared/cobuyer-probe.ts).
-    cobuyer_probe_available: s.is_test === true && (await onQaServer(supabase, String(s.store_id))),
+    cobuyer_probe_available: onQa,
+    confirmation: await submitConfirmationFor(supabase, s, onQa),
+  };
+}
+
+/**
+ * What the Submit confirmation shows: the deal, the buyer, the sale date, and
+ * each product with the price the submit sends for it. Read with the same
+ * columns and the same function as fni-contract-submit's own selections
+ * (_shared/saved-selections.ts), so the modal and the payload cannot differ.
+ * The buyer's name and the sale date are the staff values where there are
+ * any, as the submit sends them.
+ */
+async function submitConfirmationFor(supabase: SupabaseClient, s: Record<string, unknown>, onQa: boolean) {
+  const { data } = await supabase
+    .schema("fni")
+    .from("selected_products")
+    .select(SUBMIT_ROW_COLUMNS)
+    .eq("session_id", s.id as string)
+    .eq("disposition", "Included")
+    .order("product_name");
+  const edited = applyStaffEdits(s, parseStaffEdits(s.staff_edits), editTargetFor);
+  const sale = dealDates(edited).sale;
+  const text = (v: unknown) => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
+  return {
+    deal_number: s.deal_number ?? null,
+    buyer_name:
+      text(edited.buyer_display_name) ??
+      ([text(edited.buyer_first_name), text(edited.buyer_last_name)].filter(Boolean).join(" ") || null),
+    sale_date: sale,
+    sale_date_label: sale ? dayLabel(sale) : null,
+    // A test session on the QA server is sent at the provider's maximum
+    // (pricePolicy's "Test at maximum", _shared/price-cap.ts), and the modal
+    // says so beside these prices.
+    test_at_maximum: s.is_test === true && onQa,
+    ...submitConfirmation((data ?? []) as unknown as SubmitRow[]),
   };
 }
 
@@ -373,13 +412,15 @@ async function liveContracts(
 async function requiredFor(
   supabase: SupabaseClient,
   storeId: string,
-  vtype: unknown
+  vtype: unknown,
+  /** The provider record's name, for the reasons staff read. */
+  vendor = "the provider"
 ): Promise<{ properties: string[]; reason: string | null }> {
   if (typeof vtype !== "string" || vtype.trim() === "") {
     return {
       properties: [],
       reason:
-        "This unit has no TecAssured vehicle type, so there is no list of " +
+        `This unit has no ${vendor} vehicle type, so there is no list of ` +
         "fields to check. The deal's body type is either blank or not one we map.",
     };
   }
@@ -389,7 +430,7 @@ async function requiredFor(
   if (!account) {
     return {
       properties: [],
-      reason: "This store has no active TecAssured mapping, so nothing can be rated for it.",
+      reason: `This store has no active ${vendor} mapping, so nothing can be rated for it.`,
     };
   }
 
@@ -403,7 +444,7 @@ async function requiredFor(
     return {
       properties: [],
       reason:
-        `We have not yet asked TecAssured what it needs to rate a ${vtype} for ` +
+        `We have not yet asked ${vendor} what it needs to rate a ${vtype} for ` +
         `this store. Press Refresh, or wait for tonight's refresh.`,
     };
   }
@@ -431,9 +472,12 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
   const deal = ratingDeal({ ...edited, store_id: s.store_id });
   const menu = await menuFor(supabase, s.tenant_id as string, deal);
   const needsTecAssured = menu.providers.some((p) => p.adapter === "TecAssured");
+  // The name staff know the contract provider by, from its record, so no
+  // label or message on Details has a provider's name written in.
+  const providerName = await tecAssuredProviderName(supabase, s.tenant_id).catch(() => null);
 
   const { properties: taProperties, reason: taReason } = needsTecAssured
-    ? await requiredFor(supabase, s.store_id as string, edited.vehicle_type_code)
+    ? await requiredFor(supabase, s.store_id as string, edited.vehicle_type_code, providerName ?? undefined)
     : { properties: [] as string[], reason: null };
 
   const sheetInputs = await Promise.all(
@@ -489,6 +533,9 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
       deal_type: dealTypeLabel(edited.finance_type),
       vehicle_type_code: edited.vehicle_type_code,
     },
+    // The contract provider's name from its record ("Riders Advantage"), or
+    // null when the tenant has none. The page names the provider with it.
+    provider_name: providerName,
     verification: {
       state: s.verification_state ?? "Needs Verification",
       verified_at: s.verified_at ?? null,
@@ -555,6 +602,9 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
     // The buyer, co-buyer and lienholder, as the contracts will carry them,
     // locked while any contract on the deal is live.
     contract_parties: contractParties(s, edits, contracts.length > 0),
+    // A staff sale date (Renew for Today moves a past one to today) that the
+    // CRM disagrees with: Keep staff value or Use CRM value, as on the panels.
+    sale_date_choice: saleDateChoice(s, edits),
     // Why nothing is required, when nothing is. Shown instead of a sheet that
     // looks complete because it is asking for nothing.
     not_ready_reason: reason,
@@ -932,6 +982,40 @@ async function partyAction(
   return json(200, { ...(await sheetFor(supabase, latest)), changed_inputs: changed });
 }
 
+// ── The sale date, when the CRM says otherwise ────────────────────────────
+//
+// sale_date_keep_staff   the staff date stands; not asked again for this CRM date
+// sale_date_use_crm      drop the edit and use the CRM's date
+//
+// The sale date is a rating input, so using the CRM's sends the deal back
+// through Confirm and Continue and marks the rates out of date, as any change
+// to it does (_shared/sale-date.ts).
+
+async function saleDateAction(
+  supabase: SupabaseClient,
+  s: Record<string, unknown>,
+  action: string,
+  who: string
+): Promise<Response> {
+  const edits = parseStaffEdits(s.staff_edits);
+  const edit = edits.sale_date;
+  if (!edit) return json(400, { error: "The sale date has no staff value." });
+  if (action === "sale_date_use_crm") delete edits.sale_date;
+  else edits.sale_date = keepStaffSaleDate(edit, s.sale_date, who, new Date().toISOString());
+
+  const { error } = await supabase
+    .schema("fni")
+    .from("sessions")
+    .update({ staff_edits: Object.keys(edits).length > 0 ? edits : null })
+    .eq("id", s.id as string);
+  if (error) return json(500, { error: error.message });
+
+  const fresh = (await loadSession(supabase, s.id as string))!;
+  const changed = await unverifyIfInputsMoved(supabase, fresh);
+  const latest = changed.length > 0 ? (await loadSession(supabase, s.id as string))! : fresh;
+  return json(200, { ...(await sheetFor(supabase, latest)), changed_inputs: changed });
+}
+
 // ── The store's day ───────────────────────────────────────────────────────
 
 async function storeTimeZone(supabase: SupabaseClient, storeId: unknown): Promise<string | null> {
@@ -1048,12 +1132,14 @@ async function verify(
   s: Record<string, unknown>,
   verifiedBy: string
 ): Promise<Response> {
+  const vendor = (await tecAssuredProviderName(supabase, s.tenant_id).catch(() => null)) ?? "the provider";
   const edits = parseStaffEdits(s.staff_edits);
   const edited = applyStaffEdits(s, edits, editTargetFor);
   const { properties, reason } = await requiredFor(
     supabase,
     s.store_id as string,
-    edited.vehicle_type_code
+    edited.vehicle_type_code,
+    vendor
   );
   const sheet = buildVerification(s as unknown as VerificationSource, properties, edits);
 
@@ -1066,7 +1152,7 @@ async function verify(
         ? `These edits could not be read, so they are not in force: ` +
           `${sheet.invalid.map((f) => f.label).join(", ")}. Correct them before verifying.`
         : reason ??
-          `Not every field TecAssured asks for has a value yet: ` +
+          `Not every field ${vendor} asks for has a value yet: ` +
           `${sheet.missing.map((f) => f.label).join(", ")}.`,
       missing: sheet.missing.map((f) => ({ key: f.key, label: f.label })),
       invalid: sheet.invalid.map((f) => ({ key: f.key, label: f.label })),
@@ -1214,6 +1300,11 @@ serve(async (req: Request) => {
       if (who === "") return json(400, { error: "edited_by is required: an edit names a person." });
       return await partyAction(supabase, s, action, body, who);
     }
+    if (action === "sale_date_keep_staff" || action === "sale_date_use_crm") {
+      const who = typeof body.edited_by === "string" ? body.edited_by.trim() : "";
+      if (who === "") return json(400, { error: "edited_by is required: an edit names a person." });
+      return await saleDateAction(supabase, s, action, who);
+    }
     if (action === "discard_edits") return await discardEdits(supabase, s);
 
     if (action === "verify") {
@@ -1228,7 +1319,8 @@ serve(async (req: Request) => {
     return json(400, {
       error:
         "action must be one of save, refresh, discard_edits, verify, planned_sale_date, " +
-        "party_save, party_remove, party_restore, party_keep_staff, party_use_crm",
+        "party_save, party_remove, party_restore, party_keep_staff, party_use_crm, " +
+        "sale_date_keep_staff, sale_date_use_crm",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -55,7 +55,7 @@ export default function VehicleTypeChoice({
         ))}
       </div>
       <p id="vtype-line" className="vtype-line">
-        {line ?? "Choose the vehicle type. It decides the menu and what TecAssured is asked."}
+        {line ?? "Choose the vehicle type. It decides the menu and what the provider is asked."}
       </p>
     </fieldset>
   );

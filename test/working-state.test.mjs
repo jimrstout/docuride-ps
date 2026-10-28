@@ -93,12 +93,14 @@ test("no staff form sends with a plain button: each says what it is doing", () =
 test("the whole-deal actions cover the page, Submit and Void warn before leaving", () => {
   const page = src("app/details/[sessionId]/page.tsx");
   for (const label of [
-    "Refreshing from CRM...", "Submitting contracts...", "Voiding...", "Moving documents to the Deal Jacket...",
+    "Refreshing from CRM...", "Voiding...", "Moving documents to the Deal Jacket...",
     "Confirming and rating...", "Decoding the VIN...", "Reloading from CRM...",
   ]) {
     assert.match(page, new RegExp(`working="page"[^>]*pending="${label.replace(/\./g, "\\.")}"`), label);
   }
-  assert.match(page, /pending="Submitting contracts\.\.\."\s+leave=\{SUBMIT_LEAVE\}/);
+  // Submit's busy button is Confirm Submit, in its modal (components/SubmitConfirm.tsx).
+  const modal = src("components/SubmitConfirm.tsx");
+  assert.match(modal, /working="page"\s+pending="Submitting contracts\.\.\."\s+leave=\{SUBMIT_LEAVE\}/);
   assert.equal((page.match(/pending="Voiding\.\.\." leave=\{VOID_LEAVE\}/g) ?? []).length, 2);
   // Smaller ones lock their panel.
   assert.match(page, /<PendingButton pending="Getting the document\.\.\.">/);

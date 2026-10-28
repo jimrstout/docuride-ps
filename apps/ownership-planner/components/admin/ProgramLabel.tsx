@@ -8,7 +8,7 @@
 export default function ProgramLabel({ name }: { name: string | null | undefined }) {
   if (!name) return null;
   return (
-    <span className="prog-label" title="TecAssured's program name. Customers never see it.">
+    <span className="prog-label" title="The provider's program name. Customers never see it.">
       {name}
     </span>
   );

@@ -19,7 +19,7 @@
 //
 // Pure, so a Node test holds the rules.
 
-import { refusalInPlainEnglish } from "./price-cap.ts";
+import { refusalInPlainEnglish, sentenceStart } from "./price-cap.ts";
 
 /** A product we sent, keyed the way TecAssured echoes it back. */
 export interface AskedProduct {
@@ -61,7 +61,9 @@ function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-export function readSubmitResponse(response: unknown, asked: AskedProduct[]): SubmitReading {
+/** `vendor` is the provider record's name, for the lines staff read. */
+export function readSubmitResponse(response: unknown, asked: AskedProduct[], vendor = "the provider"): SubmitReading {
+  const who = sentenceStart(vendor);
   const r = (response && typeof response === "object" ? response : {}) as Record<string, unknown>;
   const topError = text(r.error);
   const entries = (Array.isArray(r.contracts) ? r.contracts : []).filter(
@@ -94,7 +96,7 @@ export function readSubmitResponse(response: unknown, asked: AskedProduct[]): Su
         outcome: "Refused",
         contract_number: null,
         detail: text(no.error),
-        line: `${a.productName}: not created. ${refusalInPlainEnglish(no.error, a.productName)}`,
+        line: `${a.productName}: not created. ${refusalInPlainEnglish(no.error, a.productName, vendor)}`,
       };
     }
     // A clear refusal of the whole call, with no entries at all, is a no for
@@ -106,7 +108,7 @@ export function readSubmitResponse(response: unknown, asked: AskedProduct[]): Su
         outcome: "Refused",
         contract_number: null,
         detail: topError,
-        line: `${a.productName}: not created. ${refusalInPlainEnglish(topError, a.productName)}`,
+        line: `${a.productName}: not created. ${refusalInPlainEnglish(topError, a.productName, vendor)}`,
       };
     }
     return {
@@ -115,7 +117,7 @@ export function readSubmitResponse(response: unknown, asked: AskedProduct[]): Su
       outcome: "Not known",
       contract_number: null,
       detail: null,
-      line: `${a.productName}: TecAssured's answer does not say whether this contract was created.`,
+      line: `${a.productName}: ${who}'s answer does not say whether this contract was created.`,
     };
   });
 
@@ -128,20 +130,20 @@ export function readSubmitResponse(response: unknown, asked: AskedProduct[]): Su
   const lines = products.map((p) => p.line);
   if (untied.length > 0) {
     lines.push(
-      `TecAssured also returned ${plural(untied.length, "contract", "contracts")} we cannot match to a product we sent: ${untied.join(", ")}.`
+      `${who} also returned ${plural(untied.length, "contract", "contracts")} we cannot match to a product we sent: ${untied.join(", ")}.`
     );
   }
 
   let head: string;
   if (refusedOutright) {
-    head = products.length === 1 ? "TecAssured did not create the contract." : "TecAssured did not create any of the contracts.";
+    head = products.length === 1 ? `${who} did not create the contract.` : `${who} did not create any of the contracts.`;
   } else if (made === products.length && !unknown) {
-    head = `Submitted. TecAssured created ${plural(made, "contract", "contracts")}.`;
+    head = `Submitted. ${who} created ${plural(made, "contract", "contracts")}.`;
   } else {
-    head = `TecAssured created ${made} of ${plural(products.length, "contract", "contracts")}.`;
+    head = `${who} created ${made} of ${plural(products.length, "contract", "contracts")}.`;
   }
   const tail = unknown
-    ? " The session is marked Submit Status Unknown: check TecAssured for the products above before submitting again."
+    ? ` The session is marked Submit Status Unknown: check with ${vendor} for the products above before submitting again.`
     : "";
 
   return {

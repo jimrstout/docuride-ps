@@ -126,3 +126,25 @@ export async function tecAssuredProviderId(
   if (error) throw new Error(`Failed to read the TecAssured provider: ${error.message}`);
   return (data as { id: string } | null)?.id ?? null;
 }
+
+/**
+ * The name staff know the tenant's TecAssured provider by, from its record
+ * ("Riders Advantage"), or null. For the words on screens and in messages, so
+ * none of them has a provider's name written in.
+ */
+export async function tecAssuredProviderName(
+  supabase: SupabaseClient,
+  tenantId: unknown
+): Promise<string | null> {
+  if (typeof tenantId !== "string" || tenantId === "") return null;
+  const { data } = await supabase
+    .schema("fni")
+    .from("providers")
+    .select("name")
+    .eq("tenant_id", tenantId)
+    .eq("adapter", "TecAssured")
+    .eq("active", true)
+    .maybeSingle();
+  const name = (data as { name?: string | null } | null)?.name;
+  return typeof name === "string" && name.trim() !== "" ? name.trim() : null;
+}

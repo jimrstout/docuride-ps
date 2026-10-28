@@ -41,12 +41,14 @@ export function hostOf(apiBaseUrl: string | null | undefined): string {
 export function contractCallRefusal(
   session: GuardSession,
   apiBaseUrl: string | null | undefined,
-  action: "submitted" | "fetched" | "voided"
+  action: "submitted" | "fetched" | "voided",
+  /** The provider record's name, for naming its test server. */
+  vendor?: string | null
 ): string | null {
   const deal = String(session.deal_number ?? "").trim();
   if (hostOf(apiBaseUrl) !== QA_HOST) {
     return (
-      `Contracts can only be ${action} on the TecAssured test server (${QA_HOST}) while DocuRide is ` +
+      `Contracts can only be ${action} on the ${vendor ? `${vendor} test server` : "provider's test server"} (${QA_HOST}) while DocuRide is ` +
       `being tested. This store's login points somewhere else, so nothing was sent.`
     );
   }

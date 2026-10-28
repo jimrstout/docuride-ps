@@ -26,7 +26,7 @@ test("deal 13437: a reported failure with two contracts created records both", (
   assert.deepEqual(r.products.map((p) => p.outcome), ["Refused", "Created", "Created"]);
   assert.equal(r.refusedOutright, false);
   assert.equal(r.unknown, false);
-  assert.match(r.message, /^TecAssured created 2 of 3 contracts\. Tire and Wheel: not created\. TecAssured would not accept Tire and Wheel: it has no rate/);
+  assert.match(r.message, /^The provider created 2 of 3 contracts\. Tire and Wheel: not created\. The provider would not accept Tire and Wheel: it has no rate/);
   assert.match(r.message, /Battery Plus: created, contract BAT-1\. Theft, Plan A: created, contract THF-1\.$/);
 });
 
@@ -34,7 +34,7 @@ test("everything created reads as a plain success", () => {
   const r = readSubmitResponse({ contracts: asked.map((a, i) => ({ rateUniqueId: a.rateUniqueId, contractNumber: `C${i}` })) }, asked);
   assert.equal(r.created.length, 3);
   assert.equal(r.unknown, false);
-  assert.match(r.message, /^Submitted\. TecAssured created 3 contracts\./);
+  assert.match(r.message, /^Submitted\. The provider created 3 contracts\./);
 });
 
 test("a clear no for every product hands the lock back", () => {
@@ -43,7 +43,7 @@ test("a clear no for every product hands the lock back", () => {
   assert.equal(all.created.length, 0);
   const whole = readSubmitResponse({ error: "Missing Dealer Code." }, asked.slice(0, 1));
   assert.equal(whole.refusedOutright, true);
-  assert.match(whole.message, /^TecAssured did not create the contract\. Tire and Wheel: not created\. TecAssured would not accept Tire and Wheel: Missing Dealer Code\.$/);
+  assert.match(whole.message, /^The provider did not create the contract\. Tire and Wheel: not created\. The provider would not accept Tire and Wheel: Missing Dealer Code\.$/);
 });
 
 test("a product the answer does not mention is Not known, and so is the session", () => {
@@ -51,8 +51,8 @@ test("a product the answer does not mention is Not known, and so is the session"
   assert.deepEqual(r.products.map((p) => p.outcome), ["Not known", "Created", "Not known"]);
   assert.equal(r.unknown, true);
   assert.equal(r.created.length, 1);
-  assert.match(r.message, /Tire and Wheel: TecAssured's answer does not say whether this contract was created\./);
-  assert.match(r.message, /marked Submit Status Unknown: check TecAssured/);
+  assert.match(r.message, /Tire and Wheel: The provider's answer does not say whether this contract was created\./);
+  assert.match(r.message, /marked Submit Status Unknown: check with the provider/);
 });
 
 test("no way to tell at all is Submit Status Unknown, never nothing", () => {

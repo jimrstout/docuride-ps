@@ -54,15 +54,18 @@ import {
   verifyAndRate,
   voidContract,
   voidOemContract,
-  submitContracts,
   getContractDocument,
   moveDocumentsToDealJacket,
+  keepStaffSaleDate,
+  useCrmSaleDate,
 } from "@/app/console-actions";
+import { submitBlock } from "@/lib/submit-check";
+import SubmitConfirm from "@/components/SubmitConfirm";
+import { sentenceStart, testServerName, vendorName } from "@/lib/vendor";
 import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
 import RatingErrorText from "@/components/RatingErrorText";
 import ContractParties from "@/components/ContractParties";
-import { DX1_CONFIRMATION } from "@/lib/contract-parties";
 import { dayLabel, storeTime } from "@/lib/store-time";
 import {
   hasMoreDetail,
@@ -72,7 +75,7 @@ import {
   type RatingFailureText,
 } from "@/lib/rating-error";
 import { Working, WorkingArea } from "@/components/Working";
-import { SUBMIT_LEAVE, VOID_LEAVE } from "@/lib/working";
+import { VOID_LEAVE } from "@/lib/working";
 import VehicleTypeChoice from "@/components/VehicleTypeChoice";
 import { money } from "@/lib/money";
 import OemContractRecord from "@/components/OemContractRecord";
@@ -92,7 +95,7 @@ const EDITABLE_HELP: Record<string, string> = {
   "engine.ccs": "Engine displacement in cc.",
   warranty: "Whole months of factory coverage left on the day of sale.",
   "fuel.type": "Gasoline, Electric or Diesel.",
-  vehicle_type: "Decides the menu and the version of each product TecAssured will contract.",
+  vehicle_type: "Decides the menu and the version of each product the provider will contract.",
   deal_type: "Cash, Finance or Lease.",
   condition: "New or Used.",
   sale_date: "YYYY-MM-DD.",
@@ -154,7 +157,7 @@ function MissingMarker({ field }: { field: VerifyField }) {
  * tooltip, and come out into the open only when they are needed: on a field
  * that is missing or that could not be read.
  */
-function Field({ field }: { field: VerifyField }) {
+function Field({ field, vendor }: { field: VerifyField; vendor: string }) {
   const help = EDITABLE_HELP[field.key];
   const edited = field.original_source !== null;
   const id = `vf-${field.key}`;
@@ -223,7 +226,7 @@ function Field({ field }: { field: VerifyField }) {
       <label className="vfield-label" htmlFor={field.editable ? id : undefined}>
         {field.label}
         {field.required ? (
-          <abbr className="vfield-req" title="TecAssured asks for this">*</abbr>
+          <abbr className="vfield-req" title={`${sentenceStart(vendor)} asks for this`}>*</abbr>
         ) : null}
       </label>
 
@@ -385,6 +388,12 @@ export default async function DetailsPage({
   );
 
   const verified = sheet.verification.state === "Verified";
+  // Why Submit is disabled, if it is: not the day of the sale, or a rating
+  // that is out of date (lib/submit-check.ts). Submit refuses both itself.
+  const submitBlocked = submitBlock(sheet);
+  // The contract provider by its record's name ("Riders Advantage"), never
+  // written in here, so another provider reads correctly (lib/vendor.ts).
+  const vendor = vendorName(sheet);
   // Verified, and nothing a rate depends on has moved since. Only then is there
   // a presentation to open.
   const presentable = verified && !sheet.rating.out_of_date;
@@ -584,8 +593,8 @@ export default async function DetailsPage({
 
         {sheet.session.is_test ? (
           <p className="note note--flag">
-            This is a test session. Its contracts go only to the TecAssured test
-            server, and can be voided there.
+            This is a test session. Its contracts go only to {testServerName(vendor)}, and can be
+            voided there.
           </p>
         ) : null}
 
@@ -597,7 +606,7 @@ export default async function DetailsPage({
 
         {sheet.unmapped_properties.length > 0 ? (
           <p className="console-flash console-flash--bad" role="alert">
-            TecAssured is asking for {sheet.unmapped_properties.join(", ")}, which
+            {sentenceStart(vendor)} is asking for {sheet.unmapped_properties.join(", ")}, which
             this screen has no field for. Nothing can be verified until it does.
           </p>
         ) : null}
@@ -630,9 +639,9 @@ export default async function DetailsPage({
           <section className="note note--panel">
             <h2>Submit Status Unknown</h2>
             <p>
-              A submit reached TecAssured and never came back, so we do not know
+              A submit reached {vendor} and never came back, so we do not know
               whether it created contracts. Nothing has been retried and nothing
-              will be. Check the deal in TecAssured. If contracts were created,
+              will be. Check the deal with {vendor}. If contracts were created,
               void the ones that should not stand, then clear this.
             </p>
             {sheet.submit_detail ? <p><small><LongText text={sheet.submit_detail} /></small></p> : null}
@@ -643,16 +652,16 @@ export default async function DetailsPage({
               <input
                 type="text"
                 name="note"
-                placeholder="What you found in TecAssured (optional)"
+                placeholder={`What you found with ${vendor} (optional)`}
               />
               <PendingButton working="page" pending="Clearing the notice...">
-                I have checked TecAssured
+                I have checked with {vendor}
               </PendingButton>
             </form>
             ) : (
               <p className="vfield-note">
                 Clearing this needs a sign-in, because it is a statement that
-                somebody looked at TecAssured.{" "}
+                somebody checked with {vendor}.{" "}
                 <Link href="/admin/sessions" prefetch={false}>Sign in</Link> to clear it.
               </p>
             )}
@@ -702,7 +711,7 @@ export default async function DetailsPage({
                           {c.status === "Recorded" ? (
                             <small>An OEM contract. Void it under OEM contracts below.</small>
                           ) : !c.contract_number ? (
-                            <small>No number to void by. Ask TecAssured.</small>
+                            <small>No number to void by. Ask {vendor}.</small>
                           ) : operator ? (
                             <form action={voidContract} className="oem-record">
                               <Working />
@@ -717,7 +726,7 @@ export default async function DetailsPage({
                                 <input name="void_reason" required />
                               </label>
                               <label className="vcontracts-confirm">
-                                <input type="checkbox" name="confirm" required /> Cancel with TecAssured
+                                <input type="checkbox" name="confirm" required /> Cancel with {vendor}
                               </label>
                               <PendingButton working="page" pending="Voiding..." leave={VOID_LEAVE}>Void</PendingButton>
                             </form>
@@ -764,9 +773,21 @@ export default async function DetailsPage({
             ) : sheet.submit_state === "Submit Status Unknown" ? (
               <p className="console-note">Submitting is paused until the Submit Status Unknown notice above is cleared.</p>
             ) : operator ? (
-              <form action={submitContracts}>
-                <Working />
-                <input type="hidden" name="session_id" value={sheet.session.id} />
+              // Submit opens a confirmation first, and only Confirm Submit
+              // sends (components/SubmitConfirm.tsx). Its figures are the
+              // ones the submit sends, from the same rows.
+              <SubmitConfirm
+                sessionId={sheet.session.id}
+                confirmation={sheet.contracts_panel.confirmation ?? {
+                  deal_number: sheet.session.deal_number, buyer_name: null, sale_date: null,
+                  sale_date_label: null, test_at_maximum: false, lines: [], total: 0, total_cents: 0,
+                }}
+                changes={sheet.contract_parties?.changes ?? []}
+                blocked={
+                  submitBlocked ??
+                  (sheet.contracts_panel.confirmation ? null : "The confirmation could not be loaded. Reload the page to submit.")
+                }
+              >
                 {sheet.contracts_panel.cobuyer_probe_available ? (
                   // TEMPORARY: the co-buyer field test. Test sessions on the
                   // QA server only; see docs/multi-provider.md, section 16.
@@ -777,7 +798,7 @@ export default async function DetailsPage({
                     <p className="vprobe-note">
                       A one-off test on this test deal. It sends made-up phone numbers (304-555-0101
                       to 304-555-0120, one per guessed phone field) and the co-buyer marker CB03 again,
-                      so the contract shows which phone field TecAssured prints, if any. No real names
+                      so the contract shows which phone field {vendor} prints, if any. No real names
                       or numbers are sent. Only Battery Standard or Care Coverage can be submitted with
                       it on. Leave it off for a normal submit.
                     </p>
@@ -792,40 +813,7 @@ export default async function DetailsPage({
                     </label>
                   </fieldset>
                 ) : null}
-                {/* Contract details changed on Details: each listed, and the
-                    person submitting confirms DX1 matches. The Edge Function
-                    refuses without it and records it (contract-parties.ts). */}
-                {(sheet.contract_parties?.changes.length ?? 0) > 0 ? (
-                  <fieldset className="vdx1">
-                    <legend>Changed on Details</legend>
-                    <ul className="vdx1-list">
-                      {sheet.contract_parties!.changes.map((c) => (
-                        <li key={c.key}>
-                          <strong>{c.label}</strong>: {c.was ?? "not set"} to {c.now ?? "removed"}
-                        </li>
-                      ))}
-                    </ul>
-                    <label className="vdx1-confirm">
-                      <input type="checkbox" name="dx1_confirmed" value="1" required /> {DX1_CONFIRMATION}
-                    </label>
-                  </fieldset>
-                ) : null}
-                {/* Contracts go out only on the day of the sale at this store
-                    (_shared/store-day.ts). Submit refuses it too; this says why
-                    before anyone presses it. */}
-                {sheet.day?.submit_problem ? (
-                  <p className="console-flash console-flash--bad" role="alert">{sheet.day.submit_problem}</p>
-                ) : null}
-                <PendingButton
-                  className="btn"
-                  working="page"
-                  pending="Submitting contracts..."
-                  leave={SUBMIT_LEAVE}
-                  disabled={!!sheet.day?.submit_problem}
-                >
-                  Submit contracts to {sheet.contracts_panel.provider_name}
-                </PendingButton>
-              </form>
+              </SubmitConfirm>
             ) : (
               <Link className="btn btn--quiet" href="/admin/sessions" prefetch={false}>
                 Sign in to submit
@@ -893,7 +881,7 @@ export default async function DetailsPage({
                             <input name="void_reason" required />
                           </label>
                           <label className="vcontracts-confirm">
-                            <input type="checkbox" name="confirm" required /> Cancel this contract with TecAssured
+                            <input type="checkbox" name="confirm" required /> Cancel this contract with {vendor}
                           </label>
                           <PendingButton working="page" pending="Voiding..." leave={VOID_LEAVE}>Void</PendingButton>
                         </form>
@@ -995,6 +983,35 @@ export default async function DetailsPage({
           </p>
         ) : null}
 
+        {/* ── A staff sale date the CRM disagrees with ─────────────────────
+            Renew for Today moves a past sale date to today as a staff edit,
+            which Refresh from CRM never overwrites. While the CRM still holds
+            another date, both are shown with a choice, as on the contract
+            panels (supabase/functions/_shared/sale-date.ts). */}
+        {sheet.sale_date_choice ? (
+          <section className="vparty-choices vsale-choice" aria-label="Sale date">
+            <div className="vparty-choice" data-working-panel="">
+              <p>
+                Sale date: staff value <strong>{dayLabel(sheet.sale_date_choice.staff_value)}</strong>, entered
+                by {sheet.sale_date_choice.edited_by}. CRM now says{" "}
+                <strong>{dayLabel(sheet.sale_date_choice.crm_value)}</strong>.
+              </p>
+              <form action={keepStaffSaleDate}>
+                <Working />
+                <input type="hidden" name="session_id" value={sheet.session.id} />
+                <input type="hidden" name="checker_name" value={checker} />
+                <PendingButton pending="Keeping...">Keep staff value</PendingButton>
+              </form>
+              <form action={useCrmSaleDate}>
+                <Working />
+                <input type="hidden" name="session_id" value={sheet.session.id} />
+                <input type="hidden" name="checker_name" value={checker} />
+                <PendingButton pending="Switching...">Use CRM value</PendingButton>
+              </form>
+            </div>
+          </section>
+        ) : null}
+
         {/* Put work that blocks verification ahead of the reference sheet. Each
             field appears in exactly one place so edits cannot conflict. */}
         <div className="vworkspace">
@@ -1036,7 +1053,7 @@ export default async function DetailsPage({
                 <h2 className="vgroup-head" title={blurb}>{group === "Money" ? "Financial" : group}</h2>
                 <div className="vgroup-fields">
                   {fields.map((f) => (
-                    <Field key={f.key} field={f} />
+                    <Field key={f.key} field={f} vendor={vendor} />
                   ))}
                 </div>
                 {/* Over the finance company's maximum before any product is
@@ -1062,7 +1079,7 @@ export default async function DetailsPage({
           <form
             id="vin-decode"
             action={decodeVin}
-            title="Asks TecAssured what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed. This page also does this once on its own, the first time it opens."
+            title={`Asks ${vendor} what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed. This page also does this once on its own, the first time it opens.`}
           >
             <Working />
             <input type="hidden" name="session_id" value={sheet.session.id} />
@@ -1093,7 +1110,7 @@ export default async function DetailsPage({
           <details className="vh-details">
             <summary>How this sheet works</summary>
             <p>
-              * TecAssured asks for this. Hover a field to see where its value comes
+              * {sentenceStart(vendor)} asks for this. Hover a field to see where its value comes
               from. Clearing a box puts the original value back. Nothing is written
               back to the CRM.
               {sheet.vin_decode_at ? ` VIN last decoded ${stamp(sheet.vin_decode_at)}.` : ""}
@@ -1177,7 +1194,7 @@ export default async function DetailsPage({
 
           {sheet.ready ? (
             <p className="vgate-say">
-              Every field TecAssured asks for has a value. Confirming records your
+              Every field {vendor} asks for has a value. Confirming records your
               name, the time, and each value with its source, and asks for the
               rate.
             </p>

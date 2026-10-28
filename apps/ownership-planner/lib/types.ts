@@ -440,6 +440,8 @@ export interface VerifySheet {
     deal_type: string | null;
     vehicle_type_code: string | null;
   };
+  /** The contract provider's name, from its record. Null when the tenant has none. */
+  provider_name?: string | null;
   verification: {
     state: "Needs Verification" | "Verified";
     verified_at: string | null;
@@ -514,6 +516,16 @@ export interface VerifySheet {
   };
   /** Who goes on the contracts (supabase/functions/_shared/contract-parties.ts). */
   contract_parties?: ContractParties;
+  /**
+   * A staff sale date the CRM disagrees with (supabase/functions/_shared/sale-date.ts),
+   * offered as Keep staff value / Use CRM value. Null when they agree or it was kept.
+   */
+  sale_date_choice?: {
+    staff_value: string;
+    crm_value: string;
+    edited_by: string;
+    edited_at: string;
+  } | null;
   fields: VerifyField[];
   missing: VerifyField[];
   ready: boolean;
@@ -759,6 +771,33 @@ export interface ContractsPanel {
   }[];
   /** Held documents not in the Deal Jacket yet, voided ones included. */
   waiting_count: number;
+  /** What the Submit confirmation shows, from the rows the submit sends. */
+  confirmation?: SubmitConfirmation;
+}
+
+/**
+ * The Submit confirmation (supabase/functions/_shared/saved-selections.ts):
+ * the same rows and prices fni-contract-submit sends, to the cent.
+ */
+export interface SubmitConfirmation {
+  deal_number: string | null;
+  buyer_name: string | null;
+  /** The sale date the submit sends, and as staff read it ("28 Oct 2026"). */
+  sale_date: string | null;
+  sale_date_label: string | null;
+  /** A test session on the QA server, sent at the provider's maximum instead. */
+  test_at_maximum: boolean;
+  lines: {
+    product_name: string;
+    vendor: string | null;
+    term_months: number | null;
+    term_miles: number | null;
+    customer_price: number;
+    customer_price_cents: number;
+    rate_unique: string;
+  }[];
+  total: number;
+  total_cents: number;
 }
 
 // ── Who goes on the contracts ──────────────────────────────────────────────
