@@ -33,6 +33,7 @@ export default function SubmitConfirm({
   confirmation,
   changes,
   blocked,
+  note = null,
   children,
 }: {
   sessionId: string;
@@ -41,6 +42,11 @@ export default function SubmitConfirm({
   changes: PartyChange[];
   /** Why Submit cannot be pressed now (lib/submit-check.ts), or null. */
   blocked: string | null;
+  /**
+   * Said beside the button and above the products in the modal, without
+   * blocking: an out-of-date rating on a test session (lib/submit-check.ts).
+   */
+  note?: string | null;
   /** Anything else the form sends, shown on the page beside the button. */
   children?: React.ReactNode;
 }) {
@@ -78,6 +84,8 @@ export default function SubmitConfirm({
       {children}
       {blocked ? (
         <p className="console-flash console-flash--bad" role="alert">{blocked}</p>
+      ) : note ? (
+        <p className="vsubmit-note" role="status">{note}</p>
       ) : null}
       <button type="button" className="btn" onClick={show} disabled={!!blocked} aria-haspopup="dialog">
         Submit contracts
@@ -94,7 +102,7 @@ export default function SubmitConfirm({
         }}
       >
         <div className="vconfirm-body">
-          <SubmitSummary confirmation={confirmation} changes={changes} titleId="vconfirm-title" />
+          <SubmitSummary confirmation={confirmation} changes={changes} note={note} titleId="vconfirm-title" />
           {needsDx1 ? (
             <label className="vdx1-confirm vconfirm-dx1">
               <input

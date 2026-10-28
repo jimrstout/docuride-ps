@@ -1116,6 +1116,16 @@ with today at the store:
   - A rating already out of date for another reason stays out of date. Nothing
     on these paths marks an offer current, and existing sessions are not
     changed: one already marked (deal 15029) stays so until it is re-rated.
+  - **Existing sessions** were brought into line once, on 28 Oct 2026
+    (migration 0039, `scripts/same-month-rating-check.mjs`, `ratedRequestDiff`).
+    For each out-of-date offer the request the session would send now was
+    rebuilt with the provider's own choices held at the stored request's,
+    and compared. Only deal 15029 qualified (rated on 26 Oct, sale date now
+    28 Oct, nothing else different); its offer was marked current, with the
+    session event "Rating kept current: sale date moved within the same month
+    (26 Oct 2026 to 28 Oct 2026)" by System. Verification was not touched.
+    13437 was left out of date: its sale date had not moved. Deal 14957 was
+    excluded.
   - A re-rate that fails still compares its whole request with the kept
     offers' request (`keptStillCurrent`, `_shared/rerate.ts`), so a sale date
     differing within the month there leaves the kept offers out of date. This
@@ -1164,3 +1174,12 @@ Confirm Submit.
   or Escape, closes it and sends nothing.
 - **Phones.** The modal is never wider than the screen less 16px a side; the
   product list scrolls inside it and the buttons stay in view.
+- **Test sessions on an out-of-date rating** (2026-10-28). On a test session
+  whose store points at the QA server (`pricePolicy` "Test at maximum"), an
+  out-of-date rating no longer blocks Submit. Details says, in amber and not
+  as an error, "The rating is out of date. This is a test session, so you can
+  still submit.", and the modal says the same above the products.
+  fni-contract-submit records the session event "Submitted on an out-of-date
+  rating: test session", with the signed-in person's initials, before
+  anything is sent, and sends nothing if it cannot. A real session is still
+  refused. The sale day check applies to every session as before.

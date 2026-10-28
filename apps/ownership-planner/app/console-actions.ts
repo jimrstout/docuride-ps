@@ -697,6 +697,8 @@ export async function submitContracts(formData: FormData): Promise<void> {
     }>({
       session_id: sessionId,
       use_saved_selections: true,
+      // For the session event if a test session submits on an out-of-date rating.
+      submitted_by: initialsFor(operator.email),
       ...(probe ? { cobuyer_probe: true, cobuyer_probe_batch: probeBatch } : {}),
       // Ticked when contract details were changed on Details: the person
       // confirms DX1 matches. The Edge Function refuses without it then.

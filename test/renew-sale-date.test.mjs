@@ -167,7 +167,8 @@ test("a sale date moved into another month makes the rating out of date, and Sub
   assert.match(renew, /if \(saleMoved && s\.verification_state === "Verified"\) \{/);
 
   const submit = read("supabase/functions/fni-contract-submit/index.ts");
-  assert.match(submit, /const stale = staleRatingProblem\(ratedOffer, dates\.sale\);\s*if \(stale\) return await refuse\(400, \{ error: stale \}\);/);
+  // Refused, except on a test session on the QA server (test/stale-test-submit.test.mjs).
+  assert.match(submit, /const stale = staleRatingProblem\(ratedOffer, dates\.sale\);\s*if \(stale\) \{\s*if \(pricePolicy\(session, credentials\.api_base_url\) !== "Test at maximum"\) \{\s*return await refuse\(400, \{ error: stale \}\);/);
   // After the deal's dates are known, and before anything is built or sent.
   assert.ok(submit.indexOf("const stale = ") > submit.indexOf("const dayProblem"));
   assert.ok(submit.indexOf("const stale = ") < submit.indexOf("Step 4: Cut the quote down"));

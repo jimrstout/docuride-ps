@@ -231,6 +231,15 @@ export function onlySameMonthSaleDateMove(
   return !saleDateMoveNeedsRerate(before.sale_date, after.sale_date, boundaries);
 }
 
+/**
+ * The session event when a test session on the QA server submits on an
+ * out-of-date rating, which only a test session may do (fni-contract-submit).
+ */
+export const STALE_TEST_SUBMIT_EVENT = "Submitted on an out-of-date rating: test session";
+
+/** What Details and the Submit confirmation say on such a session. */
+export const STALE_TEST_NOTE = "The rating is out of date. This is a test session, so you can still submit.";
+
 export const RATING_OUT_OF_DATE =
   "The rating is out of date because something it was rated on has changed, such as the sale date. " +
   "Press Confirm and Continue on Details to rate the deal again before submitting.";
@@ -261,4 +270,75 @@ export function staleRatingProblem(
     );
   }
   return null;
+}
+
+// ── Existing sessions (2026-10-28) ────────────────────────────────────────
+//
+// Offers marked out of date before the same-month rule are brought into line
+// once (supabase/migrations/0039_same_month_rating_current.sql). The question
+// for each is the one PR 53 asks going forward, asked of what the offer was
+// actually rated on: rebuild today's rate request from the session as it now
+// stands, holding the provider's own choices (dealer code, vehicle type code,
+// the properties it asked for, the rate date) at the stored request's, and
+// compare. Only a sale date moved within its month may differ.
+
+/** The top-level request fields and properties that carry the deal's dates. */
+const SALE_FIELDS = new Set(["saleDate", "vehiclePurchaseDate", "prop:sale.date"]);
+const IN_SERVICE_FIELDS = new Set(["inServiceDate", "prop:inservice.date"]);
+
+function flatRequest(req: unknown): Map<string, string | null> {
+  const out = new Map<string, string | null>();
+  if (!req || typeof req !== "object") return out;
+  for (const [k, v] of Object.entries(req as Record<string, unknown>)) {
+    if (k === "rateDate") continue; // when we asked, not the deal
+    if (k === "properties" && Array.isArray(v)) {
+      for (const p of v as Record<string, unknown>[]) {
+        const name = String(p?.name ?? p?.property ?? "").toLowerCase();
+        if (name) out.set(`prop:${name}`, p?.value === null || p?.value === undefined ? null : String(p.value));
+      }
+      continue;
+    }
+    out.set(k, v === null || v === undefined ? null : typeof v === "object" ? JSON.stringify(v) : String(v));
+  }
+  return out;
+}
+
+export interface RatedRequestDiff {
+  /** Every field that differs, top level by name and properties as prop:<name>. */
+  differs: string[];
+  /** The offer may be marked current: only the sale date moved, within its month. */
+  keepCurrent: boolean;
+  rated_sale: string | null;
+  current_sale: string | null;
+}
+
+/**
+ * Compare the request an offer was rated on with the one the session would
+ * send now. The in-service date counts as part of the sale date's move only
+ * when it equalled the sale date on both sides (a New unit's follows it).
+ */
+export function ratedRequestDiff(
+  stored: unknown,
+  current: unknown,
+  boundaries: string[] | null = []
+): RatedRequestDiff {
+  const a = flatRequest(stored);
+  const b = flatRequest(current);
+  const keys = [...new Set([...a.keys(), ...b.keys()])].sort();
+  const differs = keys.filter((k) => (a.get(k) ?? null) !== (b.get(k) ?? null));
+  const rated_sale = isoDate(a.get("saleDate"));
+  const current_sale = isoDate(b.get("saleDate"));
+  const followed =
+    isoDate(a.get("inServiceDate")) === rated_sale && isoDate(b.get("inServiceDate")) === current_sale &&
+    isoDate(a.get("prop:inservice.date") ?? a.get("inServiceDate")) === rated_sale &&
+    isoDate(b.get("prop:inservice.date") ?? b.get("inServiceDate")) === current_sale;
+  const onlyDates = differs.every((k) => SALE_FIELDS.has(k) || (IN_SERVICE_FIELDS.has(k) && followed));
+  const keepCurrent =
+    differs.includes("saleDate") && onlyDates && !saleDateMoveNeedsRerate(rated_sale, current_sale, boundaries);
+  return { differs, keepCurrent, rated_sale, current_sale };
+}
+
+/** "Rating kept current: sale date moved within the same month (27 Oct 2026 to 28 Oct 2026)". */
+export function keptCurrentEvent(from: string, to: string): string {
+  return `Rating kept current: sale date moved within the same month (${dayLabel(from)} to ${dayLabel(to)})`;
 }

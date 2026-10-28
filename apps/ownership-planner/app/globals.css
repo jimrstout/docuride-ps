@@ -1036,6 +1036,12 @@ button { cursor: pointer; }
 .vconfirm-changes { margin: var(--s3) 0 0; padding: var(--s3); border: var(--bw) solid var(--copper-edge); border-radius: var(--r-control); background: var(--copper-wash); }
 .vconfirm-changes-head { margin: 0 0 var(--s1); font-weight: 600; color: var(--nav); font-size: var(--fs-xs); }
 .vconfirm-dx1 { margin: var(--s3) 0 0; }
+/* An out-of-date rating on a test session: said, in amber, and not blocking. */
+.vsubmit-note {
+  margin: 0 0 var(--s3); padding: var(--s2) var(--s3); font-size: var(--fs-xs);
+  border: var(--bw) solid var(--warn-edge); border-radius: var(--r-control);
+  background: var(--warn-panel); color: var(--warn-fg); overflow-wrap: anywhere;
+}
 .vconfirm-actions {
   flex: none; display: flex; justify-content: flex-end; gap: var(--s2); flex-wrap: wrap;
   padding: var(--s3) var(--s4); border-top: var(--bw) solid var(--line); background: var(--tint);

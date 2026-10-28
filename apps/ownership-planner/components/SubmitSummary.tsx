@@ -24,10 +24,13 @@ export function termText(line: { term_months: number | null; term_miles: number 
 export default function SubmitSummary({
   confirmation,
   changes,
+  note = null,
   titleId,
 }: {
   confirmation: SubmitConfirmation;
   changes: PartyChange[];
+  /** Said above the products: an out-of-date rating on a test session. */
+  note?: string | null;
   titleId: string;
 }) {
   const c = confirmation;
@@ -48,6 +51,7 @@ export default function SubmitSummary({
           <dd>{c.sale_date_label ?? "Not set"}</dd>
         </div>
       </dl>
+      {note ? <p className="vsubmit-note vconfirm-stale">{note}</p> : null}
       <ul className="vconfirm-lines" aria-label="Products">
         {c.lines.map((l) => (
           <li key={l.rate_unique} className="vconfirm-line">

@@ -72,7 +72,7 @@ import { atMaximum, pricePolicy } from "../_shared/price-cap.ts";
 import { readSubmitResponse } from "../_shared/submit-outcome.ts";
 import { alignContractDates, dealDates, SALE_DATE_MISSING } from "../_shared/deal-dates.ts";
 import { storeToday, submitDateProblem } from "../_shared/store-day.ts";
-import { staleRatingProblem } from "../_shared/sale-date.ts";
+import { renewedBy, STALE_TEST_SUBMIT_EVENT, staleRatingProblem } from "../_shared/sale-date.ts";
 import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
 import { DX1_CONFIRMATION, partyChanges } from "../_shared/contract-parties.ts";
 import { applyCobuyerProbe, probeDecision, type MarkerRow } from "../_shared/cobuyer-probe.ts";
@@ -101,6 +101,9 @@ interface ContractSubmitRequest {
   dx1_confirmed?: boolean;
   /** Who confirmed, for the session event. */
   confirmed_by?: string;
+  /** The signed-in person's initials, for the session event when a test
+   *  session submits on an out-of-date rating. */
+  submitted_by?: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -377,8 +380,29 @@ serve(async (req: Request) => {
     // Renew for Today can move to today) leaves the offer out of date. Its
     // prices were for the old deal, so nothing goes out until it is rated
     // again; alignContractDates below must never paper over a moved date.
+    //
+    // A test session on the QA server may still submit (2026-10-28): its
+    // contracts go only to the test server, and Jim tests with them. The
+    // allowance is recorded as a session event before anything is sent.
+    // A real session is refused as before.
     const stale = staleRatingProblem(ratedOffer, dates.sale);
-    if (stale) return await refuse(400, { error: stale });
+    if (stale) {
+      if (pricePolicy(session, credentials.api_base_url) !== "Test at maximum") {
+        return await refuse(400, { error: stale });
+      }
+      const { error: staleEventErr } = await supabase
+        .schema("fni")
+        .from("session_events")
+        .insert({
+          session_id,
+          event: STALE_TEST_SUBMIT_EVENT,
+          detail: { reason: stale, rated_sale_date: (ratedOffer.request_payload as Record<string, unknown> | null)?.saleDate ?? null, sale_date: dates.sale },
+          created_by: renewedBy(body.submitted_by),
+        });
+      if (staleEventErr) {
+        return await refuse(500, { error: `The test session allowance could not be recorded, so nothing was sent: ${staleEventErr.message}` });
+      }
+    }
 
     // ── Step 3e: Contract details changed here, and DX1 ────────────────
     // The finance contract comes from DX1. Anything about the buyer, co-buyer
