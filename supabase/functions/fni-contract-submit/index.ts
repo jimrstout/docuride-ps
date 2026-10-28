@@ -75,6 +75,7 @@ import { alignContractDates, dealDates, SALE_DATE_MISSING } from "../_shared/dea
 import { storeToday, submitDateProblem } from "../_shared/store-day.ts";
 import { renewedBy, STALE_TEST_SUBMIT_EVENT, staleRatingProblem } from "../_shared/sale-date.ts";
 import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
+import { cobuyerKeys } from "../_shared/submit-parties.ts";
 import { DX1_CONFIRMATION, partyChanges } from "../_shared/contract-parties.ts";
 import { savedSelections, SUBMIT_ROW_COLUMNS, type SubmitRow } from "../_shared/saved-selections.ts";
 
@@ -646,13 +647,16 @@ serve(async (req: Request) => {
       toSubmit.map((r) => r.selection)
     );
 
-    // ── Step 5: Buyer and lienholder ───────────────────────────────────
+    // ── Step 5: Buyer, co-buyer and lienholder ─────────────────────────
     // The staff value wherever one exists: the CRM's, corrected on Details,
     // and blank for a lienholder staff removed (_shared/contract-parties.ts).
     const party = applyStaffEdits(session as Record<string, unknown>, parseStaffEdits(session.staff_edits)) as Record<string, string | null>;
     if (party.buyer_first_name) submitQuote.buyerFirstName = party.buyer_first_name;
     if (party.buyer_last_name) submitQuote.buyerLastName = party.buyer_last_name;
     if (party.buyer_address) submitQuote.buyerAddress = party.buyer_address;
+    // The co-buyer, on the contract's second contract holder line, only when
+    // there is one (_shared/submit-parties.ts).
+    Object.assign(submitQuote, cobuyerKeys(party));
 
     const lienholder: Record<string, string> = {};
     if (party.lienholder_name) lienholder.lienholderName = party.lienholder_name;
