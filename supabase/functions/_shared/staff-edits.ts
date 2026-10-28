@@ -25,6 +25,7 @@
 // numbers while the provider is quoted another.
 
 import { fuelChoice } from "./fuel-type.ts";
+import { applyPartyRemovals, PARTY_KEYS } from "./contract-parties.ts";
 import { isVehicleType, resolveVehicleType, tecAssuredVtype, VEHICLE_TYPES } from "./vehicle-types.ts";
 
 /** One correction, as recorded the moment it was made. */
@@ -107,6 +108,13 @@ export const EDIT_TARGETS: Record<string, EditTarget> = {
   buyer_city: { kind: "column", column: "buyer_city", cast: "text" },
   buyer_state: { kind: "column", column: "buyer_state", cast: "text" },
   buyer_zip: { kind: "column", column: "buyer_zip", cast: "text" },
+
+  // Who goes on the contracts: every buyer, co-buyer and lienholder column,
+  // edited in the panels on Details (_shared/contract-parties.ts). Each key is
+  // its own column, so these are added from that list rather than retyped.
+  ...Object.fromEntries(
+    PARTY_KEYS.map((k) => [k, { kind: "column", column: k, cast: "text" } as EditTarget])
+  ),
 };
 
 export function editTargetFor(key: string): EditTarget | null {
@@ -260,6 +268,9 @@ export function applyStaffEdits(
   }
 
   if (propsTouched) out.vehicle_properties = props;
+
+  // A co-buyer or lienholder staff removed reads as blank everywhere.
+  applyPartyRemovals(out, edits);
 
   // ── The vehicle type, and the code TecAssured is sent ─────────────────
   // Only where the row carries the choice (or staff made one), so a reader
