@@ -52,6 +52,15 @@ test("every field is editable, read-only when locked, with its history and the C
   assert.match(c, /\{parties\.locked && parties\.lock_reason \? \(/);
 });
 
+test("the Submit confirmation appears only when something was edited", () => {
+  const page = src("app/details/[sessionId]/page.tsx");
+  assert.match(page, /\{\(sheet\.contract_parties\?\.changes\.length \?\? 0\) > 0 \? \(\s*<fieldset className="vdx1">/);
+  assert.match(page, /<input type="checkbox" name="dx1_confirmed" value="1" required \/> \{DX1_CONFIRMATION\}/);
+  assert.match(page, /<strong>\{c\.label\}<\/strong>: \{c\.was \?\? "not set"\} to \{c\.now \?\? "removed"\}/);
+  const actions = src("app/console-actions.ts");
+  assert.match(actions, /\.\.\.\(formData\.get\("dx1_confirmed"\) === "1"\s*\? \{ dx1_confirmed: true, confirmed_by:/);
+});
+
 test("one column on a phone, side by side where there is room", () => {
   const css = src("app/globals.css");
   assert.match(css, /grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 20rem\), 1fr\)\);/);

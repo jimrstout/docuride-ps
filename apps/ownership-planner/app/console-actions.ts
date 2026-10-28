@@ -665,6 +665,11 @@ export async function submitContracts(formData: FormData): Promise<void> {
       session_id: sessionId,
       use_saved_selections: true,
       ...(probe ? { cobuyer_probe: true, cobuyer_probe_batch: probeBatch } : {}),
+      // Ticked when contract details were changed on Details: the person
+      // confirms DX1 matches. The Edge Function refuses without it then.
+      ...(formData.get("dx1_confirmed") === "1"
+        ? { dx1_confirmed: true, confirmed_by: (await checkerFor(formData)) || operator.email }
+        : {}),
     });
     const numbers = (done.contracts ?? []).map((c) => c.contract_number ?? "no number").join(", ");
     // Some went through and some did not: the endpoint's own lines say which.

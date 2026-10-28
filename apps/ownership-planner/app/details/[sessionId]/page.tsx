@@ -62,6 +62,7 @@ import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
 import RatingErrorText from "@/components/RatingErrorText";
 import ContractParties from "@/components/ContractParties";
+import { DX1_CONFIRMATION } from "@/lib/contract-parties";
 import { dayLabel, storeTime } from "@/lib/store-time";
 import {
   hasMoreDetail,
@@ -788,6 +789,24 @@ export default async function DetailsPage({
                         <option value="2">Batch 2</option>
                         <option value="3">Batch 3</option>
                       </select>
+                    </label>
+                  </fieldset>
+                ) : null}
+                {/* Contract details changed on Details: each listed, and the
+                    person submitting confirms DX1 matches. The Edge Function
+                    refuses without it and records it (contract-parties.ts). */}
+                {(sheet.contract_parties?.changes.length ?? 0) > 0 ? (
+                  <fieldset className="vdx1">
+                    <legend>Changed on Details</legend>
+                    <ul className="vdx1-list">
+                      {sheet.contract_parties!.changes.map((c) => (
+                        <li key={c.key}>
+                          <strong>{c.label}</strong>: {c.was ?? "not set"} to {c.now ?? "removed"}
+                        </li>
+                      ))}
+                    </ul>
+                    <label className="vdx1-confirm">
+                      <input type="checkbox" name="dx1_confirmed" value="1" required /> {DX1_CONFIRMATION}
                     </label>
                   </fieldset>
                 ) : null}
