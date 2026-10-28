@@ -1052,6 +1052,32 @@ The day boundary is worked out in Postgres (`fni.store_day_end`), so a session
 made by any path ends at the same moment; "today" for the submit check is
 `storeToday` in `_shared/store-day.ts`, from the same zone.
 
+**Renew for Today also moves past dates to today** (2026-10-28,
+`_shared/sale-date.ts`). Before renewing, `fni-admin-sessions` compares the
+session's sale date (the staff date where there is one) and planned sale date
+with today at the store:
+
+| Date | Before today | Today or later | Not set |
+|---|---|---|---|
+| Sale date | Moved to today, as a staff edit over the CRM's | Left alone | Left alone (still missing) |
+| Planned sale date | Moved to today | Left alone, so a deal prepared for tomorrow keeps tomorrow | Left alone (stays empty) |
+
+- The in-service date is never touched.
+- Each move is a session event: "Sale date moved from 27 Oct 2026 to 28 Oct
+  2026 by JS". JS is the signed-in person's initials, as their admin avatar
+  shows them; with nobody signed in it is "System". Never the Checked by name.
+- Refresh from CRM writes the columns, never the edit, so the moved date
+  stands. While the CRM holds a different date, Details shows "CRM now says
+  ..." with Keep staff value and Use CRM value, as on the contract panels.
+  Keeping records which CRM date was kept over, so it is not asked again until
+  the CRM changes.
+- The sale date is sent in the rate request, so a move marks the rated offers
+  out of date (kept, prices unchanged) and a verified deal goes back through
+  Confirm and Continue. Submit already refused only off the sale day; it now
+  also refuses an out-of-date rating, or one rated on a different sale date
+  than the deal now has, so the quote's dates are never quietly realigned over
+  a re-rate. Details disables Submit and says why.
+
 ## 21. Who goes on the contracts
 
 Details shows the buyer, co-buyer and lienholder exactly as the service

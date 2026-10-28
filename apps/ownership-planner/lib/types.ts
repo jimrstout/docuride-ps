@@ -514,6 +514,16 @@ export interface VerifySheet {
   };
   /** Who goes on the contracts (supabase/functions/_shared/contract-parties.ts). */
   contract_parties?: ContractParties;
+  /**
+   * A staff sale date the CRM disagrees with (supabase/functions/_shared/sale-date.ts),
+   * offered as Keep staff value / Use CRM value. Null when they agree or it was kept.
+   */
+  sale_date_choice?: {
+    staff_value: string;
+    crm_value: string;
+    edited_by: string;
+    edited_at: string;
+  } | null;
   fields: VerifyField[];
   missing: VerifyField[];
   ready: boolean;

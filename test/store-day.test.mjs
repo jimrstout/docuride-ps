@@ -124,7 +124,7 @@ test("Sessions offers Renew for Today, not +24h, and only when it gives longer",
   assert.match(page, />\s*Renew for Today\s*<\/PendingButton>/);
   assert.doesNotMatch(page, />\s*\+24h\s*<|extendSession|Adding 24 hours/);
   const actions = src("apps/ownership-planner/app/console-actions.ts");
-  assert.match(actions, /await edge\.adminRenew<\{ expires_at: string \}>\(sessionId\);/);
+  assert.match(actions, /await edge\.adminRenew<\{ expires_at: string \}>\(sessionId, initialsFor\(operator\.email\)\);/);
   assert.doesNotMatch(actions, /EXTEND_HOURS|adminExtend/);
   const { storeTime } = await import("../apps/ownership-planner/lib/store-time.ts");
   assert.equal(storeTime("2026-10-28T03:59:59Z", "America/New_York"), "11:59 PM, 27 Oct (EDT)");
@@ -139,8 +139,11 @@ test("Details shows when the deal ends, sets the planned sale date, and holds Su
   assert.match(page, /<form action=\{setPlannedSaleDate\} className="vplanned" data-working-panel="">/);
   assert.match(page, /min=\{sheet\.day\.today\}/);
   assert.match(page, /<PendingButton formAction=\{clearPlannedSaleDate\} formNoValidate pending="Clearing the date\.\.\.">/);
-  assert.match(page, /\{sheet\.day\?\.submit_problem \? \(\s*<p className="console-flash console-flash--bad" role="alert">\{sheet\.day\.submit_problem\}<\/p>/);
-  assert.match(page, /disabled=\{!!sheet\.day\?\.submit_problem\}/);
+  // The reason (not the sale day, or a rating out of date) is said beside a
+  // disabled Submit (lib/submit-check.ts).
+  assert.match(page, /const submitBlocked = submitBlock\(sheet\);/);
+  assert.match(page, /\{submitBlocked \? \(\s*<p className="console-flash console-flash--bad" role="alert">\{submitBlocked\}<\/p>/);
+  assert.match(page, /disabled=\{!!submitBlocked\}/);
   // Submit and Confirm and Continue (which rates) are busy buttons.
   assert.match(page, /pending="Submitting contracts\.\.\."/);
   const actions = src("apps/ownership-planner/app/console-actions.ts");

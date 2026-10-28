@@ -24,7 +24,7 @@ import {
   cleanCheckerName,
 } from "@/lib/checker";
 import { ratingInputsFrom } from "@/lib/verify-fields";
-import { ADMIN_HOME, safeAdminPath, withNotice } from "@/lib/admin-sections";
+import { ADMIN_HOME, initialsFor, safeAdminPath, withNotice } from "@/lib/admin-sections";
 
 // The admin area's pages, as the actions below send people back to them.
 const SESSIONS = ADMIN_HOME;
@@ -82,6 +82,11 @@ export async function signOut(): Promise<void> {
  * Renew for Today: the session lasts to 23:59:59 on its store's day, or on its
  * planned sale date when that is later. It never adds hours, so a second press
  * changes nothing (+24h stacked: deal 13437 gained 48 hours).
+ *
+ * A sale date or planned sale date before today moves to today first, recorded
+ * against the signed-in person's initials, the ones their admin avatar shows.
+ * Never the Checked by name: that is a label typed on Details, not who is
+ * signed in (supabase/functions/_shared/sale-date.ts).
  */
 export async function renewSession(formData: FormData): Promise<void> {
   // Checked here and not only on the page: a Server Action is a POST endpoint
@@ -94,7 +99,7 @@ export async function renewSession(formData: FormData): Promise<void> {
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
   try {
-    await edge.adminRenew<{ expires_at: string }>(sessionId);
+    await edge.adminRenew<{ expires_at: string }>(sessionId, initialsFor(operator.email));
   } catch (err) {
     console.error(`console renew failed for ${sessionId}:`, err);
     redirect(withNotice(SESSIONS, "renewfailed"));
@@ -509,6 +514,26 @@ export async function keepStaffValue(formData: FormData): Promise<void> {
 export async function useCrmValue(formData: FormData): Promise<void> {
   const key = String(formData.get("key") ?? "");
   await partyAction(formData, (session_id) => ({ session_id, action: "party_use_crm", key }), "partycrm");
+}
+
+/**
+ * The CRM holds a different sale date from the staff one: keep the staff date,
+ * or drop it and use the CRM's. Named like a sheet edit, by Checked by.
+ */
+async function saleDateChoice(formData: FormData, action: string, onOk: string): Promise<void> {
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
+  const who = await checkerFor(formData);
+  if (who === "") return backToVerify(sessionId, "needname");
+  await verifyAction(formData, (session_id) => ({ session_id, action, edited_by: who }), onOk);
+}
+
+export async function keepStaffSaleDate(formData: FormData): Promise<void> {
+  await saleDateChoice(formData, "sale_date_keep_staff", "saledatekept");
+}
+
+export async function useCrmSaleDate(formData: FormData): Promise<void> {
+  await saleDateChoice(formData, "sale_date_use_crm", "saledatecrm");
 }
 
 /** Clear the planned sale date: the session stays open to the end of today. */

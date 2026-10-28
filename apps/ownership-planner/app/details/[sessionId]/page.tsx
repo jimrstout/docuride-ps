@@ -57,7 +57,10 @@ import {
   submitContracts,
   getContractDocument,
   moveDocumentsToDealJacket,
+  keepStaffSaleDate,
+  useCrmSaleDate,
 } from "@/app/console-actions";
+import { submitBlock } from "@/lib/submit-check";
 import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
 import RatingErrorText from "@/components/RatingErrorText";
@@ -385,6 +388,9 @@ export default async function DetailsPage({
   );
 
   const verified = sheet.verification.state === "Verified";
+  // Why Submit is disabled, if it is: not the day of the sale, or a rating
+  // that is out of date (lib/submit-check.ts). Submit refuses both itself.
+  const submitBlocked = submitBlock(sheet);
   // Verified, and nothing a rate depends on has moved since. Only then is there
   // a presentation to open.
   const presentable = verified && !sheet.rating.out_of_date;
@@ -813,15 +819,15 @@ export default async function DetailsPage({
                 {/* Contracts go out only on the day of the sale at this store
                     (_shared/store-day.ts). Submit refuses it too; this says why
                     before anyone presses it. */}
-                {sheet.day?.submit_problem ? (
-                  <p className="console-flash console-flash--bad" role="alert">{sheet.day.submit_problem}</p>
+                {submitBlocked ? (
+                  <p className="console-flash console-flash--bad" role="alert">{submitBlocked}</p>
                 ) : null}
                 <PendingButton
                   className="btn"
                   working="page"
                   pending="Submitting contracts..."
                   leave={SUBMIT_LEAVE}
-                  disabled={!!sheet.day?.submit_problem}
+                  disabled={!!submitBlocked}
                 >
                   Submit contracts to {sheet.contracts_panel.provider_name}
                 </PendingButton>
@@ -993,6 +999,35 @@ export default async function DetailsPage({
             {sheet.changed_inputs.length === 1 ? "rating input" : "rating inputs"}, so
             this deal needs verifying again and the old rates are out of date.
           </p>
+        ) : null}
+
+        {/* ── A staff sale date the CRM disagrees with ─────────────────────
+            Renew for Today moves a past sale date to today as a staff edit,
+            which Refresh from CRM never overwrites. While the CRM still holds
+            another date, both are shown with a choice, as on the contract
+            panels (supabase/functions/_shared/sale-date.ts). */}
+        {sheet.sale_date_choice ? (
+          <section className="vparty-choices vsale-choice" aria-label="Sale date">
+            <div className="vparty-choice" data-working-panel="">
+              <p>
+                Sale date: staff value <strong>{dayLabel(sheet.sale_date_choice.staff_value)}</strong>, entered
+                by {sheet.sale_date_choice.edited_by}. CRM now says{" "}
+                <strong>{dayLabel(sheet.sale_date_choice.crm_value)}</strong>.
+              </p>
+              <form action={keepStaffSaleDate}>
+                <Working />
+                <input type="hidden" name="session_id" value={sheet.session.id} />
+                <input type="hidden" name="checker_name" value={checker} />
+                <PendingButton pending="Keeping...">Keep staff value</PendingButton>
+              </form>
+              <form action={useCrmSaleDate}>
+                <Working />
+                <input type="hidden" name="session_id" value={sheet.session.id} />
+                <input type="hidden" name="checker_name" value={checker} />
+                <PendingButton pending="Switching...">Use CRM value</PendingButton>
+              </form>
+            </div>
+          </section>
         ) : null}
 
         {/* Put work that blocks verification ahead of the reference sheet. Each

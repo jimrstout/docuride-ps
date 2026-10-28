@@ -38,6 +38,12 @@ export interface StaffEdit {
   original_source: string;
   edited_by: string;
   edited_at: string;
+  /**
+   * The CRM value staff chose to keep this edit over (Keep staff value), so
+   * the choice is not offered again until the CRM changes. The sale date only;
+   * the contract panels record the same thing in `original`.
+   */
+  crm_kept?: string | null;
 }
 
 export type StaffEdits = Record<string, StaffEdit>;
@@ -134,6 +140,7 @@ export function parseStaffEdits(raw: unknown): StaffEdits {
       original_source: typeof e.original_source === "string" ? e.original_source : "Missing",
       edited_by: typeof e.edited_by === "string" ? e.edited_by : "unknown",
       edited_at: typeof e.edited_at === "string" ? e.edited_at : "",
+      ...(typeof e.crm_kept === "string" || e.crm_kept === null ? { crm_kept: e.crm_kept as string | null } : {}),
     };
   }
   return out;

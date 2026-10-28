@@ -6,15 +6,29 @@
 //
 // Input:
 //   GET  ?limit=25                    -> the newest sessions, newest first
-//   POST { session_id }               -> Renew for Today: the session lasts to
+//   POST { session_id, renewed_by? }  -> Renew for Today: a sale date or
+//                                        planned sale date before today moves
+//                                        to today, then the session lasts to
 //                                        the end of its store's day, or of its
-//                                        planned sale date when that is later
+//                                        planned sale date when that is later.
+//                                        renewed_by is the signed-in person's
+//                                        initials; without it, System.
 //
 // ── Renew for Today, not +24h ───────────────────────────────────────────
 // +24h added 24 hours a press, so two presses stacked (deal 13437 gained 48).
 // A session now lasts to 23:59:59 on its store's day (migration 0038), and
 // renewing sets that same moment again: a second press changes nothing. An
 // older console that still sends { hours } is renewed the same way.
+//
+// ── Past dates move to today (2026-10-28) ───────────────────────────────
+// A deal prepared yesterday still said yesterday, and Submit takes only the
+// day of the sale. So a sale date or planned sale date before today at the
+// store moves to today first; today or later is left alone, so a deal
+// prepared for tomorrow keeps tomorrow. The sale date moves as a staff edit
+// over the CRM's, and each move is a session event naming who did it. A moved
+// sale date marks the rates out of date, since it is sent in the rate request,
+// and a verified deal goes back through Confirm and Continue. No price is
+// touched. See _shared/sale-date.ts.
 //
 // Auth: FNI_WEBHOOK_SECRET via x-webhook-secret header or ?secret= query param,
 // exactly as fni-session-get. The browser never holds it; the console's server
@@ -36,6 +50,9 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { currentRows, ratingSummary, type RatingFailure, type RatingRow } from "../_shared/rating-summary.ts";
+import { storeToday } from "../_shared/store-day.ts";
+import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
+import { dateMoveEvent, movedSaleDateEdit, renewDateMoves, renewedBy } from "../_shared/sale-date.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -256,14 +273,80 @@ async function renew(req: Request): Promise<Response> {
   const { data: row, error: readErr } = await supabase
     .schema("fni")
     .from("sessions")
-    .select("id,expires_at")
+    .select("id,expires_at,store_id,sale_date,planned_sale_date,staff_edits,verification_state")
     .eq("id", sessionId)
     .maybeSingle();
 
   if (readErr) return json(500, { error: readErr.message });
   if (!row) return json(404, { error: "Session not found" });
 
-  const before = (row as { expires_at: string }).expires_at;
+  const s = row as Record<string, unknown>;
+  const before = s.expires_at as string;
+  const who = renewedBy(body.renewed_by);
+
+  // ── Past dates move to today, at the store ────────────────────────────
+  const { data: storeRow } = await supabase
+    .from("stores")
+    .select("time_zone")
+    .eq("id", s.store_id as string)
+    .maybeSingle();
+  const today = storeToday((storeRow as { time_zone?: string } | null)?.time_zone ?? null);
+  const edits = parseStaffEdits(s.staff_edits);
+  const moves = renewDateMoves({
+    // The sale date as it stands: a staff date where there is one.
+    sale: (applyStaffEdits(s, edits).sale_date as string | null) ?? null,
+    planned: (s.planned_sale_date as string | null) ?? null,
+    today,
+  });
+
+  if (moves.length > 0) {
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = {};
+    for (const m of moves) {
+      if (m.field === "planned_sale_date") patch.planned_sale_date = m.to;
+      // A staff edit over the CRM's date, so Refresh from CRM keeps it.
+      else patch.staff_edits = { ...edits, sale_date: movedSaleDateEdit(s.sale_date, m.to, who, now) };
+    }
+    const saleMoved = moves.some((m) => m.field === "sale_date");
+    // The sale date is a rating input: a verified deal is verified again.
+    if (saleMoved && s.verification_state === "Verified") {
+      Object.assign(patch, {
+        verification_state: "Needs Verification",
+        verified_at: null,
+        verified_by: null,
+        verified_snapshot: null,
+      });
+    }
+
+    const { error: moveErr } = await supabase
+      .schema("fni")
+      .from("sessions")
+      .update(patch)
+      .eq("id", sessionId);
+    if (moveErr) return json(500, { error: moveErr.message });
+
+    // Rated on the old date, so out of date. Kept, never deleted, and no
+    // price on them is changed.
+    if (saleMoved) {
+      const { error: staleErr } = await supabase
+        .schema("fni")
+        .from("rated_offers")
+        .update({ out_of_date: true })
+        .eq("session_id", sessionId);
+      if (staleErr) return json(500, { error: staleErr.message });
+    }
+
+    const { error: eventErr } = await supabase
+      .schema("fni")
+      .from("session_events")
+      .insert(moves.map((m) => ({
+        session_id: sessionId,
+        event: dateMoveEvent(m, who),
+        detail: { field: m.field, from: m.from, to: m.to, store_today: today },
+        created_by: who,
+      })));
+    if (eventErr) console.error(`fni-admin-sessions date move event not recorded for ${sessionId}: ${eventErr.message}`);
+  }
   const { data: next, error: writeErr } = await supabase
     .schema("fni")
     .rpc("renew_session", { p_session: sessionId });
@@ -279,6 +362,8 @@ async function renew(req: Request): Promise<Response> {
     expires_at: next,
     // It was revived rather than merely pushed out. The console says so.
     revived: Number.isFinite(current) && current <= Date.now(),
+    // Each date moved to today, in the words of its session event.
+    moved: moves.map((m) => dateMoveEvent(m, who)),
   });
 }
 

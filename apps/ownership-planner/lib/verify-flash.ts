@@ -149,6 +149,10 @@ export function flashMessage(
       return { tone: "ok", text: "Kept the staff value." };
     case "partycrm":
       return { tone: "ok", text: `Now using the CRM value. ${DX1_REMINDER}` };
+    case "saledatekept":
+      return { tone: "ok", text: "Kept the staff sale date." };
+    case "saledatecrm":
+      return { tone: "ok", text: "Now using the CRM sale date." };
     case "planned":
       return { tone: "ok", text: "Planned sale date saved. This deal stays open until the end of that day." };
     case "plannedcleared":

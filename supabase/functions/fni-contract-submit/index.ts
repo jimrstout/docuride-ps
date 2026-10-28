@@ -72,6 +72,7 @@ import { atMaximum, pricePolicy } from "../_shared/price-cap.ts";
 import { readSubmitResponse } from "../_shared/submit-outcome.ts";
 import { alignContractDates, dealDates, SALE_DATE_MISSING } from "../_shared/deal-dates.ts";
 import { storeToday, submitDateProblem } from "../_shared/store-day.ts";
+import { staleRatingProblem } from "../_shared/sale-date.ts";
 import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
 import { DX1_CONFIRMATION, partyChanges } from "../_shared/contract-parties.ts";
 import { applyCobuyerProbe, probeDecision, type MarkerRow } from "../_shared/cobuyer-probe.ts";
@@ -362,6 +363,14 @@ serve(async (req: Request) => {
       today,
     });
     if (dayProblem) return await refuse(400, { error: dayProblem });
+
+    // ── Step 3d2: Rated on the deal as it now stands ───────────────────
+    // A rating input that moved after rating (the sale date above all, which
+    // Renew for Today can move to today) leaves the offer out of date. Its
+    // prices were for the old deal, so nothing goes out until it is rated
+    // again; alignContractDates below must never paper over a moved date.
+    const stale = staleRatingProblem(ratedOffer, dates.sale);
+    if (stale) return await refuse(400, { error: stale });
 
     // ── Step 3e: Contract details changed here, and DX1 ────────────────
     // The finance contract comes from DX1. Anything about the buyer, co-buyer

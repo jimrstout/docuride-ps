@@ -69,6 +69,7 @@ import {
 } from "../_shared/contract-parties.ts";
 import { plannedDateProblem, storeToday, submitDateProblem } from "../_shared/store-day.ts";
 import { capChange, editFor, MAX_AMOUNT_FINANCED } from "./save-edits.ts";
+import { keepStaffSaleDate, saleDateChoice } from "../_shared/sale-date.ts";
 import {
   duplicateVinWarning,
   occupiesSlot,
@@ -555,6 +556,9 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
     // The buyer, co-buyer and lienholder, as the contracts will carry them,
     // locked while any contract on the deal is live.
     contract_parties: contractParties(s, edits, contracts.length > 0),
+    // A staff sale date (Renew for Today moves a past one to today) that the
+    // CRM disagrees with: Keep staff value or Use CRM value, as on the panels.
+    sale_date_choice: saleDateChoice(s, edits),
     // Why nothing is required, when nothing is. Shown instead of a sheet that
     // looks complete because it is asking for nothing.
     not_ready_reason: reason,
@@ -932,6 +936,40 @@ async function partyAction(
   return json(200, { ...(await sheetFor(supabase, latest)), changed_inputs: changed });
 }
 
+// ── The sale date, when the CRM says otherwise ────────────────────────────
+//
+// sale_date_keep_staff   the staff date stands; not asked again for this CRM date
+// sale_date_use_crm      drop the edit and use the CRM's date
+//
+// The sale date is a rating input, so using the CRM's sends the deal back
+// through Confirm and Continue and marks the rates out of date, as any change
+// to it does (_shared/sale-date.ts).
+
+async function saleDateAction(
+  supabase: SupabaseClient,
+  s: Record<string, unknown>,
+  action: string,
+  who: string
+): Promise<Response> {
+  const edits = parseStaffEdits(s.staff_edits);
+  const edit = edits.sale_date;
+  if (!edit) return json(400, { error: "The sale date has no staff value." });
+  if (action === "sale_date_use_crm") delete edits.sale_date;
+  else edits.sale_date = keepStaffSaleDate(edit, s.sale_date, who, new Date().toISOString());
+
+  const { error } = await supabase
+    .schema("fni")
+    .from("sessions")
+    .update({ staff_edits: Object.keys(edits).length > 0 ? edits : null })
+    .eq("id", s.id as string);
+  if (error) return json(500, { error: error.message });
+
+  const fresh = (await loadSession(supabase, s.id as string))!;
+  const changed = await unverifyIfInputsMoved(supabase, fresh);
+  const latest = changed.length > 0 ? (await loadSession(supabase, s.id as string))! : fresh;
+  return json(200, { ...(await sheetFor(supabase, latest)), changed_inputs: changed });
+}
+
 // ── The store's day ───────────────────────────────────────────────────────
 
 async function storeTimeZone(supabase: SupabaseClient, storeId: unknown): Promise<string | null> {
@@ -1214,6 +1252,11 @@ serve(async (req: Request) => {
       if (who === "") return json(400, { error: "edited_by is required: an edit names a person." });
       return await partyAction(supabase, s, action, body, who);
     }
+    if (action === "sale_date_keep_staff" || action === "sale_date_use_crm") {
+      const who = typeof body.edited_by === "string" ? body.edited_by.trim() : "";
+      if (who === "") return json(400, { error: "edited_by is required: an edit names a person." });
+      return await saleDateAction(supabase, s, action, who);
+    }
     if (action === "discard_edits") return await discardEdits(supabase, s);
 
     if (action === "verify") {
@@ -1228,7 +1271,8 @@ serve(async (req: Request) => {
     return json(400, {
       error:
         "action must be one of save, refresh, discard_edits, verify, planned_sale_date, " +
-        "party_save, party_remove, party_restore, party_keep_staff, party_use_crm",
+        "party_save, party_remove, party_restore, party_keep_staff, party_use_crm, " +
+        "sale_date_keep_staff, sale_date_use_crm",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
