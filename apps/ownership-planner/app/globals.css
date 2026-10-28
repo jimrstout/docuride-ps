@@ -885,12 +885,12 @@ button { cursor: pointer; }
 }
 
 /* The house input, for every box on the page. */
-.vh input[type="text"], .vh select {
+.vh input[type="text"], .vh input[type="tel"], .vh input[type="email"], .vh select {
   min-height: 2.25rem; padding: 0 var(--s3);
   font: inherit; font-size: var(--fs-xs); color: var(--ink);
   background: var(--panel); border: var(--bw) solid var(--line); border-radius: var(--r-control);
 }
-.vh input[type="text"]:focus, .vh select:focus { outline: none; border-color: var(--copper); }
+.vh input[type="text"]:focus, .vh input[type="tel"]:focus, .vh input[type="email"]:focus, .vh select:focus { outline: none; border-color: var(--copper); }
 .vwho input { width: 11rem; }
 
 /* Buttons on this page run a size down from the customer screens; a tablet
@@ -899,7 +899,7 @@ button { cursor: pointer; }
 .vh .btn--quiet { border-color: var(--line); }
 .vh .vgate .btn { min-height: var(--tap); padding: var(--s2) var(--s5); font-size: var(--fs-base); }
 @media (pointer: coarse) {
-  .vh .btn, .vh input[type="text"], .vh select { min-height: var(--tap); }
+  .vh .btn, .vh input[type="text"], .vh input[type="tel"], .vh input[type="email"], .vh select { min-height: var(--tap); }
 }
 
 .console { background: var(--page); padding: var(--s5) var(--s5) var(--s8); }
@@ -941,6 +941,53 @@ button { cursor: pointer; }
 }
 .vstate dd { margin: 0; font-size: var(--fs-xs); font-weight: 600; display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
 .vstate dd small { font-size: var(--fs-xs); font-weight: 400; color: var(--muted); }
+/* ── Who goes on the contracts (components/ContractParties) ────────────────
+   Three panels in the house table style: one column on a phone, side by side
+   where there is room. */
+.vparties { display: grid; gap: var(--s3); margin-top: var(--s4); min-width: 0; }
+.vparties-title { margin: 0; font-size: var(--fs-title); color: var(--nav); }
+.vparties-intro { margin: 0; font-size: var(--fs-xs); color: var(--ink-soft); }
+.vparties-lock { justify-self: stretch; }
+.vparties-grid {
+  display: grid; gap: var(--s3); align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+}
+.vparty-heading, .vparty-business, .vparty-empty {
+  margin: 0; padding: var(--s2) var(--s4); font-size: var(--fs-xs); color: var(--ink);
+  border-bottom: var(--bw) solid var(--line);
+}
+.vparty-business { background: var(--copper-wash); }
+.vparty-heading { font-weight: 600; }
+.vparty-empty { color: var(--ink-soft); border-bottom: 0; }
+.vparty-form { margin: 0; }
+.vparty-field { min-width: 0; }
+.vparty-field .vfield-value { overflow-wrap: anywhere; }
+.vparty-field.is-staff .vfield-control > input,
+.vparty-field.is-staff .vfield-control > select { border-left: 3px solid var(--copper); }
+.vparty-missing { color: var(--warn-fg); font-weight: 600; }
+.vparty-was { color: var(--ink-soft); }
+.vparty-crm { color: var(--copper-ink); font-weight: 600; }
+.vparty-actions, .vparty-body { display: flex; flex-wrap: wrap; gap: var(--s2); padding: var(--s3) var(--s4); }
+.vparty-body { flex-direction: column; align-items: flex-start; }
+.vparty-note { margin: 0; font-size: var(--fs-xs); color: var(--ink-soft); }
+.vparty-choices { display: grid; gap: var(--s2); padding: 0 var(--s4) var(--s3); }
+.vparty-choice {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2);
+  padding: var(--s2) var(--s3); border-radius: var(--r-control); background: var(--copper-wash);
+}
+.vparty-choice p { margin: 0; flex: 1 1 100%; font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.vparty-choice form { margin: 0; }
+.vparty-add, .vparty-remove { border-top: var(--bw) solid var(--line); }
+.vparty-add > summary, .vparty-remove > summary {
+  cursor: pointer; padding: var(--s2) var(--s4); font-size: var(--fs-xs); font-weight: 600; color: var(--copper-ink);
+}
+.vparty-remove > form { display: grid; gap: var(--s2); justify-items: start; padding: 0 var(--s4) var(--s3); margin: 0; }
+.vparty-confirm { display: flex; align-items: center; gap: var(--s2); font-size: var(--fs-xs); }
+@media (max-width: 899px) {
+  .vparty-add > summary, .vparty-remove > summary { min-height: var(--tap); display: flex; align-items: center; }
+  .vparty-confirm input { width: 20px; height: 20px; flex: none; }
+}
+
 /* The planned sale date: a small form beside when the session ends. */
 .vplanned { display: inline-flex; align-items: center; gap: var(--s2); flex-wrap: wrap; font-weight: 400; }
 .vplanned label { color: var(--muted); }

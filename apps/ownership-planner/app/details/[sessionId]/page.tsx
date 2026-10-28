@@ -61,6 +61,7 @@ import {
 import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
 import RatingErrorText from "@/components/RatingErrorText";
+import ContractParties from "@/components/ContractParties";
 import { dayLabel, storeTime } from "@/lib/store-time";
 import {
   hasMoreDetail,
@@ -1081,6 +1082,21 @@ export default async function DetailsPage({
           </details>
         </div>
         </div>
+
+        {/* ── Who goes on the contracts ──────────────────────────────────── */}
+        {/* Names, addresses and phone numbers, so a signed-in operator only.
+            Anyone else holding the link sees that the panels exist. */}
+        {sheet.contract_parties ? (
+          operator ? (
+            <ContractParties parties={sheet.contract_parties} sessionId={sheet.session.id} />
+          ) : (
+            <section className="vparties" aria-label="Who goes on the contracts">
+              <p className="vparties-intro">
+                Sign in to see and correct who goes on the contracts: the buyer, co-buyer and lienholder.
+              </p>
+            </section>
+          )
+        ) : null}
 
         {/* ── The gate ───────────────────────────────────────────────────── */}
         <form action={verifyAndRate} className="vgate">
