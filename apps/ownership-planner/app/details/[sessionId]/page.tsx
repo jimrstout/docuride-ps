@@ -61,6 +61,7 @@ import {
   useCrmSaleDate,
 } from "@/app/console-actions";
 import { submitBlock } from "@/lib/submit-check";
+import { sentenceStart, testServerName, vendorName } from "@/lib/vendor";
 import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
 import RatingErrorText from "@/components/RatingErrorText";
@@ -95,7 +96,7 @@ const EDITABLE_HELP: Record<string, string> = {
   "engine.ccs": "Engine displacement in cc.",
   warranty: "Whole months of factory coverage left on the day of sale.",
   "fuel.type": "Gasoline, Electric or Diesel.",
-  vehicle_type: "Decides the menu and the version of each product TecAssured will contract.",
+  vehicle_type: "Decides the menu and the version of each product the provider will contract.",
   deal_type: "Cash, Finance or Lease.",
   condition: "New or Used.",
   sale_date: "YYYY-MM-DD.",
@@ -157,7 +158,7 @@ function MissingMarker({ field }: { field: VerifyField }) {
  * tooltip, and come out into the open only when they are needed: on a field
  * that is missing or that could not be read.
  */
-function Field({ field }: { field: VerifyField }) {
+function Field({ field, vendor }: { field: VerifyField; vendor: string }) {
   const help = EDITABLE_HELP[field.key];
   const edited = field.original_source !== null;
   const id = `vf-${field.key}`;
@@ -226,7 +227,7 @@ function Field({ field }: { field: VerifyField }) {
       <label className="vfield-label" htmlFor={field.editable ? id : undefined}>
         {field.label}
         {field.required ? (
-          <abbr className="vfield-req" title="TecAssured asks for this">*</abbr>
+          <abbr className="vfield-req" title={`${sentenceStart(vendor)} asks for this`}>*</abbr>
         ) : null}
       </label>
 
@@ -391,6 +392,9 @@ export default async function DetailsPage({
   // Why Submit is disabled, if it is: not the day of the sale, or a rating
   // that is out of date (lib/submit-check.ts). Submit refuses both itself.
   const submitBlocked = submitBlock(sheet);
+  // The contract provider by its record's name ("Riders Advantage"), never
+  // written in here, so another provider reads correctly (lib/vendor.ts).
+  const vendor = vendorName(sheet);
   // Verified, and nothing a rate depends on has moved since. Only then is there
   // a presentation to open.
   const presentable = verified && !sheet.rating.out_of_date;
@@ -590,8 +594,8 @@ export default async function DetailsPage({
 
         {sheet.session.is_test ? (
           <p className="note note--flag">
-            This is a test session. Its contracts go only to the TecAssured test
-            server, and can be voided there.
+            This is a test session. Its contracts go only to {testServerName(vendor)}, and can be
+            voided there.
           </p>
         ) : null}
 
@@ -603,7 +607,7 @@ export default async function DetailsPage({
 
         {sheet.unmapped_properties.length > 0 ? (
           <p className="console-flash console-flash--bad" role="alert">
-            TecAssured is asking for {sheet.unmapped_properties.join(", ")}, which
+            {sentenceStart(vendor)} is asking for {sheet.unmapped_properties.join(", ")}, which
             this screen has no field for. Nothing can be verified until it does.
           </p>
         ) : null}
@@ -636,9 +640,9 @@ export default async function DetailsPage({
           <section className="note note--panel">
             <h2>Submit Status Unknown</h2>
             <p>
-              A submit reached TecAssured and never came back, so we do not know
+              A submit reached {vendor} and never came back, so we do not know
               whether it created contracts. Nothing has been retried and nothing
-              will be. Check the deal in TecAssured. If contracts were created,
+              will be. Check the deal with {vendor}. If contracts were created,
               void the ones that should not stand, then clear this.
             </p>
             {sheet.submit_detail ? <p><small><LongText text={sheet.submit_detail} /></small></p> : null}
@@ -649,16 +653,16 @@ export default async function DetailsPage({
               <input
                 type="text"
                 name="note"
-                placeholder="What you found in TecAssured (optional)"
+                placeholder={`What you found with ${vendor} (optional)`}
               />
               <PendingButton working="page" pending="Clearing the notice...">
-                I have checked TecAssured
+                I have checked with {vendor}
               </PendingButton>
             </form>
             ) : (
               <p className="vfield-note">
                 Clearing this needs a sign-in, because it is a statement that
-                somebody looked at TecAssured.{" "}
+                somebody checked with {vendor}.{" "}
                 <Link href="/admin/sessions" prefetch={false}>Sign in</Link> to clear it.
               </p>
             )}
@@ -708,7 +712,7 @@ export default async function DetailsPage({
                           {c.status === "Recorded" ? (
                             <small>An OEM contract. Void it under OEM contracts below.</small>
                           ) : !c.contract_number ? (
-                            <small>No number to void by. Ask TecAssured.</small>
+                            <small>No number to void by. Ask {vendor}.</small>
                           ) : operator ? (
                             <form action={voidContract} className="oem-record">
                               <Working />
@@ -723,7 +727,7 @@ export default async function DetailsPage({
                                 <input name="void_reason" required />
                               </label>
                               <label className="vcontracts-confirm">
-                                <input type="checkbox" name="confirm" required /> Cancel with TecAssured
+                                <input type="checkbox" name="confirm" required /> Cancel with {vendor}
                               </label>
                               <PendingButton working="page" pending="Voiding..." leave={VOID_LEAVE}>Void</PendingButton>
                             </form>
@@ -783,7 +787,7 @@ export default async function DetailsPage({
                     <p className="vprobe-note">
                       A one-off test on this test deal. It sends made-up phone numbers (304-555-0101
                       to 304-555-0120, one per guessed phone field) and the co-buyer marker CB03 again,
-                      so the contract shows which phone field TecAssured prints, if any. No real names
+                      so the contract shows which phone field {vendor} prints, if any. No real names
                       or numbers are sent. Only Battery Standard or Care Coverage can be submitted with
                       it on. Leave it off for a normal submit.
                     </p>
@@ -829,7 +833,7 @@ export default async function DetailsPage({
                   leave={SUBMIT_LEAVE}
                   disabled={!!submitBlocked}
                 >
-                  Submit contracts to {sheet.contracts_panel.provider_name}
+                  Submit contracts
                 </PendingButton>
               </form>
             ) : (
@@ -899,7 +903,7 @@ export default async function DetailsPage({
                             <input name="void_reason" required />
                           </label>
                           <label className="vcontracts-confirm">
-                            <input type="checkbox" name="confirm" required /> Cancel this contract with TecAssured
+                            <input type="checkbox" name="confirm" required /> Cancel this contract with {vendor}
                           </label>
                           <PendingButton working="page" pending="Voiding..." leave={VOID_LEAVE}>Void</PendingButton>
                         </form>
@@ -1071,7 +1075,7 @@ export default async function DetailsPage({
                 <h2 className="vgroup-head" title={blurb}>{group === "Money" ? "Financial" : group}</h2>
                 <div className="vgroup-fields">
                   {fields.map((f) => (
-                    <Field key={f.key} field={f} />
+                    <Field key={f.key} field={f} vendor={vendor} />
                   ))}
                 </div>
                 {/* Over the finance company's maximum before any product is
@@ -1097,7 +1101,7 @@ export default async function DetailsPage({
           <form
             id="vin-decode"
             action={decodeVin}
-            title="Asks TecAssured what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed. This page also does this once on its own, the first time it opens."
+            title={`Asks ${vendor} what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed. This page also does this once on its own, the first time it opens.`}
           >
             <Working />
             <input type="hidden" name="session_id" value={sheet.session.id} />
@@ -1128,7 +1132,7 @@ export default async function DetailsPage({
           <details className="vh-details">
             <summary>How this sheet works</summary>
             <p>
-              * TecAssured asks for this. Hover a field to see where its value comes
+              * {sentenceStart(vendor)} asks for this. Hover a field to see where its value comes
               from. Clearing a box puts the original value back. Nothing is written
               back to the CRM.
               {sheet.vin_decode_at ? ` VIN last decoded ${stamp(sheet.vin_decode_at)}.` : ""}
@@ -1212,7 +1216,7 @@ export default async function DetailsPage({
 
           {sheet.ready ? (
             <p className="vgate-say">
-              Every field TecAssured asks for has a value. Confirming records your
+              Every field {vendor} asks for has a value. Confirming records your
               name, the time, and each value with its source, and asks for the
               rate.
             </p>

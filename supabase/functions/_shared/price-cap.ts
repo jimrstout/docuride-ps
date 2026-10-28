@@ -55,32 +55,42 @@ export function atMaximum(
   });
 }
 
-/** TecAssured's refusal of a contract, in words staff can act on. */
-export function refusalInPlainEnglish(error: unknown, productName?: string | null): string {
+/** The provider as a sentence starts with it: "The provider", "Riders Advantage". */
+export function sentenceStart(vendor: string): string {
+  return vendor.charAt(0).toUpperCase() + vendor.slice(1);
+}
+
+/**
+ * The provider's refusal of a contract, in words staff can act on. `vendor`
+ * is the provider record's name (fni.providers.name), never written in here,
+ * so another provider's refusal names that provider.
+ */
+export function refusalInPlainEnglish(error: unknown, productName?: string | null, vendor = "the provider"): string {
   const raw = String(error ?? "").trim().replace(/[.\s]+$/, "");
   const what = productName ? `${productName}` : "the contract";
+  const who = sentenceStart(vendor);
   const cap = raw.match(/purchase price of \$?([\d,]+(?:\.\d+)?) cannot be greater than the maximum selling price of \$?([\d,]+(?:\.\d+)?)/i);
   if (cap) {
     return (
-      `TecAssured would not accept ${what}: its price, $${cap[1]}, is above the most ` +
-      `TecAssured allows this dealer to sell it for, $${cap[2]}. Lower the price to ` +
+      `${who} would not accept ${what}: its price, $${cap[1]}, is above the most ` +
+      `${vendor} allows this dealer to sell it for, $${cap[2]}. Lower the price to ` +
       `$${cap[2]} or less and submit again.`
     );
   }
   if (/no rate found matching criteria/i.test(raw)) {
     return (
-      `TecAssured would not accept ${what}: it has no rate for this product that ` +
+      `${who} would not accept ${what}: it has no rate for this product that ` +
       `matches the vehicle. Check the vehicle type on Verify; an On-Road product ` +
       `cannot go on an off-road vehicle, or the reverse.`
     );
   }
   if (/duplicate/i.test(raw)) {
     return (
-      `TecAssured would not accept ${what}: it already has this contract for this ` +
-      `deal. Check TecAssured before submitting again.`
+      `${who} would not accept ${what}: it already has this contract for this ` +
+      `deal. Check with ${vendor} before submitting again.`
     );
   }
   return raw === ""
-    ? `TecAssured would not accept ${what}, and did not say why.`
-    : `TecAssured would not accept ${what}: ${raw}.`;
+    ? `${who} would not accept ${what}, and did not say why.`
+    : `${who} would not accept ${what}: ${raw}.`;
 }

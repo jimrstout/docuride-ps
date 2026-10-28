@@ -440,6 +440,8 @@ export interface VerifySheet {
     deal_type: string | null;
     vehicle_type_code: string | null;
   };
+  /** The contract provider's name, from its record. Null when the tenant has none. */
+  provider_name?: string | null;
   verification: {
     state: "Needs Verification" | "Verified";
     verified_at: string | null;

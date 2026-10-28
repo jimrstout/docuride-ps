@@ -167,7 +167,7 @@ test("a submit that started and never finished is refused as unknown", () => {
   assert.equal(lockIsStale({ submit_state: "In Progress", submit_started_at: started, submit_detail: null }, now), true);
   assert.match(
     submitRefusal({ submit_state: "In Progress", submit_started_at: started, submit_detail: null }, now),
-    /outcome is unknown\. Check in TecAssured before submitting again\./
+    /outcome is unknown\. Check with the provider before submitting again\./
   );
 });
 
@@ -235,7 +235,7 @@ test("a changed selection is refused until the old contract is voided", () => {
   assert.match(contractSubmit, /must_void_first/);
   assert.match(
     contractSubmit,
-    /Void it in TecAssured[\s\S]{0,40}first, then submit again/
+    /Void it with \$\{vendor\}[\s\S]{0,40}first, then submit again/
   );
   assert.match(
     contractSubmit,

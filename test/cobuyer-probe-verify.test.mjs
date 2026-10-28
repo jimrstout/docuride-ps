@@ -15,7 +15,7 @@ test("offered on test sessions on the QA server only, read from the base URL alo
 
 test("the checkbox is off by default, explained, with a batch picker defaulting to All", () => {
   const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
-  const block = page.slice(page.indexOf("{sheet.contracts_panel.cobuyer_probe_available ? ("), page.indexOf("Submit contracts to {sheet.contracts_panel.provider_name}"));
+  const block = page.slice(page.indexOf("{sheet.contracts_panel.cobuyer_probe_available ? ("), page.indexOf("{/* Contract details changed on Details"));
   assert.match(block, /<input type="checkbox" name="cobuyer_probe" value="1" \/> Phone and co-buyer field test/);
   assert.doesNotMatch(block, /defaultChecked|checked=/);
   assert.match(block, /No real names\s+or numbers are sent\./);

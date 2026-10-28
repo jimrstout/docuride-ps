@@ -589,7 +589,7 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
       // A provider failed and its last good offers were kept: said in words.
       warning = typeof result?.warning === "string" ? result.warning : null;
     } else {
-      reason = "TecAssured did not offer any plans for this deal.";
+      reason = "No provider offered any plans for this deal.";
     }
   } catch (err) {
     console.error(`rate after verify failed for ${sessionId}:`, err);
@@ -633,7 +633,7 @@ export async function voidContract(formData: FormData): Promise<void> {
   const reason = String(formData.get("void_reason") ?? "").trim();
   if (!reason) return backToVerify(sessionId, "refused", "Say why this contract is being voided.");
   if (formData.get("confirm") !== "on") {
-    return backToVerify(sessionId, "refused", "Tick the box to confirm. Voiding cancels the contract with TecAssured.");
+    return backToVerify(sessionId, "refused", "Tick the box to confirm. Voiding cancels the contract with the provider.");
   }
 
   let message: string | null = null;
@@ -664,6 +664,12 @@ export async function voidContract(formData: FormData): Promise<void> {
  * while DocuRide is being tested). fni-contract-submit's lock refuses a second
  * submit for the session while one is running.
  */
+/** The provider as the start of a sentence, by its record's name. */
+function providerSays(name: string | undefined): string {
+  const v = name?.trim() || "the provider";
+  return v.charAt(0).toUpperCase() + v.slice(1);
+}
+
 export async function submitContracts(formData: FormData): Promise<void> {
   const operator = await currentOperator();
   if (!operator) redirect(SESSIONS);
@@ -685,6 +691,8 @@ export async function submitContracts(formData: FormData): Promise<void> {
       /** Product by product: created, refused, or not known. */
       message?: string;
       partial?: boolean;
+      /** The provider record's name. */
+      provider_name?: string;
       cobuyer_probe?: { batch: string | number } | null;
     }>({
       session_id: sessionId,
@@ -703,7 +711,7 @@ export async function submitContracts(formData: FormData): Promise<void> {
       ? `These products were already submitted: ${numbers}. Nothing new was sent.`
       : partial && done.message
         ? `${done.message} Get the document for each contract created.`
-        : `Submitted. TecAssured returned ${done.contract_count ?? 0} ${done.contract_count === 1 ? "contract" : "contracts"}: ${numbers}. Get each document next.`;
+        : `Submitted. ${providerSays(done.provider_name)} returned ${done.contract_count ?? 0} ${done.contract_count === 1 ? "contract" : "contracts"}: ${numbers}. Get each document next.`;
     if (done.cobuyer_probe) {
       detail +=
         ` Phone and co-buyer field test sent (${done.cobuyer_probe.batch === "All" ? "all fields" : `batch ${done.cobuyer_probe.batch}`}).` +

@@ -25,7 +25,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
-import { offerRowsFor, tecAssuredAccount } from "../_shared/provider-rows.ts";
+import { offerRowsFor, tecAssuredAccount, tecAssuredProviderName } from "../_shared/provider-rows.ts";
 import { hostOf, QA_HOST } from "../_shared/contract-guard.ts";
 import { currentRows, familiesFromRows, ratingSummary, type RatingRow } from "../_shared/rating-summary.ts";
 import { menuFor, ratingDeal } from "../_shared/rate-session.ts";
@@ -374,13 +374,15 @@ async function liveContracts(
 async function requiredFor(
   supabase: SupabaseClient,
   storeId: string,
-  vtype: unknown
+  vtype: unknown,
+  /** The provider record's name, for the reasons staff read. */
+  vendor = "the provider"
 ): Promise<{ properties: string[]; reason: string | null }> {
   if (typeof vtype !== "string" || vtype.trim() === "") {
     return {
       properties: [],
       reason:
-        "This unit has no TecAssured vehicle type, so there is no list of " +
+        `This unit has no ${vendor} vehicle type, so there is no list of ` +
         "fields to check. The deal's body type is either blank or not one we map.",
     };
   }
@@ -390,7 +392,7 @@ async function requiredFor(
   if (!account) {
     return {
       properties: [],
-      reason: "This store has no active TecAssured mapping, so nothing can be rated for it.",
+      reason: `This store has no active ${vendor} mapping, so nothing can be rated for it.`,
     };
   }
 
@@ -404,7 +406,7 @@ async function requiredFor(
     return {
       properties: [],
       reason:
-        `We have not yet asked TecAssured what it needs to rate a ${vtype} for ` +
+        `We have not yet asked ${vendor} what it needs to rate a ${vtype} for ` +
         `this store. Press Refresh, or wait for tonight's refresh.`,
     };
   }
@@ -432,9 +434,12 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
   const deal = ratingDeal({ ...edited, store_id: s.store_id });
   const menu = await menuFor(supabase, s.tenant_id as string, deal);
   const needsTecAssured = menu.providers.some((p) => p.adapter === "TecAssured");
+  // The name staff know the contract provider by, from its record, so no
+  // label or message on Details has a provider's name written in.
+  const providerName = await tecAssuredProviderName(supabase, s.tenant_id).catch(() => null);
 
   const { properties: taProperties, reason: taReason } = needsTecAssured
-    ? await requiredFor(supabase, s.store_id as string, edited.vehicle_type_code)
+    ? await requiredFor(supabase, s.store_id as string, edited.vehicle_type_code, providerName ?? undefined)
     : { properties: [] as string[], reason: null };
 
   const sheetInputs = await Promise.all(
@@ -490,6 +495,9 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
       deal_type: dealTypeLabel(edited.finance_type),
       vehicle_type_code: edited.vehicle_type_code,
     },
+    // The contract provider's name from its record ("Riders Advantage"), or
+    // null when the tenant has none. The page names the provider with it.
+    provider_name: providerName,
     verification: {
       state: s.verification_state ?? "Needs Verification",
       verified_at: s.verified_at ?? null,
@@ -1086,12 +1094,14 @@ async function verify(
   s: Record<string, unknown>,
   verifiedBy: string
 ): Promise<Response> {
+  const vendor = (await tecAssuredProviderName(supabase, s.tenant_id).catch(() => null)) ?? "the provider";
   const edits = parseStaffEdits(s.staff_edits);
   const edited = applyStaffEdits(s, edits, editTargetFor);
   const { properties, reason } = await requiredFor(
     supabase,
     s.store_id as string,
-    edited.vehicle_type_code
+    edited.vehicle_type_code,
+    vendor
   );
   const sheet = buildVerification(s as unknown as VerificationSource, properties, edits);
 
@@ -1104,7 +1114,7 @@ async function verify(
         ? `These edits could not be read, so they are not in force: ` +
           `${sheet.invalid.map((f) => f.label).join(", ")}. Correct them before verifying.`
         : reason ??
-          `Not every field TecAssured asks for has a value yet: ` +
+          `Not every field ${vendor} asks for has a value yet: ` +
           `${sheet.missing.map((f) => f.label).join(", ")}.`,
       missing: sheet.missing.map((f) => ({ key: f.key, label: f.label })),
       invalid: sheet.invalid.map((f) => ({ key: f.key, label: f.label })),

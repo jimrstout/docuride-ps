@@ -978,6 +978,16 @@ the next place to look.
   "Open presentation" both use `target="_blank"` with `rel="noopener"`. The
   staff page stays where it was, so one person can work several deals at once.
 
+- **No provider names written in** (2026-10-28). The button reads "Submit
+  contracts". No label, button or message on Details, its components or the
+  submit flow names a provider in its text. Where a name is needed (Void,
+  Submit Status Unknown, the test session banner, submit results and
+  refusals), it is the provider record's name (`fni.providers.name`), sent by
+  fni-session-verify as `provider_name` and used by fni-contract-submit for
+  its messages; without one the words say "the provider". Product names are
+  the provider's own and are shown as they come. A test
+  (`test/no-provider-branding.test.mjs`) sweeps those files.
+
 ## 19. Showing when the system is working
 
 Rating, refreshing from the CRM, submitting and voiding take seconds, and the

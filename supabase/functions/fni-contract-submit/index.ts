@@ -53,7 +53,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
-import { offerRowsFor, tecAssuredRow } from "../_shared/provider-rows.ts";
+import { offerRowsFor, tecAssuredProviderName, tecAssuredRow } from "../_shared/provider-rows.ts";
 import {
   buildSubmitQuote,
   str,
@@ -195,6 +195,9 @@ serve(async (req: Request) => {
   let lockToken: string | null = null;
   let lockHeld = false;
   let providerWasCalled = false;
+  // The provider these contracts go to, by its record's name, for every
+  // message below and in the catch. No message has a provider's name written in.
+  let vendor = "the provider";
 
   /** Put the session back to Idle. Used on every path that did not reach the
    *  provider, and on the ones that reached it and got a clear answer. */
@@ -273,7 +276,9 @@ serve(async (req: Request) => {
     // concurrent requests that each pass every read-only check before either
     // writes anything. So the lock is taken with a conditional UPDATE, which
     // Postgres applies atomically: of two requests, exactly one gets a row back.
-    const refusal = submitRefusal(session as unknown as SubmitLockState);
+    vendor = (await tecAssuredProviderName(supabase, session.tenant_id).catch(() => null)) ?? vendor;
+
+    const refusal = submitRefusal(session as unknown as SubmitLockState, Date.now(), vendor);
     if (refusal) {
       return json(409, {
         error: refusal,
@@ -319,6 +324,7 @@ serve(async (req: Request) => {
     if (!ratedOffer) {
       return await refuse(400, { error: "No rated offer found for this session. Rate the vehicle first." });
     }
+    vendor = ratedOffer.provider?.name ?? vendor;
 
     // ── Step 3: Which login, which Dealer ID ───────────────────────────
     let store;
@@ -333,7 +339,7 @@ serve(async (req: Request) => {
     // While DocuRide is being tested a contract may go only to TecAssured's
     // QA server, and only for a cleared deal or a test session. Checked
     // before anything is sent. See _shared/contract-guard.ts.
-    const notCleared = contractCallRefusal(session, credentials.api_base_url, "submitted");
+    const notCleared = contractCallRefusal(session, credentials.api_base_url, "submitted", vendor);
     if (notCleared) return await refuse(403, { error: notCleared });
 
     // ── Step 3c: The deal's dates ──────────────────────────────────────
@@ -543,7 +549,7 @@ serve(async (req: Request) => {
         error:
           "This deal already has a live contract for " +
           changedMind.map((c) => describeContract(c.contract)).join(", ") +
-          ", on a different rate than the one selected. Void it in TecAssured " +
+          `, on a different rate than the one selected. Void it with ${vendor} ` +
           "first, then submit again. There must never be two live contracts for " +
           "the same product on one deal.",
         must_void_first: changedMind.map((c) => ({
@@ -676,7 +682,8 @@ serve(async (req: Request) => {
     // Unknown.
     const reading = readSubmitResponse(
       response,
-      toSubmit.map((r) => ({ rateUniqueId: r.rateUniqueId, productName: r.productName }))
+      toSubmit.map((r) => ({ rateUniqueId: r.rateUniqueId, productName: r.productName })),
+      vendor
     );
 
     if (reading.refusedOutright) {
@@ -751,8 +758,8 @@ serve(async (req: Request) => {
       );
       return json(500, {
         error:
-          "Contracts were submitted to TecAssured but the agreement could not be recorded. " +
-          "Do not retry; the contracts may already exist. Staff must check TecAssured " +
+          `Contracts were submitted to ${vendor} but the agreement could not be recorded. ` +
+          `Do not retry; the contracts may already exist. Staff must check with ${vendor} ` +
           "before this session can submit again.",
         detail: agreementErr?.message,
         submit_state: "Submit Status Unknown",
@@ -802,8 +809,8 @@ serve(async (req: Request) => {
       );
       return json(500, {
         error:
-          "Contracts were submitted to TecAssured but the selections could not be recorded. " +
-          "Do not retry; the contracts may already exist. Staff must check TecAssured " +
+          `Contracts were submitted to ${vendor} but the selections could not be recorded. ` +
+          `Do not retry; the contracts may already exist. Staff must check with ${vendor} ` +
           "before this session can submit again.",
         detail: selErr?.message,
         submit_state: "Submit Status Unknown",
@@ -900,8 +907,8 @@ serve(async (req: Request) => {
         );
         return json(500, {
           error:
-            "Contracts were submitted to TecAssured but could not be recorded. " +
-            "Do not retry; the contracts may already exist. Staff must check TecAssured " +
+            `Contracts were submitted to ${vendor} but could not be recorded. ` +
+            `Do not retry; the contracts may already exist. Staff must check with ${vendor} ` +
             "before this session can submit again.",
           detail: prodErr.message,
           submit_state: "Submit Status Unknown",
@@ -939,6 +946,8 @@ serve(async (req: Request) => {
       status: "Agreement Created",
       // Product by product: created, refused, or not known.
       message: reading.message,
+      // The provider record's name, for the console's own line.
+      provider_name: vendor,
       // TEMPORARY: which markers went out, to read the contract against.
       ...(probe.kind === "On" ? { cobuyer_probe: { batch: probe.batch, markers: probeMarkers } } : {}),
       products: reading.products,
@@ -989,9 +998,9 @@ serve(async (req: Request) => {
         await markUnknown(`The submit call failed after reaching the provider: ${message}`);
         return json(500, {
           error:
-            "The submit reached TecAssured but we never learned the outcome: " +
+            `The submit reached ${vendor} but we never learned the outcome: ` +
             message +
-            ". It may have created contracts. Staff must check TecAssured before " +
+            `. It may have created contracts. Staff must check with ${vendor} before ` +
             "this session can submit again. Nothing will be retried automatically.",
           submit_state: "Submit Status Unknown",
         });
