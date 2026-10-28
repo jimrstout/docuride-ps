@@ -35,6 +35,7 @@ import {
   VERIFY_FLASH_OPTIONS,
   encodeVerifyFlash,
 } from "@/lib/verify-flash";
+import { partyEntries } from "@/lib/contract-parties";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -459,6 +460,55 @@ export async function setPlannedSaleDate(formData: FormData): Promise<void> {
     (session_id) => ({ session_id, action: "planned_sale_date", value }),
     value === "" ? "plannedcleared" : "planned"
   );
+}
+
+// ── Who goes on the contracts ─────────────────────────────────────────────
+//
+// The buyer, co-buyer and lienholder panels on Details. Signed-in operators
+// only: these are names, addresses and phone numbers, and the page shows them
+// only to an operator. Each change is a staff edit with the person's name on
+// it (supabase/functions/_shared/contract-parties.ts).
+
+async function partyAction(
+  formData: FormData,
+  body: (sessionId: string) => Record<string, unknown>,
+  onOk: string
+): Promise<void> {
+  const sessionId = String(formData.get("session_id") ?? "");
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
+  const operator = await currentOperator();
+  if (!operator) return backToVerify(sessionId, "refused", "Sign in to change who goes on the contracts.");
+  const who = (await checkerFor(formData)) || operator.email;
+  await verifyAction(formData, (session_id) => ({ ...body(session_id), edited_by: who }), onOk);
+}
+
+export async function savePartyFields(formData: FormData): Promise<void> {
+  await partyAction(formData, (session_id) => ({ session_id, action: "party_save", entries: partyEntries(formData) }), "partysaved");
+}
+
+export async function removeParty(formData: FormData): Promise<void> {
+  const party = String(formData.get("party") ?? "");
+  if (formData.get("confirm") !== "1") {
+    const sessionId = String(formData.get("session_id") ?? "");
+    if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
+    return backToVerify(sessionId, "refused", `Tick the box to confirm removing the ${party.toLowerCase()}.`);
+  }
+  await partyAction(formData, (session_id) => ({ session_id, action: "party_remove", party }), "partyremoved");
+}
+
+export async function restoreParty(formData: FormData): Promise<void> {
+  const party = String(formData.get("party") ?? "");
+  await partyAction(formData, (session_id) => ({ session_id, action: "party_restore", party }), "partyrestored");
+}
+
+export async function keepStaffValue(formData: FormData): Promise<void> {
+  const key = String(formData.get("key") ?? "");
+  await partyAction(formData, (session_id) => ({ session_id, action: "party_keep_staff", key }), "partykept");
+}
+
+export async function useCrmValue(formData: FormData): Promise<void> {
+  const key = String(formData.get("key") ?? "");
+  await partyAction(formData, (session_id) => ({ session_id, action: "party_use_crm", key }), "partycrm");
 }
 
 /** Clear the planned sale date: the session stays open to the end of today. */

@@ -21,6 +21,14 @@
 
 export const VERIFY_FLASH_COOKIE = "docuride_verify_flash";
 
+/**
+ * Said after any change to who goes on the contracts. The same sentence as
+ * DX1_REMINDER in lib/contract-parties.ts; a test holds the two together. Not
+ * imported, so this file stays free of imports and Node tests can load it.
+ */
+const DX1_REMINDER =
+  "This changes what prints on the service contracts. Make the same change in DX1 so the finance contract matches.";
+
 export const VERIFY_FLASH_OPTIONS = {
   httpOnly: true,
   sameSite: "lax",
@@ -131,6 +139,16 @@ export function flashMessage(
       return { tone: "ok", text: "Decoded from the VIN." };
     case "refreshed":
       return { tone: "ok", text: "Re-pulled from CRM." };
+    case "partysaved":
+      return { tone: "ok", text: `Saved. ${DX1_REMINDER}` };
+    case "partyremoved":
+      return { tone: "ok", text: `Removed. ${DX1_REMINDER}` };
+    case "partyrestored":
+      return { tone: "ok", text: `Put back as the CRM has it. ${DX1_REMINDER}` };
+    case "partykept":
+      return { tone: "ok", text: "Kept the staff value." };
+    case "partycrm":
+      return { tone: "ok", text: `Now using the CRM value. ${DX1_REMINDER}` };
     case "planned":
       return { tone: "ok", text: "Planned sale date saved. This deal stays open until the end of that day." };
     case "plannedcleared":

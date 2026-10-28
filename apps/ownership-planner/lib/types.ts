@@ -512,6 +512,8 @@ export interface VerifySheet {
     sale_date: string | null;
     submit_problem: string | null;
   };
+  /** Who goes on the contracts (supabase/functions/_shared/contract-parties.ts). */
+  contract_parties?: ContractParties;
   fields: VerifyField[];
   missing: VerifyField[];
   ready: boolean;
@@ -757,4 +759,49 @@ export interface ContractsPanel {
   }[];
   /** Held documents not in the Deal Jacket yet, voided ones included. */
   waiting_count: number;
+}
+
+// ── Who goes on the contracts ──────────────────────────────────────────────
+// As supabase/functions/_shared/contract-parties.ts builds it.
+
+export type PartyName = "Buyer" | "Co-buyer" | "Lienholder";
+
+export interface PartyField {
+  key: string;
+  label: string;
+  input: "text" | "type" | "state" | "zip" | "phone" | "email";
+  value: string | null;
+  crm_value: string | null;
+  edited: boolean;
+  was: string | null;
+  edited_by: string | null;
+  edited_at: string | null;
+  crm_changed: boolean;
+  missing: string | null;
+}
+
+export interface Party {
+  party: PartyName;
+  present: boolean;
+  in_crm: boolean;
+  removed: { by: string; at: string } | null;
+  business: boolean;
+  heading: string | null;
+  fields: PartyField[];
+  missing: string[];
+}
+
+export interface PartyChange {
+  key: string;
+  party: PartyName;
+  label: string;
+  was: string | null;
+  now: string | null;
+}
+
+export interface ContractParties {
+  parties: Party[];
+  locked: boolean;
+  lock_reason: string | null;
+  changes: PartyChange[];
 }
