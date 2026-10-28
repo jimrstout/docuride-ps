@@ -10,6 +10,8 @@
 //
 //   cobuyerFirstName / cobuyerLastName   the second contract holder line
 //                                        (VLBT3440876-42153, VLBT3440876-42274)
+//   buyerHomePhone                       the buyer telephone, digits only
+//                                        (probe key P04, VLBT3440876-42274)
 //
 // Pure, so a Node test can hold it.
 
@@ -37,4 +39,16 @@ export function cobuyerKeys(party: Record<string, unknown>): Record<string, stri
   const last = text(party.cobuyer_last_name);
   if (first || last) return { cobuyerFirstName: first, cobuyerLastName: last };
   return display ? { cobuyerFirstName: "", cobuyerLastName: display } : {};
+}
+
+/**
+ * buyerHomePhone, the buyer's phone as digits only, or nothing when there is
+ * none. The probe sent ten digits (3045550104) and the contract printed
+ * (304) 555-0104, so formatting is stripped, and a leading US country code 1
+ * on an eleven-digit number is dropped to leave the ten.
+ */
+export function buyerPhoneKeys(party: Record<string, unknown>): Record<string, string> {
+  let digits = text(party.buyer_phone).replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+  return digits ? { buyerHomePhone: digits } : {};
 }

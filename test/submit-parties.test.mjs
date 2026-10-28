@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { cobuyerKeys } from "../supabase/functions/_shared/submit-parties.ts";
+import { buyerPhoneKeys, cobuyerKeys } from "../supabase/functions/_shared/submit-parties.ts";
 import { applyStaffEdits, parseStaffEdits } from "../supabase/functions/_shared/staff-edits.ts";
 import { REMOVED } from "../supabase/functions/_shared/contract-parties.ts";
 
@@ -53,4 +53,26 @@ test("the submit adds them to the quote from the contract parties", () => {
   assert.match(submit, /const party = applyStaffEdits\(session as Record<string, unknown>, parseStaffEdits\(session\.staff_edits\)\)[^\n]*\n[\s\S]*?Object\.assign\(submitQuote, cobuyerKeys\(party\)\);/);
   // Added before the dates are aligned and the call is made.
   assert.ok(submit.indexOf("cobuyerKeys(party)") < submit.indexOf("client.submitContractDetailed(submitPayload)"));
+});
+
+test("the buyer phone is sent digits only under buyerHomePhone", () => {
+  assert.deepEqual(buyerPhoneKeys(party(DEAL)), { buyerHomePhone: "3045550199" });
+});
+
+test("phone formatting is stripped", () => {
+  for (const v of ["(304) 555-0199", "304.555.0199", "304 555 0199", "+1 304-555-0199", "1-304-555-0199", " 3045550199 "]) {
+    assert.deepEqual(buyerPhoneKeys({ buyer_phone: v }), { buyerHomePhone: "3045550199" }, v);
+  }
+});
+
+test("no phone omits the key", () => {
+  for (const v of [null, undefined, "", "   ", "n/a"]) assert.deepEqual(buyerPhoneKeys({ buyer_phone: v }), {}, String(v));
+});
+
+test("the staff phone wins over the CRM phone", () => {
+  const p = party(DEAL, { buyer_phone: edit("304-555-0177", "304-555-0199") });
+  assert.deepEqual(buyerPhoneKeys(p), { buyerHomePhone: "3045550177" });
+  const submit = src("supabase/functions/fni-contract-submit/index.ts");
+  assert.match(submit, /const party = applyStaffEdits\([^\n]*\n[\s\S]*?Object\.assign\(submitQuote, buyerPhoneKeys\(party\)\);/);
+  assert.ok(submit.indexOf("buyerPhoneKeys(party)") < submit.indexOf("client.submitContractDetailed(submitPayload)"));
 });
