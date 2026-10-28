@@ -1090,12 +1090,37 @@ with today at the store:
   ..." with Keep staff value and Use CRM value, as on the contract panels.
   Keeping records which CRM date was kept over, so it is not asked again until
   the CRM changes.
-- The sale date is sent in the rate request, so a move marks the rated offers
-  out of date (kept, prices unchanged) and a verified deal goes back through
-  Confirm and Continue. Submit already refused only off the sale day; it now
-  also refuses an out-of-date rating, or one rated on a different sale date
-  than the deal now has, so the quote's dates are never quietly realigned over
-  a re-rate. Details disables Submit and says why.
+- The sale date is sent in the rate request. A move into another calendar
+  month or year marks the rated offers out of date (kept, prices unchanged)
+  and a verified deal goes back through Confirm and Continue. Submit refuses
+  an out-of-date rating, or one rated on a sale date in another month, and
+  Details disables Submit and says why.
+- **Within the same month the rating stands** (2026-10-28, Jim's rule: rate
+  cards change at month boundaries). A sale date moved within its month keeps
+  the offers current and the deal verified; the move's session event is still
+  written, with `rerate_needed: false`. Submit sends the stored quote with the
+  deal's current dates (`alignContractDates`), as it did before PR 51. The same
+  rule applies wherever a moved sale date used to mark the rating: Renew for
+  Today, a sale date edited on Details or changed by Refresh from CRM or Use
+  CRM value, and a relaunch from the CRM button (`saleDateMoveNeedsRerate`,
+  `onlySameMonthSaleDateMove`, `_shared/sale-date.ts`).
+  - The month is the date's own; the store's time zone decides it through
+    "today", the day Renew moves a date to.
+  - A Price Sheet provider's sheet can start or end on any day, so a move
+    across a Published sheet's first day, or the day after its last, counts as
+    a boundary too. If the sheets cannot be read, a re-rate is required.
+    (Price sheet eligibility counts calendar months and model years, so a
+    within-month move cannot change it.)
+  - A New unit's in-service date follows its sale date and moves with it; any
+    other rating input moving at the same time is handled as before.
+  - A rating already out of date for another reason stays out of date. Nothing
+    on these paths marks an offer current, and existing sessions are not
+    changed: one already marked (deal 15029) stays so until it is re-rated.
+  - A re-rate that fails still compares its whole request with the kept
+    offers' request (`keptStillCurrent`, `_shared/rerate.ts`), so a sale date
+    differing within the month there leaves the kept offers out of date. This
+    is the safe direction and rarely reached, since a same-month move no
+    longer sends a deal back to be rated.
 
 ## 21. Who goes on the contracts
 

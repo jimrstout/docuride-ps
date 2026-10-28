@@ -148,6 +148,89 @@ export function keepStaffSaleDate(edit: StaffEdit, crmSaleDate: unknown, who: st
   return { ...edit, crm_kept: isoDate(crmSaleDate), edited_by: who, edited_at: now };
 }
 
+// ── Within the month, the rating stands (2026-10-28) ──────────────────────
+//
+// Jim's rule: rate cards change at month boundaries, so a sale date moved
+// within the same calendar month does not need a re-rate. A move into another
+// month or year does. Sale dates are calendar days, so the month is the
+// date's own; the store's time zone decides it through "today", which is
+// where Renew for Today moves a date to (storeToday).
+//
+// A Price Sheet provider's sheet can start or end on any day, so a move
+// across one of those days is treated like a month boundary: the sheet in
+// force, and so the price, may differ (_shared/price-sheet-rows.ts).
+
+/** "2026-10" for any date in October 2026, or null. */
+export function monthOf(v: unknown): string | null {
+  return isoDate(v)?.slice(0, 7) ?? null;
+}
+
+/** The day after an ISO date. */
+function dayAfter(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * The days on which a price sheet takes over or stops: each sheet's first
+ * day, and the day after its last.
+ */
+export function priceSheetBoundaries(sheets: { effective_from: string; effective_to: string | null }[]): string[] {
+  const out = new Set<string>();
+  for (const sh of sheets) {
+    const from = isoDate(sh.effective_from);
+    if (from) out.add(from);
+    const to = isoDate(sh.effective_to);
+    if (to) out.add(dayAfter(to));
+  }
+  return [...out].sort();
+}
+
+/**
+ * Does moving the sale date from one day to another need a re-rate? Yes when
+ * the month or year differs, when a price sheet boundary lies between them,
+ * or when either is missing and they differ. `boundaries` null means they
+ * could not be read, and the safe answer is yes.
+ */
+export function saleDateMoveNeedsRerate(
+  from: unknown,
+  to: unknown,
+  boundaries: string[] | null = []
+): boolean {
+  const a = isoDate(from);
+  const b = isoDate(to);
+  if (a === b) return false;
+  if (a === null || b === null) return true;
+  if (monthOf(a) !== monthOf(b)) return true;
+  if (boundaries === null) return true;
+  const [lo, hi] = a < b ? [a, b] : [b, a];
+  return boundaries.some((d) => d > lo && d <= hi);
+}
+
+/**
+ * The rating inputs that moved are only the sale date, within the month, and
+ * the in-service date following it (a New unit's in-service date is its sale
+ * date). Such a move leaves the deal verified and its rating current; anything
+ * else in the list is handled as before. Values are as the sheet shows them.
+ */
+export function onlySameMonthSaleDateMove(
+  changed: string[],
+  before: Record<string, string | null> | null | undefined,
+  after: Record<string, string | null>,
+  boundaries: string[] | null = []
+): boolean {
+  if (!before || !changed.includes("sale_date")) return false;
+  if (!changed.every((k) => k === "sale_date" || k === "in_service_date")) return false;
+  if (changed.includes("in_service_date")) {
+    const followed =
+      isoDate(before.in_service_date) === isoDate(before.sale_date) &&
+      isoDate(after.in_service_date) === isoDate(after.sale_date);
+    if (!followed) return false;
+  }
+  return !saleDateMoveNeedsRerate(before.sale_date, after.sale_date, boundaries);
+}
+
 export const RATING_OUT_OF_DATE =
   "The rating is out of date because something it was rated on has changed, such as the sale date. " +
   "Press Confirm and Continue on Details to rate the deal again before submitting.";
@@ -155,11 +238,13 @@ export const RATING_OUT_OF_DATE =
 /**
  * Why the rated offer cannot be submitted, or null.
  *
- * Out of date (a rating input moved after it was rated), or rated on a
- * different sale date than the deal now has. The second catches a moved date
- * even where nothing marked the offer out of date. An offer rated before rate
- * requests carried the sale date has none to compare, and only the first
- * check applies to it.
+ * Out of date (a rating input moved after it was rated), or rated on a sale
+ * date in a different calendar month or year than the deal now has. The
+ * second catches a moved date even where nothing marked the offer out of
+ * date. Within the same month the rating stands, and the submit sends the
+ * quote with the deal's current dates (alignContractDates), as it did before.
+ * An offer rated before rate requests carried the sale date has none to
+ * compare, and only the first check applies to it.
  */
 export function staleRatingProblem(
   offer: { out_of_date?: boolean | null; request_payload?: unknown },
@@ -168,10 +253,11 @@ export function staleRatingProblem(
   if (offer.out_of_date === true) return RATING_OUT_OF_DATE;
   const req = offer.request_payload;
   const rated = req && typeof req === "object" ? fromTecAssuredDate((req as Record<string, unknown>).saleDate) : null;
-  if (rated !== null && rated !== saleDate) {
+  if (rated !== null && saleDateMoveNeedsRerate(rated, saleDate)) {
     return (
-      `The deal was rated with a sale date of ${dayLabel(rated)}, and its sale date is now ${dayLabel(saleDate)}. ` +
-      `Press Confirm and Continue on Details to rate the deal again before submitting.`
+      `The deal was rated with a sale date of ${dayLabel(rated)}, and its sale date is now ${dayLabel(saleDate)}, ` +
+      `in another month. Rates can change from one month to the next, so press Confirm and Continue on Details ` +
+      `to rate the deal again before submitting.`
     );
   }
   return null;

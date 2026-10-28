@@ -37,6 +37,8 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { getRecord, ZohoRecord } from "../_shared/zoho.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { tecAssuredAccount } from "../_shared/provider-rows.ts";
+import { publishedSheetDates } from "../_shared/price-sheet-rows.ts";
+import { onlySameMonthSaleDateMove, priceSheetBoundaries } from "../_shared/sale-date.ts";
 import { crmRatingFields } from "../_shared/crm-fields.ts";
 import { mapSession, testRecordPatch, text } from "../_shared/session-map.ts";
 import {
@@ -317,7 +319,19 @@ async function ratingInputsChanged(
     buildVerification(session as unknown as VerificationSource, properties)
   );
 
-  return changedInputs(before, after);
+  const changed = changedInputs(before, after);
+
+  // Rate cards change at month boundaries: a sale date the CRM moved within
+  // the month it was rated on leaves the deal verified and its rating
+  // current, as on Details (_shared/sale-date.ts).
+  if (changed.includes("sale_date")) {
+    const sheets = await publishedSheetDates(supabase, session.tenant_id);
+    if (onlySameMonthSaleDateMove(changed, before, after, sheets === null ? null : priceSheetBoundaries(sheets))) {
+      return [];
+    }
+  }
+
+  return changed;
 }
 
 // ─── Main handler ────────────────────────────────────────────────────────
