@@ -16,6 +16,12 @@
 // send again. While it runs the modal cannot be closed. When the submit has
 // answered, the modal closes and the result is shown on the page.
 //
+// A voided contract spends the rate it was made from (supabase/functions/
+// _shared/spent-rates.ts). Then Submit contracts first refreshes the rating
+// (refreshSpentRates), and the page comes back with the modal open: with the
+// note that prices are unchanged, or, when any changed, each difference and
+// Confirm Submit disabled. A refresh never submits.
+//
 // On a phone the modal fits the screen: the product list scrolls inside it and
 // the buttons stay in view (app/globals.css, .vconfirm).
 
@@ -26,7 +32,7 @@ import { Working, useWorking } from "@/components/Working";
 import { DX1_CONFIRMATION } from "@/lib/contract-parties";
 import { SUBMIT_LEAVE } from "@/lib/working";
 import type { PartyChange, SubmitConfirmation } from "@/lib/types";
-import { submitContracts } from "@/app/console-actions";
+import { refreshSpentRates, submitContracts } from "@/app/console-actions";
 
 export default function SubmitConfirm({
   sessionId,
@@ -34,6 +40,7 @@ export default function SubmitConfirm({
   changes,
   blocked,
   note = null,
+  autoOpen = false,
   children,
 }: {
   sessionId: string;
@@ -47,6 +54,8 @@ export default function SubmitConfirm({
    * blocking: an out-of-date rating on a test session (lib/submit-check.ts).
    */
   note?: string | null;
+  /** Open the modal as the page loads: a refresh has just answered. */
+  autoOpen?: boolean;
   /** Anything else the form sends, shown on the page beside the button. */
   children?: React.ReactNode;
 }) {
@@ -57,6 +66,10 @@ export default function SubmitConfirm({
   const area = useWorking();
   const busy = !!area?.running && area.running.form === form.current && form.current !== null;
   const needsDx1 = changes.length > 0;
+  const held = confirmation.held ?? null;
+  // A spent rate is refreshed before the modal opens, unless a refresh has
+  // already held the submit.
+  const refreshFirst = (confirmation.spent?.length ?? 0) > 0 && !held;
 
   // The submit has answered: close the modal, so the result shows on the page.
   const wasBusy = useRef(false);
@@ -73,6 +86,11 @@ export default function SubmitConfirm({
     dialog.current?.showModal();
     setOpen(true);
   };
+  useEffect(() => {
+    if (autoOpen && !blocked && !refreshFirst) show();
+    // Once, as the page loads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const cancel = () => {
     if (!busy) dialog.current?.close();
   };
@@ -87,9 +105,22 @@ export default function SubmitConfirm({
       ) : note ? (
         <p className="vsubmit-note" role="status">{note}</p>
       ) : null}
-      <button type="button" className="btn" onClick={show} disabled={!!blocked} aria-haspopup="dialog">
-        Submit contracts
-      </button>
+      {refreshFirst ? (
+        <PendingButton
+          className="btn"
+          working="page"
+          pending="Refreshing the rating..."
+          formAction={refreshSpentRates}
+          formNoValidate
+          disabled={!!blocked}
+        >
+          Submit contracts
+        </PendingButton>
+      ) : (
+        <button type="button" className="btn" onClick={show} disabled={!!blocked} aria-haspopup="dialog">
+          Submit contracts
+        </button>
+      )}
 
       <dialog
         ref={dialog}
@@ -103,6 +134,18 @@ export default function SubmitConfirm({
       >
         <div className="vconfirm-body">
           <SubmitSummary confirmation={confirmation} changes={changes} note={note} titleId="vconfirm-title" />
+          {held ? (
+            <div className="console-flash console-flash--bad vconfirm-held" role="alert">
+              <p>{held.message}</p>
+              <ul className="vdx1-list">
+                {held.differences.map((d) => (
+                  <li key={d}>{d}</li>
+                ))}
+              </ul>
+            </div>
+          ) : confirmation.refresh_note ? (
+            <p className="vsubmit-note" role="status">{confirmation.refresh_note}</p>
+          ) : null}
           {needsDx1 ? (
             <label className="vdx1-confirm vconfirm-dx1">
               <input
@@ -126,7 +169,7 @@ export default function SubmitConfirm({
             working="page"
             pending="Submitting contracts..."
             leave={SUBMIT_LEAVE}
-            disabled={!open || !!blocked || (needsDx1 && !ticked)}
+            disabled={!open || !!blocked || !!held || (needsDx1 && !ticked)}
           >
             Confirm Submit
           </PendingButton>

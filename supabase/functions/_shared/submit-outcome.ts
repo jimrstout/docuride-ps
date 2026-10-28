@@ -17,6 +17,20 @@
 // product is not known, the session is parked at Submit Status Unknown and
 // staff are told in plain English which ones, so nothing is guessed.
 //
+// ── A top-level error with no contract number is a refusal (2026-10-28) ──
+// Deal 15029, 18:26 UTC: a rate whose contract had been voided was sent
+// again, and the answer was HTTP 200 with
+//   {"error":" One or more of these products have been voided. Please re-rate
+//    and try again","contracts":[{"pdfLink":"RSAPI.ratessys-qa.com/final/",
+//    "productId":0,"rateUniqueId":"34347"}]}
+// The top-level error used to count only when there were no entries at all,
+// so this read as Not known and the session was parked at Submit Status
+// Unknown. An entry with no contract number (productId 0, an empty pdfLink)
+// is not paperwork, so now: a top-level error and no entry carrying a
+// contract number is a refusal of every product without its own answer.
+// When some entry does carry a number, those contracts are recorded as
+// before and the top-level error is shown beside them.
+//
 // Pure, so a Node test holds the rules.
 
 import { refusalInPlainEnglish, sentenceStart } from "./price-cap.ts";
@@ -71,6 +85,7 @@ export function readSubmitResponse(response: unknown, asked: AskedProduct[], ven
   );
 
   const created = entries.filter((c) => text(c.contractNumber) !== "" && text(c.error) === "");
+  const anyNumber = entries.some((c) => text(c.contractNumber) !== "");
   const refused = entries.filter((c) => text(c.error) !== "");
   const rateOf = (c: Record<string, unknown>) => text(c.rateUniqueId ?? c.rateUnique);
   const askedRates = new Set(asked.map((a) => a.rateUniqueId));
@@ -99,9 +114,10 @@ export function readSubmitResponse(response: unknown, asked: AskedProduct[], ven
         line: `${a.productName}: not created. ${refusalInPlainEnglish(no.error, a.productName, vendor)}`,
       };
     }
-    // A clear refusal of the whole call, with no entries at all, is a no for
-    // every product: TecAssured declined before creating anything.
-    if (entries.length === 0 && topError !== "") {
+    // A top-level error, and no entry carrying a contract number, is a no
+    // for every product: TecAssured declined before creating anything. An
+    // entry with no number (productId 0) is not paperwork.
+    if (!anyNumber && topError !== "") {
       return {
         product_name: a.productName,
         rate_unique_id: a.rateUniqueId,
@@ -128,6 +144,11 @@ export function readSubmitResponse(response: unknown, asked: AskedProduct[], ven
   const refusedOutright = made === 0 && !unknown;
 
   const lines = products.map((p) => p.line);
+  // Contracts were created and the answer also carried a top-level error:
+  // they are recorded, and what the provider said is shown with them.
+  if (anyNumber && topError !== "") {
+    lines.push(`${who} also said: ${topError.replace(/[.\s]+$/, "")}.`);
+  }
   if (untied.length > 0) {
     lines.push(
       `${who} also returned ${plural(untied.length, "contract", "contracts")} we cannot match to a product we sent: ${untied.join(", ")}.`

@@ -41,6 +41,7 @@ import {
   VERIFY_FLASH_COOKIE,
   decodeVerifyFlash,
   flashMessage,
+  SUBMIT_OPEN_CODES,
 } from "@/lib/verify-flash";
 import {
   clearSubmitUnknown,
@@ -797,6 +798,8 @@ export default async function DetailsPage({
                 }}
                 changes={sheet.contract_parties?.changes ?? []}
                 note={submitNote}
+                // A refresh of a spent rating has just answered: open the modal.
+                autoOpen={!!decoded && SUBMIT_OPEN_CODES.includes(decoded.code)}
                 blocked={
                   submitBlocked ??
                   (sheet.contracts_panel.confirmation ? null : "The confirmation could not be loaded. Reload the page to submit.")

@@ -29,6 +29,19 @@ export const VERIFY_FLASH_COOKIE = "docuride_verify_flash";
 const DX1_REMINDER =
   "This changes what prints on the service contracts. Make the same change in DX1 so the finance contract matches.";
 
+/**
+ * Said after Submit contracts refreshed a spent rating. The same sentences as
+ * REFRESHED_NOTE and HELD_MESSAGE in supabase/functions/_shared/spent-rates.ts;
+ * a test holds them together.
+ */
+export const REFRESHED_NOTE =
+  "The rating was refreshed because an earlier contract was voided. Prices are unchanged.";
+export const HELD_MESSAGE =
+  "Prices changed since this deal was rated. Review the products on Details before submitting.";
+
+/** The codes after which the Submit confirmation opens by itself. */
+export const SUBMIT_OPEN_CODES = ["submitready", "spentrefreshed", "spentheld"];
+
 export const VERIFY_FLASH_OPTIONS = {
   httpOnly: true,
   sameSite: "lax",
@@ -105,7 +118,20 @@ export function flashMessage(
     return { tone: "bad", text: "Verified. The re-rate failed, and the last good offers are kept." };
   }
 
+  // The rating's banner holds the provider's error, with Show details and Copy error.
+  if (opts.ratingShown && flash.code === "refreshfailed") {
+    return { tone: "bad", text: "The rating could not be refreshed, so nothing was submitted. The provider's error is below." };
+  }
+
   switch (flash.code) {
+    case "submitready":
+      return { tone: "ok", text: "Review the products, then press Confirm Submit." };
+    case "spentrefreshed":
+      return { tone: "ok", text: REFRESHED_NOTE };
+    case "spentheld":
+      return { tone: "bad", text: HELD_MESSAGE };
+    case "refreshfailed":
+      return { tone: "bad", text: flash.detail ?? "The rating could not be refreshed, so nothing was submitted." };
     case "refused":
       return { tone: "bad", text: flash.detail ?? "Something went wrong. Try again." };
     case "rated":

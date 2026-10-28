@@ -91,9 +91,11 @@ test("Submit contracts opens the modal and sends nothing; only Confirm Submit se
   assert.match(m, /<button type="button" className="btn" onClick=\{show\} disabled=\{!!blocked\} aria-haspopup="dialog">\s*Submit contracts\s*<\/button>/);
   assert.match(m, /const show = \(\) => \{\s*setTicked\(false\);\s*dialog\.current\?\.showModal\(\);\s*setOpen\(true\);\s*\};/);
   // The one control that sends the form is Confirm Submit, and only while the modal is open.
-  assert.equal((m.match(/<PendingButton/g) ?? []).length, 1);
+  // The other is the spent-rate refresh, which sends to refreshSpentRates, never to submitContracts.
+  assert.equal((m.match(/<PendingButton/g) ?? []).length, 2);
+  assert.match(m, /<PendingButton\s+className="btn"\s+working="page"\s+pending="Refreshing the rating\.\.\."\s+formAction=\{refreshSpentRates\}/);
   assert.doesNotMatch(m, /type="submit"|requestSubmit|\.submit\(\)/);
-  assert.match(m, /disabled=\{!open \|\| !!blocked \|\| \(needsDx1 && !ticked\)\}\s*>\s*Confirm Submit\s*</);
+  assert.match(m, /disabled=\{!open \|\| !!blocked \|\| !!held \|\| \(needsDx1 && !ticked\)\}\s*>\s*Confirm Submit\s*</);
   assert.match(m, /<form action=\{submitContracts\} ref=\{form\} className="vsubmit">\s*<Working \/>/);
   const page = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
   assert.doesNotMatch(page, /<form action=\{submitContracts\}/);

@@ -27,7 +27,7 @@ test("deal 13437: a reported failure with two contracts created records both", (
   assert.equal(r.refusedOutright, false);
   assert.equal(r.unknown, false);
   assert.match(r.message, /^The provider created 2 of 3 contracts\. Tire and Wheel: not created\. The provider would not accept Tire and Wheel: it has no rate/);
-  assert.match(r.message, /Battery Plus: created, contract BAT-1\. Theft, Plan A: created, contract THF-1\.$/);
+  assert.match(r.message, /Battery Plus: created, contract BAT-1\. Theft, Plan A: created, contract THF-1\. The provider also said: We ran into error while submitting your request\.$/);
 });
 
 test("everything created reads as a plain success", () => {
