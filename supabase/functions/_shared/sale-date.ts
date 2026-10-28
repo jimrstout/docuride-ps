@@ -71,6 +71,36 @@ export function renewDateMoves(d: { sale: string | null; planned: string | null;
   return out;
 }
 
+/**
+ * Renewing would give the session longer: the end of the store's day (or of
+ * the planned sale date) is later than the expiry it has. Only then is the
+ * expiry written, so renewing a session already open to tonight leaves its
+ * open-until time as it is.
+ */
+export function renewExtends(expiresAt: string | null | undefined, renewTo: string | null | undefined): boolean {
+  if (!renewTo) return false;
+  const target = Date.parse(renewTo);
+  if (!Number.isFinite(target)) return false;
+  const current = typeof expiresAt === "string" ? Date.parse(expiresAt) : NaN;
+  return !Number.isFinite(current) || target > current;
+}
+
+/**
+ * Whether Renew for Today is offered, judged in the store's time zone: when
+ * it would give the session longer, or when it would move a past sale date or
+ * planned sale date to today. A session already open to tonight with
+ * yesterday's sale date still needs it, or that date can never be moved.
+ */
+export function renewOffered(d: {
+  expiresAt: string | null | undefined;
+  renewTo: string | null | undefined;
+  sale: string | null;
+  planned: string | null;
+  today: string;
+}): boolean {
+  return renewExtends(d.expiresAt, d.renewTo) || renewDateMoves(d).length > 0;
+}
+
 /** "Sale date moved from 27 Oct 2026 to 28 Oct 2026 by JS". */
 export function dateMoveEvent(m: DateMove, who: string): string {
   return `${m.label} moved from ${dayLabel(m.from)} to ${dayLabel(m.to)} by ${who}`;

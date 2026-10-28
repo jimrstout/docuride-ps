@@ -262,9 +262,10 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
             >
               Open
             </a>
-            {/* Renew for Today: to the end of the store's day, never more.
-                Shown only when it would give the session longer, so it cannot
-                stack the way +24h did. */}
+            {/* Renew for Today: to the end of the store's day, never more, so it
+                cannot stack the way +24h did. Shown when it would give the
+                session longer, or move a past sale date or planned sale date
+                to today (fni-admin-sessions decides, in the store's zone). */}
             {row.renewable ? (
               <form action={renewSession}>
                 <Working />

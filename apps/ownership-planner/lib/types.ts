@@ -284,7 +284,10 @@ export interface ConsoleSessionRow {
   };
   /** The day the deal is planned to be sold, when staff set one on Details. */
   planned_sale_date?: string | null;
-  /** Renew for Today would give the session longer: offered only then. */
+  /**
+   * Renew for Today is offered: it would give the session longer, or move a
+   * sale date or planned sale date that is before today at the store.
+   */
   renewable?: boolean;
   /** What Renew for Today would set: 23:59:59 on the store's day. */
   renew_to?: string | null;

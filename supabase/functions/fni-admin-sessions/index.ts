@@ -52,7 +52,14 @@ import { secretsMatch } from "../_shared/supabase.ts";
 import { currentRows, ratingSummary, type RatingFailure, type RatingRow } from "../_shared/rating-summary.ts";
 import { storeToday } from "../_shared/store-day.ts";
 import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
-import { dateMoveEvent, movedSaleDateEdit, renewDateMoves, renewedBy } from "../_shared/sale-date.ts";
+import {
+  dateMoveEvent,
+  movedSaleDateEdit,
+  renewDateMoves,
+  renewedBy,
+  renewExtends,
+  renewOffered,
+} from "../_shared/sale-date.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -201,16 +208,28 @@ async function list(url: URL): Promise<Response> {
 
   // ── What Renew for Today would do ─────────────────────────────────────
   // The end of the store's day (or of the planned sale date), from Postgres so
-  // it is the same moment the renew writes. Offered only when it is later than
-  // the expiry the session already has.
-  const renewTo = new Map<string, { renew_to: string; time_zone: string }>();
+  // it is the same moment the renew writes, and the store's today. Offered
+  // when it is later than the expiry the session already has, or when the
+  // sale date or a set planned sale date is before today at the store, since
+  // Renew is what moves them (_shared/sale-date.ts, renewOffered).
+  const renewTo = new Map<string, { renew_to: string; time_zone: string; store_today: string }>();
+  // The sale date as it stands, a staff date where there is one. Read here
+  // and used only for that: staff_edits can hold names and addresses, and the
+  // list never returns it.
+  const saleDate = new Map<string, string | null>();
   if (sessionIds.length > 0) {
-    const { data: targets, error: targetErr } = await supabase
-      .schema("fni")
-      .rpc("session_renew_targets", { p_ids: sessionIds });
+    const [{ data: targets, error: targetErr }, { data: dates, error: datesErr }] = await Promise.all([
+      supabase.schema("fni").rpc("session_renew_targets", { p_ids: sessionIds }),
+      supabase.schema("fni").from("sessions").select("id, sale_date, staff_edits").in("id", sessionIds),
+    ]);
     if (targetErr) console.error(`session_renew_targets failed: ${targetErr.message}`);
-    for (const t of (targets ?? []) as { session_id: string; renew_to: string; time_zone: string }[]) {
-      renewTo.set(t.session_id, { renew_to: t.renew_to, time_zone: t.time_zone });
+    if (datesErr) console.error(`sale dates for Renew for Today failed: ${datesErr.message}`);
+    for (const t of (targets ?? []) as { session_id: string; renew_to: string; time_zone: string; store_today: string }[]) {
+      renewTo.set(t.session_id, { renew_to: t.renew_to, time_zone: t.time_zone, store_today: t.store_today });
+    }
+    for (const d of (dates ?? []) as Record<string, unknown>[]) {
+      const sale = applyStaffEdits(d, parseStaffEdits(d.staff_edits)).sale_date;
+      saleDate.set(String(d.id), typeof sale === "string" ? sale : null);
     }
   }
 
@@ -218,8 +237,13 @@ async function list(url: URL): Promise<Response> {
   const renewable = (s: Record<string, unknown>): boolean => {
     const t = renewTo.get(String(s.id));
     if (!t) return false;
-    const current = typeof s.expires_at === "string" ? Date.parse(s.expires_at) : NaN;
-    return !Number.isFinite(current) || Date.parse(t.renew_to) > current;
+    return renewOffered({
+      expiresAt: typeof s.expires_at === "string" ? s.expires_at : null,
+      renewTo: t.renew_to,
+      sale: saleDate.get(String(s.id)) ?? null,
+      planned: typeof s.planned_sale_date === "string" ? s.planned_sale_date : null,
+      today: t.store_today,
+    });
   };
 
   return json(200, {
@@ -242,7 +266,8 @@ async function list(url: URL): Promise<Response> {
       expires_at: s.expires_at,
       expired: isExpired(s.expires_at, now),
       planned_sale_date: s.planned_sale_date ?? null,
-      // Renew for Today is offered only when it would give the session longer.
+      // Renew for Today is offered when it would give the session longer, or
+      // move a past sale date or planned sale date to today.
       renewable: renewable(s),
       renew_to: renewTo.get(String(s.id))?.renew_to ?? null,
       time_zone: renewTo.get(String(s.id))?.time_zone ?? null,
@@ -347,21 +372,38 @@ async function renew(req: Request): Promise<Response> {
       })));
     if (eventErr) console.error(`fni-admin-sessions date move event not recorded for ${sessionId}: ${eventErr.message}`);
   }
-  const { data: next, error: writeErr } = await supabase
+  // ── Then the expiry, only if that gives the session longer ────────────
+  // Worked out after the moves, since a planned sale date moved to today
+  // changes the day it lasts to. A session already open to tonight keeps its
+  // open-until time: pressing Renew again moves dates and nothing else.
+  const { data: target, error: targetErr } = await supabase
     .schema("fni")
-    .rpc("renew_session", { p_session: sessionId });
+    .rpc("session_renew_targets", { p_ids: [sessionId] });
+  if (targetErr) return json(500, { error: targetErr.message });
+  const renewTo = ((target ?? []) as { renew_to: string }[])[0]?.renew_to ?? null;
+  const extended = renewExtends(before, renewTo);
 
-  if (writeErr) return json(500, { error: writeErr.message });
-
-  console.log(`fni-admin-sessions renewed ${sessionId} to ${next}`);
+  let next: string = before;
+  if (extended) {
+    const { data: renewed, error: writeErr } = await supabase
+      .schema("fni")
+      .rpc("renew_session", { p_session: sessionId });
+    if (writeErr) return json(500, { error: writeErr.message });
+    next = renewed as string;
+    console.log(`fni-admin-sessions renewed ${sessionId} to ${next}`);
+  } else {
+    console.log(`fni-admin-sessions ${sessionId} already open to ${before}; ${moves.length} date(s) moved`);
+  }
 
   const current = Date.parse(before);
   return json(200, {
     session_id: sessionId,
     previous_expires_at: before,
     expires_at: next,
+    // Whether the open-until time changed. False when it already ran to tonight.
+    extended,
     // It was revived rather than merely pushed out. The console says so.
-    revived: Number.isFinite(current) && current <= Date.now(),
+    revived: extended && Number.isFinite(current) && current <= Date.now(),
     // Each date moved to today, in the words of its session event.
     moved: moves.map((m) => dateMoveEvent(m, who)),
   });
