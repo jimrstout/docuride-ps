@@ -71,3 +71,27 @@ export async function publishedSheetFor(
   }));
   return { sheet: { id: sheet.id, name: sheet.name }, rates };
 }
+
+/**
+ * The tenant's Published price sheets' dates, for deciding whether a sale date
+ * moved within a month crossed the day one sheet takes over from another
+ * (_shared/sale-date.ts, priceSheetBoundaries). Null when they cannot be
+ * read, which callers treat as "it may have", the safe answer.
+ */
+export async function publishedSheetDates(
+  supabase: SupabaseClient,
+  tenantId: unknown
+): Promise<{ effective_from: string; effective_to: string | null }[] | null> {
+  if (typeof tenantId !== "string" || tenantId === "") return null;
+  const { data, error } = await supabase
+    .schema("fni")
+    .from("price_sheets")
+    .select("effective_from, effective_to")
+    .eq("status", "Published")
+    .eq("tenant_id", tenantId);
+  if (error) {
+    console.error(`price sheet dates could not be read: ${error.message}`);
+    return null;
+  }
+  return (data ?? []) as unknown as { effective_from: string; effective_to: string | null }[];
+}

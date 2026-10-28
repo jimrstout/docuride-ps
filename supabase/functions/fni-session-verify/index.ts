@@ -30,7 +30,7 @@ import { hostOf, QA_HOST } from "../_shared/contract-guard.ts";
 import { currentRows, familiesFromRows, ratingSummary, type RatingRow } from "../_shared/rating-summary.ts";
 import { menuFor, ratingDeal } from "../_shared/rate-session.ts";
 import { priceSheetRequiredInputs } from "../_shared/adapters/price-sheet.ts";
-import { publishedSheetFor } from "../_shared/price-sheet-rows.ts";
+import { publishedSheetDates, publishedSheetFor } from "../_shared/price-sheet-rows.ts";
 import { resolvedSlotsFor } from "../_shared/menu-template-rows.ts";
 import { oemContractList } from "../_shared/oem-contract-rows.ts";
 import { contractStateLabel } from "../_shared/oem-contracts.ts";
@@ -69,7 +69,12 @@ import {
 } from "../_shared/contract-parties.ts";
 import { dayLabel, plannedDateProblem, storeToday, submitDateProblem } from "../_shared/store-day.ts";
 import { capChange, editFor, MAX_AMOUNT_FINANCED } from "./save-edits.ts";
-import { keepStaffSaleDate, saleDateChoice } from "../_shared/sale-date.ts";
+import {
+  keepStaffSaleDate,
+  onlySameMonthSaleDateMove,
+  priceSheetBoundaries,
+  saleDateChoice,
+} from "../_shared/sale-date.ts";
 import { SUBMIT_ROW_COLUMNS, submitConfirmation, type SubmitRow } from "../_shared/saved-selections.ts";
 import {
   duplicateVinWarning,
@@ -647,6 +652,18 @@ async function unverifyIfInputsMoved(
   const before = (snapshot?.rating_inputs ?? null) as Record<string, string | null> | null;
 
   const changed = fresh.verification_state === "Verified" ? changedInputs(before, after) : [];
+
+  // Rate cards change at month boundaries: a sale date moved within the month
+  // it was verified and rated on (with a New unit's in-service date following
+  // it) leaves the deal verified and its rating current. Into another month,
+  // across a price sheet's first or last day, or with anything else moved,
+  // it is handled as before (_shared/sale-date.ts).
+  if (changed.includes("sale_date")) {
+    const sheets = await publishedSheetDates(supabase, fresh.tenant_id);
+    if (onlySameMonthSaleDateMove(changed, before, after, sheets === null ? null : priceSheetBoundaries(sheets))) {
+      return [];
+    }
+  }
 
   if (changed.length > 0) {
     await supabase

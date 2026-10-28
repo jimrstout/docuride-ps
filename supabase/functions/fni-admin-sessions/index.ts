@@ -59,7 +59,10 @@ import {
   renewedBy,
   renewExtends,
   renewOffered,
+  priceSheetBoundaries,
+  saleDateMoveNeedsRerate,
 } from "../_shared/sale-date.ts";
+import { publishedSheetDates } from "../_shared/price-sheet-rows.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -298,7 +301,7 @@ async function renew(req: Request): Promise<Response> {
   const { data: row, error: readErr } = await supabase
     .schema("fni")
     .from("sessions")
-    .select("id,expires_at,store_id,sale_date,planned_sale_date,staff_edits,verification_state")
+    .select("id,expires_at,store_id,tenant_id,sale_date,planned_sale_date,staff_edits,verification_state")
     .eq("id", sessionId)
     .maybeSingle();
 
@@ -332,8 +335,16 @@ async function renew(req: Request): Promise<Response> {
       // A staff edit over the CRM's date, so Refresh from CRM keeps it.
       else patch.staff_edits = { ...edits, sale_date: movedSaleDateEdit(s.sale_date, m.to, who, now) };
     }
-    const saleMoved = moves.some((m) => m.field === "sale_date");
-    // The sale date is a rating input: a verified deal is verified again.
+    // The sale date is a rating input, but rate cards change at month
+    // boundaries: a move within the month leaves the rating current and the
+    // deal verified. Into another month or year, or across the day a price
+    // sheet takes over, the deal is verified and rated again
+    // (_shared/sale-date.ts). A planned sale date is never sent to a
+    // provider, so moving it alone never touches the rating.
+    const saleMove = moves.find((m) => m.field === "sale_date");
+    const sheets = saleMove ? await publishedSheetDates(supabase, s.tenant_id) : [];
+    const saleMoved = !!saleMove &&
+      saleDateMoveNeedsRerate(saleMove.from, saleMove.to, sheets === null ? null : priceSheetBoundaries(sheets));
     if (saleMoved && s.verification_state === "Verified") {
       Object.assign(patch, {
         verification_state: "Needs Verification",
@@ -350,8 +361,9 @@ async function renew(req: Request): Promise<Response> {
       .eq("id", sessionId);
     if (moveErr) return json(500, { error: moveErr.message });
 
-    // Rated on the old date, so out of date. Kept, never deleted, and no
-    // price on them is changed.
+    // Rated on a date in another month, so out of date. Kept, never deleted,
+    // and no price on them is changed. Offers already out of date for any
+    // other reason are left so: nothing here marks one current.
     if (saleMoved) {
       const { error: staleErr } = await supabase
         .schema("fni")
@@ -367,7 +379,8 @@ async function renew(req: Request): Promise<Response> {
       .insert(moves.map((m) => ({
         session_id: sessionId,
         event: dateMoveEvent(m, who),
-        detail: { field: m.field, from: m.from, to: m.to, store_today: today },
+        // Whether this move sent the deal back to be rated: false within the month.
+        detail: { field: m.field, from: m.from, to: m.to, store_today: today, rerate_needed: m.field === "sale_date" && saleMoved },
         created_by: who,
       })));
     if (eventErr) console.error(`fni-admin-sessions date move event not recorded for ${sessionId}: ${eventErr.message}`);

@@ -149,13 +149,15 @@ test("Details shows CRM now says, with Keep staff value and Use CRM value, while
   assert.equal(flashMessage({ code: "saledatecrm", detail: null }).text, "Now using the CRM sale date.");
 });
 
-test("a moved sale date marks the rating out of date, and Submit then needs a re-rate", () => {
+test("a sale date moved into another month makes the rating out of date, and Submit then needs a re-rate", () => {
   assert.equal(staleRatingProblem({ out_of_date: true, request_payload: { saleDate: TODAY } }, TODAY), RATING_OUT_OF_DATE);
-  // Rated on 27 Oct, the deal now says 28 Oct: refused even if nothing marked it.
+  // Rated on 30 Sep, the deal now says 1 Oct: refused even if nothing marked it.
   assert.match(
-    staleRatingProblem({ out_of_date: false, request_payload: { saleDate: "2026-10-27" } }, TODAY),
-    /rated with a sale date of 27 Oct 2026, and its sale date is now 28 Oct 2026/
+    staleRatingProblem({ out_of_date: false, request_payload: { saleDate: "2026-09-30" } }, "2026-10-01"),
+    /rated with a sale date of 30 Sep 2026, and its sale date is now 1 Oct 2026, in another month/
   );
+  // Within the month the rating stands (test/sale-date-month.test.mjs).
+  assert.equal(staleRatingProblem({ out_of_date: false, request_payload: { saleDate: "2026-10-27" } }, TODAY), null);
   assert.equal(staleRatingProblem({ out_of_date: false, request_payload: { saleDate: TODAY } }, TODAY), null);
   // An offer rated before requests carried the date has nothing to compare.
   assert.equal(staleRatingProblem({ out_of_date: false, request_payload: {} }, TODAY), null);
