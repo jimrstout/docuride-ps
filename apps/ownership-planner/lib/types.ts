@@ -470,6 +470,11 @@ export interface VerifySheet {
     }[];
   };
   /** The menu template this deal matches. Null when the dealer group has none. */
+  /**
+   * Selections Rate again could not keep: still on an old rate the fresh
+   * offer does not match to the cent. Staff choose them again.
+   */
+  rating_differences?: { message: string; differences: string[] } | null;
   menu_template?: { name: string } | null;
   /** Menu slots hidden from the customer on this deal, with why, for staff. */
   hidden_slots?: { title: string; note: string | null }[];

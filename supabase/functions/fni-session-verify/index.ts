@@ -34,6 +34,9 @@ import { publishedSheetDates, publishedSheetFor } from "../_shared/price-sheet-r
 import { PROVIDER_ANSWER_EVENT, providerAnswerText, type ProviderAnswer } from "../_shared/provider-answer.ts";
 import {
   HELD_MESSAGE,
+  isRatedAgainEvent,
+  OUT_OF_DATE_MESSAGE,
+  RATED_AGAIN_PREFIX,
   REFRESHED_HELD_EVENT,
   REFRESHED_NOTE,
   REFRESHED_UNCHANGED_EVENT,
@@ -371,21 +374,50 @@ async function spentStateFor(
     : { data: [] };
   const offers = await offerRowsFor(supabase, s.id as string);
   const ratedAt = offers.find((o) => o.provider?.adapter === "TecAssured")?.rated_at ?? null;
-  const { data: latest } = await supabase
-    .schema("fni")
-    .from("session_events")
-    .select("event, created_at, detail")
-    .eq("session_id", s.id as string)
-    .in("event", [REFRESHED_UNCHANGED_EVENT, REFRESHED_HELD_EVENT])
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const state = refreshState(selections, (latest as RefreshEvent | null) ?? null, money);
+  const state = refreshState(selections, await latestRefreshEvent(supabase, s.id as string), money);
   return {
     spent: spentSelections(selections, (contracts ?? []) as VoidedContract[], ratedAt).map((x) => x.product_name ?? x.provider_product_id),
     refresh_note: state?.kind === "refreshed" ? REFRESHED_NOTE : null,
     held: state?.kind === "held" ? { message: HELD_MESSAGE, differences: state.differences } : null,
   };
+}
+
+/**
+ * The latest refresh of the rating: one before Submit (a spent rate) or a
+ * press of Rate again on Details. Read as two lookups, since the Rate again
+ * event carries the person's initials in its name.
+ */
+async function latestRefreshEvent(supabase: SupabaseClient, sessionId: string): Promise<RefreshEvent | null> {
+  const pick = (q: PromiseLike<{ data: unknown }>) => q.then((r) => (r.data as RefreshEvent | null) ?? null);
+  const base = () =>
+    supabase.schema("fni").from("session_events").select("event, created_at, detail").eq("session_id", sessionId);
+  const [refresh, again] = await Promise.all([
+    pick(base().in("event", [REFRESHED_UNCHANGED_EVENT, REFRESHED_HELD_EVENT]).order("created_at", { ascending: false }).limit(1).maybeSingle()),
+    pick(base().like("event", `${RATED_AGAIN_PREFIX}%`).order("created_at", { ascending: false }).limit(1).maybeSingle()),
+  ]);
+  if (!refresh) return again;
+  if (!again) return refresh;
+  return Date.parse(again.created_at) > Date.parse(refresh.created_at) ? again : refresh;
+}
+
+/**
+ * The selections Rate again could not keep: still on an old rate the fresh
+ * offer does not match to the cent, each with what changed. Shown on Details
+ * so staff can choose them again. Null when there are none.
+ */
+async function ratingDifferences(supabase: SupabaseClient, sessionId: string) {
+  const { data } = await supabase
+    .schema("fni")
+    .from("selected_products")
+    .select("provider_product_id, rate_unique_id, providers(contract_method)")
+    .eq("session_id", sessionId)
+    .eq("disposition", "Included");
+  const rows = ((data ?? []) as unknown as { provider_product_id: string; rate_unique_id: string | null; providers: { contract_method: string | null } | null }[])
+    .filter((r) => r.providers?.contract_method !== "Recorded by Staff");
+  const latest = await latestRefreshEvent(supabase, sessionId);
+  if (!latest || !isRatedAgainEvent(latest.event)) return null;
+  const state = refreshState(rows, latest, money);
+  return state?.kind === "held" ? { message: OUT_OF_DATE_MESSAGE, differences: state.differences } : null;
 }
 
 /**
@@ -583,12 +615,13 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
       )
     : null;
 
-  const [duplicates, contracts, oemContracts, panel, providerAnswer] = await Promise.all([
+  const [duplicates, contracts, oemContracts, panel, providerAnswer, differences] = await Promise.all([
     duplicateVinSessions(supabase, s),
     liveContracts(supabase, s.id as string),
     oemContractList(supabase, s.id as string),
     contractsPanel(supabase, s),
     lastProviderAnswer(supabase, s.id as string),
+    ratingDifferences(supabase, s.id as string),
   ]);
 
   return {
@@ -630,6 +663,8 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
         kept_error_at: p.kept_error_at,
       })),
     },
+    // Selections Rate again could not keep, with what changed (_shared/spent-rates.ts).
+    rating_differences: differences,
     // The template the deal matches now. Rating records it on the session.
     menu_template: menu.template ? { name: menu.template.name } : null,
     // Slots hidden from the customer on this deal, with the reason for staff.

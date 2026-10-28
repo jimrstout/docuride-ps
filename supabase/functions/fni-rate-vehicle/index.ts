@@ -68,6 +68,7 @@ import {
   compareRefreshed,
   REFRESHED_HELD_EVENT,
   REFRESHED_UNCHANGED_EVENT,
+  ratedAgainEvent,
   spentSelections,
   type SpentSelection,
   type VoidedContract,
@@ -86,6 +87,13 @@ interface RateRequest {
   refresh_spent?: boolean;
   /** The signed-in person's initials, for the session event. */
   refreshed_by?: string;
+  /**
+   * Rate again on Details: rate now with the session's current inputs, and
+   * keep each selection that the fresh offer matches to the cent.
+   */
+  rate_again?: boolean;
+  /** The signed-in person's initials, for "Rated again by". */
+  rated_by?: string;
 }
 
 interface SessionRow {
@@ -243,6 +251,10 @@ serve(async (req: Request) => {
       for (const key of allowedOverrides) {
         if (key in overrides) rateSource[key] = overrides[key];
       }
+    }
+
+    if (body.rate_again === true) {
+      return await rateAgain(supabase, sess, rateSource, body.rated_by);
     }
 
     if (body.refresh_spent === true) {
@@ -521,4 +533,129 @@ async function refreshSpent(
   if (eventErr) console.error(`fni-rate-vehicle refresh event not recorded for ${sess.id}: ${eventErr.message}`);
 
   return json(200, { session_id: sess.id, outcome: unchanged ? "unchanged" : "held", lines: record });
+}
+
+// ── Rate again on Details (2026-10-28) ────────────────────────────────────
+//
+// On deal 15029 the only way to force a fresh rating was Confirm and
+// Continue, which shows only while the deal needs verifying. Rate again rates
+// the deal any time, with its current inputs, through the same rateSession
+// staff use. Refused while a submit is running or a contract is live, since a
+// live contract was written on the offer it would replace.
+//
+// Each selection the submit would send is matched to the fresh offer with the
+// spent-rate rules (_shared/spent-rates.ts), selection by selection:
+//
+//   matches to the cent   moves onto its fresh rate (rate ID and snapshot; no
+//                         price column is written)
+//   anything else         stays on its old rate, out of date, listed on
+//                         Details until staff choose again; Submit is held
+//
+// With selections the session's status is left alone, so the contracts panel
+// stays. With none, the status moves as any rating moves it. Every press is
+// recorded as "Rated again by <initials>", or by System, success or failure.
+async function rateAgain(
+  supabase: SupabaseClient,
+  sess: SessionRow,
+  rateSource: Record<string, unknown>,
+  by: unknown
+): Promise<Response> {
+  const who = renewedBy(by);
+  const event = ratedAgainEvent(who);
+  const record = async (detail: Record<string, unknown>) => {
+    const { error } = await supabase
+      .schema("fni")
+      .from("session_events")
+      .insert({ session_id: sess.id, event, detail, created_by: who });
+    if (error) console.error(`fni-rate-vehicle rate again event not recorded for ${sess.id}: ${error.message}`);
+  };
+
+  const submitState = String((sess as unknown as Record<string, unknown>).submit_state ?? "Idle");
+  if (submitState !== "Idle") {
+    return json(409, { session_id: sess.id, outcome: "refused", error: "A submit is running or its outcome is not known, so the deal cannot be rated again now." });
+  }
+  const { data: agreements } = await supabase.schema("fni").from("agreements").select("id").eq("session_id", sess.id);
+  const agreementIds = ((agreements ?? []) as { id: string }[]).map((a) => a.id);
+  const { data: contractRows } = agreementIds.length > 0
+    ? await supabase.schema("fni").from("agreement_products").select("status").in("agreement_id", agreementIds)
+    : { data: [] };
+  if (((contractRows ?? []) as { status: string }[]).some((c) => c.status === "Live" || c.status === "Submit Status Unknown")) {
+    return json(409, { session_id: sess.id, outcome: "refused", error: "A contract on this deal is live, so it cannot be rated again. Void it first." });
+  }
+
+  const { data: chosen, error: chosenErr } = await supabase
+    .schema("fni")
+    .from("selected_products")
+    .select("id, provider_id, provider_product_id, product_name, rate_unique_id, selected_options, customer_price, retail_price, providers!inner(contract_method)")
+    .eq("session_id", sess.id)
+    .eq("disposition", "Included")
+    .eq("providers.contract_method", "Through API");
+  if (chosenErr) return json(500, { error: `The customer's choices could not be read: ${chosenErr.message}` });
+  const selections = (chosen ?? []) as unknown as (SpentSelection & { id: string })[];
+
+  // The quote the selections were made from, read before it is replaced.
+  const beforeRows = await offerRowsFor(supabase, sess.id);
+  const oldFamilies = beforeRows.flatMap((r) => familiesFromRow({ ...(r as unknown as RatingRow), out_of_date: false }));
+
+  const { template, outcomes } = await rateSession(
+    supabase,
+    { id: sess.id, tenant_id: sess.tenant_id, store_id: sess.store_id },
+    rateSource
+  );
+  const ta = outcomes.find((o) => o.tecassured);
+  const rated = outcomes.filter((o) => o.result.state === "Rated");
+  const productCount = rated.reduce((n, o) => n + o.productCount, 0);
+  if (rated.length === 0 || productCount === 0) {
+    const reason = outcomes.map((o) => outcomeLine(o)).join(" ") || "No provider rated this deal.";
+    await record({ outcome: "failed", reason });
+    // The provider's words are on the rating row, shown behind Show details.
+    return json(502, { session_id: sess.id, outcome: "failed", error: `The deal could not be rated again. ${reason}`.trim() });
+  }
+
+  const taAnswered = ta && ta.tecassured && ta.result.state !== "Failed";
+  await supabase
+    .schema("fni")
+    .from("sessions")
+    .update({
+      // With selections, the status stays: the customer's choices stand.
+      ...(selections.length === 0 ? { status: statusAfterRating(String(sess.status), productCount, true) } : {}),
+      menu_template_id: template?.id ?? null,
+      rated_provider_ids: outcomes.map((o) => o.provider.id),
+      ...(taAnswered ? { credential_id: ta.tecassured!.credentialId, dealer_code_used: ta.tecassured!.dealer_code } : {}),
+    })
+    .eq("id", sess.id);
+
+  if (selections.length === 0) {
+    await record({ outcome: "rated", product_count: productCount, lines: [] });
+    return json(200, { session_id: sess.id, outcome: "rated", product_count: productCount, lines: [] });
+  }
+
+  const { data: ruleRows } = await supabase
+    .schema("fni")
+    .from("pricing_rules")
+    .select("*")
+    .eq("tenant_id", sess.tenant_id)
+    .or(`store_id.eq.${sess.store_id},store_id.is.null`)
+    .eq("active", true);
+  const freshPriced = priceFamilies(
+    familiesFromRows((await offerRowsFor(supabase, sess.id)) as unknown as RatingRow[]),
+    (ruleRows ?? []) as unknown as PricingRule[]
+  );
+
+  const { lines, unchanged } = compareRefreshed(selections, oldFamilies, freshPriced);
+  for (const [i, l] of lines.entries()) {
+    if (l.status !== "unchanged" || l.from_rate === l.to_rate) continue;
+    const { error: moveErr } = await supabase
+      .schema("fni")
+      .from("selected_products")
+      .update({ rate_unique_id: l.to_rate, rate_snapshot: l.snapshot })
+      .eq("id", selections[i].id)
+      .eq("rate_unique_id", l.from_rate);
+    if (moveErr) {
+      return json(500, { session_id: sess.id, outcome: "failed", error: `The selections could not be moved onto the fresh rating: ${moveErr.message}` });
+    }
+  }
+  const kept = lines.map(({ snapshot: _snapshot, ...l }) => l);
+  await record({ outcome: unchanged ? "unchanged" : "changed", product_count: productCount, lines: kept });
+  return json(200, { session_id: sess.id, outcome: unchanged ? "unchanged" : "changed", product_count: productCount, lines: kept });
 }

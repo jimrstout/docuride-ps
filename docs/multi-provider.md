@@ -1133,3 +1133,16 @@ Confirm Submit.
   alone, applies in any month, and does not change the same-month rule. Once
   rated after the void the rate is not spent, so a provider that still
   refuses is shown as a refusal and nothing retries.
+- **Rate again** (2026-10-28). The Rating line on Details has a Rate again
+  button for a signed-in operator, whatever the rating says, except while a
+  submit is running or its outcome is unknown, or a contract on the deal is
+  live (`lib/rate-again.ts`; fni-rate-vehicle refuses the same cases). It runs
+  the same rating staff run, with the session's current inputs
+  (`rate_again`). Each selection is matched to the fresh offer with the
+  spent-rate rules, one by one: a match to the cent moves onto its fresh
+  rate; anything else stays on its old rate and is listed under Rating as
+  "Out of date", with what changed, until staff choose it again, and the
+  Submit confirmation is held meanwhile. With selections the status is left
+  alone; with none it moves as any rating moves it. A rating error shows in
+  the rating banner with Show details and Copy error. Every press is
+  recorded as "Rated again by <initials>", or "Rated again by System".
