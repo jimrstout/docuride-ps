@@ -57,6 +57,16 @@ import {
 } from "../_shared/staff-edits.ts";
 import { parseRequiredProperties, readRateProperties } from "../_shared/rate-properties.ts";
 import { dealDates, type DealDateSource } from "../_shared/deal-dates.ts";
+import {
+  contractParties,
+  isPartyKey,
+  LOCK_REASON,
+  PARTY_FIELDS,
+  partyValue,
+  REMOVABLE,
+  REMOVED,
+  type PartyName,
+} from "../_shared/contract-parties.ts";
 import { plannedDateProblem, storeToday, submitDateProblem } from "../_shared/store-day.ts";
 import { capChange, editFor, MAX_AMOUNT_FINANCED } from "./save-edits.ts";
 import {
@@ -112,6 +122,15 @@ const COLUMNS = [
   // Financial, shown on the sheet and not rating inputs. Migration 0018.
   "agreed_down_payment", "max_amount_financed",
   "buyer_city", "buyer_state", "buyer_zip",
+  // Who goes on the contracts: the buyer, co-buyer and lienholder, shown and
+  // edited in their own panels (_shared/contract-parties.ts). The page shows
+  // them only to a signed-in operator; this function serves the page's server,
+  // never a browser.
+  "buyer_type", "buyer_display_name", "buyer_first_name", "buyer_last_name", "buyer_address",
+  "buyer_phone", "buyer_email",
+  "cobuyer_type", "cobuyer_display_name", "cobuyer_first_name", "cobuyer_last_name", "cobuyer_address",
+  "cobuyer_city", "cobuyer_state", "cobuyer_zip", "cobuyer_phone", "cobuyer_email",
+  "lienholder_address", "lienholder_city", "lienholder_state", "lienholder_zip", "lienholder_phone",
   "vehicle_properties", "vin_decode", "vin_decode_at",
   // The last decode attempt, successful or not. The Verify page decodes on its
   // own only when both this and vin_decode_at are empty, so a TecAssured outage
@@ -533,6 +552,9 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
     // whether Submit would be refused on the deal's dates today
     // (_shared/store-day.ts). Submit checks the same thing again itself.
     day: await dayFor(supabase, s, edited),
+    // The buyer, co-buyer and lienholder, as the contracts will carry them,
+    // locked while any contract on the deal is live.
+    contract_parties: contractParties(s, edits, contracts.length > 0),
     // Why nothing is required, when nothing is. Shown instead of a sheet that
     // looks complete because it is asking for nothing.
     not_ready_reason: reason,
@@ -641,6 +663,11 @@ async function save(
     if (rawKey.startsWith("$")) continue;
 
     const key = allowed.find((k) => k.toLowerCase() === rawKey.toLowerCase());
+    // City, state and ZIP are on the contracts too, so they lock with the
+    // contract panels once a contract is live (_shared/contract-parties.ts).
+    if (key && isPartyKey(key) && (await liveContracts(supabase, s.id as string)).length > 0) {
+      return json(409, { error: LOCK_REASON });
+    }
     if (!key) {
       // Either a field nothing may edit -- Deal #, Stock # and Lender -- or one
       // closed by the deal as it stands, such as APR on a cash deal. Refused by
@@ -797,6 +824,109 @@ async function discardEdits(
     discarded_edits: discarded,
     refreshed: false,
   });
+}
+
+// ── Who goes on the contracts ─────────────────────────────────────────────
+//
+// party_save        { entries: { buyer_last_name: "...", ... } }
+// party_remove      { party: "Co-buyer" | "Lienholder" }
+// party_restore     { party: "Co-buyer" | "Lienholder" }
+// party_keep_staff  { key }   the CRM changed: keep the staff value
+// party_use_crm     { key }   the CRM changed: drop the edit, use the CRM's
+//
+// Each is a staff edit (_shared/contract-parties.ts), refused while a contract
+// on the deal is live. City, state and ZIP feed the rate too, so a change to
+// them sends the deal back through Confirm and Continue, as on the sheet.
+
+async function partyAction(
+  supabase: SupabaseClient,
+  s: Record<string, unknown>,
+  action: string,
+  body: Record<string, unknown>,
+  who: string
+): Promise<Response> {
+  if ((await liveContracts(supabase, s.id as string)).length > 0) {
+    return json(409, { error: LOCK_REASON });
+  }
+  const edits = parseStaffEdits(s.staff_edits);
+  const now = new Date().toISOString();
+  const crm = (key: string): string | null => {
+    const v = s[key];
+    const t = v === null || v === undefined ? "" : String(v).trim();
+    return t === "" ? null : t;
+  };
+  const removable = (v: unknown): PartyName | null =>
+    v === "Co-buyer" || v === "Lienholder" ? v : null;
+
+  if (action === "party_save") {
+    const entries = body.entries;
+    if (!entries || typeof entries !== "object" || Array.isArray(entries)) {
+      return json(400, { error: "entries must be an object" });
+    }
+    const problems: string[] = [];
+    for (const [key, raw] of Object.entries(entries as Record<string, unknown>)) {
+      const spec = PARTY_FIELDS.find((f) => f.key === key);
+      if (!spec) continue; // Form plumbing, not a field.
+      const typed = raw === null || raw === undefined ? "" : String(raw).trim();
+      // Blank means "what the CRM says", the same as clearing a box on the sheet.
+      if (typed === "") {
+        delete edits[key];
+        continue;
+      }
+      const checked = partyValue(spec, typed);
+      if ("problem" in checked) {
+        problems.push(checked.problem);
+        continue;
+      }
+      const original = crm(key);
+      const edit = editFor(
+        editTargetFor(key),
+        checked.value,
+        { value: original, source: original === null ? "Missing" : "CRM" },
+        edits[key],
+        who,
+        now
+      );
+      if (edit === null) delete edits[key];
+      else edits[key] = edit;
+    }
+    if (problems.length > 0) return json(400, { error: problems.join(" "), problems });
+  } else if (action === "party_remove" || action === "party_restore") {
+    const party = removable(body.party);
+    if (!party) return json(400, { error: "party must be Co-buyer or Lienholder" });
+    const marker = REMOVABLE[party as "Co-buyer" | "Lienholder"];
+    if (action === "party_restore") {
+      delete edits[marker];
+    } else {
+      // Its own field edits go with it: they described the one being removed.
+      for (const f of PARTY_FIELDS) if (f.party === party) delete edits[f.key];
+      const crmHad = PARTY_FIELDS.filter((f) => f.party === party).some((f) => crm(f.key) !== null);
+      if (crmHad) {
+        edits[marker] = { value: REMOVED, original: null, original_source: "CRM", edited_by: who, edited_at: now };
+      }
+    }
+  } else if (action === "party_keep_staff" || action === "party_use_crm") {
+    const key = typeof body.key === "string" ? body.key : "";
+    if (!isPartyKey(key) || !edits[key]) return json(400, { error: "That field has no staff value." });
+    if (action === "party_use_crm") delete edits[key];
+    // Keep: the edit stays, and now records what the CRM says as the value it
+    // replaces, so the difference is acknowledged and no longer flagged.
+    else edits[key] = { ...edits[key], original: crm(key), original_source: crm(key) === null ? "Missing" : "CRM", edited_by: who, edited_at: now };
+  } else {
+    return json(400, { error: `Unknown action ${action}` });
+  }
+
+  const { error } = await supabase
+    .schema("fni")
+    .from("sessions")
+    .update({ staff_edits: Object.keys(edits).length > 0 ? edits : null })
+    .eq("id", s.id as string);
+  if (error) return json(500, { error: error.message });
+
+  const fresh = (await loadSession(supabase, s.id as string))!;
+  const changed = await unverifyIfInputsMoved(supabase, fresh);
+  const latest = changed.length > 0 ? (await loadSession(supabase, s.id as string))! : fresh;
+  return json(200, { ...(await sheetFor(supabase, latest)), changed_inputs: changed });
 }
 
 // ── The store's day ───────────────────────────────────────────────────────
@@ -1076,6 +1206,11 @@ serve(async (req: Request) => {
 
       if (action === "refresh") return await refresh(supabase, s);
     if (action === "planned_sale_date") return await setPlannedSaleDate(supabase, s, body.value);
+    if (action.startsWith("party_")) {
+      const who = typeof body.edited_by === "string" ? body.edited_by.trim() : "";
+      if (who === "") return json(400, { error: "edited_by is required: an edit names a person." });
+      return await partyAction(supabase, s, action, body, who);
+    }
     if (action === "discard_edits") return await discardEdits(supabase, s);
 
     if (action === "verify") {
@@ -1088,7 +1223,9 @@ serve(async (req: Request) => {
     }
 
     return json(400, {
-      error: "action must be one of save, refresh, discard_edits, verify, planned_sale_date",
+      error:
+        "action must be one of save, refresh, discard_edits, verify, planned_sale_date, " +
+        "party_save, party_remove, party_restore, party_keep_staff, party_use_crm",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
