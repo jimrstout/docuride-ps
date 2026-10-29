@@ -42,14 +42,17 @@ test("Missing Folder when neither has them, and the function changes nothing fir
   assert.equal(resolveFolders({ deal_jacket_folder_id: null, signed_documents_folder_id: null }, { deal_jacket_folder_id: "j", signed_documents_folder_id: null }), null);
   assert.match(MISSING_FOLDER_MESSAGE, /^Missing Folder\. .*Nothing was moved or changed\./);
   const fn = src("../supabase/functions/fni-documents-to-deal-jacket/index.ts");
-  assert.ok(fn.indexOf("if (!resolved)") < fn.indexOf("moveHeldDocuments("));
-  assert.ok(fn.indexOf("if (!resolved)") < fn.indexOf('.from("agreement_products")'));
+  assert.ok(fn.indexOf("if (!resolved)") > 0);
+  assert.ok(fn.indexOf("if (!resolved)") < fn.indexOf("fileHeldDocuments(supabase"));
+  assert.doesNotMatch(fn, /\.from\("agreement_products"\)/);
 });
 
 test("calling twice moves nothing the second time", async () => {
   const rows = [{ id: "r1", contract_number: "RA1", document_name: "TA01 MUI #13759 A B RA1", document_storage_path: "s/a.pdf", document_status: WAITING, workdrive_file_id: null }];
   const uploads = [];
   const deps = {
+    claim: async () => true,
+    release: async () => {},
     download: async () => new Uint8Array([37, 80, 68, 70]),
     listJacket: async () => [],
     trash: async () => {},
@@ -71,7 +74,9 @@ test("calling twice moves nothing the second time", async () => {
 test("only documents PS holds are moved; no provider is called; nothing is deleted; the secret is checked", () => {
   const fn = src("../supabase/functions/fni-documents-to-deal-jacket/index.ts");
   assert.match(fn, /secretsMatch\(presented, Deno\.env\.get\("FNI_WEBHOOK_SECRET"\)\)/);
-  assert.match(fn, /\.is\("recorded_by", null\)\s*\.not\("document_storage_path", "is", null\)/);
+  const file = src("../supabase/functions/_shared/deal-jacket-file.ts");
+  assert.match(file, /\.is\("recorded_by", null\)\s*\.not\("document_storage_path", "is", null\)/);
+  assert.doesNotMatch(file, /tecassured|contractCallRefusal/i);
   assert.doesNotMatch(fn, /tecassured|contractCallRefusal/i);
   assert.doesNotMatch(fn + src("../supabase/functions/_shared/deal-jacket-live.ts"), /\.remove\(|method: "DELETE"/);
   assert.doesNotMatch(fn, /console\.(log|error)\([^)]*(presented|secret)/i);

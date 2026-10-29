@@ -1,6 +1,8 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getRecord } from "../_shared/zoho.ts";
 import { mapDeal } from "../_shared/dealmap.ts";
 import { dealFolderArgs, dealFolderLog, type DealFolderOutcome } from "../_shared/deal-folders.ts";
+import { fileWhenFoldersReady } from "../_shared/deal-jacket-file.ts";
 import {
   sbInsert,
   sbRpc,
@@ -27,7 +29,11 @@ import {
  * Each synced deal's three WorkDrive folder IDs (Deal_Jacket_Folder_ID,
  * Supporting_Documents_Folder_ID, Signed_Documents_Folder_ID) are also handed
  * to fni.record_deal_folders, which keeps them on the deal's session
- * (migration 0041, _shared/deal-folders.ts). Nothing is filed here yet.
+ * (migration 0041, _shared/deal-folders.ts). When the Deal Jacket and Signed
+ * Documents folders both became known with that write, the session's waiting
+ * contract documents are filed there (_shared/deal-jacket-file.ts), after the
+ * sync has answered. A filing problem is a session event; it never fails the
+ * queue row.
  *
  * verify_jwt is false (supabase/config.toml): Zoho cannot send a Supabase JWT,
  * so the shared secret is the whole of the authentication.
@@ -43,6 +49,22 @@ const MAX_ATTEMPTS = 5;
 const BATCH = 50;
 // Leave room inside the Edge Function wall clock to finish the item in flight.
 const TIME_BUDGET_MS = 50_000;
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
+
+/**
+ * File a session's waiting documents once its folders became known, without
+ * holding up the sync. Background work the runtime keeps alive after the
+ * answer; awaited only where there is no runtime to keep it (a local run).
+ */
+async function fileInBackground(sessionId: string, pending: Promise<unknown>[]): Promise<void> {
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const work = fileWhenFoldersReady(supabase, sessionId).catch((err) =>
+    console.error("zoho-sync filing failed", err instanceof Error ? err.message : String(err))
+  );
+  if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(work);
+  else pending.push(work);
+}
 
 interface QueueRow {
   id: number;
@@ -148,7 +170,7 @@ interface DrainResult {
  * sweep. At MAX_ATTEMPTS it stops being claimed and stays put with last_error
  * set, rather than being deleted or retried forever.
  */
-async function drain(started: number): Promise<DrainResult> {
+async function drain(started: number, pending: Promise<unknown>[]): Promise<DrainResult> {
   const queue = await sbSelect<QueueRow>(
     `sync_queue?processed_at=is.null&attempts=lt.${MAX_ATTEMPTS}` +
       `&select=id,tenant_id,module,zoho_id,attempts&order=received_at.asc&limit=${BATCH}`,
@@ -200,6 +222,8 @@ async function drain(started: number): Promise<DrainResult> {
           "fni",
         );
         if (folders) console.log(`zoho-sync ${head.module}/${head.zoho_id} deal folders`, dealFolderLog(folders));
+        // The folders became known with this write: file what is waiting.
+        if (folders?.folders_became_ready) await fileInBackground(folders.session_id, pending);
 
         await markProcessed(ids);
         synced++;
@@ -272,7 +296,10 @@ Deno.serve(async (req: Request) => {
       queued = id;
     }
 
-    const result = await drain(started);
+    const pending: Promise<unknown>[] = [];
+    const result = await drain(started, pending);
+    // Only where there is no EdgeRuntime to keep the filing alive.
+    await Promise.all(pending);
     return json(200, { queued, ...result, ms: Date.now() - started });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
