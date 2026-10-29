@@ -1,7 +1,9 @@
 import { getRecord } from "../_shared/zoho.ts";
 import { mapDeal } from "../_shared/dealmap.ts";
+import { dealFolderArgs, dealFolderLog, type DealFolderOutcome } from "../_shared/deal-folders.ts";
 import {
   sbInsert,
+  sbRpc,
   sbSelect,
   sbUpdate,
   sbUpsert,
@@ -21,6 +23,11 @@ import {
  *           Drains only. Driven by pg_cron every 5 minutes, to pick up rows a
  *           webhook enqueued but could not finish, and rows whose Zoho read
  *           failed and are owed a retry.
+ *
+ * Each synced deal's three WorkDrive folder IDs (Deal_Jacket_Folder_ID,
+ * Supporting_Documents_Folder_ID, Signed_Documents_Folder_ID) are also handed
+ * to fni.record_deal_folders, which keeps them on the deal's session
+ * (migration 0041, _shared/deal-folders.ts). Nothing is filed here yet.
  *
  * verify_jwt is false (supabase/config.toml): Zoho cannot send a Supabase JWT,
  * so the shared secret is the whole of the authentication.
@@ -182,6 +189,18 @@ async function drain(started: number): Promise<DrainResult> {
         const storeId = deal.store_location ? stores.get(deal.store_location) ?? null : null;
 
         await sbUpsert("deals", { ...deal, store_id: storeId }, "zoho_id");
+
+        // The deal's folder IDs onto its session, blank or not: the function
+        // keeps the first of each and logs a blank or a change once. No row
+        // back means the deal has no session yet. A failure fails the item,
+        // so the sweeper tries it again; the upsert above is idempotent.
+        const [folders] = await sbRpc<DealFolderOutcome>(
+          "record_deal_folders",
+          { ...dealFolderArgs(head.zoho_id, record) },
+          "fni",
+        );
+        if (folders) console.log(`zoho-sync ${head.module}/${head.zoho_id} deal folders`, dealFolderLog(folders));
+
         await markProcessed(ids);
         synced++;
       } catch (err) {

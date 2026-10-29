@@ -8,8 +8,8 @@
  * with no policies, so it is invisible to anon and authenticated alike.
  *
  * PostgREST is called directly rather than through supabase-js: these
- * functions need four verbs and no session handling, and one less dependency
- * is one less cold-start import.
+ * functions need four verbs, one RPC call and no session handling, and one
+ * less dependency is one less cold-start import.
  */
 
 const URL_ = Deno.env.get("SUPABASE_URL")!;
@@ -75,6 +75,23 @@ export function sbUpdate(
     `${table}?${filter}`,
     { method: "PATCH", headers: headers({ Prefer: "return=minimal" }), body: JSON.stringify(patch) },
     `update ${table}`,
+  );
+}
+
+/**
+ * Call a Postgres function through PostgREST, e.g. sbRpc("record_deal_folders",
+ * {...}, "fni"). `schema` picks the exposed schema the function lives in; the
+ * default is public. Returns the function's rows.
+ */
+export function sbRpc<T>(
+  fn: string,
+  args: Record<string, unknown>,
+  schema = "public",
+): Promise<T[]> {
+  return rest<T[]>(
+    `rpc/${fn}`,
+    { method: "POST", headers: headers({ "Content-Profile": schema }), body: JSON.stringify(args) },
+    `rpc ${schema}.${fn}`,
   );
 }
 
