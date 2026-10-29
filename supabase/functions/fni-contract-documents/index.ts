@@ -27,10 +27,12 @@
 //      folder id, so the full name is built when the file reaches WorkDrive.
 //   4. Hold the PDF in fni-contracts at {session id}/{file name}. The
 //      document is "Waiting for Deal Jacket".
-//   5. If dc.deals already has the deal's Deal Jacket and Signed Documents
-//      folder, move it there now (_shared/deal-jacket-move.ts): "Saved to
-//      Deal Jacket". If not, it waits, and fni-documents-to-deal-jacket moves
-//      it once DocuRide DC has made the folders.
+//   5. If the deal's Deal Jacket and Signed Documents folders are known, move
+//      it there now (_shared/deal-jacket-move.ts): "Saved to Deal Jacket".
+//      The session's folders come first (zoho-sync keeps them from the CRM,
+//      migration 0041), then dc.deals as a read-only fallback, id by id. If
+//      neither has them, it waits: zoho-sync files it when the CRM makes the
+//      folders, and fni-documents-to-deal-jacket moves it on request.
 // Voided contracts and OEM contracts recorded by staff are left alone.
 //
 // No token or secret value is read, logged or returned, and nothing logs a
@@ -46,12 +48,13 @@ import { PDFDocument } from "npm:pdf-lib@1.17.1";
 import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { contractCallRefusal } from "../_shared/contract-guard.ts";
-import { assignPositions, buyerNameFor, otherSignatureTypes, prefixProblem, readyFolders, signatureData } from "../_shared/contract-documents.ts";
+import { assignPositions, buyerNameFor, otherSignatureTypes, prefixProblem, signatureData } from "../_shared/contract-documents.ts";
 import { documentBaseName, storageFileName } from "../_shared/document-names.ts";
 import { fromBase64, isPdf, pageSizes, withoutPdf } from "../_shared/pdf-pages.ts";
 import { dcDealFolders } from "../_shared/dc-deal-folders.ts";
 import { HOLD_BUCKET, liveMoveDeps } from "../_shared/deal-jacket-live.ts";
 import { moveHeldDocuments, WAITING } from "../_shared/deal-jacket-move.ts";
+import { resolveFolders } from "../_shared/deal-jacket-request.ts";
 import { workDriveFileUrl } from "../_shared/workdrive-links.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -114,7 +117,10 @@ serve(async (req: Request) => {
     const { data: session, error: sessErr } = await supabase
       .schema("fni")
       .from("sessions")
-      .select("id, store_id, is_test, dealer_code_used, deal_number, zoho_deal_id, buyer_display_name")
+      .select(
+        "id, store_id, is_test, dealer_code_used, deal_number, zoho_deal_id, buyer_display_name, " +
+          "deal_jacket_folder_id, signed_documents_folder_id"
+      )
       .eq("id", session_id)
       .single();
     if (sessErr || !session) return json(404, { error: `Session ${session_id} not found` });
@@ -155,8 +161,14 @@ serve(async (req: Request) => {
     if (!buyer) {
       return json(409, { error: "This deal has no buyer name, and its documents are named after the buyer. Refresh it from the CRM first." });
     }
-    // Null until DocuRide DC has made the deal's folders.
-    const folders = readyFolders(deal);
+    // The session's folders first, then dc.deals, id by id. Null until both
+    // the Deal Jacket and the Signed Documents folder are known.
+    const folders =
+      resolveFolders(
+        { deal_jacket_folder_id: null, signed_documents_folder_id: null },
+        deal,
+        { deal_jacket_folder_id: session.deal_jacket_folder_id ?? null, signed_documents_folder_id: session.signed_documents_folder_id ?? null }
+      )?.folders ?? null;
 
     // ── Step 3: The agreement and its contracts ──────────────────────────
     let agreementQuery = supabase.schema("fni").from("agreements").select("id, status").eq("session_id", session_id);
@@ -280,6 +292,7 @@ serve(async (req: Request) => {
         record.workdrive_file_id = null;
         record.workdrive_saved_at = null;
         record.workdrive_file_name = null;
+        record.deal_jacket_folder_id = null;
 
         const { error: updErr } = await supabase
           .schema("fni")
