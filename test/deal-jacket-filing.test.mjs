@@ -167,3 +167,25 @@ test("zoho-sync's filing never throws, signs its events System, and never names 
   // Every caller files through the same function.
   assert.match(read("supabase/functions/fni-documents-to-deal-jacket/index.ts"), /await fileHeldDocuments\(supabase, found\.map\(\(s\) => s\.id\), resolved\.folders\)/);
 });
+
+test("Get document files at once when the session knows the folders, then dc.deals", () => {
+  const fn = read("supabase/functions/fni-contract-documents/index.ts");
+  // The session's folder IDs are read with the session.
+  assert.match(fn, /"deal_jacket_folder_id, signed_documents_folder_id"\s*\)/);
+  // Session first, dc.deals second, through the same rule as every caller.
+  assert.match(fn, /resolveFolders\(\s*\{ deal_jacket_folder_id: null, signed_documents_folder_id: null \},\s*deal,\s*\{ deal_jacket_folder_id: session\.deal_jacket_folder_id \?\? null, signed_documents_folder_id: session\.signed_documents_folder_id \?\? null \}\s*\)\?\.folders \?\? null;/);
+  assert.doesNotMatch(fn, /readyFolders\(deal\)/);
+  // Held first, then filed through the claimed move.
+  assert.ok(fn.indexOf(".from(HOLD_BUCKET)") < fn.indexOf("if (folders) {"));
+  assert.ok(fn.indexOf("if (folders) {") < fn.indexOf("await moveHeldDocuments("));
+  // A fresh copy forgets the folder its old copy was filed into.
+  assert.match(fn, /record\.workdrive_file_name = null;\s*record\.deal_jacket_folder_id = null;/);
+});
+
+test("the session's folders are enough on their own, with no DocuRide DC row", () => {
+  const none = { deal_jacket_folder_id: null, signed_documents_folder_id: null };
+  const session = { deal_jacket_folder_id: "jacketSession1", signed_documents_folder_id: "signedSession1" };
+  assert.deepEqual(resolveFolders(none, null, session)?.folders, session);
+  // Only the Deal Jacket on the session and nothing in DC: it waits.
+  assert.equal(resolveFolders(none, null, { ...session, signed_documents_folder_id: null }), null);
+});

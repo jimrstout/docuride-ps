@@ -707,6 +707,10 @@ it is.
   endpoint and Get document never file the same one at once; a claim older
   than five minutes is taken to be abandoned. The row records the Deal
   Jacket folder it was filed into.
+- **Get document files at once** (2026-10-29) when the deal's folders are
+  known: the session's first (from the CRM, via zoho-sync), then dc.deals,
+  id by id. Before, it read dc.deals only, so a deal whose folders the CRM
+  had sent but DC did not have yet waited for the next move.
 
 ## 14. Vehicle type on Details
 
