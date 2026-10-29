@@ -4,8 +4,9 @@
 // gets. Pure, so a Node test holds the rules.
 //
 // The deal is named by its Zoho DocuRide record id, or its deal number (Verify's
-// own button sends the session id). Folder ids sent with the call win, one by
-// one, over the ones in dc.deals: the CRM may know them before dc.deals does.
+// own button sends the session id). Folder ids are taken one by one: sent with
+// the call first, then the deal's session (which zoho-sync fills from the CRM,
+// migration 0041), then dc.deals as a read-only fallback.
 
 import { readyFolders } from "./contract-documents.ts";
 
@@ -51,26 +52,38 @@ export function parseMoveRequest(body: Record<string, unknown>): { request: Move
   };
 }
 
-export type FolderSource = "This call" | "DocuRide DC" | "This call and DocuRide DC";
+/** Where the folder ids came from: "This call", "The session", "DocuRide DC", or two joined by "and". */
+export type FolderSource = string;
+
+type FolderPair = { deal_jacket_folder_id: string | null; signed_documents_folder_id: string | null };
+
+const has = (v: string | null | undefined): v is string => typeof v === "string" && v.trim() !== "";
 
 /**
  * The folders to move into: each id from the call if it sent one, otherwise
- * from dc.deals. Null when either is still unknown, which is "Missing Folder".
+ * from the deal's session, otherwise from dc.deals. Null when either is still
+ * unknown, which is "Missing Folder".
  */
 export function resolveFolders(
   request: Pick<MoveRequest, "deal_jacket_folder_id" | "signed_documents_folder_id">,
-  dc: { deal_jacket_folder_id: string | null; signed_documents_folder_id: string | null } | null
+  dc: FolderPair | null,
+  session: FolderPair | null = null
 ): { folders: { deal_jacket_folder_id: string; signed_documents_folder_id: string }; source: FolderSource } | null {
-  const jacket = request.deal_jacket_folder_id ?? dc?.deal_jacket_folder_id ?? null;
-  const signed = request.signed_documents_folder_id ?? dc?.signed_documents_folder_id ?? null;
-  const folders = readyFolders({ deal_jacket_folder_id: jacket, signed_documents_folder_id: signed });
+  const pick = (key: keyof FolderPair): { id: string | null; from: string | null } =>
+    has(request[key]) ? { id: request[key], from: "This call" }
+    : has(session?.[key]) ? { id: session![key], from: "The session" }
+    : has(dc?.[key]) ? { id: dc![key], from: "DocuRide DC" }
+    : { id: null, from: null };
+  const jacket = pick("deal_jacket_folder_id");
+  const signed = pick("signed_documents_folder_id");
+  const folders = readyFolders({ deal_jacket_folder_id: jacket.id, signed_documents_folder_id: signed.id });
   if (!folders) return null;
-  const fromCall = [request.deal_jacket_folder_id, request.signed_documents_folder_id].filter(Boolean).length;
-  const source: FolderSource = fromCall === 2 ? "This call" : fromCall === 0 ? "DocuRide DC" : "This call and DocuRide DC";
+  const from = [...new Set([jacket.from!, signed.from!])];
+  const source = from.length === 1 ? from[0] : `${from[0]} and ${from[1].replace(/^The /, "the ")}`;
   return { folders, source };
 }
 
 /** Said when the deal's folders are not known yet. Nothing is changed. */
 export const MISSING_FOLDER_MESSAGE =
-  "Missing Folder. This deal has no Deal Jacket or Signed Documents folder yet, in this call or in DocuRide DC. " +
+  "Missing Folder. This deal has no Deal Jacket or Signed Documents folder yet, in this call, on its session or in DocuRide DC. " +
   "Nothing was moved or changed. Call again once DocuRide DC has made the deal's folders.";

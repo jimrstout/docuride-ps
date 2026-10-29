@@ -29,6 +29,8 @@ function fakes({ jacket = [], held = { "s/a.pdf": new Uint8Array([37, 80, 68, 70
   return {
     log,
     deps: {
+      claim: async (id) => (log.claimed = [...(log.claimed ?? []), id], true),
+      release: async (id) => void (log.released = [...(log.released ?? []), id]),
       download: async (path) => held[path] ?? null,
       listJacket: async () => [...jacket],
       trash: async (id) => void log.trashed.push(id),
@@ -73,6 +75,11 @@ test("with folders a held document is saved to the Deal Jacket; without them it 
   assert.deepEqual(log.uploaded, [{ folder: "jacket1", name: line.file_name }]);
   assert.equal(log.recorded[0].document_status, SAVED);
   assert.equal(log.recorded[0].workdrive_file_id, "wd-1");
+  // Claimed first; the record names the folder and ends the claim.
+  assert.deepEqual(log.claimed, ["row1"]);
+  assert.equal(log.recorded[0].deal_jacket_folder_id, "jacket1");
+  assert.equal(log.recorded[0].filing_started_at, null);
+  assert.equal(log.released, undefined);
 
   // Without folders, Get document holds and does not stop with Missing Folder.
   const fn = src("../supabase/functions/fni-contract-documents/index.ts");

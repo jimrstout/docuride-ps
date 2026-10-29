@@ -1,6 +1,6 @@
 // zoho-sync keeps a deal's three WorkDrive folder IDs on its session through
-// fni.record_deal_folders (migration 0041), and files nothing yet. Mock data
-// only: every ID here is invented.
+// fni.record_deal_folders (migration 0041), and files the waiting documents
+// when the folders become known. Mock data only: every ID here is invented.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -63,12 +63,12 @@ test("zoho-sync records the folders after the deal mirrors and before the queue 
   assert.ok(tryAt < rpc && catchAt > done);
 });
 
-test("nothing is filed yet", () => {
+test("filing starts only when the folders became ready, off the sync's own path", () => {
   const src = read(SYNC);
-  const imports = src.match(/^import [^;]+;$/gm).join("\n");
-  assert.doesNotMatch(imports, /workdrive|deal-jacket|contract-documents|document-names|zoho-files/i);
-  // The answer is only logged: nothing acts on folders_became_ready yet.
-  assert.doesNotMatch(src, /\.folders_became_ready/);
+  assert.match(src, /if \(folders\?\.folders_became_ready\) await fileInBackground\(folders\.session_id, pending\);/);
+  assert.match(src, /if \(typeof EdgeRuntime !== "undefined"\) EdgeRuntime\.waitUntil\(work\);\s*else pending\.push\(work\);/);
+  // The filing never reaches the queue row's failure path.
+  assert.match(src, /const work = fileWhenFoldersReady\(supabase, sessionId\)\.catch\(/);
 });
 
 test("a folder ID is never logged", () => {

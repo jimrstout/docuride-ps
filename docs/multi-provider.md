@@ -692,6 +692,21 @@ it is.
   from the session otherwise, so a document can be held before DC has the deal.
 - **The Details page's button sends the session id**; the CRM sends the record id or
   deal number. Both reach the same move.
+- **Filed when the CRM makes the folders** (2026-10-29). zoho-sync keeps the
+  deal's three folder IDs on its session (`fni.record_deal_folders`,
+  migration 0041). When the Deal Jacket and Signed Documents folders both
+  became known with that write, it files the session's waiting documents
+  after it has answered (`_shared/deal-jacket-file.ts`, the same filing the
+  endpoint runs). Filed: the session event "Contracts filed to Deal Jacket
+  when CRM created the deal's folders" with the count. Not filed: "Contract
+  not filed to Deal Jacket" per contract, with the reason. Nothing waiting:
+  no event. A filing problem never fails the sync; the Details button files
+  again. Folders come from the call, then the session, then dc.deals.
+- **One filing per contract at a time.** Each contract is claimed before it
+  is filed (`agreement_products.filing_started_at`), so the sync, the
+  endpoint and Get document never file the same one at once; a claim older
+  than five minutes is taken to be abandoned. The row records the Deal
+  Jacket folder it was filed into.
 
 ## 14. Vehicle type on Details
 
