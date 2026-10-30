@@ -116,7 +116,7 @@ serve(async (req: Request) => {
 
     const { data: catRows } = await supabase
       .schema("fni").from("product_catalog")
-      .select("provider_id, product_code, display_name, coverage_duration")
+      .select("provider_id, product_code, display_name, coverage_duration, category")
       .eq("tenant_id", s.tenant_id as string);
 
     // Keyed by provider and code: two providers may use one product code.
@@ -128,10 +128,21 @@ serve(async (req: Request) => {
       });
     }
 
+    // The package chosen on the conventional menu, its term and what the
+    // customer removed from it (migration 0046, docs section 26).
+    const choice = (s.menu_choice ?? null) as {
+      name?: string; removed?: string[]; term?: { months: number; rate: number; deal_term: boolean } | null;
+    } | null;
+    const removedCats = new Set(choice?.removed ?? []);
+    const catOf = new Map<string, string>();
+    for (const c of (catRows ?? []) as Record<string, unknown>[]) catOf.set(`${c.provider_id as string}:${c.product_code as string}`, String(c.category ?? ""));
+
     const decisions: AckDecision[] = ((rows ?? []) as Record<string, unknown>[]).map((d) => {
       const code = d.provider_product_id as string;
       const c = copy.get(`${d.provider_id as string}:${code}`);
+      const removed = choice?.name && removedCats.has(catOf.get(`${d.provider_id as string}:${code}`) ?? "");
       return {
+        removed_from: removed && d.disposition !== "Included" ? choice!.name! : null,
         product_code: code,
         product_name: c?.name ?? (d.product_name as string) ?? code,
         disposition: d.disposition as AckDecision["disposition"],
@@ -141,6 +152,7 @@ serve(async (req: Request) => {
       };
     });
 
+    const chosenTerm = choice?.term && !choice.term.deal_term ? choice.term : null;
     const out = await renderAcknowledgment(
       { PDFDocument, StandardFonts, rgb },
       {
@@ -157,9 +169,11 @@ serve(async (req: Request) => {
         // the deal has a payment at all.
         tila_amount_financed: numOr(s.tila_amount_financed),
         amount_financed: numOr(s.amount_financed),
-        apr: numOr(s.apr),
-        interest_rate: numOr(s.interest_rate),
-        term_months: numOr(s.finance_term_total),
+        // The term the customer chose on the menu when it was not the deal's
+        // own: the payments they signed for are on that term and rate.
+        apr: chosenTerm ? chosenTerm.rate : numOr(s.apr),
+        interest_rate: chosenTerm ? chosenTerm.rate : numOr(s.interest_rate),
+        term_months: chosenTerm ? chosenTerm.months : numOr(s.finance_term_total),
         lienholder_name: (s.lienholder_name as string | null) ?? null,
         // The planner applies the finance company's maximum to the payment,
         // so the signed copy must too.

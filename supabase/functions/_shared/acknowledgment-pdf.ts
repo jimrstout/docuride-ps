@@ -42,6 +42,8 @@ export interface AckDecision {
   customer_price: number | null;
   term_months: number | null;
   coverage_duration: string | null;
+  /** Removed by the customer from the package they chose (docs section 26). */
+  removed_from?: string | null;
 }
 
 export interface AckInput {
@@ -234,7 +236,9 @@ export async function renderAcknowledgment(
     if (bits.length > 0) line(bits.join("   -   "), { size: 9, color: grey, gap: 2 });
 
     // The customer's own words. Not an enum token, and never "Not Selected".
-    line(d.disposition, { size: 9, font: bold, color: isIncluded ? ink : grey, gap: 10 });
+    line(d.removed_from && !isIncluded ? `${d.disposition}. Removed from the ${d.removed_from} package` : d.disposition, {
+      size: 9, font: bold, color: isIncluded ? ink : grey, gap: 10,
+    });
   }
 
   // What is due at signing, the same lines the planner shows. Never on a cash
