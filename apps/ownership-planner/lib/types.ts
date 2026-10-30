@@ -620,6 +620,15 @@ export interface TemplateRow {
   updated_by: string | null;
   conditions_line: string;
   slots: TemplateSlotRow[];
+  /** The conventional menu's columns, or the default layout (is_default). */
+  menu_columns: { columns: MenuColumnRow[]; is_default: boolean };
+}
+
+/** A conventional menu column (supabase/functions/_shared/menu-columns.ts). */
+export interface MenuColumnRow {
+  name: string;
+  preset_categories: string[];
+  starting_level: "Lowest" | "Middle" | "Highest";
 }
 
 export interface CatalogProductRow {
@@ -638,6 +647,8 @@ export interface TemplatesPayload {
   products: CatalogProductRow[];
   vehicle_types: string[];
   templates: TemplateRow[];
+  /** Catalog products with no approved description yet. */
+  needs_description: { id: string; provider_id: string; provider_name: string; code: string; name: string }[];
 }
 
 export interface PriceSheetRow {

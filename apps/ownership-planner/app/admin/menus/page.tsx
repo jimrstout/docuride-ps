@@ -13,7 +13,16 @@
 //
 // Nothing is deleted: a menu is switched off, and a slot with no products is
 // not shown. No JavaScript: ?template=<id> opens a menu, ?slot=<id> or
-// ?addslot=1 opens the slot form, ?new=1 the new-menu form.
+// ?addslot=1 opens the slot form, ?new=1 the new-menu form, ?columns=1 the
+// menu columns form.
+//
+// ── Menu columns (the conventional menu) ────────────────────────────────
+// Each menu also has two to five package columns for the conventional menu:
+// a name, an order, the product categories each starts checked, and the
+// coverage level its products start at. Until some are saved it uses the
+// default layout (supabase/functions/_shared/menu-columns.ts). Products with
+// no approved description are listed here so staff can write one; the
+// conventional menu still shows them, under the provider's product name.
 
 import Link from "next/link";
 import PendingButton from "@/components/PendingButton";
@@ -21,7 +30,7 @@ import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
 import type { TemplateRow, TemplateSlotRow, TemplatesPayload } from "@/lib/types";
-import { moveSlot, saveSlot, saveTemplate } from "@/app/console-actions";
+import { moveSlot, saveMenuColumns, saveSlot, saveTemplate } from "@/app/console-actions";
 import ProgramLabel from "@/components/admin/ProgramLabel";
 import { Badge, Notice, PageHead } from "@/components/admin/Parts";
 
@@ -31,6 +40,8 @@ type Params = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : "");
 
 const CATEGORIES = ["Mechanical Protection", "Maintenance", "Tire and Wheel", "Theft", "Battery", "Appearance", "Other"];
+const LEVELS = ["Lowest", "Middle", "Highest"] as const;
+const COLUMN_ROWS = [1, 2, 3, 4, 5];
 
 function notice(params: Params): { tone: "good" | "warn"; text: string } | null {
   if (params.saved !== undefined || params.moved !== undefined) {
@@ -171,6 +182,129 @@ function SlotForm({ t, slot, payload }: { t: TemplateRow; slot: TemplateSlotRow 
   );
 }
 
+/** The menu's conventional columns, and the form that changes them. */
+function ColumnsPanel({ t, editing }: { t: TemplateRow; editing: boolean }) {
+  const { columns, is_default } = t.menu_columns;
+  return (
+    <section className="ad-panel" aria-labelledby="columns-title">
+      <div className="ad-panel-head">
+        <h2 id="columns-title">Menu columns, left to right {is_default ? <Badge>Default layout</Badge> : null}</h2>
+        {editing ? null : (
+          <Link href={`/admin/menus?template=${t.id}&columns=1`} prefetch={false} className="ad-btn ad-btn--secondary">Edit columns</Link>
+        )}
+      </div>
+      {editing ? (
+        <div className="ad-panel-body">
+          <form action={saveMenuColumns} className="ad-editor-fields">
+            <Working />
+            <input type="hidden" name="template_id" value={t.id} />
+            <p className="ad-help ad-field--wide">
+              Two to five columns. Leave a name blank to leave that column out. Products in the ticked
+              categories start checked in that column; a category with no rated product on a deal is simply
+              left out of it.
+            </p>
+            {COLUMN_ROWS.map((n) => {
+              const c = columns[n - 1];
+              return (
+                <fieldset key={n} className="ad-fieldset ad-field--wide">
+                  <legend>Column {n}</legend>
+                  <label className="ad-field">
+                    <span>Name</span>
+                    <input name={`col_${n}_name`} defaultValue={c?.name ?? ""} maxLength={40} placeholder={n <= 2 ? "Required" : "Not used"} />
+                  </label>
+                  <label className="ad-field">
+                    <span>Starting coverage level</span>
+                    <select name={`col_${n}_level`} defaultValue={c?.starting_level ?? "Lowest"}>
+                      {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                  </label>
+                  <div className="ad-field--wide">
+                    {CATEGORIES.map((cat) => (
+                      <label key={cat} className="ad-check">
+                        <input type="checkbox" name={`col_${n}_categories`} value={cat} defaultChecked={c?.preset_categories.includes(cat) ?? false} /> {cat}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              );
+            })}
+            <div className="ad-editor-actions ad-field--wide">
+              <PendingButton className="ad-btn ad-btn--primary" pending="Saving the columns...">Save columns</PendingButton>
+              <Link href={`/admin/menus?template=${t.id}`} prefetch={false} className="ad-btn ad-btn--secondary">Cancel</Link>
+            </div>
+          </form>
+        </div>
+      ) : (
+        <div className="ad-scroll">
+          <table className="ad-table">
+            <thead>
+              <tr>
+                <th scope="col" className="num">#</th>
+                <th scope="col">Column</th>
+                <th scope="col">Starts checked</th>
+                <th scope="col">Starting coverage level</th>
+              </tr>
+            </thead>
+            <tbody>
+              {columns.map((c, i) => (
+                <tr key={c.name}>
+                  <td className="num">{i + 1}</td>
+                  <td className="ad-strong">{c.name}</td>
+                  <td>{c.preset_categories.length > 0 ? c.preset_categories.join(", ") : "Nothing"}</td>
+                  <td>{c.starting_level}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Catalog products with no approved description yet, for staff to write one. */
+function NeedsDescription({ payload }: { payload: TemplatesPayload }) {
+  const rows = payload.needs_description ?? [];
+  return (
+    <section className="ad-panel" aria-labelledby="needs-title">
+      <div className="ad-panel-head"><h2 id="needs-title">Products that need a description</h2></div>
+      <div className="ad-panel-body">
+        <p className="ad-help">
+          The Ownership Planner does not show these until their description is approved. The conventional menu
+          shows them under the provider&apos;s product name.
+        </p>
+      </div>
+      <div className="ad-scroll">
+        <table className="ad-table">
+          <thead>
+            <tr>
+              <th scope="col">Product</th>
+              <th scope="col">Provider</th>
+              <th scope="col"><span className="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={3} className="ad-empty">Every product has an approved description.</td></tr>
+            ) : null}
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td><span className="ad-strong">{r.name}</span><small>{r.code}</small></td>
+                <td>{r.provider_name}</td>
+                <td className="num">
+                  <Link href={`/admin/providers/wording?provider=${r.provider_id}&product=${r.id}`} prefetch={false} className="ad-btn ad-btn--secondary">
+                    Write description
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function MenuDetail({ t, payload, params }: { t: TemplateRow; payload: TemplatesPayload; params: Params }) {
   const name = (id: string) => payload.products.find((p) => p.id === id);
   const slotId = one(params.slot);
@@ -262,6 +396,8 @@ function MenuDetail({ t, payload, params }: { t: TemplateRow; payload: Templates
       </section>
 
       {slot || addingSlot ? <SlotForm t={t} slot={slot} payload={payload} /> : null}
+
+      <ColumnsPanel t={t} editing={params.columns !== undefined} />
     </>
   );
 }
@@ -349,6 +485,8 @@ export default async function MenusPage({ searchParams }: { searchParams: Promis
           </div>
         </section>
       )}
+
+      {params.new === undefined && !open ? <NeedsDescription payload={payload} /> : null}
     </>
   );
 }

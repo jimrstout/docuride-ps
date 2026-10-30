@@ -1159,6 +1159,21 @@ export async function moveSlot(fd: FormData): Promise<void> {
     }), "moved");
 }
 
+/**
+ * A menu's conventional columns: up to five rows, a blank name is a column
+ * not in use. The Edge Function refuses fewer than two or more than five.
+ */
+export async function saveMenuColumns(fd: FormData): Promise<void> {
+  const templateId = field(fd, "template_id");
+  const columns = [1, 2, 3, 4, 5].map((n) => ({
+    name: field(fd, `col_${n}_name`),
+    preset_categories: fd.getAll(`col_${n}_categories`).map(String),
+    starting_level: field(fd, `col_${n}_level`),
+  }));
+  await adminWrite(`${MENUS}?template=${templateId}`, (by) =>
+    edge.adminSaveTemplates({ action: "save_columns", template_id: templateId, columns, updated_by: by }), "saved");
+}
+
 // ── Price sheets ──
 
 /**
