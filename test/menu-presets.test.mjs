@@ -94,12 +94,14 @@ test("a deal's type as presets name it: Cash, or Financed for a loan or lease", 
 });
 
 test("the band: never below dealer cost, the minimum markup up to the maximum, to the cent", () => {
-  // Cost $300.00, rule retail $450.00, at least $25, up to 40% or $150.
-  const band = priceBand(300, 450, { markup_min_dollars: 25, max_markup_percent: 40, max_markup_dollars: 150 });
+  // Cost $300.00, rule retail $400.00, at least $25, up to 40% or $150.
+  const band = priceBand(300, 400, { markup_min_dollars: 25, max_markup_percent: 40, max_markup_dollars: 150 });
   assert.deepEqual(band, { floor: 32500, top: 42000 });
+  // The rule's own price is never above the top: the default never needs a manager.
+  assert.deepEqual(priceBand(300, 450, { max_markup_percent: 40 }), { floor: 30000, top: 45000 });
   // Percent only, dollars only, neither (the rule's own retail is the top).
   assert.deepEqual(priceBand(300, 450, { max_markup_percent: 60 }), { floor: 30000, top: 48000 });
-  assert.deepEqual(priceBand(300, 450, { max_markup_dollars: 75.5 }), { floor: 30000, top: 37550 });
+  assert.deepEqual(priceBand(300, 350, { max_markup_dollars: 75.5 }), { floor: 30000, top: 37550 });
   assert.deepEqual(priceBand(300, 450, {}), { floor: 30000, top: 45000 });
   // An odd cost keeps its cents: 33.3% of $199.99 is $66.60 (66.597 rounded).
   assert.deepEqual(priceBand(199.99, null, { max_markup_percent: 33.3 }), { floor: 19999, top: 26659 });
