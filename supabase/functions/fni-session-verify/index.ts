@@ -84,14 +84,11 @@ import {
   REMOVED,
   type PartyName,
 } from "../_shared/contract-parties.ts";
-import { dayLabel, plannedDateProblem, storeToday, submitDateProblem } from "../_shared/store-day.ts";
+import { contractDateLine, dayLabel, saleDateLine, storeToday, submitDateProblem } from "../_shared/store-day.ts";
+import { crmSaleDate, freshSaleDate, recordCrmSaleDate, type FreshSaleDate } from "../_shared/crm-sale-date.ts";
+import { productName } from "../_shared/dx1-check.ts";
 import { capChange, editFor, MAX_AMOUNT_FINANCED } from "./save-edits.ts";
-import {
-  keepStaffSaleDate,
-  onlySameMonthSaleDateMove,
-  priceSheetBoundaries,
-  saleDateChoice,
-} from "../_shared/sale-date.ts";
+import { onlySameMonthSaleDateMove, priceSheetBoundaries } from "../_shared/sale-date.ts";
 import { SUBMIT_ROW_COLUMNS, submitConfirmation, type SubmitRow } from "../_shared/saved-selections.ts";
 import {
   duplicateVinWarning,
@@ -127,6 +124,9 @@ function admin(): SupabaseClient {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 }
+
+/** What an old Details page is told when it asks to change the sale date here. */
+const SALE_DATE_IN_CRM = "The sale date is set in the CRM only. Change the Sale Date on the DocuRide record in the CRM.";
 
 /** The session columns this function reads. Explicit, so a new PII column on
  *  fni.sessions cannot widen what a staff screen receives by accident. */
@@ -164,9 +164,6 @@ const COLUMNS = [
   // For the duplicate warnings and the submit lock, both of which the verify
   // screen now shows.
   "expires_at", "submit_state", "submit_detail",
-  // The day the deal is planned to be sold, for preparing it the night
-  // before. Migration 0038.
-  "planned_sale_date",
   // The staff layer over the CRM's figures. Migration 0016.
   "staff_edits",
   // Which providers the latest rating covered. Multi-provider Part 4.
@@ -559,7 +556,7 @@ async function requiredFor(
 }
 
 /** The sheet, plus everything the screen shows around it. */
-async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
+async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>, crmRead: FreshSaleDate | null = null) {
   const edits = parseStaffEdits(s.staff_edits);
 
   // The required-properties lookup has to use the EDITED vehicle type, not the
@@ -709,16 +706,14 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
     submit_detail: s.submit_detail ?? null,
     // What the provider said to the last submit that did not simply succeed.
     provider_answer: providerAnswer,
-    // The store's day: when this session ends, the planned sale date, and
-    // whether Submit would be refused on the deal's dates today
-    // (_shared/store-day.ts). Submit checks the same thing again itself.
-    day: await dayFor(supabase, s, edited),
+    // The store's day: when this session ends (the CRM sale date), whether
+    // Submit would be refused on the deal's dates today, the date line and any
+    // contract sent with another date (_shared/store-day.ts). Submit reads the
+    // CRM and checks again itself.
+    day: await dayFor(supabase, s, edited, crmRead),
     // The buyer, co-buyer and lienholder, as the contracts will carry them,
     // locked while any contract on the deal is live.
     contract_parties: contractParties(s, edits, contracts.length > 0),
-    // A staff sale date (Renew for Today moves a past one to today) that the
-    // CRM disagrees with: Keep staff value or Use CRM value, as on the panels.
-    sale_date_choice: saleDateChoice(s, edits),
     // Why nothing is required, when nothing is. Shown instead of a sheet that
     // looks complete because it is asking for nothing.
     not_ready_reason: reason,
@@ -1108,40 +1103,6 @@ async function partyAction(
   return json(200, { ...(await sheetFor(supabase, latest)), changed_inputs: changed });
 }
 
-// ── The sale date, when the CRM says otherwise ────────────────────────────
-//
-// sale_date_keep_staff   the staff date stands; not asked again for this CRM date
-// sale_date_use_crm      drop the edit and use the CRM's date
-//
-// The sale date is a rating input, so using the CRM's sends the deal back
-// through Confirm and Continue and marks the rates out of date, as any change
-// to it does (_shared/sale-date.ts).
-
-async function saleDateAction(
-  supabase: SupabaseClient,
-  s: Record<string, unknown>,
-  action: string,
-  who: string
-): Promise<Response> {
-  const edits = parseStaffEdits(s.staff_edits);
-  const edit = edits.sale_date;
-  if (!edit) return json(400, { error: "The sale date has no staff value." });
-  if (action === "sale_date_use_crm") delete edits.sale_date;
-  else edits.sale_date = keepStaffSaleDate(edit, s.sale_date, who, new Date().toISOString());
-
-  const { error } = await supabase
-    .schema("fni")
-    .from("sessions")
-    .update({ staff_edits: Object.keys(edits).length > 0 ? edits : null })
-    .eq("id", s.id as string);
-  if (error) return json(500, { error: error.message });
-
-  const fresh = (await loadSession(supabase, s.id as string))!;
-  const changed = await unverifyIfInputsMoved(supabase, fresh);
-  const latest = changed.length > 0 ? (await loadSession(supabase, s.id as string))! : fresh;
-  return json(200, { ...(await sheetFor(supabase, latest)), changed_inputs: changed });
-}
-
 // ── The store's day ───────────────────────────────────────────────────────
 
 async function storeTimeZone(supabase: SupabaseClient, storeId: unknown): Promise<string | null> {
@@ -1150,50 +1111,81 @@ async function storeTimeZone(supabase: SupabaseClient, storeId: unknown): Promis
   return (data as { time_zone?: string } | null)?.time_zone ?? null;
 }
 
-async function dayFor(supabase: SupabaseClient, s: Record<string, unknown>, edited: DealDateSource) {
+/**
+ * The store's day, and what the CRM sale date blocks (docs section 24). The
+ * sale date is the CRM's, read fresh when Details loads; it is never edited
+ * here. One date line when Submit is blocked by it, and a line for each live
+ * contract sent with another date. Nothing is changed or voided for those.
+ */
+async function dayFor(
+  supabase: SupabaseClient,
+  s: Record<string, unknown>,
+  edited: DealDateSource,
+  crmRead: FreshSaleDate | null
+) {
   const timeZone = await storeTimeZone(supabase, s.store_id);
   const today = storeToday(timeZone);
-  const planned = typeof s.planned_sale_date === "string" ? s.planned_sale_date : null;
   const dates = dealDates(edited);
+  const contracts = dates.sale ? await contractDates(supabase, s.id as string) : [];
   return {
     time_zone: timeZone,
     today,
     expires_at: s.expires_at ?? null,
-    planned_sale_date: planned,
     sale_date: dates.sale,
-    submit_problem: submitDateProblem({ sale: dates.sale, inService: dates.inService, planned, today }),
+    // The record to open in the CRM, so staff can change the date there.
+    crm_record_id: typeof s.zoho_deal_id === "string" && s.zoho_deal_id !== "" ? s.zoho_deal_id : null,
+    // Whether the sale date was read from the CRM as this page loaded.
+    sale_date_fresh: crmRead?.fresh ?? false,
+    sale_date_problem: crmRead?.problem ?? null,
+    submit_problem: submitDateProblem({ sale: dates.sale, inService: dates.inService, today }),
+    date_line: dates.sale !== null && dates.sale !== today ? saleDateLine(dates.sale, today) : null,
+    contract_date_lines: dates.sale
+      ? contracts.map((c) => contractDateLine(c, dates.sale!)).filter((l): l is string => l !== null)
+      : [],
   };
 }
 
-/**
- * Set or clear the planned sale date. The session then lasts to the end of
- * that day, or of today when it is cleared (fni.renew_session, migration 0038).
- * Never sent to a provider: the sale date is the deal's own.
- */
-async function setPlannedSaleDate(
+/** Each live contract's plain product name, number and the sale date it was sent with. */
+async function contractDates(
   supabase: SupabaseClient,
-  s: Record<string, unknown>,
-  value: unknown
-): Promise<Response> {
-  const raw = typeof value === "string" ? value.trim() : "";
-  const planned = raw === "" ? null : raw;
-  const today = storeToday(await storeTimeZone(supabase, s.store_id));
-  const problem = plannedDateProblem(planned, today);
-  if (problem) return json(400, { error: problem });
-
-  const { error } = await supabase
+  sessionId: string
+): Promise<{ name: string; contract_number: string; dated: string }[]> {
+  const { data: agreements } = await supabase.schema("fni").from("agreements").select("id").eq("session_id", sessionId);
+  const ids = ((agreements ?? []) as { id: string }[]).map((a) => a.id);
+  if (ids.length === 0) return [];
+  const { data } = await supabase
     .schema("fni")
-    .from("sessions")
-    .update({ planned_sale_date: planned })
-    .eq("id", s.id as string);
-  if (error) return json(500, { error: error.message });
-
-  const { error: renewErr } = await supabase.schema("fni").rpc("renew_session", { p_session: s.id as string });
-  if (renewErr) return json(500, { error: renewErr.message });
-
-  console.log(`fni-session-verify planned_sale_date ${s.id} = ${planned ?? "(cleared)"}`);
-  const fresh = (await loadSession(supabase, s.id as string))!;
-  return json(200, await sheetFor(supabase, fresh));
+    .from("agreement_products")
+    .select("contract_number, provider_id, provider_product_id, product_name, contract_sale_date")
+    .in("agreement_id", ids)
+    .in("status", ["Live", "Submit Status Unknown"])
+    // Sent to a provider by PS; an OEM contract recorded here was written elsewhere.
+    .is("recorded_by", null)
+    .not("contract_sale_date", "is", null);
+  const rows = (data ?? []) as {
+    contract_number: string | null; provider_id: string | null; provider_product_id: string | null;
+    product_name: string | null; contract_sale_date: string;
+  }[];
+  if (rows.length === 0) return [];
+  const codes = [...new Set(rows.map((r) => r.provider_product_id).filter((c): c is string => !!c))];
+  const { data: catalog } = codes.length
+    ? await supabase.schema("fni").from("product_catalog").select("provider_id, product_code, category").in("product_code", codes).is("store_id", null)
+    : { data: [] };
+  const cat = new Map(((catalog ?? []) as { provider_id: string; product_code: string; category: string | null }[])
+    .map((c) => [`${c.provider_id}:${c.product_code}`, c.category]));
+  return rows.map((r) => ({
+    name: productName({
+      contract_number: r.contract_number ?? "",
+      category: cat.get(`${r.provider_id}:${r.provider_product_id}`) ?? null,
+      product_name: r.product_name ?? "",
+      plan: null,
+      term_months: null,
+      cents: null,
+      provider_name: null,
+    }),
+    contract_number: r.contract_number ?? "with no number",
+    dated: r.contract_sale_date,
+  }));
 }
 
 // ── The conventional menu's columns for this deal ─────────────────────────
@@ -1278,7 +1270,14 @@ async function refresh(
   // not cleared anywhere in this function, which is how a refresh keeps staff
   // edits: the layer sits above the columns being rewritten. Discard is the only
   // thing that drops them.
-  const patch = crmRatingFields(record as unknown as Record<string, unknown>);
+  // The sale date first, through the one place that records it: its event,
+  // its month rule and its open-until time (_shared/crm-sale-date.ts).
+  try {
+    await recordCrmSaleDate(supabase, s as unknown as { id: string }, crmSaleDate(record as unknown as Record<string, unknown>));
+  } catch (err) {
+    return json(500, { error: err instanceof Error ? err.message : String(err) });
+  }
+  const { sale_date: _sale, ...patch } = crmRatingFields(record as unknown as Record<string, unknown>);
 
   const { error } = await supabase
     .schema("fni")
@@ -1431,9 +1430,13 @@ serve(async (req: Request) => {
       if (!sessionId || !UUID_RE.test(sessionId)) {
         return json(400, { error: "A well-formed session_id is required" });
       }
-      const s = await loadSession(supabase, sessionId);
-      if (!s) return json(404, { error: "Session not found" });
-      return json(200, await sheetFor(supabase, s));
+      const loaded = await loadSession(supabase, sessionId);
+      if (!loaded) return json(404, { error: "Session not found" });
+      // The sale date fresh from the CRM, whatever zoho-sync last saw. A CRM
+      // that does not answer in time leaves the copy, and the page says so.
+      const crmRead = await freshSaleDate(supabase, loaded as unknown as { id: string });
+      const s = crmRead.outcome === "Changed" ? (await loadSession(supabase, sessionId))! : loaded;
+      return json(200, await sheetFor(supabase, s, crmRead));
     }
 
     if (req.method !== "POST") return json(405, { error: "GET or POST only" });
@@ -1470,16 +1473,13 @@ serve(async (req: Request) => {
     }
 
       if (action === "refresh") return await refresh(supabase, s);
-    if (action === "planned_sale_date") return await setPlannedSaleDate(supabase, s, body.value);
+    if (action === "planned_sale_date" || action === "sale_date_keep_staff" || action === "sale_date_use_crm") {
+      return json(410, { error: SALE_DATE_IN_CRM });
+    }
     if (action.startsWith("party_")) {
       const who = typeof body.edited_by === "string" ? body.edited_by.trim() : "";
       if (who === "") return json(400, { error: "edited_by is required: an edit names a person." });
       return await partyAction(supabase, s, action, body, who);
-    }
-    if (action === "sale_date_keep_staff" || action === "sale_date_use_crm") {
-      const who = typeof body.edited_by === "string" ? body.edited_by.trim() : "";
-      if (who === "") return json(400, { error: "edited_by is required: an edit names a person." });
-      return await saleDateAction(supabase, s, action, who);
     }
     if (action === "discard_edits") return await discardEdits(supabase, s);
     if (action === "menu_levels") return await setMenuLevels(supabase, s, body.levels);
@@ -1495,9 +1495,8 @@ serve(async (req: Request) => {
 
     return json(400, {
       error:
-        "action must be one of save, refresh, discard_edits, verify, planned_sale_date, " +
-        "party_save, party_remove, party_restore, party_keep_staff, party_use_crm, " +
-        "sale_date_keep_staff, sale_date_use_crm",
+        "action must be one of save, refresh, discard_edits, verify, menu_levels, " +
+        "party_save, party_remove, party_restore, party_keep_staff, party_use_crm",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

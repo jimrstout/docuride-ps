@@ -72,7 +72,7 @@ test("a deal with no sale date is refused, and today is never put in its place",
     for (const k of ["saleDate", "vehiclePurchaseDate", "inServiceDate"]) assert.notEqual(request[k], TODAY, k);
     assert.equal("sale.date" in props(request), false);
   }
-  assert.equal(SALE_DATE_MISSING, "Sale date is missing. Add it on the deal and refresh from CRM, or enter it on Verify.");
+  assert.equal(SALE_DATE_MISSING, "There is no sale date in the CRM. Add the Sale Date in the CRM.");
 });
 
 test("rateDate is still today: it says when we asked, not anything about the deal", () => {

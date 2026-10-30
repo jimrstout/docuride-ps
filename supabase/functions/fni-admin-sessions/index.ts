@@ -1,34 +1,13 @@
 // fni-admin-sessions/index.ts
 //
-// The internal session browser's data source: the most recent planner sessions,
-// and the one write it needs -- Renew for Today, so a lapsed session can be
-// opened again without creating a new deal.
+// The internal session browser's data source: the most recent planner sessions.
 //
 // Input:
-//   GET  ?limit=25                    -> the newest sessions, newest first
-//   POST { session_id, renewed_by? }  -> Renew for Today: a sale date or
-//                                        planned sale date before today moves
-//                                        to today, then the session lasts to
-//                                        the end of its store's day, or of its
-//                                        planned sale date when that is later.
-//                                        renewed_by is the signed-in person's
-//                                        initials; without it, System.
-//
-// ── Renew for Today, not +24h ───────────────────────────────────────────
-// +24h added 24 hours a press, so two presses stacked (deal 13437 gained 48).
-// A session now lasts to 23:59:59 on its store's day (migration 0038), and
-// renewing sets that same moment again: a second press changes nothing. An
-// older console that still sends { hours } is renewed the same way.
-//
-// ── Past dates move to today (2026-10-28) ───────────────────────────────
-// A deal prepared yesterday still said yesterday, and Submit takes only the
-// day of the sale. So a sale date or planned sale date before today at the
-// store moves to today first; today or later is left alone, so a deal
-// prepared for tomorrow keeps tomorrow. The sale date moves as a staff edit
-// over the CRM's, and each move is a session event naming who did it. A moved
-// sale date marks the rates out of date, since it is sent in the rate request,
-// and a verified deal goes back through Confirm and Continue. No price is
-// touched. See _shared/sale-date.ts.
+//   GET  ?limit=25   -> the newest sessions, newest first
+//   POST             -> 410. Renew for Today is retired (2026-10-30): a session
+//                       is open through 23:59:59 on its CRM sale date at the
+//                       store (migration 0044), and the sale date is changed in
+//                       the CRM only (_shared/crm-sale-date.ts).
 //
 // Auth: FNI_WEBHOOK_SECRET via x-webhook-secret header or ?secret= query param,
 // exactly as fni-session-get. The browser never holds it; the console's server
@@ -50,22 +29,6 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { currentRows, ratingSummary, type RatingFailure, type RatingRow } from "../_shared/rating-summary.ts";
-import { storeToday } from "../_shared/store-day.ts";
-import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
-import {
-  dateMoveEvent,
-  movedSaleDateEdit,
-  renewDateMoves,
-  renewedBy,
-  renewExtends,
-  renewOffered,
-  priceSheetBoundaries,
-  saleDateMoveNeedsRerate,
-} from "../_shared/sale-date.ts";
-import { publishedSheetDates } from "../_shared/price-sheet-rows.ts";
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** The columns the console renders. Explicit, so a new PII column on the table
  *  cannot widen this endpoint by accident. */
@@ -82,7 +45,6 @@ const LIST_COLUMNS = [
   "stock_number",
   "created_at",
   "expires_at",
-  "planned_sale_date",
   // Which providers the latest rating covered. Multi-provider Part 4.
   "rated_provider_ids",
 ].join(",");
@@ -159,13 +121,15 @@ async function list(url: URL): Promise<Response> {
   ];
 
   const names = new Map<string, string>();
+  const zones = new Map<string, string | null>();
   if (storeIds.length > 0) {
     const { data: stores } = await supabase
       .from("stores")
-      .select("id,name")
+      .select("id,name,time_zone")
       .in("id", storeIds);
-    for (const s of (stores ?? []) as { id: string; name: string }[]) {
+    for (const s of (stores ?? []) as { id: string; name: string; time_zone: string | null }[]) {
       names.set(s.id, s.name);
+      zones.set(s.id, s.time_zone ?? null);
     }
   }
 
@@ -209,45 +173,7 @@ async function list(url: URL): Promise<Response> {
     }
   }
 
-  // ── What Renew for Today would do ─────────────────────────────────────
-  // The end of the store's day (or of the planned sale date), from Postgres so
-  // it is the same moment the renew writes, and the store's today. Offered
-  // when it is later than the expiry the session already has, or when the
-  // sale date or a set planned sale date is before today at the store, since
-  // Renew is what moves them (_shared/sale-date.ts, renewOffered).
-  const renewTo = new Map<string, { renew_to: string; time_zone: string; store_today: string }>();
-  // The sale date as it stands, a staff date where there is one. Read here
-  // and used only for that: staff_edits can hold names and addresses, and the
-  // list never returns it.
-  const saleDate = new Map<string, string | null>();
-  if (sessionIds.length > 0) {
-    const [{ data: targets, error: targetErr }, { data: dates, error: datesErr }] = await Promise.all([
-      supabase.schema("fni").rpc("session_renew_targets", { p_ids: sessionIds }),
-      supabase.schema("fni").from("sessions").select("id, sale_date, staff_edits").in("id", sessionIds),
-    ]);
-    if (targetErr) console.error(`session_renew_targets failed: ${targetErr.message}`);
-    if (datesErr) console.error(`sale dates for Renew for Today failed: ${datesErr.message}`);
-    for (const t of (targets ?? []) as { session_id: string; renew_to: string; time_zone: string; store_today: string }[]) {
-      renewTo.set(t.session_id, { renew_to: t.renew_to, time_zone: t.time_zone, store_today: t.store_today });
-    }
-    for (const d of (dates ?? []) as Record<string, unknown>[]) {
-      const sale = applyStaffEdits(d, parseStaffEdits(d.staff_edits)).sale_date;
-      saleDate.set(String(d.id), typeof sale === "string" ? sale : null);
-    }
-  }
-
   const now = Date.now();
-  const renewable = (s: Record<string, unknown>): boolean => {
-    const t = renewTo.get(String(s.id));
-    if (!t) return false;
-    return renewOffered({
-      expiresAt: typeof s.expires_at === "string" ? s.expires_at : null,
-      renewTo: t.renew_to,
-      sale: saleDate.get(String(s.id)) ?? null,
-      planned: typeof s.planned_sale_date === "string" ? s.planned_sale_date : null,
-      today: t.store_today,
-    });
-  };
 
   return json(200, {
     // Echoed so the console can say "the 25 newest" without assuming the
@@ -268,157 +194,13 @@ async function list(url: URL): Promise<Response> {
       created_at: s.created_at,
       expires_at: s.expires_at,
       expired: isExpired(s.expires_at, now),
-      planned_sale_date: s.planned_sale_date ?? null,
-      // Renew for Today is offered when it would give the session longer, or
-      // move a past sale date or planned sale date to today.
-      renewable: renewable(s),
-      renew_to: renewTo.get(String(s.id))?.renew_to ?? null,
-      time_zone: renewTo.get(String(s.id))?.time_zone ?? null,
+      time_zone: typeof s.store_id === "string" ? zones.get(s.store_id) ?? null : null,
 
       // No row means nobody has asked the provider yet. That is a real and
       // common state on a session created moments ago, so it is named rather
       // than folded into one of the outcomes.
       rating: rating.get(String(s.id)) ?? { state: "Pending", detail: null, at: null, failures: [] },
     })),
-  });
-}
-
-async function renew(req: Request): Promise<Response> {
-  let body: Record<string, unknown>;
-  try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return json(400, { error: "A JSON body is required" });
-  }
-
-  const sessionId = body.session_id;
-  if (typeof sessionId !== "string" || !UUID_RE.test(sessionId)) {
-    return json(400, { error: "A well-formed session_id is required" });
-  }
-
-  const supabase = admin();
-
-  const { data: row, error: readErr } = await supabase
-    .schema("fni")
-    .from("sessions")
-    .select("id,expires_at,store_id,tenant_id,sale_date,planned_sale_date,staff_edits,verification_state")
-    .eq("id", sessionId)
-    .maybeSingle();
-
-  if (readErr) return json(500, { error: readErr.message });
-  if (!row) return json(404, { error: "Session not found" });
-
-  const s = row as Record<string, unknown>;
-  const before = s.expires_at as string;
-  const who = renewedBy(body.renewed_by);
-
-  // ── Past dates move to today, at the store ────────────────────────────
-  const { data: storeRow } = await supabase
-    .from("stores")
-    .select("time_zone")
-    .eq("id", s.store_id as string)
-    .maybeSingle();
-  const today = storeToday((storeRow as { time_zone?: string } | null)?.time_zone ?? null);
-  const edits = parseStaffEdits(s.staff_edits);
-  const moves = renewDateMoves({
-    // The sale date as it stands: a staff date where there is one.
-    sale: (applyStaffEdits(s, edits).sale_date as string | null) ?? null,
-    planned: (s.planned_sale_date as string | null) ?? null,
-    today,
-  });
-
-  if (moves.length > 0) {
-    const now = new Date().toISOString();
-    const patch: Record<string, unknown> = {};
-    for (const m of moves) {
-      if (m.field === "planned_sale_date") patch.planned_sale_date = m.to;
-      // A staff edit over the CRM's date, so Refresh from CRM keeps it.
-      else patch.staff_edits = { ...edits, sale_date: movedSaleDateEdit(s.sale_date, m.to, who, now) };
-    }
-    // The sale date is a rating input, but rate cards change at month
-    // boundaries: a move within the month leaves the rating current and the
-    // deal verified. Into another month or year, or across the day a price
-    // sheet takes over, the deal is verified and rated again
-    // (_shared/sale-date.ts). A planned sale date is never sent to a
-    // provider, so moving it alone never touches the rating.
-    const saleMove = moves.find((m) => m.field === "sale_date");
-    const sheets = saleMove ? await publishedSheetDates(supabase, s.tenant_id) : [];
-    const saleMoved = !!saleMove &&
-      saleDateMoveNeedsRerate(saleMove.from, saleMove.to, sheets === null ? null : priceSheetBoundaries(sheets));
-    if (saleMoved && s.verification_state === "Verified") {
-      Object.assign(patch, {
-        verification_state: "Needs Verification",
-        verified_at: null,
-        verified_by: null,
-        verified_snapshot: null,
-      });
-    }
-
-    const { error: moveErr } = await supabase
-      .schema("fni")
-      .from("sessions")
-      .update(patch)
-      .eq("id", sessionId);
-    if (moveErr) return json(500, { error: moveErr.message });
-
-    // Rated on a date in another month, so out of date. Kept, never deleted,
-    // and no price on them is changed. Offers already out of date for any
-    // other reason are left so: nothing here marks one current.
-    if (saleMoved) {
-      const { error: staleErr } = await supabase
-        .schema("fni")
-        .from("rated_offers")
-        .update({ out_of_date: true })
-        .eq("session_id", sessionId);
-      if (staleErr) return json(500, { error: staleErr.message });
-    }
-
-    const { error: eventErr } = await supabase
-      .schema("fni")
-      .from("session_events")
-      .insert(moves.map((m) => ({
-        session_id: sessionId,
-        event: dateMoveEvent(m, who),
-        // Whether this move sent the deal back to be rated: false within the month.
-        detail: { field: m.field, from: m.from, to: m.to, store_today: today, rerate_needed: m.field === "sale_date" && saleMoved },
-        created_by: who,
-      })));
-    if (eventErr) console.error(`fni-admin-sessions date move event not recorded for ${sessionId}: ${eventErr.message}`);
-  }
-  // ── Then the expiry, only if that gives the session longer ────────────
-  // Worked out after the moves, since a planned sale date moved to today
-  // changes the day it lasts to. A session already open to tonight keeps its
-  // open-until time: pressing Renew again moves dates and nothing else.
-  const { data: target, error: targetErr } = await supabase
-    .schema("fni")
-    .rpc("session_renew_targets", { p_ids: [sessionId] });
-  if (targetErr) return json(500, { error: targetErr.message });
-  const renewTo = ((target ?? []) as { renew_to: string }[])[0]?.renew_to ?? null;
-  const extended = renewExtends(before, renewTo);
-
-  let next: string = before;
-  if (extended) {
-    const { data: renewed, error: writeErr } = await supabase
-      .schema("fni")
-      .rpc("renew_session", { p_session: sessionId });
-    if (writeErr) return json(500, { error: writeErr.message });
-    next = renewed as string;
-    console.log(`fni-admin-sessions renewed ${sessionId} to ${next}`);
-  } else {
-    console.log(`fni-admin-sessions ${sessionId} already open to ${before}; ${moves.length} date(s) moved`);
-  }
-
-  const current = Date.parse(before);
-  return json(200, {
-    session_id: sessionId,
-    previous_expires_at: before,
-    expires_at: next,
-    // Whether the open-until time changed. False when it already ran to tonight.
-    extended,
-    // It was revived rather than merely pushed out. The console says so.
-    revived: extended && Number.isFinite(current) && current <= Date.now(),
-    // Each date moved to today, in the words of its session event.
-    moved: moves.map((m) => dateMoveEvent(m, who)),
   });
 }
 
@@ -429,7 +211,11 @@ serve(async (req: Request) => {
 
   try {
     if (req.method === "GET") return await list(url);
-    if (req.method === "POST") return await renew(req);
+    if (req.method === "POST") {
+      return json(410, {
+        error: "Renew for Today is retired. A session is open through its sale date; change the Sale Date in the CRM.",
+      });
+    }
     return json(405, { error: "GET or POST only" });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

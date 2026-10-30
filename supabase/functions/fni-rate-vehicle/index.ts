@@ -64,6 +64,7 @@ import { familiesFromRow, familiesFromRows, type RatingRow } from "../_shared/ra
 import { priceFamilies } from "../_shared/plan-prices.ts";
 import type { PricingRule } from "../_shared/planner-pricing.ts";
 import { renewedBy } from "../_shared/sale-date.ts";
+import { freshSaleDate, type SaleDateSession } from "../_shared/crm-sale-date.ts";
 import {
   compareRefreshed,
   REFRESHED_HELD_EVENT,
@@ -198,7 +199,16 @@ serve(async (req: Request) => {
 
     if (sessErr || !session) return json(404, { error: `Session ${session_id} not found` });
 
-    const sess = session as SessionRow;
+    // The sale date fresh from the CRM before every rating, whatever zoho-sync
+    // last saw (_shared/crm-sale-date.ts). A CRM that does not answer in time
+    // leaves the last value read; a change is recorded, with its month rule,
+    // and the session read again so the rating carries it.
+    let sess = session as SessionRow;
+    const crmRead = await freshSaleDate(supabase, sess as unknown as SaleDateSession);
+    if (crmRead.outcome === "Changed" || crmRead.outcome === "Changed meanwhile") {
+      const { data: again } = await supabase.schema("fni").from("sessions").select("*").eq("id", session_id).single();
+      if (again) sess = again as SessionRow;
+    }
     providerId = await tecAssuredProviderId(supabase, sess.tenant_id);
 
     const terminalStatuses = ["Finalized", "Written Back", "Cancelled"];

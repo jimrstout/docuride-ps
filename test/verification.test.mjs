@@ -107,6 +107,8 @@ test("every field that feeds a rate is editable", () => {
     // is shown so staff can confirm who is financing it. Deal type is the field
     // that decides how the deal rates, and that one is editable.
     if (["deal_number", "stock_number", "lender"].includes(f.key)) continue;
+    // The sale date feeds every rate, and is the CRM's: changed there only (migration 0044).
+    if (f.key === "sale_date") continue;
     // Down payment is shown for confirmation and read only. It feeds no rate.
     if (f.key === "agreed_down_payment") continue;
     // The three finance figures close on a cash deal, and this fixture is one.
@@ -123,12 +125,17 @@ test("only the fields that feed no rate are never editable", () => {
     .fields.filter((f) => !f.editable);
   assert.deepEqual(
     locked.map((f) => f.key).sort(),
-    ["agreed_down_payment", "deal_number", "lender", "stock_number"]
+    ["agreed_down_payment", "deal_number", "lender", "sale_date", "stock_number"]
   );
   // Down payment joined them: shown in Financial, read only, from the CRM.
   // None of them is a TecAssured rating input, so changing one cannot
-  // invalidate a verification.
-  for (const f of locked) assert.equal(f.provider_property, null, f.key);
+  // invalidate a verification. The sale date is the exception: it is a rating
+  // input, changed in the CRM only, and a change there is handled by the month
+  // rule (_shared/crm-sale-date.ts).
+  for (const f of locked.filter((f) => f.key !== "sale_date")) assert.equal(f.provider_property, null, f.key);
+  const sale = locked.find((f) => f.key === "sale_date");
+  assert.equal(sale.provider_property, "sale.date");
+  assert.equal(sale.note, "From the CRM. The sale date is changed in the CRM only.");
 });
 
 test("a CRM field no longer tells you to go and fix it in CRM", () => {

@@ -34,7 +34,7 @@
 export const RATING_INPUT_NAMES: readonly string[] = [
   // Deal
   "deal_type",
-  "sale_date",
+  // No sale_date: it is the CRM's, changed there only (docs section 24).
   // Vehicle
   "vin",
   "unit_year",

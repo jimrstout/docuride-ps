@@ -43,7 +43,7 @@ interface OwnReason {
 }
 
 const OWN_REASONS: OwnReason[] = [
-  { match: /^Sale date is missing\b/, say: null },
+  { match: /^There is no sale date in the CRM\b/, say: null },
   { match: /^In-service date is missing\b/, say: null },
   {
     match: /^No TecAssured vehicle type for this unit\b/,

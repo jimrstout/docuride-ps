@@ -214,13 +214,19 @@ test("money, months and dates are cast for the column, not passed as text", () =
   const out = applied({
     sale_price: edit({ value: "$25,500.00" }),
     odometer: edit({ value: "412 " }),
-    sale_date: edit({ value: "2026-10-01" }),
+    in_service_date: edit({ value: "2026-10-01" }),
     unit_year: edit({ value: "2025" }),
   });
   assert.equal(out.sale_price, 25500);
   assert.equal(out.odometer, 412);
-  assert.equal(out.sale_date, "2026-10-01");
+  assert.equal(out.in_service_date, "2026-10-01");
   assert.equal(out.unit_year, 2025);
+});
+
+test("the sale date is the CRM's: it cannot be edited, and an old staff sale date is ignored", () => {
+  assert.equal(editTargetFor("sale_date"), null);
+  const out = applied({ sale_date: edit({ value: "2026-10-28" }) });
+  assert.equal(out.sale_date, "2026-09-26");
 });
 
 test("deal type round-trips through the word staff read", () => {
@@ -629,7 +635,7 @@ test("a formatting-only difference is not an edit", () => {
   }
   assert.equal(sameAsUnedited(editTargetFor("apr"), "6.99", "6.99%"), true);
   assert.equal(sameAsUnedited(editTargetFor("deal_type"), "Loan", "Finance"), true);
-  assert.equal(sameAsUnedited(editTargetFor("sale_date"), "09/26/2026", "2026-09-26"), true);
+  assert.equal(sameAsUnedited(editTargetFor("in_service_date"), "09/26/2026", "2026-09-26"), true);
   assert.equal(sameAsUnedited(editTargetFor("vehicle_type"), "utv", "UTV"), true);
 
   const deal = defender({ sale_price: "24999" });

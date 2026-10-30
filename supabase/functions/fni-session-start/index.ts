@@ -40,6 +40,7 @@ import { tecAssuredAccount } from "../_shared/provider-rows.ts";
 import { publishedSheetDates } from "../_shared/price-sheet-rows.ts";
 import { onlySameMonthSaleDateMove, priceSheetBoundaries } from "../_shared/sale-date.ts";
 import { crmRatingFields } from "../_shared/crm-fields.ts";
+import { crmSaleDate, recordCrmSaleDate } from "../_shared/crm-sale-date.ts";
 import { mapSession, testRecordPatch, text } from "../_shared/session-map.ts";
 import {
   buildVerification,
@@ -201,8 +202,21 @@ async function reopen(
   }
 
   // ── Refresh the rating inputs from the CRM ────────────────────────────
+  // The sale date through the one place that records it, with its event and
+  // its month rule (_shared/crm-sale-date.ts). The rest as before.
+  try {
+    const { sale } = await recordCrmSaleDate(
+      supabase,
+      session as unknown as { id: string },
+      crmSaleDate(record as unknown as Record<string, unknown>)
+    );
+    session.sale_date = sale;
+  } catch (err) {
+    console.error(`fni-session-start sale date not recorded for ${sessionId}: ${err instanceof Error ? err.message : "error"}`);
+  }
+  const { sale_date: _sale, ...crmFields } = crmRatingFields(record as unknown as Record<string, unknown>);
   const patch: Record<string, unknown> = {
-    ...crmRatingFields(record as unknown as Record<string, unknown>),
+    ...crmFields,
     // A record ticked "Test Record Only" since the session began makes it a
     // test session. Nothing here ever clears is_test.
     ...testRecordPatch(record as unknown as Record<string, unknown>, session),
