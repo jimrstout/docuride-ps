@@ -234,6 +234,8 @@ export interface SessionPayload {
   selections: Selection[];
   /** Products under a live contract: shown purchased, and locked (lib/purchased.ts). */
   purchased?: { provider_id: string | null; provider_product_id: string }[];
+  /** The conventional menu's columns for this deal (supabase/functions/_shared/menu-columns.ts). */
+  menu_columns?: MenuColumnRow[];
   photos: string[] | null;
   photos_cached_at: string | null;
 }
