@@ -18,6 +18,14 @@
 //   both go in a session event. Refused once the customer has chosen a
 //   package: prices are locked then.
 //
+//   `terms` (optional): each column's extra payment terms, {"<position>":
+//   [{months, rate}]}, at most two, each with its own rate
+//   (_shared/menu-terms.ts). Financed deals only.
+//
+// POST { session_id, action: "reset", set_by }
+//   The menu back to its prepared state: products the customer removed from
+//   a column come back. Not once a package is chosen.
+//
 // POST { session_id, action: "unlock", set_by }
 //   Back to Prepare menu after the customer chose a package: the prices
 //   unlock, and the session event says who did it.
@@ -32,12 +40,15 @@ import { loadSheet } from "../_shared/menu-prepare-rows.ts";
 import { checkPreparation, optionFor, type Preparation } from "../_shared/menu-prepare.ts";
 import { sessionCap, sessionPaymentBasis } from "../_shared/plan-prices.ts";
 import { renewedBy } from "../_shared/sale-date.ts";
+import { parseTerms } from "../_shared/menu-terms.ts";
+import { presetDealType } from "../_shared/menu-presets.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const PREPARED_EVENT = "Menu prepared";
 export const ABOVE_BAND_EVENT = "Price above the band allowed by a manager on Prepare menu";
 export const UNLOCKED_EVENT = "Returned to Prepare menu after the customer chose a package";
+export const RESET_EVENT = "Menu reset to the prepared state";
 export const LOCKED =
   "The customer chose a package, so its prices are locked. Return to Prepare menu to change them; that is recorded on the deal.";
 export const NEEDS_MANAGER = "A price above the band needs a manager to sign in and give a reason.";
@@ -71,6 +82,8 @@ async function reply(supabase: SupabaseClient, s: Record<string, unknown>, statu
       rate: basis.ratePercent,
       term_months: basis.termMonths,
       cap: sessionCap(s, basis),
+      // The deal's own term comes first in every column (_shared/menu-terms.ts).
+      financed: presetDealType(s.finance_type) === "Financed",
     },
     sheet,
   });
@@ -119,7 +132,16 @@ serve(async (req: Request) => {
       return await reply(supabase, (await session(supabase, id))!);
     }
 
-    if (body.action !== "save") return json(400, { error: "action must be save or unlock" });
+    if (body.action === "reset") {
+      if (s.menu_prices_locked_at) return json(409, { error: LOCKED });
+      const { error } = await supabase.schema("fni").from("sessions").update({ menu_removed: null }).eq("id", id);
+      if (error) return json(500, { error: error.message });
+      await supabase.schema("fni").from("session_events").insert({ session_id: id, event: RESET_EVENT, detail: {}, created_by: who });
+      console.log("fni-menu-prepare reset", { session: id });
+      return await reply(supabase, (await session(supabase, id))!);
+    }
+
+    if (body.action !== "save") return json(400, { error: "action must be save, reset or unlock" });
     if (s.menu_prices_locked_at) return json(409, { error: LOCKED });
 
     const surcharges = Array.isArray(body.surcharges) ? body.surcharges.map(String) : [];
@@ -133,6 +155,22 @@ serve(async (req: Request) => {
       surcharges,
     };
     const check = checkPreparation(sheet, prep);
+
+    // Extra payment terms, per column, each with its own rate. Financed only.
+    let menuTerms: Record<string, { months: number; rate: number }[]> | null | undefined = undefined;
+    if (body.terms !== undefined) {
+      if (presetDealType(s.finance_type) !== "Financed") {
+        check.errors.push("A cash deal has no payments, so it has no payment terms.");
+      } else {
+        menuTerms = {};
+        for (const c of sheet.columns) {
+          const raw = ((body.terms as Record<string, unknown>)[String(c.position)] ?? []) as { months?: unknown; rate?: unknown }[];
+          const got = parseTerms(Array.isArray(raw) ? raw : [], c.name);
+          if ("errors" in got) check.errors.push(...got.errors);
+          else menuTerms[String(c.position)] = got.terms;
+        }
+      }
+    }
     if (check.errors.length > 0) return json(400, { error: check.errors.join(" "), errors: check.errors });
 
     const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 500) : "";
@@ -164,6 +202,7 @@ serve(async (req: Request) => {
       menu_surcharges: surcharges,
       menu_prepared_at: now,
       menu_prepared_by: who,
+      ...(menuTerms !== undefined ? { menu_terms: menuTerms } : {}),
     }).eq("id", id);
     if (sErr) return json(500, { error: `The menu could not be saved: ${sErr.message}` });
 

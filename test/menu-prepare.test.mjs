@@ -205,3 +205,35 @@ test("the endpoint: secret, managers above the band, locked once chosen, events,
     assert.doesNotMatch(read(f), /—/, f);
   }
 });
+
+test("each column's footer shows a payment for each of its terms, the deal's first", async () => {
+  const { columnTerms } = await import("../supabase/functions/_shared/menu-terms.ts");
+  const sheet = buildSheet(input({ terms: { "1": [{ months: 72, rate: 7.74 }], "2": [] } }));
+  assert.deepEqual(sheet.terms, { "1": [{ months: 72, rate: 7.74 }], "2": [] });
+  const s = { ...model.initialState(sheet), cells: { "1": { "Mechanical Protection": keyOf(sheet, "c48") }, "2": { "Mechanical Protection": keyOf(sheet, "c24") } } };
+  const deal = { months: 60, rate: 5.9 };
+  const on = (prices, t) => planTotals(12000, prices, t.rate, t.months, null).totalPayment;
+  const gold = model.columnFigures(sheet, s, "1", () => null, columnTerms(deal, s.terms["1"]), on);
+  assert.deepEqual(gold.payments.map((p) => [p.months, p.rate, p.deal_term]), [[60, 5.9, true], [72, 7.74, false]]);
+  assert.equal(gold.payments[1].monthly, Math.round(planTotals(12000, [775], 7.74, 72, null).totalPayment * 100));
+  // Each column its own set of terms.
+  assert.equal(model.columnFigures(sheet, s, "2", () => null, columnTerms(deal, s.terms["2"]), on).payments.length, 1);
+  // A cash deal: no terms, no payments, and no terms sent.
+  assert.deepEqual(model.columnFigures(sheet, s, "1", () => null, columnTerms(null, s.terms["1"]), on).payments, []);
+  assert.equal("terms" in model.payloadOf(sheet, s, false), false);
+  assert.deepEqual(model.payloadOf(sheet, s, true).terms, { "1": [{ months: 72, rate: 7.74 }], "2": [] });
+});
+
+test("terms are saved checked, cash deals refused; Reset the menu brings removed products back and is recorded", () => {
+  const fn = read("supabase/functions/fni-menu-prepare/index.ts");
+  assert.match(fn, /check\.errors\.push\("A cash deal has no payments, so it has no payment terms\."\);/);
+  assert.match(fn, /const got = parseTerms\(Array\.isArray\(raw\) \? raw : \[\], c\.name\);/);
+  assert.match(fn, /\.\.\.\(menuTerms !== undefined \? \{ menu_terms: menuTerms \} : \{\}\),/);
+  assert.match(fn, /if \(body\.action === "reset"\) \{\s*if \(s\.menu_prices_locked_at\) return json\(409, \{ error: LOCKED \}\);/);
+  assert.match(fn, /\.update\(\{ menu_removed: null \}\)/);
+  assert.match(fn, /export const RESET_EVENT = "Menu reset to the prepared state";/);
+  const rows = read("supabase/functions/_shared/menu-prepare-rows.ts");
+  // The deal's own terms first, else the presets'; a cash deal none.
+  assert.match(rows, /const financed = presetDealType\(s\.finance_type\) === "Financed";/);
+  assert.match(rows, /terms\[String\(pos\)\] = Array\.isArray\(own\)/);
+});

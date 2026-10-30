@@ -42,7 +42,8 @@ export async function loadSheet(supabase: SupabaseClient, s: Record<string, unkn
     if (resolved) families = slotFamilies(resolved);
   }
 
-  const [{ data: ruleRows }, { data: catalogRows }, { data: columnRows }, { data: presetRows }, { data: priceRows }, { data: agreements }] =
+  const financed = presetDealType(s.finance_type) === "Financed";
+  const [{ data: ruleRows }, { data: catalogRows }, { data: columnRows }, { data: presetRows }, { data: priceRows }, { data: agreements }, { data: termRows }] =
     await Promise.all([
       supabase.schema("fni").from("pricing_rules").select("*")
         .eq("tenant_id", s.tenant_id as string).or(`store_id.eq.${s.store_id},store_id.is.null`).eq("active", true),
@@ -56,6 +57,9 @@ export async function loadSheet(supabase: SupabaseClient, s: Record<string, unkn
         : Promise.resolve({ data: [] }),
       supabase.schema("fni").from("session_menu_prices").select("option_key, retail_price, above_band, approved_by, reason").eq("session_id", sessionId),
       supabase.schema("fni").from("agreements").select("id").eq("session_id", sessionId),
+      templateId && financed
+        ? supabase.schema("fni").from("menu_preset_terms").select("column_position, slot, term_months, rate_percent").eq("template_id", templateId)
+        : Promise.resolve({ data: [] }),
     ]);
 
   const rules = (ruleRows ?? []) as unknown as PricingRule[];
@@ -95,6 +99,22 @@ export async function loadSheet(supabase: SupabaseClient, s: Record<string, unkn
     if (purchased.has(k)) purchasedPrices[k] = Number(c.customer_price ?? c.retail_price ?? 0);
   }
 
+  // Extra payment terms (migration 0046): the deal's own as Prepare menu set
+  // them, else the presets'. A cash deal has none.
+  const dealTerms = (s.menu_terms ?? null) as Record<string, { months: number; rate: number }[]> | null;
+  const terms: Record<string, { months: number; rate: number }[]> = {};
+  if (financed) {
+    for (let pos = 1; pos <= columns.length; pos++) {
+      const own = dealTerms?.[String(pos)];
+      terms[String(pos)] = Array.isArray(own)
+        ? own.filter((t) => Number.isInteger(t?.months) && Number.isFinite(t?.rate))
+        : ((termRows ?? []) as { column_position: number; slot: number; term_months: number | null; rate_percent: number | string | null }[])
+            .filter((r) => r.column_position === pos && r.term_months !== null && r.rate_percent !== null)
+            .sort((a, b) => a.slot - b.slot)
+            .map((r) => ({ months: r.term_months!, rate: Number(r.rate_percent) }));
+    }
+  }
+
   const input: SheetInput = {
     families: priced,
     catalog: (catalogRows ?? []) as never,
@@ -106,6 +126,8 @@ export async function loadSheet(supabase: SupabaseClient, s: Record<string, unkn
     surcharges: Array.isArray(s.menu_surcharges) ? (s.menu_surcharges as string[]) : [],
     purchased,
     purchased_prices: purchasedPrices,
+    terms,
+    removed: (s.menu_removed ?? {}) as Record<string, string[]>,
   };
   return { input, sheet: buildSheet(input), out_of_date: outOfDate };
 }

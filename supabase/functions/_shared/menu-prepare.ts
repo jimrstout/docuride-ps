@@ -100,6 +100,13 @@ export interface PrepareSheet {
   prepared: boolean;
   /** Products already under a live contract: shown locked, in every column, at the price sold. */
   purchased: { category: string; plan_name: string; price: number }[];
+  /**
+   * Each column's extra payment terms, after the deal's own (_shared/menu-terms.ts):
+   * as Prepare menu set them, else the presets'. Empty on a cash deal.
+   */
+  terms: Record<string, { months: number; rate: number }[]>;
+  /** Products the customer removed from each column before choosing, by category. */
+  removed: Record<string, string[]>;
 }
 
 export interface SheetInput {
@@ -115,6 +122,9 @@ export interface SheetInput {
   purchased: Set<string>;
   /** Their saved selections' customer prices, in dollars, by "provider:product". */
   purchased_prices?: Record<string, number>;
+  /** Extra terms per column, already resolved (deal's, else presets'); none on a cash deal. */
+  terms?: Record<string, { months: number; rate: number }[]>;
+  removed?: Record<string, string[]>;
 }
 
 function surchargesOf(rate: RateVariant, chosen: Set<string>): { cost: number; codes: string[] } {
@@ -270,6 +280,8 @@ export function buildSheet(input: SheetInput): PrepareSheet {
     plans,
     cells,
     purchased: purchasedRows,
+    terms: Object.fromEntries(columns.map((c) => [String(c.position), (input.terms?.[String(c.position)] ?? []).slice(0, 2)])),
+    removed: Object.fromEntries(columns.map((c) => [String(c.position), input.removed?.[String(c.position)] ?? []])),
     surcharges: { available: surchargeChoices(input.families), chosen: input.surcharges.filter((c) => surchargeChoices(input.families).some((s) => s.code === c)) },
     prepared: input.prepared !== null,
   };
