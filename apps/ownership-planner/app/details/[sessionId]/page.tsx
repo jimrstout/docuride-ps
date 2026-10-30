@@ -572,11 +572,7 @@ export default async function DetailsPage({
                   </ul>
                 </div>
               ) : null}
-              {rateAgainAvailable({
-                signedIn: !!operator,
-                submitState: sheet.submit_state,
-                liveContracts: sheet.contracts.length,
-              }) ? (
+              {rateAgainAvailable({ signedIn: !!operator, submitState: sheet.submit_state }) ? (
                 // The rating staff run, any time, with the deal's current
                 // inputs (fni-rate-vehicle, rate_again). Never submits.
                 <form action={rateAgain} className="vrate-again" data-working-panel="">

@@ -87,3 +87,30 @@ export function statusAfterAdding(
 ): string | null {
   return complete && status === FINALIZED && newlyIncluded > 0 ? PRODUCTS_SELECTED : null;
 }
+
+// ── Rating while a contract is live (2026-10-30) ──────────────────────────
+//
+// Products can be added after a contract, so rating, Rate again and Confirm
+// and Continue work while contracts are live. A rating only ever affects the
+// products not yet submitted: a purchased product stays exactly as it is, its
+// selection never moved onto a new rate or marked, and the session keeps its
+// status, so the contracts panel and Submit stay where they are.
+
+/** The status after a rating: kept while any contract is live, else the usual rule's. */
+export function statusAfterRatingWithContracts(current: string, usual: string, purchased: Set<string>): string {
+  return purchased.size > 0 ? current : usual;
+}
+
+/** The selections a rating may move or mark: none under a live contract. */
+export function notPurchased<T extends { provider_id: string | null; provider_product_id: string | null }>(
+  selections: T[],
+  purchased: Set<string>
+): T[] {
+  return selections.filter((s) => !isPurchased(purchased, s.provider_id, String(s.provider_product_id ?? "")));
+}
+
+/** Rating is refused on these statuses; Finalized only when no contract is live. */
+export function ratingRefused(status: string, purchased: Set<string>): boolean {
+  if (status === "Written Back" || status === "Cancelled") return true;
+  return status === FINALIZED && purchased.size === 0;
+}
