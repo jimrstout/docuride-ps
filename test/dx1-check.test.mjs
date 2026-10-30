@@ -266,7 +266,8 @@ test("Details shows the latest check, refreshed on load, for signed-in staff onl
   assert.match(view, /if \(result\.status === "Nothing to check" && result\.warnings\.length === 0\) return null;/);
   assert.match(view, /fix these before generating documents/);
   // The same lines, then once, how to fix them.
-  assert.match(view, /\{result\.status === "Problems" \? <p className="vdx1check-fix">\{DX1_FIX\}<\/p> : null\}/);
+  assert.match(view, /\{result\.status === "Problems" && \[\.\.\.result\.blocking, \.\.\.result\.warnings\]\.some\(\(l\) => !TERM_LINE\.test\(l\)\) \? \(\s*<p className="vdx1check-fix">\{DX1_FIX\}<\/p>/);
+  assert.match(view, /const TERM_LINE = \/\^Finance terms\[: \]\/;/);
   assert.ok(view.includes(
     '"To fix: in DX1, make sure each F&I product is entered on this deal with the same price and term as its contract, " +\n' +
     '  "and remove any product whose contract was voided. Then press Update F-I Products on the DocuRide record and check again."'
