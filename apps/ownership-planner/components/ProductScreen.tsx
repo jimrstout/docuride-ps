@@ -31,6 +31,7 @@ import RateChooser from "./RateChooser";
 import TierChooser from "./TierChooser";
 import { durationOf, renderTemplate, TEMPLATE_DISAPPEARING_DEDUCTIBLE } from "@/lib/copy";
 import type { CatalogEntry, Disposition, OfferRate, OfferTier } from "@/lib/types";
+import { PURCHASED_LABEL, PURCHASED_NOTE } from "@/lib/purchased";
 
 /** A tier that can honestly be shown: it has approved copy and a sellable rate. */
 export interface PresentableTier {
@@ -65,6 +66,7 @@ export default function ProductScreen({
   onChooseRate,
   onDecide,
   onOption,
+  purchased = false,
 }: {
   item: Presentable;
   /** 1-based, for "Option 2 of 5". */
@@ -88,6 +90,11 @@ export default function ProductScreen({
   onChooseRate: (rateUniqueId: string) => void;
   onDecide: (d: Disposition) => void;
   onOption: (code: string, on: boolean) => void;
+  /**
+   * Already purchased on this deal (lib/purchased.ts): the price it was sold
+   * for, and none of the choices, since nothing about it can be changed.
+   */
+  purchased?: boolean;
 }) {
   const { copy, tier } = chosenTier;
 
@@ -160,6 +167,7 @@ export default function ProductScreen({
       </div>
 
       <div className="ps-side">
+        {purchased ? null : (
         <TierChooser
           tiers={item.tiers.map((t) => ({
             product_code: t.tier.product_code,
@@ -169,12 +177,15 @@ export default function ProductScreen({
           chosen={tier.product_code}
           onChoose={onChooseTier}
         />
+        )}
 
+        {purchased ? null : (
         <RateChooser
           rates={tier.rates}
           chosen={chosenRate}
           onChoose={onChooseRate}
         />
+        )}
 
         <div className="ps-price">
           <span className="ps-price-label">Price</span>
@@ -202,23 +213,32 @@ export default function ProductScreen({
           )}
         </div>
 
-        <ProductConfigurator
-          productCode={tier.product_code}
-          productName={copy.display_name}
-          options={chosenRate?.options ?? []}
-          chosen={chosenOptions}
-          onToggle={onOption}
-        />
+        {purchased ? (
+          <div className="ps-decide ps-purchased" role="status">
+            <p className="ps-purchased-label">{PURCHASED_LABEL}</p>
+            <p className="ps-purchased-note">{PURCHASED_NOTE}</p>
+          </div>
+        ) : (
+          <>
+            <ProductConfigurator
+              productCode={tier.product_code}
+              productName={copy.display_name}
+              options={chosenRate?.options ?? []}
+              chosen={chosenOptions}
+              onToggle={onOption}
+            />
 
-        <div className="ps-decide">
-          <p className="ps-decide-ask">Is this part of your plan?</p>
-          <DecisionControl
-            name={`decision-${item.family_code}`}
-            value={disposition}
-            onChange={onDecide}
-            productName={copy.display_name}
-          />
-        </div>
+            <div className="ps-decide">
+              <p className="ps-decide-ask">Is this part of your plan?</p>
+              <DecisionControl
+                name={`decision-${item.family_code}`}
+                value={disposition}
+                onChange={onDecide}
+                productName={copy.display_name}
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

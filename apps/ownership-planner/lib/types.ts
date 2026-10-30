@@ -101,6 +101,8 @@ export interface Selection {
   provider_product_id: string;
   disposition: Disposition;
   retail_price: string | number | null;
+  /** What it was sold for. A purchased product shows this price. */
+  customer_price?: string | number | null;
   term_months: number | null;
   /** Which rate of that product, so a resumed session reopens on the same one. */
   rate_unique_id: string | null;
@@ -230,6 +232,8 @@ export interface SessionPayload {
   copy: Record<string, string>;
   catalog_coverage: CatalogCoverage;
   selections: Selection[];
+  /** Products under a live contract: shown purchased, and locked (lib/purchased.ts). */
+  purchased?: { provider_id: string | null; provider_product_id: string }[];
   photos: string[] | null;
   photos_cached_at: string | null;
 }
