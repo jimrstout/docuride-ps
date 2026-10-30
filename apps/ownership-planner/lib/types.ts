@@ -240,6 +240,13 @@ export interface SessionPayload {
   photos_cached_at: string | null;
 }
 
+/** The F&I check against DX1 (supabase/functions/_shared/dx1-check.ts). */
+export interface Dx1Check {
+  status: "Nothing to check" | "Match" | "Problems";
+  blocking: string[];
+  warnings: string[];
+}
+
 /** Postgres numerics arrive as strings over PostgREST. */
 export function num(v: string | number | null | undefined): number | null {
   if (v === null || v === undefined || v === "") return null;

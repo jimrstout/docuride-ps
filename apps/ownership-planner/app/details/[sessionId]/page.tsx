@@ -29,7 +29,7 @@ import { cookies } from "next/headers";
 import { currentOperator } from "@/lib/admin-session";
 import { currentChecker } from "@/lib/checker";
 import { edge, EdgeError, isSessionId } from "@/lib/edge";
-import type { FieldGroup, VerifyField, VerifySheet } from "@/lib/types";
+import type { FieldGroup, VerifyField, VerifySheet, Dx1Check as Dx1CheckResult } from "@/lib/types";
 import { VerifySidebarFields } from "@/components/VerifySidebarFields";
 import {
   AUTO_DECODE_TIMEOUT_MS,
@@ -66,6 +66,7 @@ import { rateAgainAvailable } from "@/lib/rate-again";
 import { submitCheck } from "@/lib/submit-check";
 import SubmitConfirm from "@/components/SubmitConfirm";
 import ProviderAnswer from "@/components/ProviderAnswer";
+import Dx1Check from "@/components/Dx1Check";
 import { sentenceStart, testServerName, vendorName } from "@/lib/vendor";
 import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
@@ -333,6 +334,18 @@ export default async function DetailsPage({
     );
   }
 
+  // ── The F&I check against DX1 ───────────────────────────────────────────
+  // What the CRM's Generate gate would be told: the slots the DX1 pull left in
+  // the CRM against the live contracts (fni-dx1-check). Refreshed on every
+  // load, for signed-in staff. The function answers within 4.5 seconds and
+  // never fails loudly; nothing here blocks the page.
+  const dx1Promise: Promise<Dx1CheckResult | null> = operator
+    ? edge.dx1Check<Dx1CheckResult>(sessionId).catch((err) => {
+        console.error(`dx1 check failed for ${sessionId}:`, err instanceof EdgeError ? err.status : "error");
+        return null;
+      })
+    : Promise.resolve(null);
+
   // ── The automatic VIN decode ─────────────────────────────────────────────
   // Once per session, the first time Verify opens: a VIN, never decoded, never
   // tried. Server side, through the same function as the Decode the VIN button.
@@ -401,6 +414,7 @@ export default async function DetailsPage({
   // The contract provider by its record's name ("Riders Advantage"), never
   // written in here, so another provider reads correctly (lib/vendor.ts).
   const vendor = vendorName(sheet);
+  const dx1 = await dx1Promise;
   // Verified, rated, and nothing a rate depends on has moved since. Only then
   // is there a presentation to open, the planner or the menu. A live contract
   // does not block it: products are added after a contract, and the purchased
@@ -795,6 +809,7 @@ export default async function DetailsPage({
         {sheet.contracts_panel ? (
           <section className="vcontracts" aria-labelledby="vcontracts-title">
             <h2 id="vcontracts-title">Contracts</h2>
+            <Dx1Check result={dx1} />
             <ul className="vcontracts-chosen">
               {sheet.contracts_panel.selections.map((c) => (
                 <li key={c.product_name}>

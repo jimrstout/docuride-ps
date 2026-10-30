@@ -1309,3 +1309,10 @@ wordings are shown; price and term carry the blocking.
 The result is kept on the session (`dx1_check`, `dx1_checked_at`, migration
 0043); a session event "F&I check against DX1: <status>", signed System, is
 added only when it changes.
+
+**On Details.** For signed-in staff, Details runs the same check when it loads
+(`edge.dx1Check`, by session id) and shows it at the top of the Contracts panel
+(`components/Dx1Check.tsx`): "everything matches", or the blocking lines under
+"fix these before generating documents", then the wording warnings. Nothing is
+shown when there is nothing to check. The check never holds the page: it
+answers within 4.5 seconds, and a failure shows nothing.

@@ -198,3 +198,18 @@ test("every line is plain English, with no em dash", () => {
   ]));
   for (const l of [...r.blocking, ...r.warnings]) assert.doesNotMatch(l, /—|undefined|null|NaN/);
 });
+
+test("Details shows the latest check, refreshed on load, for signed-in staff only", () => {
+  const page = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  assert.match(page, /const dx1Promise: Promise<Dx1CheckResult \| null> = operator\s*\? edge\.dx1Check<Dx1CheckResult>\(sessionId\)\.catch\(/);
+  assert.match(page, /: Promise\.resolve\(null\);/);
+  assert.match(page, /<h2 id="vcontracts-title">Contracts<\/h2>\s*<Dx1Check result=\{dx1\} \/>/);
+  const edge = read("apps/ownership-planner/lib/edge.ts");
+  assert.match(edge, /call<T>\("fni-dx1-check", \{ method: "POST", body: \{ session_id: sessionId \} \}\)/);
+  const view = read("apps/ownership-planner/components/Dx1Check.tsx");
+  assert.match(view, /if \(result\.status === "Nothing to check" && result\.warnings\.length === 0\) return null;/);
+  assert.match(view, /fix these before generating documents/);
+  assert.doesNotMatch(view, /—/);
+  // The endpoint takes Details' session id as well as the gate's record id.
+  assert.match(read("supabase/functions/fni-dx1-check/index.ts"), /q = UUID\.test\(sessionId\) \? q\.eq\("id", sessionId\) : q\.eq\("zoho_deal_id", zohoId\);/);
+});
