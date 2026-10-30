@@ -7,12 +7,21 @@
 
 import AppShell from "@/components/AppShell";
 
-export default function Gate({ title, body }: { title: string; body: string }) {
+export default function Gate({
+  title,
+  body,
+  eyebrow = "Ownership planner",
+}: {
+  title: string;
+  body: string;
+  /** The conventional menu names itself here; the planner keeps its own. */
+  eyebrow?: string;
+}) {
   return (
     <AppShell>
       <div className="gate">
         <div className="gate-card">
-          <p className="eyebrow eyebrow--rule">Ownership planner</p>
+          <p className="eyebrow eyebrow--rule">{eyebrow}</p>
           <h1 className="display display--sm">{title}</h1>
           <p className="lede">{body}</p>
         </div>

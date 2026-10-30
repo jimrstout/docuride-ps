@@ -34,6 +34,7 @@ import {
 } from "../_shared/rating-summary.ts";
 import { slotFamilies } from "../_shared/menu-templates.ts";
 import { PURCHASED_STATES, type DealContract } from "../_shared/purchased.ts";
+import { columnsFor, isLevel } from "../_shared/menu-columns.ts";
 import { resolvedSlotsFor } from "../_shared/menu-template-rows.ts";
 import { PricingRule } from "../_shared/planner-pricing.ts";
 import { priceFamilies, sessionCap, sessionPaymentBasis } from "../_shared/plan-prices.ts";
@@ -345,6 +346,27 @@ serve(async (req: Request) => {
       .filter((c) => (PURCHASED_STATES as readonly string[]).includes(c.status) && c.provider_product_id)
       .map((c) => ({ provider_id: c.provider_id, provider_product_id: String(c.provider_product_id) }));
 
+    // ── The conventional menu's columns ─────────────────────────────────
+    // The menu template the deal was rated against, or the default layout,
+    // with any coverage level a manager set for this deal on Details
+    // (sessions.menu_column_levels, by column position). The Ownership
+    // Planner does not read this.
+    const templateId = typeof s.menu_template_id === "string" ? s.menu_template_id : null;
+    const { data: columnRows } = templateId
+      ? await supabase
+          .schema("fni")
+          .from("menu_template_columns")
+          .select("position, name, preset_categories, starting_level")
+          .eq("template_id", templateId)
+      : { data: [] };
+    const dealLevels = (s.menu_column_levels ?? {}) as Record<string, unknown>;
+    const menuColumns = columnsFor(
+      (columnRows ?? []) as { position: number; name: string; preset_categories: string[] | null; starting_level: string | null }[]
+    ).columns.map((c, i) => {
+      const level = dealLevels[String(i + 1)];
+      return isLevel(level) ? { ...c, starting_level: level } : c;
+    });
+
     // ── Rate basis ──────────────────────────────────────────────────────
     // Where this deal's payment comes from, if it has one. A cash deal -- no
     // lienholder -- has no payment, and the planner must not invent one from
@@ -490,6 +512,7 @@ serve(async (req: Request) => {
 
       selections: selections ?? [],
       purchased,
+      menu_columns: menuColumns,
       photos: s.dx1_photos ?? null,
       photos_cached_at: s.dx1_photos_cached_at ?? null,
     });

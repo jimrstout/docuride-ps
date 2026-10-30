@@ -1197,3 +1197,26 @@ refuses fewer than two or more than five.
 products with no approved description (`fni.product_catalog_presentable`),
 each with a link to write one. The Ownership Planner does not show them; the
 conventional menu shows them under the provider's product name.
+
+**The screen** (`/menu/[sessionId]`, `app/menu/[sessionId]/Menu.tsx`,
+`lib/menu-model.ts`). Opens straight into the columns; none of the planner's
+screens come first. Rows are the offered families in the planner's order;
+every tier is kept. A product with no approved description shows under the
+provider's product name; one with no price shows "Not available" and cannot be
+checked; a purchased one is checked, locked and priced as sold. A cell starts
+checked when its category is one of the column's presets, at the column's
+coverage level (the deal's own level from Details wins over the template's),
+on the planner's defaults for term, deductible and options; a mandatory
+surcharge always counts. The price (and on wide screens a short caption: the
+level's own word, or the term) opens a dialog with the planner's level, term
+and option controls. Each column's total and payment come from `planTotals`,
+the planner's arithmetic, with the finance company's maximum; cash shows the
+total only. "Select this package" and "Decline everything" save the planner's
+rows through the same save route (`complete: true`) and ask for the same
+acknowledgment, so Submit is unchanged.
+
+No scrolling, measured in a browser with five columns and eight products:
+side by side from 1201 pixels wide and 700 tall; between 761 and 1200 wide the
+cells show checkbox and price, with the level and term in the dialog; on
+phones and any window under 700 tall, one column at a time, chosen from tabs.
+Product names are never below 18 pixels.
