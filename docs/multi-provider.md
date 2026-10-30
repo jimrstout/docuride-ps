@@ -1303,8 +1303,25 @@ expanding DMS shorthand (T&W, OFFRD, MECH, MAINT, BATT, PROT), folding words
 for the same cover (warranty, care, service contract), and dropping filler
 and the provider's name; the score is the share of DX1's words found in the
 contract's product name, plan and category. 0.6 and up: nothing said; 0.3 to
-0.6: "check the wording"; under 0.3: "does not look like this product". Both
-wordings are shown; price and term carry the blocking.
+0.6: "check it matches the contract"; under 0.3: "does not look like this
+product" as well. DX1's wording is shown; price and term carry the blocking.
+
+**The lines** are read by staff in the CRM popup and on Details. Each names
+the product as the menu does (Battery Protection, Tire and Wheel, Mechanical
+Protection, Maintenance, Theft, Appearance, GAP; Care Coverage for an
+uncategorised care product), never the provider's full title, puts the
+contract number in parentheses, and says what is wrong. No line starts with
+"F&I": the gate adds its own heading and fix steps.
+
+| case | line |
+|---|---|
+| not entered | Battery Protection (contract VLBTE001930-42120) has not been entered in DX1. |
+| price | Tire and Wheel (contract TWOTE001930-5980): DX1 shows $585.00, but the contract price is $595.00. |
+| term | Tire and Wheel (contract TWOTE001930-5980): DX1 shows 12 months, but the contract term is 24 months. |
+| no contract | DX1 has a product in Aftermarket 2 for $199.00 that does not match any contract on this deal. |
+| voided | Battery Protection (contract VLBTE001930-42120) was voided, but DX1 still shows it in Aftermarket 1 for $145.00. |
+| wording | Tire and Wheel (contract TWOTE001930-5980): the DX1 description reads "T&W OFFRD". Check it matches the contract. |
+| unavailable | F&I contracts could not be checked against DX1 |
 
 The result is kept on the session (`dx1_check`, `dx1_checked_at`, migration
 0043); a session event "F&I check against DX1: <status>", signed System, is
@@ -1313,6 +1330,9 @@ added only when it changes.
 **On Details.** For signed-in staff, Details runs the same check when it loads
 (`edge.dx1Check`, by session id) and shows it at the top of the Contracts panel
 (`components/Dx1Check.tsx`): "everything matches", or the blocking lines under
-"fix these before generating documents", then the wording warnings. Nothing is
-shown when there is nothing to check. The check never holds the page: it
+"fix these before generating documents", then the wording warnings, then once:
+"To fix: in DX1, make sure each F&I product is entered on this deal with the
+same price and term as its contract, and remove any product whose contract was
+voided. Then run the F&I Update in DocuRide and check again." Nothing is shown
+when there is nothing to check. The check never holds the page: it
 answers within 4.5 seconds, and a failure shows nothing.
