@@ -3,7 +3,10 @@
 // The F&I check against DX1, called by the CRM's Generate gate
 // (DC_Generate_Contract_Gated) alongside its other checks, and by Details when
 // it loads. Compares the DocuRide record's eight product slots, read fresh
-// from the CRM, with the deal's live contracts (_shared/dx1-check.ts). Not run
+// from the CRM, with the deal's live contracts (_shared/dx1-check.ts), and the
+// finance term the customer chose on the menu, when it is not the deal's own,
+// with the record's Term_Months and Interest_Rate (_shared/finance-term-check.ts).
+// Not run
 // from zoho-sync: the DX1 pull writes without workflow triggers, so zoho-sync
 // never sees those edits.
 //
@@ -12,13 +15,15 @@
 //   { "session_id": "<DocuRide session>" }    Details
 //
 // Always HTTP 200 with JSON, exactly { status, blocking, warnings }:
-//   "Nothing to check"   no session, or no live contract. Both lists empty.
+//   "Nothing to check"   no session, or no live contract and no chosen term to
+//                        compare. Both lists empty.
 //   "Match"              everything agrees. Both lists empty.
 //   "Problems"           at least one line in either list.
 // A bad secret is 401. Anything that goes wrong inside, or a check that would
 // take longer than the gate can wait (4.5 seconds), answers "Nothing to check"
 // with the warning "F&I contracts could not be checked against DX1", so the
-// gate lets Generate through.
+// gate lets Generate through. A CRM term or rate that cannot be read is the
+// warning "Finance terms could not be checked against the CRM.", never a block.
 //
 // PS never writes a CRM field here: it only reads the record. The result is
 // kept on the session (sessions.dx1_check, dx1_checked_at, migration 0043) for
@@ -40,6 +45,7 @@ import {
   type CheckResult,
   type Contract,
 } from "../_shared/dx1-check.ts";
+import { chosenTermToCheck, compareFinanceTerm, withFinanceTerm, type ChosenTerm } from "../_shared/finance-term-check.ts";
 
 const MODULE = "DocuRide";
 const BUDGET_MS = 4500;
@@ -114,31 +120,37 @@ async function check(body: Record<string, unknown>): Promise<CheckResult> {
   const sessionId = typeof body.session_id === "string" ? body.session_id.trim() : "";
   if (!RECORD_ID.test(zohoId) && !UUID.test(sessionId)) return FAILED;
 
-  let q = supabase.schema("fni").from("sessions").select("id, zoho_deal_id, dx1_check");
+  let q = supabase.schema("fni").from("sessions").select("id, zoho_deal_id, dx1_check, finance_type, lienholder_name, menu_choice");
   q = UUID.test(sessionId) ? q.eq("id", sessionId) : q.eq("zoho_deal_id", zohoId);
   const { data: session, error } = await q.maybeSingle();
   if (error) throw new Error("session");
-  const s = session as { id: string; zoho_deal_id: string | null; dx1_check: CheckResult | null } | null;
+  const s = session as
+    | { id: string; zoho_deal_id: string | null; dx1_check: CheckResult | null; finance_type: unknown; lienholder_name: unknown; menu_choice: unknown }
+    | null;
   if (!s) return NOTHING;
 
   const { live, voided } = await contractsFor(supabase, s.id);
-  if (live.length === 0) {
+  const chosen: ChosenTerm | null = chosenTermToCheck(s);
+  if (live.length === 0 && !chosen) {
     await keep(supabase, s.id, s.dx1_check, NOTHING);
     console.log("fni-dx1-check", { session: s.id, live: 0, status: NOTHING.status });
     return NOTHING;
   }
-  if (!s.zoho_deal_id) return FAILED;
 
-  // Read fresh from the CRM on every call: the DX1 pull changes it without telling anyone.
-  const record = await getRecord(MODULE, s.zoho_deal_id).catch(() => {
-    throw new Error("crm");
-  });
-  if (!record) return FAILED;
-
-  const result = compareToDx1(live, voided, record);
+  // Read fresh from the CRM on every call: the DX1 pull changes it without
+  // telling anyone. A read that fails never blocks, and is not kept: the
+  // products say they could not be checked, and so does the term.
+  const record = s.zoho_deal_id ? await getRecord(MODULE, s.zoho_deal_id).catch(() => null) : null;
+  if (!record) {
+    console.error("fni-dx1-check: could not check", { session: s.id, step: s.zoho_deal_id ? "crm" : "no crm id" });
+    return withFinanceTerm(live.length === 0 ? NOTHING : FAILED, compareFinanceTerm(chosen, null));
+  }
+  const products = live.length === 0 ? NOTHING : compareToDx1(live, voided, record);
+  const result = withFinanceTerm(products, compareFinanceTerm(chosen, record));
   await keep(supabase, s.id, s.dx1_check, result);
   console.log("fni-dx1-check", {
-    session: s.id, live: live.length, status: result.status, blocking: result.blocking.length, warnings: result.warnings.length,
+    session: s.id, live: live.length, term: chosen ? "checked" : "none", status: result.status,
+    blocking: result.blocking.length, warnings: result.warnings.length,
   });
   return result;
 }
