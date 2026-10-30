@@ -70,7 +70,7 @@ import {
 import { applyDealPrices, type DealPrice } from "../_shared/menu-prepare.ts";
 import { loadSheet } from "../_shared/menu-prepare-rows.ts";
 import { columnTerms, packageChosenEvent, type Term } from "../_shared/menu-terms.ts";
-import { presetDealType } from "../_shared/menu-presets.ts";
+import { CATEGORIES, presetDealType } from "../_shared/menu-presets.ts";
 import type { NormalizedFamily } from "../_shared/normalized-offer.ts";
 import {
   finalizedMaySave,
@@ -176,6 +176,18 @@ async function serverAdditionalDown(
   return additionalDownForSelections(s, priced ?? [], selections);
 }
 
+/** {"<column>": ["<category>"]} as the menu sent it, checked: columns 1 to 5, known categories only. */
+function removedFrom(v: unknown): Record<string, string[]> | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const out: Record<string, string[]> = {};
+  for (const [pos, list] of Object.entries(v as Record<string, unknown>)) {
+    if (!/^[1-5]$/.test(pos) || !Array.isArray(list)) continue;
+    const cats = [...new Set(list.map(String).filter((c) => (CATEGORIES as readonly string[]).includes(c)))];
+    if (cats.length > 0) out[pos] = cats;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 interface Decision {
   /** Who the product is from. A planner tab opened before providers existed
    *  does not send it, and gets the TecAssured provider, which was the only
@@ -211,6 +223,7 @@ interface SaveRequest {
   presented_by?: string;
   presented_by_name?: string;
   menu_event?: unknown;
+  menu_removed?: unknown;
 }
 
 function json(status: number, body: unknown): Response {
@@ -495,6 +508,13 @@ serve(async (req: Request) => {
         .filter((d) => d.disposition === "Included")
         .map((d) => String(d.product_name ?? d.product_code));
       patch.menu_choice = { column: chosen.column, name: menuEvent!.package, term: chosen.term, kept, removed: chosen.removed };
+    }
+
+    // Products the customer removed from a column before choosing (migration
+    // 0046): kept so a reload shows them, and so staff can reset them from
+    // Prepare menu. Not session events. Ignored once a package is chosen.
+    if (body.menu_removed !== undefined && !(session as unknown as Record<string, unknown>).menu_prices_locked_at) {
+      patch.menu_removed = removedFrom(body.menu_removed);
     }
 
     if (body.discovery !== undefined) patch.discovery = body.discovery;

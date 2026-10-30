@@ -18,7 +18,7 @@
 // height between the header and the column footers. On a phone one column is
 // shown at a time, chosen from tabs that carry every column's total.
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { OfferRate, SessionPayload, SurchargeOption } from "@/lib/types";
 import { num } from "@/lib/types";
 import { money, planTotals, toCents } from "@/lib/money";
@@ -90,7 +90,35 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
 
   // The prepared menu (Prepare menu, or the presets as they stand), with the
   // deal's prices already on the offers; else the columns' own rule.
-  const [cells, setCells] = useState<Cell[][]>(() => preparedCells(rows, columns, initial.menu_prepared));
+  // `baseline` is the column as prepared; what the customer removed from it
+  // shows dimmed with "Add back", never hidden (docs section 26).
+  const baseline = useMemo(() => preparedCells(rows, columns, initial.menu_prepared), [rows, columns, initial.menu_prepared]);
+  const [cells, setCells] = useState<Cell[][]>(() =>
+    baseline.map((col, ci) => {
+      const gone = new Set(initial.menu_prepared?.removed?.[String(ci + 1)] ?? []);
+      return col.map((cell, ri) => (cell.checked && !rows[ri].purchased && rows[ri].category && gone.has(rows[ri].category!) ? { ...cell, checked: false } : cell));
+    })
+  );
+  const removable = (ci: number, ri: number) => baseline[ci]?.[ri]?.checked === true && !rows[ri].purchased;
+  const isRemoved = (ci: number, ri: number) => removable(ci, ri) && !cells[ci][ri].checked;
+  const removedIn = (ci: number) =>
+    rows.flatMap((r, ri) => (isRemoved(ci, ri) ? [r.category ?? r.label] : []));
+
+  // Kept on the session as the customer goes, so a reload shows them and staff
+  // can reset them from Prepare menu. Not session events.
+  const removedKey = JSON.stringify(columns.map((_, ci) => removedIn(ci)));
+  const firstKey = useRef(removedKey);
+  useEffect(() => {
+    if (removedKey === firstKey.current || once.current) return;
+    firstKey.current = removedKey;
+    const menu_removed = Object.fromEntries(columns.map((_, ci) => [String(ci + 1), removedIn(ci)]));
+    void fetch(apiPath(`/api/session/${session.id}/save`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ menu_removed }),
+    }).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [removedKey]);
   const [shown, setShown] = useState(0);
   const [editing, setEditing] = useState<{ col: number; row: number } | null>(null);
   const [phase, setPhase] = useState<Phase>("menu");
@@ -162,7 +190,7 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
                 package: name,
                 column,
                 term: chosenTerm ? { months: chosenTerm.months, rate: chosenTerm.rate } : null,
-                removed: [],
+                removed: column === null ? [] : removedIn(column - 1),
               },
         }),
       });
@@ -267,17 +295,35 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
               const price = cellPrice(row, cell);
               const t = tierOf(row, cell);
               return (
-                <div key={c.name} className={`mn-cell ${ci === shown ? "is-shown" : ""} ${cell.checked ? "is-on" : ""}`} role="cell">
+                <div
+                  key={c.name}
+                  className={`mn-cell ${ci === shown ? "is-shown" : ""} ${cell.checked ? "is-on" : ""} ${isRemoved(ci, ri) ? "is-removed" : ""}`}
+                  role="cell"
+                >
                   {available ? (
                     <>
-                      <input
-                        type="checkbox"
-                        className="mn-box"
-                        checked={cell.checked}
-                        disabled={locked || phase === "saving"}
-                        onChange={(e) => setCell(ci, ri, { checked: e.target.checked })}
-                        aria-label={`${t?.name ?? row.label} in ${c.name}`}
-                      />
+                      {removable(ci, ri) ? (
+                        // Part of the package as prepared: the customer can remove it and
+                        // add it back. Removed, it stays in view, dimmed.
+                        <button
+                          type="button"
+                          className="mn-remove"
+                          disabled={phase === "saving"}
+                          onClick={() => setCell(ci, ri, { checked: !cell.checked })}
+                          aria-label={`${cell.checked ? "Remove" : "Add back"} ${t?.name ?? row.label} in ${c.name}`}
+                        >
+                          {cell.checked ? "Remove" : "Add back"}
+                        </button>
+                      ) : (
+                        <input
+                          type="checkbox"
+                          className="mn-box"
+                          checked={cell.checked}
+                          disabled={locked || phase === "saving"}
+                          onChange={(e) => setCell(ci, ri, { checked: e.target.checked })}
+                          aria-label={`${t?.name ?? row.label} in ${c.name}`}
+                        />
+                      )}
                       {locked ? (
                         <span className="mn-cap mn-tag" title={t?.name}>{PURCHASED}</span>
                       ) : (

@@ -151,7 +151,7 @@ test("Present menu starts from the prepared menu, or the presets as they stand",
   assert.match(get, /if \(prepared\) applyDealPrices\(pricedFamilies, prepared\.input\.prices\);/);
   assert.match(get, /menu_prepared: menuPrepared,/);
   const m = read("apps/ownership-planner/app/menu/[sessionId]/Menu.tsx");
-  assert.match(m, /useState<Cell\[\]\[\]>\(\(\) => preparedCells\(rows, columns, initial\.menu_prepared\)\)/);
+  assert.match(m, /const baseline = useMemo\(\(\) => preparedCells\(rows, columns, initial\.menu_prepared\), \[rows, columns, initial\.menu_prepared\]\);/);
   // A column with no choice for a category leaves it unchecked.
   const sheet = flow({}).sheet;
   const prepared = preparedForMenu(sheet);

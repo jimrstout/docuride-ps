@@ -191,3 +191,14 @@ button.mn-cell-price { cursor: pointer; }
 .mn-term input { width: 18px; height: 18px; margin: 0; accent-color: var(--copper); flex: none; }
 .mn-term.is-picked { font-weight: 650; }
 .mn-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Removing a product from a column, and adding it back (docs section 26).
+   Removed, it stays in view, dimmed, so the customer sees what they gave up. */
+.mn-remove {
+  font: inherit; font-size: 13px; font-weight: 600; padding: 4px 8px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--ink-soft); white-space: nowrap;
+}
+.mn-remove:hover:not(:disabled) { border-color: var(--copper-edge); color: var(--copper-ink); }
+.mn-cell.is-removed { background: var(--page); border-style: dashed; }
+.mn-cell.is-removed .mn-cap, .mn-cell.is-removed .mn-cell-price { opacity: 0.45; text-decoration: line-through; }
+.mn-cell.is-removed .mn-remove { border-color: var(--copper-edge); color: var(--copper-ink); }
