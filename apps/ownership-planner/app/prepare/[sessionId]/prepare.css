@@ -33,7 +33,7 @@
 .pm-head h1 { margin: 2px 0 0; font-size: clamp(18px, 2.4vh, 26px); font-weight: 650; color: #fff; }
 .pm-eyebrow { margin: 0; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--brand-ps); }
 .pm-basis { margin: 4px 0 0; font-size: 15px; color: var(--nav-text); }
-.pm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.pm-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 
 .pm-note { margin: 8px 20px 0; padding: 8px 12px; border-radius: 8px; background: var(--good-bg, #e8f3ec); color: var(--good-fg, #1d5a35); font-size: 15px; }
 .pm-note--bad { background: var(--warn-bg); color: var(--warn-fg); }
@@ -67,7 +67,7 @@
   min-height: 0; overflow: hidden; text-align: left; font: inherit; cursor: pointer;
   display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto auto; align-content: center;
   column-gap: 8px; padding: 4px 10px;
-  font-size: clamp(12px, calc(40vh / var(--pm-rows) / 3), 16px);
+  font-size: clamp(11px, calc(36vh / var(--pm-rows) / 3), 16px); line-height: 1.15;
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color: var(--ink);
 }
 .pm-cell:hover:not(:disabled) { border-color: var(--copper-edge); }
@@ -81,11 +81,12 @@
 .pm-profit { color: var(--ink-soft); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 
 .pm-foot {
-  display: grid; gap: 2px; align-content: start; padding: 8px 10px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; row-gap: 1px; align-content: start; padding: 6px 10px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-  font-size: 15px; font-variant-numeric: tabular-nums;
+  font-size: 13px; line-height: 1.25; font-variant-numeric: tabular-nums;
 }
-.pm-total { font-size: clamp(18px, 2.6vh, 24px); font-weight: 700; }
+.pm-total { font-size: clamp(16px, 2.4vh, 22px); font-weight: 700; }
+.pm-foot-line { grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .pm-btn {
   font: inherit; font-size: 15px; font-weight: 650; padding: 8px 14px; border-radius: 8px; cursor: pointer;
@@ -133,3 +134,8 @@
   .pm-head { padding: 8px 12px; }
   .pm-basis { display: none; }
 }
+
+/* Payment lines per term in a column's footer (docs section 26). */
+.pm-pay { font-size: 13px; }
+.pm-pay--deal { font-weight: 650; }
+.pm-linkbtn { justify-self: start; font: inherit; font-size: 14px; border: 0; background: none; padding: 0; color: var(--copper-ink); text-decoration: underline; cursor: pointer; }

@@ -28,7 +28,12 @@ function why(err: unknown): string {
 
 export async function savePreparedMenu(
   sessionId: string,
-  prepared: { cells: Record<string, Record<string, string | null>>; prices: Record<string, number>; surcharges: string[] },
+  prepared: {
+    cells: Record<string, Record<string, string | null>>;
+    prices: Record<string, number>;
+    surcharges: string[];
+    terms?: Record<string, { months: number; rate: number }[]>;
+  },
   manager: { email: string; password: string; reason: string } | null
 ): Promise<PrepareResult> {
   const operator = await currentOperator();
@@ -54,6 +59,20 @@ export async function savePreparedMenu(
       set_by: initialsFor(operator.email),
       ...approval,
     });
+    revalidatePath(`/prepare/${sessionId}`);
+    return { ok: true, payload };
+  } catch (err) {
+    return { ok: false, error: why(err) };
+  }
+}
+
+/** The menu back to its prepared state: products the customer removed come back. Recorded. */
+export async function resetPreparedMenu(sessionId: string): Promise<PrepareResult> {
+  const operator = await currentOperator();
+  if (!operator) return { ok: false, error: "Sign in to prepare the menu." };
+  if (!UUID_RE.test(sessionId)) return { ok: false, error: "That is not a session." };
+  try {
+    const payload = await edge.menuPrepareSave<PreparePayload>({ session_id: sessionId, action: "reset", set_by: initialsFor(operator.email) });
     revalidatePath(`/prepare/${sessionId}`);
     return { ok: true, payload };
   } catch (err) {

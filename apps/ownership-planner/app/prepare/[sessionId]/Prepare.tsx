@@ -32,7 +32,8 @@ import {
   type PreparePayload,
   type PrepareState,
 } from "@/lib/prepare-model";
-import { savePreparedMenu, unlockPreparedMenu } from "./actions";
+import { resetPreparedMenu, savePreparedMenu, unlockPreparedMenu } from "./actions";
+import { columnTerms, paymentText, rateText } from "@/lib/menu-terms";
 
 export default function Prepare({ initial }: { initial: PreparePayload }) {
   const [data, setData] = useState(initial);
@@ -54,8 +55,19 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
     payment.has_payment && payment.principal !== null && payment.rate !== null && payment.term_months !== null
       ? planTotals(payment.principal, prices, payment.rate, payment.term_months, payment.cap).planPayment
       : null;
+  // The deal's own term first in every column, then the column's extra terms
+  // (lib/menu-terms.ts). A cash deal has none.
+  const termsFor = (pos: string) =>
+    columnTerms(
+      payment.financed && payment.has_payment ? { months: payment.term_months, rate: payment.rate } : null,
+      state.terms[pos] ?? []
+    );
+  const paymentOn = (prices: number[], t: { months: number; rate: number }) =>
+    payment.has_payment && payment.principal !== null
+      ? planTotals(payment.principal, prices, t.rate, t.months, payment.cap).totalPayment
+      : null;
   const footers = useMemo(
-    () => sheet.columns.map((c) => columnFigures(sheet, state, String(c.position), monthlyOf)),
+    () => sheet.columns.map((c) => columnFigures(sheet, state, String(c.position), monthlyOf, termsFor(String(c.position)), paymentOn)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sheet, state, payment]
   );
@@ -64,13 +76,15 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
   const setCell = (pos: string, category: string, key: string | null) =>
     setState((s) => ({ ...s, cells: { ...s.cells, [pos]: { ...s.cells[pos], [category]: key } } }));
   const setPrice = (key: string, cents: number) => setState((s) => ({ ...s, prices: { ...s.prices, [key]: cents } }));
+  const setTerms = (pos: string, terms: { months: number; rate: number }[]) =>
+    setState((s) => ({ ...s, terms: { ...s.terms, [pos]: terms } }));
   const toggleSurcharge = (code: string) =>
     setState((s) => ({ ...s, surcharges: s.surcharges.includes(code) ? s.surcharges.filter((c) => c !== code) : [...s.surcharges, code] }));
 
   const save = (withManager: boolean) =>
     start(async () => {
       setMessage(null);
-      const result = await savePreparedMenu(session.id, payloadOf(sheet, state), withManager ? manager : null);
+      const result = await savePreparedMenu(session.id, payloadOf(sheet, state, payment.financed === true), withManager ? manager : null);
       if (!result.ok) {
         setMessage({ tone: "bad", text: result.error });
         return;
@@ -87,6 +101,16 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
     else save(false);
   };
 
+  const removedCount = Object.values(sheet.removed ?? {}).reduce((n, list) => n + list.length, 0);
+  const reset = () =>
+    start(async () => {
+      const result = await resetPreparedMenu(session.id);
+      if (!result.ok) return setMessage({ tone: "bad", text: result.error });
+      setData(result.payload);
+      setState(initialState(result.payload.sheet));
+      setMessage({ tone: "ok", text: "The menu is back to its prepared state. This is recorded on the deal." });
+    });
+
   const unlock = () =>
     start(async () => {
       const result = await unlockPreparedMenu(session.id);
@@ -100,6 +124,28 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
     if (locked) return;
     setEditing({ pos, category });
     cellDialog.current?.showModal();
+  };
+
+  const termsDialog = useRef<HTMLDialogElement>(null);
+  const [termsPos, setTermsPos] = useState<string | null>(null);
+  const [termDraft, setTermDraft] = useState<{ months: string; rate: string }[]>([]);
+  const openTerms = (pos: string) => {
+    const now = state.terms[pos] ?? [];
+    setTermsPos(pos);
+    setTermDraft([0, 1].map((i) => ({ months: now[i] ? String(now[i].months) : "", rate: now[i] ? String(now[i].rate) : "" })));
+    termsDialog.current?.showModal();
+  };
+  const termProblem = termDraft.some((t) => (t.months === "") !== (t.rate === ""))
+    ? "An extra term needs both its months and its interest rate."
+    : termDraft.some((t) => t.months !== "" && (!/^\d+$/.test(t.months) || Number(t.months) < 6 || Number(t.months) > 240))
+      ? "A term is a whole number of months, 6 to 240."
+      : termDraft.some((t) => t.rate !== "" && !/^\d+(\.\d{1,3})?$/.test(t.rate.replace(/%$/, "")))
+        ? "An interest rate is a percent, such as 7.74."
+        : null;
+  const applyTerms = () => {
+    if (!termsPos || termProblem) return;
+    setTerms(termsPos, termDraft.filter((t) => t.months !== "").map((t) => ({ months: Number(t.months), rate: Number(t.rate.replace(/%$/, "")) })));
+    termsDialog.current?.close();
   };
 
   const edited = editing ? findOption(sheet, state.cells[editing.pos]?.[editing.category] ?? null) : null;
@@ -124,6 +170,11 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
           </p>
         </div>
         <div className="pm-actions">
+          {removedCount > 0 && !locked ? (
+            <button type="button" className="pm-btn" onClick={reset} disabled={pending} title="Products the customer removed come back">
+              Reset the menu ({removedCount} removed)
+            </button>
+          ) : null}
           <button type="button" className="pm-btn" onClick={() => surchargeDialog.current?.showModal()} disabled={locked || pending}>
             Surcharges{state.surcharges.length > 0 ? ` (${state.surcharges.length})` : ""}
           </button>
@@ -202,8 +253,20 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
           {footers.map((f, i) => (
             <div key={i} data-col={i + 1} className="pm-foot">
               <span className="pm-total">{dollars(f.total)}</span>
-              <span>Profit {dollars(f.profit)}</span>
-              <span>{f.monthly === null ? "Cash deal: no payment" : `${dollars(f.monthly)} a month for protection`}</span>
+              {payment.financed && payment.has_payment && !locked ? (
+                <button type="button" className="pm-linkbtn" onClick={() => openTerms(String(sheet.columns[i].position))}>Terms</button>
+              ) : <span />}
+              <span className="pm-foot-line">Profit {dollars(f.profit)}</span>
+              {f.payments.length === 0 ? <span className="pm-foot-line">Cash deal: no payments</span> : null}
+              {f.payments.map((p) => (
+                <span
+                  key={`${p.months}-${p.rate}`}
+                  className={p.deal_term ? "pm-foot-line pm-pay pm-pay--deal" : "pm-foot-line pm-pay"}
+                  title={paymentText(p.monthly / 100, p)}
+                >
+                  {p.months} months, {rateText(p.rate)}: {dollars(p.monthly)}
+                </span>
+              ))}
             </div>
           ))}
         </div>
@@ -277,6 +340,31 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
             </div>
           </div>
         ) : null}
+      </dialog>
+
+      <dialog ref={termsDialog} className="pm-dialog">
+        <div className="pm-dialog-body">
+          <h2>Payment terms: {sheet.columns.find((c) => String(c.position) === termsPos)?.name}</h2>
+          <p className="pm-help">
+            First, always: {payment.term_months} months at {payment.rate === null ? "" : rateText(payment.rate)}, the deal&apos;s term from the CRM.
+            Up to two more, each with its own interest rate. The deal&apos;s rate never carries to a longer term.
+          </p>
+          {termDraft.map((t, i) => (
+            <div key={i} className="pm-figures">
+              <label className="pm-field"><span>Extra term {i + 1}, months</span>
+                <input inputMode="numeric" value={t.months} onChange={(e) => setTermDraft(termDraft.map((x, j) => (j === i ? { ...x, months: e.target.value.trim() } : x)))} />
+              </label>
+              <label className="pm-field"><span>Interest rate, %</span>
+                <input inputMode="decimal" value={t.rate} onChange={(e) => setTermDraft(termDraft.map((x, j) => (j === i ? { ...x, rate: e.target.value.trim() } : x)))} />
+              </label>
+            </div>
+          ))}
+          {termProblem ? <p className="pm-note pm-note--bad">{termProblem}</p> : null}
+          <div className="pm-dialog-actions">
+            <button type="button" className="pm-btn" onClick={() => termsDialog.current?.close()}>Cancel</button>
+            <button type="button" className="pm-btn pm-btn--go" onClick={applyTerms} disabled={!!termProblem}>Done</button>
+          </div>
+        </div>
       </dialog>
 
       <dialog ref={surchargeDialog} className="pm-dialog">

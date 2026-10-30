@@ -54,12 +54,16 @@ export interface PrepareSheet {
   surcharges: { available: { code: string; label: string }[]; chosen: string[] };
   prepared: boolean;
   purchased: { category: string; plan_name: string; price: number }[];
+  /** Each column's extra payment terms after the deal's own; none on a cash deal. */
+  terms?: Record<string, { months: number; rate: number }[]>;
+  /** Products the customer removed from each column before choosing. */
+  removed?: Record<string, string[]>;
 }
 
 export interface PreparePayload {
   session: { id: string; deal_number: string | null; vehicle: string; prepared_at: string | null; prepared_by: string | null; locked_at: string | null };
   out_of_date: boolean;
-  payment: { has_payment: boolean; principal: number | null; rate: number | null; term_months: number | null; cap: number | null };
+  payment: { has_payment: boolean; principal: number | null; rate: number | null; term_months: number | null; cap: number | null; financed?: boolean };
   sheet: PrepareSheet;
 }
 
@@ -69,6 +73,8 @@ export interface PrepareState {
   /** Cents per option key, for the prices staff typed. */
   prices: Record<string, number>;
   surcharges: string[];
+  /** Each column's extra terms, after the deal's own. */
+  terms: Record<string, { months: number; rate: number }[]>;
 }
 
 export function initialState(sheet: PrepareSheet): PrepareState {
@@ -76,7 +82,7 @@ export function initialState(sheet: PrepareSheet): PrepareState {
   for (const [pos, row] of Object.entries(sheet.cells)) {
     cells[pos] = Object.fromEntries(Object.entries(row).map(([cat, c]) => [cat, c.key]));
   }
-  return { cells, prices: {}, surcharges: [...sheet.surcharges.chosen] };
+  return { cells, prices: {}, surcharges: [...sheet.surcharges.chosen], terms: { ...(sheet.terms ?? {}) } };
 }
 
 export function findOption(sheet: PrepareSheet, key: string | null): { category: string; plan: SheetPlan; option: SheetOption } | null {
@@ -124,8 +130,10 @@ export function cellFigures(o: SheetOption, state: PrepareState): CellFigures {
 export interface ColumnFigures {
   total: number;
   profit: number;
-  /** Cents a month for the protection, or null on a cash deal. */
+  /** Cents a month for the protection on the first term, or null on a cash deal. */
   monthly: number | null;
+  /** The whole monthly payment on each of the column's terms, in cents. */
+  payments: { months: number; rate: number; deal_term: boolean; monthly: number }[];
 }
 
 /**
@@ -137,7 +145,11 @@ export function columnFigures(
   sheet: PrepareSheet,
   state: PrepareState,
   pos: string,
-  monthlyOf: (prices: number[]) => number | null
+  monthlyOf: (prices: number[]) => number | null,
+  // The column's terms (the deal's first) and the whole monthly payment on one
+  // of them, in dollars: lib/money.ts planTotals with that term's months and rate.
+  terms: { months: number; rate: number; deal_term: boolean }[] = [],
+  paymentOn: (prices: number[], term: { months: number; rate: number }) => number | null = () => null
 ): ColumnFigures {
   const prices: number[] = sheet.purchased.map((p) => p.price);
   let profit = 0;
@@ -150,18 +162,28 @@ export function columnFigures(
     profit += f.profit ?? 0;
   }
   const total = prices.reduce((a, p) => a + p, 0);
-  const m = monthlyOf(prices.map((p) => p / 100));
-  return { total, profit, monthly: m === null ? null : Math.round(m * 100) };
+  const dollarsEach = prices.map((p) => p / 100);
+  const m = monthlyOf(dollarsEach);
+  const payments = terms
+    .map((t) => ({ ...t, monthly: paymentOn(dollarsEach, t) }))
+    .filter((p): p is typeof p & { monthly: number } => p.monthly !== null)
+    .map((p) => ({ months: p.months, rate: p.rate, deal_term: p.deal_term, monthly: Math.round(p.monthly * 100) }));
+  return { total, profit, monthly: m === null ? null : Math.round(m * 100), payments };
 }
 
 /** What Prepare menu sends: only the prices staff changed from the sheet's. */
-export function payloadOf(sheet: PrepareSheet, state: PrepareState): { cells: PrepareState["cells"]; prices: Record<string, number>; surcharges: string[] } {
+export function payloadOf(
+  sheet: PrepareSheet,
+  state: PrepareState,
+  financed = false
+): { cells: PrepareState["cells"]; prices: Record<string, number>; surcharges: string[]; terms?: PrepareState["terms"] } {
   const prices: Record<string, number> = {};
   for (const [key, cents] of Object.entries(state.prices)) {
     const o = findOption(sheet, key)?.option;
     if (o && cents !== o.price) prices[key] = cents;
   }
-  return { cells: state.cells, prices, surcharges: state.surcharges };
+  // Terms only on a financed deal: a cash deal has no payments.
+  return { cells: state.cells, prices, surcharges: state.surcharges, ...(financed ? { terms: state.terms } : {}) };
 }
 
 /** Whether a manager must sign in: any price on screen above its band. */
