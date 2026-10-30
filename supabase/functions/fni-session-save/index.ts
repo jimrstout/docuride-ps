@@ -30,6 +30,14 @@
 //                  stored quote, and written to sessions.additional_down_payment.
 //                  No price sent by the browser is used for it.
 //
+// ── Products already purchased (2026-10-30) ─────────────────────────────
+// A product under a Live or Submit Status Unknown contract is purchased: its
+// saved row is left exactly as it is, whatever the browser sent, and the
+// answer lists it under `locked`. A Finalized session still saves while it has
+// a live contract, and a finished save that includes a product with no
+// contract yet puts it back to Products Selected so Submit takes it
+// (_shared/purchased.ts).
+//
 // Auth: FNI_WEBHOOK_SECRET via x-webhook-secret header or ?secret= query param.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
@@ -44,6 +52,13 @@ import {
   priceFamilies,
   type SavedSelection,
 } from "../_shared/plan-prices.ts";
+import {
+  finalizedMaySave,
+  purchasedKeys,
+  splitLocked,
+  statusAfterAdding,
+  type DealContract,
+} from "../_shared/purchased.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -231,7 +246,25 @@ serve(async (req: Request) => {
       return json(410, { error: "This planning session has expired" });
     }
 
-    if (TERMINAL.includes(s.status)) {
+    // ── What is already purchased on this deal ──────────────────────────
+    const { data: agreements } = await supabase
+      .schema("fni")
+      .from("agreements")
+      .select("id")
+      .eq("session_id", sessionId);
+    const agreementIds = ((agreements ?? []) as { id: string }[]).map((a) => a.id);
+    const { data: contractRows, error: contractErr } = agreementIds.length > 0
+      ? await supabase
+          .schema("fni")
+          .from("agreement_products")
+          .select("provider_id, provider_product_id, status")
+          .in("agreement_id", agreementIds)
+      : { data: [], error: null };
+    if (contractErr) throw new Error(`Failed to read the deal's contracts: ${contractErr.message}`);
+    const purchased = purchasedKeys((contractRows ?? []) as DealContract[]);
+
+    // Finalized still takes more products while a contract is live on it.
+    if (TERMINAL.includes(s.status) && !(s.status === "Finalized" && finalizedMaySave(s.status, purchased))) {
       return json(409, {
         error: `Session is ${s.status} and can no longer be changed`,
       });
@@ -286,10 +319,12 @@ serve(async (req: Request) => {
     // the customer declined is indistinguishable from one they never reached,
     // and the acknowledgment cannot list what was presented.
     const presentedAt = body.presented_at ?? new Date().toISOString();
+    // A purchased product's row is never rewritten.
+    const { writable, locked } = splitLocked(decisions, purchased, providerOf);
     let written = 0;
 
-    if (decisions.length > 0) {
-      const rows = decisions.map((d) => {
+    if (writable.length > 0) {
+      const rows = writable.map((d) => {
         const included = d.disposition === "Included";
         return {
           session_id: sessionId,
@@ -344,6 +379,13 @@ serve(async (req: Request) => {
       if (s.status === "Initiated" || s.status === "Rated" || s.status === STATUS_PRESENTING) {
         patch.status = STATUS_SELECTED;
       }
+      // A product added after the documents were finished: Submit takes it.
+      const reopened = statusAfterAdding(
+        s.status,
+        true,
+        writable.filter((d) => d.disposition === "Included").length
+      );
+      if (reopened) patch.status = reopened;
 
       // ── The additional down payment, worked out here ─────────────────────
       // Never from a figure the browser sent. See serverAdditionalDown.
@@ -374,6 +416,8 @@ serve(async (req: Request) => {
       session_id: sessionId,
       status: patch.status ?? s.status,
       decisions_written: written,
+      // Purchased products, left as they were.
+      locked: locked.map((d) => String(d.product_code)),
       decisions_on_record: count ?? null,
       presented_at: presentedAt,
     });

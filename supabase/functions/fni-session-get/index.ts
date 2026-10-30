@@ -33,6 +33,7 @@ import {
   type RatingRow,
 } from "../_shared/rating-summary.ts";
 import { slotFamilies } from "../_shared/menu-templates.ts";
+import { PURCHASED_STATES, type DealContract } from "../_shared/purchased.ts";
 import { resolvedSlotsFor } from "../_shared/menu-template-rows.ts";
 import { PricingRule } from "../_shared/planner-pricing.ts";
 import { priceFamilies, sessionCap, sessionPaymentBasis } from "../_shared/plan-prices.ts";
@@ -323,6 +324,27 @@ serve(async (req: Request) => {
       .select("*")
       .eq("session_id", sessionId);
 
+    // ── Already purchased ───────────────────────────────────────────────
+    // A product under a Live or Submit Status Unknown contract shows as
+    // purchased and cannot be changed (_shared/purchased.ts). Product ids and
+    // the contract state only: no contract number reaches the customer's tab.
+    const { data: agreementRows } = await supabase
+      .schema("fni")
+      .from("agreements")
+      .select("id")
+      .eq("session_id", sessionId);
+    const agreementIds = ((agreementRows ?? []) as { id: string }[]).map((a) => a.id);
+    const { data: contractRows } = agreementIds.length > 0
+      ? await supabase
+          .schema("fni")
+          .from("agreement_products")
+          .select("provider_id, provider_product_id, status")
+          .in("agreement_id", agreementIds)
+      : { data: [] };
+    const purchased = ((contractRows ?? []) as DealContract[])
+      .filter((c) => (PURCHASED_STATES as readonly string[]).includes(c.status) && c.provider_product_id)
+      .map((c) => ({ provider_id: c.provider_id, provider_product_id: String(c.provider_product_id) }));
+
     // ── Rate basis ──────────────────────────────────────────────────────
     // Where this deal's payment comes from, if it has one. A cash deal -- no
     // lienholder -- has no payment, and the planner must not invent one from
@@ -467,6 +489,7 @@ serve(async (req: Request) => {
       catalog_coverage: coverage,
 
       selections: selections ?? [],
+      purchased,
       photos: s.dx1_photos ?? null,
       photos_cached_at: s.dx1_photos_cached_at ?? null,
     });

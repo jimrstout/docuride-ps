@@ -25,6 +25,10 @@
 //   Monthly figures appear only where a payment honestly exists, and the total
 //   is computed from the combined financed amount rather than by summing
 //   rounded per-product payments.
+//
+//   A product already purchased on this deal (a live contract) shows as
+//   purchased, included, at the price it was sold for, and cannot be changed.
+//   Everything not yet submitted stays selectable (lib/purchased.ts).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -47,6 +51,7 @@ import {
 } from "@/lib/money";
 import { profileFor, relevanceScore } from "@/lib/profiles";
 import { apiPath } from "@/lib/paths";
+import { purchasedKey, purchasedSet, purchasedTierOf, savedPrice } from "@/lib/purchased";
 
 import AppShell from "@/components/AppShell";
 import ProgressStepper from "@/components/ProgressStepper";
@@ -171,6 +176,14 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     [answers]
   );
 
+  // ── Already purchased on this deal ──────────────────────────────────────
+  const purchased = useMemo(() => purchasedSet(initial.purchased), [initial.purchased]);
+  const savedRows = useMemo(() => {
+    const m = new Map<string, (typeof initial.selections)[number]>();
+    for (const s of initial.selections ?? []) m.set(purchasedKey(s.provider_id, s.provider_product_id), s);
+    return m;
+  }, [initial.selections]);
+
   // ── What can actually be shown ──────────────────────────────────────────
   const copyByCode = useMemo(() => {
     const m = new Map<string, CatalogEntry>();
@@ -194,10 +207,15 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
       for (const tier of family.tiers) {
         // A tier names its own provider when a menu slot mixes providers.
         const copy = copyByCode.get(`${tier.provider_id ?? family.provider_id ?? ""}:${tier.product_code}`);
+        // Purchased on this deal: shown at the price it was sold for, even
+        // when today's rating has no price for it.
+        const bought = purchased.has(purchasedKey(tier.provider_id ?? family.provider_id, tier.product_code));
         const sellable = tier.rates.filter((r) => r.retail_price !== null);
         const fromPrice = sellable.length > 0
           ? Math.min(...sellable.map((r) => r.retail_price as number))
-          : null;
+          : bought
+            ? savedPrice(savedRows.get(purchasedKey(tier.provider_id ?? family.provider_id, tier.product_code)))
+            : null;
 
         // Filtering by genuine eligibility is correct. Filtering for relevance
         // is steering, and is not done anywhere here. The exclusions below are
@@ -229,7 +247,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
 
         // Only the rates that carry a price. A rate no band covers cannot be
         // offered, and offering the length without a price is worse.
-        tiers.push({ tier: { ...tier, rates: sellable }, copy, fromPrice });
+        tiers.push({ tier: { ...tier, rates: sellable.length > 0 || !bought ? sellable : tier.rates }, copy, fromPrice });
       }
 
       if (tiers.length > 0) {
@@ -250,7 +268,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     });
 
     return { presentable: ok, withheld: bad, unmatched: missing };
-  }, [initial.offer, copyByCode, allAnswers]);
+  }, [initial.offer, copyByCode, allAnswers, purchased, savedRows]);
 
   // The flow, as a list of screens. Rebuilt when the product list changes,
   // which is why the customer's position is kept as an index into it rather
@@ -344,11 +362,19 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   // not all down to the protection chosen, and is not described that way.
   const baseOverCap = cap !== null && principal !== null && principal > cap;
 
-  /** The tier in force for a family: the customer's, else the cheapest. */
+  /** The tier in force for a family: the purchased one, the customer's, else the cheapest. */
   const tierOf = useCallback(
     (p: Presentable): PresentableTier =>
+      purchasedTierOf(p, purchased) ??
       p.tiers.find((t) => t.tier.product_code === tierChoice[p.family_code]) ?? p.tiers[0],
-    [tierChoice]
+    [tierChoice, purchased]
+  );
+
+  /** A family with a purchased tier is locked: included, and unchangeable. */
+  const lockedOf = useCallback((p: Presentable): boolean => purchasedTierOf(p, purchased) !== null, [purchased]);
+  const decisionOf = useCallback(
+    (p: Presentable): Disposition | undefined => (lockedOf(p) ? "Included" : decisions[p.family_code]),
+    [lockedOf, decisions]
   );
 
   /** The rate in force for a tier: the customer's, else the shortest. */
@@ -362,15 +388,20 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   const priceOf = useCallback(
     (p: Presentable): number | null => {
       const t = tierOf(p);
+      // What a purchased product was sold for, not today's price.
+      if (lockedOf(p)) {
+        const sold = savedPrice(savedRows.get(purchasedKey(t.tier.provider_id ?? p.provider_id, t.tier.product_code)));
+        if (sold !== null) return sold;
+      }
       const r = rateOf(t);
       if (!r || r.retail_price === null) return null;
       return r.retail_price + surchargeCost(r, options[t.tier.product_code] ?? []);
     },
-    [tierOf, rateOf, options]
+    [tierOf, rateOf, options, lockedOf, savedRows]
   );
 
   const includedPrices = presentable
-    .filter((p) => decisions[p.family_code] === "Included")
+    .filter((p) => decisionOf(p) === "Included")
     .map(priceOf)
     .filter((n): n is number => n !== null);
 
@@ -393,12 +424,12 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
       const price = priceOf(p);
       if (isCash || principal === null || cap === null || price === null) return 0;
       const others = presentable
-        .filter((q) => q.family_code !== p.family_code && decisions[q.family_code] === "Included")
+        .filter((q) => q.family_code !== p.family_code && decisionOf(q) === "Included")
         .map(priceOf)
         .filter((n): n is number => n !== null);
       return productDownImpact(principal, others, price, cap);
     },
-    [isCash, principal, cap, presentable, decisions, priceOf]
+    [isCash, principal, cap, presentable, decisionOf, priceOf]
   );
 
   const downSummary = isCash ? null : (
@@ -420,7 +451,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
           // Only the tier actually chosen, in a family they included, is
           // Included.
           decisions: presentable.flatMap((p) => {
-            const decided = decisions[p.family_code];
+            const decided = decisionOf(p);
             const chosenTier = tierOf(p);
 
             return p.tiers.map((t) => {
@@ -473,7 +504,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
         setSaveState("error");
       }
     },
-    [presentable, decisions, options, answers, session.id]
+    [presentable, decisionOf, tierOf, rateOf, options, answers, session.id]
   );
 
   // Debounced autosave. Only once the customer has actually decided something --
@@ -580,7 +611,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     }
   }, [save, session.id]);
 
-  const decided = presentable.filter((p) => decisions[p.family_code]).length;
+  const decided = presentable.filter((p) => decisionOf(p)).length;
 
   const vehicleName = [
     session.vehicle.year,
@@ -623,7 +654,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
       name: t.copy.display_name,
       duration: durationOf(rateOf(t), t.copy.coverage_duration),
       price: priceOf(p),
-      disposition: decisions[p.family_code],
+      disposition: decisionOf(p),
     };
   });
 
@@ -639,7 +670,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
         term: durationOf(rateOf(t), t.copy.coverage_duration),
       })),
       tierInForce: tierOf(p).tier.product_code,
-      decision: decisions[p.family_code],
+      decision: decisionOf(p),
       price: priceOf(p),
     }))
   );
@@ -662,7 +693,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   // would record a decision they never made.
   const undecidedHere =
     screen.kind === "product" &&
-    !decisions[presentable[screen.pIndex].family_code];
+    !decisionOf(presentable[screen.pIndex]);
 
   const status =
     undecidedHere ? "Choose one to continue"
@@ -691,7 +722,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
           <p className="eyebrow">Your options</p>
           <ol>
             {presentable.map((p, i) => {
-              const d = decisions[p.family_code];
+              const d = decisionOf(p);
               const here = screen.kind === "product" && screen.pIndex === i;
               const reached = i <= furthestProduct;
               return (
@@ -888,7 +919,8 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
             hasPayment={hasPayment}
             rate={rate}
             term={term}
-            decisions={decisions}
+            disposition={decisionOf(presentable[screen.pIndex])}
+            purchased={lockedOf(presentable[screen.pIndex])}
             options={options}
             dealerGroupName={initial.dealer_group_name}
             copyTemplates={initial.copy ?? {}}
@@ -954,7 +986,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                   label="Added to your purchase"
                   total={planTotal}
                   lines={presentable
-                    .filter((p) => decisions[p.family_code] === "Included")
+                    .filter((p) => decisionOf(p) === "Included")
                     .map((p) => ({
                       name: tierOf(p).copy.display_name,
                       amount: priceOf(p),
@@ -1123,7 +1155,8 @@ function FamilyScreen({
   hasPayment,
   rate,
   term,
-  decisions,
+  disposition,
+  purchased,
   options,
   dealerGroupName,
   copyTemplates,
@@ -1142,7 +1175,10 @@ function FamilyScreen({
   hasPayment: boolean;
   rate: number | null;
   term: number | null;
-  decisions: Record<string, Disposition>;
+  /** The family's decision: Included when it is purchased. */
+  disposition: Disposition | undefined;
+  /** Purchased on this deal: shown, and nothing about it can be changed. */
+  purchased: boolean;
   options: Record<string, string[]>;
   dealerGroupName: string | null;
   copyTemplates: Record<string, string>;
@@ -1170,7 +1206,8 @@ function FamilyScreen({
           : null
       }
       downImpact={downImpactOf(family)}
-      disposition={decisions[family.family_code]}
+      disposition={disposition}
+      purchased={purchased}
       chosenOptions={options[code] ?? []}
       dealerGroupName={dealerGroupName}
       copyTemplates={copyTemplates}

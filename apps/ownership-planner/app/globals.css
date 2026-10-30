@@ -347,6 +347,11 @@ button { cursor: pointer; }
 .ps-price-down { display: block; font-size: var(--fs-base); color: var(--warn-fg); font-weight: 600; margin-top: var(--s1); }
 .ps-price-term { display: block; font-size: var(--fs-xs); color: var(--muted); margin-top: var(--s2); }
 
+/* A product already on a contract: shown, and locked (lib/purchased.ts). */
+.ps-purchased { border: var(--bw) solid var(--line-strong); border-radius: 6px; padding: var(--s2) var(--s3); }
+.ps-purchased-label { font-weight: 700; margin: 0; }
+.ps-purchased-note { margin: var(--s1) 0 0; color: var(--ink-soft); }
+
 .ps-decide { border-top: var(--bw) solid var(--line); padding-top: var(--s3); }
 .ps-decide-ask { margin: 0 0 var(--s2); font-size: var(--fs-base); font-weight: 600; }
 .ps-side .decision { flex-direction: column; align-items: stretch; gap: var(--s2); }
