@@ -69,9 +69,12 @@ create table if not exists fni.menu_presets (
   category text not null check (category in (
     'Mechanical Protection', 'Maintenance', 'Tire and Wheel', 'Theft', 'Battery', 'Appearance', 'Other'
   )),
-  -- The preferred plan: a catalog product of the provider. Null: the column's level decides.
+  -- The preferred plan, as the catalog names it ("Priority Maintenance, Gold"):
+  -- one name covers that plan's version for every vehicle type, each its own
+  -- product code. A lower plan is the one before it in catalog display order.
+  -- Null: the column's level decides, as before.
   provider_id uuid references fni.providers(id),
-  product_code text,
+  plan_name text,
   term_months int check (term_months is null or term_months > 0),
   term_miles int check (term_miles is null or term_miles >= 0),
   deductible numeric(12,2) check (deductible is null or deductible >= 0),

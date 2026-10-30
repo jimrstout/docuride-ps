@@ -21,7 +21,7 @@ test("presets: per template, Financed or Cash, column and category", () => {
   assert.match(code, /deal_type text not null check \(deal_type in \('Financed', 'Cash'\)\)/);
   assert.match(code, /column_position int not null check \(column_position between 1 and 5\)/);
   assert.match(code, /unique \(template_id, deal_type, column_position, category\)/);
-  for (const c of ["provider_id uuid", "product_code text", "term_months int", "term_miles int", "deductible numeric\\(12,2\\)", "disappearing_deductible boolean"]) {
+  for (const c of ["provider_id uuid", "plan_name text", "term_months int", "term_miles int", "deductible numeric\\(12,2\\)", "disappearing_deductible boolean"]) {
     assert.match(code, new RegExp(c), c);
   }
 });
