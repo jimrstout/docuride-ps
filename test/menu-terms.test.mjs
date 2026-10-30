@@ -80,6 +80,10 @@ test("the menu: a payment line per term, the term chosen with the package, check
   const save = read("supabase/functions/fni-session-save/index.ts");
   assert.match(save, /const term = asked === null\s*\? terms\[0\] \?\? null\s*: terms\.find\(/);
   assert.match(save, /patch\.menu_choice = \{ column: chosen\.column, name: menuEvent!\.package, term: chosen\.term, kept, removed: chosen\.removed \};/);
+  // The session is read with what the check needs.
+  for (const c of ["finance_type", "menu_template_id", "menu_terms", "menu_prepared", "menu_column_levels"]) {
+    assert.ok(save.slice(save.indexOf("const SESSION_COLUMNS = ["), save.indexOf('].join(", ");')).includes(`"${c}"`), c);
+  }
   // PS never writes the CRM's finance terms.
   assert.doesNotMatch(save, /updateRecord|Finance_Term|Interest_Rate/);
 });

@@ -106,6 +106,10 @@ const SESSION_COLUMNS = [
   "tila_amount_financed", "amount_financed", "apr", "interest_rate",
   "finance_term_total", "lienholder_name", "max_amount_financed",
   "rated_provider_ids",
+  // What the package choice is checked against: the deal's type, its menu
+  // template, levels, prepared cells and terms (migrations 0042, 0045, 0046).
+  "finance_type", "menu_template_id", "menu_column_levels", "menu_prepared",
+  "menu_surcharges", "menu_terms", "menu_removed", "menu_prices_locked_at",
 ].join(", ");
 
 /**
