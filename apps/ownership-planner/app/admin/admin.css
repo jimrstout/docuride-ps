@@ -426,3 +426,5 @@
 .ad .ad-preset-row { display: grid; grid-template-columns: minmax(9rem, 1.2fr) repeat(5, minmax(8rem, 1fr)); gap: var(--s2, 8px); align-items: end; padding: 6px 0; border-top: 1px solid var(--line, #e3e1dc); }
 .ad .ad-preset-row:first-of-type { border-top: 0; }
 @media (max-width: 900px) { .ad .ad-preset-row { grid-template-columns: 1fr 1fr; } }
+.ad .ad-preset-terms { grid-template-columns: minmax(9rem, 1.2fr) minmax(8rem, 1fr) repeat(2, minmax(16rem, 2fr)); }
+.ad .ad-term-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2, 8px); }

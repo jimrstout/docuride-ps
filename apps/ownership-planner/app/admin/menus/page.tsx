@@ -32,6 +32,7 @@ import { edge, EdgeError } from "@/lib/edge";
 import type { MenuPresetRow, TemplateRow, TemplateSlotRow, TemplatesPayload } from "@/lib/types";
 import { moveSlot, saveMenuColumns, saveMenuPresets, saveSlot, saveTemplate } from "@/app/console-actions";
 import { deductibleLabel, milesLabel, PRESET_DEDUCTIBLES, PRESET_MILES, PRESET_TERMS, termLabel } from "@/lib/menu-labels";
+import { rateText } from "@/lib/menu-terms";
 import ProgramLabel from "@/components/admin/ProgramLabel";
 import { Badge, Notice, PageHead } from "@/components/admin/Parts";
 
@@ -297,6 +298,12 @@ function PresetsPanel({ t, payload, params }: { t: TemplateRow; payload: Templat
     return blank ? undefined : p;
   };
   const plans = payload.plan_names ?? {};
+  // Extra payment terms, Financed only (supabase/functions/_shared/menu-terms.ts).
+  const termAt = (pos: number, slot: number) => (t.preset_terms ?? []).find((x) => x.column_position === pos && x.slot === slot);
+  const termsLine = (pos: number) => {
+    const extra = [1, 2].map((slot) => termAt(pos, slot)).filter(Boolean).map((x) => `${x!.months} months at ${rateText(x!.rate)}`);
+    return extra.length > 0 ? `The deal's term, plus ${extra.join(" and ")}` : "The deal's term only";
+  };
   const changes = (payload.preset_changes ?? []).filter((c) => (c.record_key ?? "").startsWith(`${t.id}|`));
   return (
     <section className="ad-panel" aria-labelledby="presets-title">
@@ -338,6 +345,27 @@ function PresetsPanel({ t, payload, params }: { t: TemplateRow; payload: Templat
             {columns.map((c, ci) => (
               <fieldset key={c.name} className="ad-fieldset ad-field--wide">
                 <legend>{c.name}</legend>
+                {dealType === "Financed" ? (
+                  <div className="ad-preset-row ad-preset-terms">
+                    <span className="ad-strong">Payment terms</span>
+                    <span className="ad-help">The deal&apos;s own term is always first.</span>
+                    {[1, 2].map((slot) => {
+                      const t = termAt(ci + 1, slot);
+                      return (
+                        <span key={slot} className="ad-term-pair">
+                          <label className="ad-field">
+                            <span>Extra term {slot}, months</span>
+                            <input name={`t_${ci + 1}_${slot}_months`} inputMode="numeric" defaultValue={t ? String(t.months) : ""} placeholder="None" />
+                          </label>
+                          <label className="ad-field">
+                            <span>Interest rate, %</span>
+                            <input name={`t_${ci + 1}_${slot}_rate`} inputMode="decimal" defaultValue={t ? String(t.rate) : ""} placeholder="Required with months" />
+                          </label>
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : null}
                 {CATEGORIES.map((cat, ki) => {
                   const p = at(ci + 1, cat);
                   const f = (name: string) => `p_${ci + 1}_${ki}_${name}`;
@@ -411,6 +439,12 @@ function PresetsPanel({ t, payload, params }: { t: TemplateRow; payload: Templat
                   {columns.map((c, ci) => <td key={c.name}>{presetText(at(ci + 1, cat))}</td>)}
                 </tr>
               ))}
+              <tr>
+                <th scope="row" className="ad-strong">Payment terms</th>
+                {columns.map((c, ci) => (
+                  <td key={c.name}>{dealType === "Financed" ? termsLine(ci + 1) : "A total, no payments"}</td>
+                ))}
+              </tr>
             </tbody>
           </table>
         </div>

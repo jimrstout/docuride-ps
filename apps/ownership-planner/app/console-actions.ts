@@ -1130,9 +1130,11 @@ export async function saveMenuPresets(fd: FormData): Promise<void> {
   const dealType = field(fd, "deal_type") === "Cash" ? "Cash" : "Financed";
   const presets: Record<string, string> = {};
   for (const [k, v] of fd.entries()) if (/^p_\d_\d_[a-z]+$/.test(k)) presets[k] = String(v);
+  const terms: Record<string, string> = {};
+  for (const [k, v] of fd.entries()) if (/^t_\d_\d_(months|rate)$/.test(k)) terms[k] = String(v);
   await adminWrite(`${MENUS}?template=${templateId}&presets=${dealType}`, (by, operatorId) =>
     edge.adminSaveTemplates({
-      action: "save_presets", template_id: templateId, deal_type: dealType, presets, updated_by: by, operator_id: operatorId,
+      action: "save_presets", template_id: templateId, deal_type: dealType, presets, terms, updated_by: by, operator_id: operatorId,
     }), "saved");
 }
 
