@@ -6,6 +6,13 @@
 // POST { section: "templates", action: "add_slot", template_id, ...slot, updated_by }
 // POST { section: "templates", action: "save_slot", slot_id, ...slot, updated_by }
 // POST { section: "templates", action: "move_slot", slot_id, direction: "up" | "down", updated_by }
+// POST { section: "templates", action: "save_columns", template_id, columns: [...], updated_by }
+//
+// Each template also carries its conventional menu columns (two to five, or the
+// default layout until some are saved: _shared/menu-columns.ts), and the
+// section lists the catalog's products that have no approved description yet,
+// so staff can write one. Such a product still appears on the conventional
+// menu, under its provider product name.
 //
 // A menu template decides which products a deal is offered (section 4 of
 // docs/multi-provider.md). Nothing is deleted: a template is switched off, and
@@ -14,6 +21,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { conditionsLine, parseSlot, parseTemplate } from "../_shared/menu-admin.ts";
 import { VEHICLE_TYPES } from "../_shared/vehicle-types.ts";
+import { columnsFor, parseColumns } from "../_shared/menu-columns.ts";
 import type { Reply } from "./providers.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -66,6 +74,26 @@ export async function readTemplates(supabase: SupabaseClient, tenantId: string):
         .order("position")
     : { data: [] };
 
+  const { data: columnRows, error: colErr } = ids.length
+    ? await supabase
+        .schema("fni")
+        .from("menu_template_columns")
+        .select("template_id, position, name, preset_categories, starting_level")
+        .in("template_id", ids)
+    : { data: [], error: null };
+  if (colErr) throw new Error(`Failed to read the menu columns: ${colErr.message}`);
+
+  // Products with no approved description yet, by the planner's own rule
+  // (fni.product_catalog_presentable).
+  const { data: unwritten, error: wErr } = await supabase
+    .schema("fni")
+    .from("product_catalog_presentable")
+    .select("id, provider_id, product_code, display_name")
+    .eq("tenant_id", tenantId)
+    .is("store_id", null)
+    .eq("is_presentable", false);
+  if (wErr) throw new Error(`Failed to read which products need a description: ${wErr.message}`);
+
   const storeName = (id: string) => stores.find((s) => s.id === id)?.name ?? "a store";
   return {
     status: 200,
@@ -77,6 +105,18 @@ export async function readTemplates(supabase: SupabaseClient, tenantId: string):
         ...t,
         conditions_line: conditionsLine(t as never, storeName),
         slots: ((slots ?? []) as { template_id: string }[]).filter((s) => s.template_id === t.id),
+        menu_columns: columnsFor(
+          ((columnRows ?? []) as {
+            template_id: string; position: number; name: string; preset_categories: string[] | null; starting_level: string | null;
+          }[]).filter((c) => c.template_id === t.id)
+        ),
+      })),
+      needs_description: ((unwritten ?? []) as { id: string; provider_id: string; product_code: string; display_name: string }[]).map((u) => ({
+        id: u.id,
+        provider_id: u.provider_id,
+        provider_name: products.find((p) => p.id === u.id)?.provider_name ?? "A provider",
+        code: u.product_code,
+        name: u.display_name,
       })),
     },
   };
@@ -209,6 +249,20 @@ export async function writeTemplates(
       }
       await touch(s.template_id);
       return { status: 200, body: { ok: true } };
+    }
+
+    case "save_columns": {
+      const templateId = await ownTemplate(body.template_id);
+      if (!templateId) return { status: 404, body: { error: "That menu no longer exists." } };
+      const parsed = parseColumns(body.columns);
+      if ("errors" in parsed) return { status: 400, body: { error: parsed.errors.join(" ") } };
+      // One statement replaces them all, and refuses fewer than two or more than five.
+      const { error } = await supabase
+        .schema("fni")
+        .rpc("save_menu_columns", { p_template_id: templateId, p_columns: parsed.columns, p_updated_by: by });
+      if (error) return { status: 400, body: { error: error.message } };
+      await touch(templateId);
+      return { status: 200, body: { ok: true, columns: parsed.columns.length } };
     }
 
     default:

@@ -1166,3 +1166,34 @@ Confirm Submit.
   alone; with none it moves as any rating moves it. A rating error shows in
   the rating banner with Show details and Copy error. Every press is
   recorded as "Rated again by <initials>", or "Rated again by System".
+
+## 22. The conventional menu
+
+A second presentation beside the Ownership Planner, out of the same session:
+package columns side by side (Platinum, Gold, Silver, Basic), every rated
+product in every column, checked or not. Everything before and after it
+(Details, rating, selections, Submit, Get document, Deal Jacket filing) is
+shared with the planner. Built in five pull requests; this section grows with
+them.
+
+**Columns, per menu template** (migration 0042, `fni.menu_template_columns`,
+`_shared/menu-columns.ts`). Administration > Menus > a menu > Menu columns:
+two to five columns, each with a name, its order, the product categories it
+starts checked, and its starting coverage level (Lowest, Middle or Highest of
+a product's levels, cheapest first; Middle is the lower middle for an even
+count). A template with none saved uses the default layout:
+
+| Column | Starts checked | Starting level |
+|---|---|---|
+| Platinum | Mechanical Protection, Maintenance, Tire and Wheel, Theft, Battery, Appearance | Highest |
+| Gold | Mechanical Protection, Tire and Wheel, Theft, Battery | Middle |
+| Silver | Mechanical Protection, Tire and Wheel | Lowest |
+| Basic | Mechanical Protection | Lowest |
+
+`fni.save_menu_columns` replaces a template's columns in one statement and
+refuses fewer than two or more than five.
+
+**Products that need a description.** The Menus page lists the catalog's
+products with no approved description (`fni.product_catalog_presentable`),
+each with a link to write one. The Ownership Planner does not show them; the
+conventional menu shows them under the provider's product name.
