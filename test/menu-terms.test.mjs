@@ -71,3 +71,23 @@ test("presets: Financed only, managers only, every change logged", () => {
   assert.match(page, /name=\{`t_\$\{ci \+ 1\}_\$\{slot\}_months`\}/);
   assert.match(page, /name=\{`t_\$\{ci \+ 1\}_\$\{slot\}_rate`\}/);
 });
+
+test("the menu: a payment line per term, the term chosen with the package, checked by the save", () => {
+  const menu = read("apps/ownership-planner/app/menu/[sessionId]/Menu.tsx");
+  assert.match(menu, /<span>\{paymentText\(p\.totals\.totalPayment, p\.t\)\}<\/span>/);
+  assert.match(menu, /onClick=\{\(\) => void record\(cells\[ci\], c\.name, ci \+ 1, f\.term\)\}/);
+  assert.match(menu, /term: chosenTerm \? \{ months: chosenTerm\.months, rate: chosenTerm\.rate \} : null,/);
+  const save = read("supabase/functions/fni-session-save/index.ts");
+  assert.match(save, /const term = asked === null\s*\? terms\[0\] \?\? null\s*: terms\.find\(/);
+  assert.match(save, /patch\.menu_choice = \{ column: chosen\.column, name: menuEvent!\.package, term: chosen\.term, kept, removed: chosen\.removed \};/);
+  // PS never writes the CRM's finance terms.
+  assert.doesNotMatch(save, /updateRecord|Finance_Term|Interest_Rate/);
+});
+
+test("Details: the note when the customer chose a term other than the deal's", () => {
+  const verify = read("supabase/functions/fni-session-verify/index.ts");
+  assert.match(verify, /chosen_term_note: chosenTermNote\(/);
+  assert.match(verify, /"menu_choice",/);
+  const page = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  assert.match(page, /\{sheet\.chosen_term_note \? \(\s*<p className="console-flash console-flash--bad" role="alert">\{sheet\.chosen_term_note\}<\/p>/);
+});

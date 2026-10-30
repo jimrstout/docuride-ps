@@ -127,7 +127,9 @@ test("the browser's figure is never the price: the save prices on the server", (
   assert.match(save, /retail_price: included \? price : null,\s*customer_price: included \? price : null,/);
   assert.match(save, /return applyDealPrices\(priceFamilies\(familiesFromRows\(offers\), \(ruleRows \?\? \[\]\) as unknown as PricingRule\[\]\), prices\);/);
   // Prices lock when the customer chooses a package.
-  assert.match(save, /if \(body\.complete === true && menuEvent\?\.kind === "selected"\) patch\.menu_prices_locked_at = new Date\(\)\.toISOString\(\);/);
+  assert.match(save, /if \(chosen\) \{\s*patch\.menu_prices_locked_at = new Date\(\)\.toISOString\(\);/);
+  // The term is checked before anything is written.
+  assert.ok(save.indexOf('return json(400, { error: "That payment term is not one this package offers." });') < save.indexOf("// ── Upsert the decisions"));
   // Logged as a count, never a price.
   for (const m of save.matchAll(/console\.\w+\("[^"]*",([^;]*)\);/g)) assert.doesNotMatch(m[1], /price|server\b|browser\b/, m[1]);
   assert.match(save, /console\.log\("fni-session-save priced on the server", \{ session: sessionId, differed: adjusted \}\);/);

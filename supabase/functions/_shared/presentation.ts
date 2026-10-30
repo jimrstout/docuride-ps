@@ -10,7 +10,8 @@
 // Session events, signed with the signed-in person's initials or "System":
 //
 //   "Conventional menu opened"                      when the menu loads
-//   "Package selected on the conventional menu: Gold"
+//   "Package chosen: Gold, 72 months at 7.74%. Removed: Tire and Wheel, Battery."
+//                                                   (_shared/menu-terms.ts, migration 0046)
 //   "Everything declined on the conventional menu"
 //
 // "Presented by <name>, dealership staff" goes on the acknowledgment when a
@@ -40,6 +41,12 @@ export function pathForSave(v: unknown): PresentationPath {
 export interface MenuEvent {
   kind: "opened" | "selected" | "declined";
   package?: string;
+  /** The column chosen, 1 to 5. */
+  column?: number;
+  /** The payment term chosen, when the deal has payments. */
+  term?: { months: number; rate: number } | null;
+  /** Products the customer removed from the chosen column, by category. */
+  removed?: string[];
 }
 
 /** A menu event as the browser sent it, or null when it is not one. */
@@ -48,7 +55,16 @@ export function parseMenuEvent(v: unknown): MenuEvent | null {
   const e = v as Record<string, unknown>;
   if (e.kind === "opened" || e.kind === "declined") return { kind: e.kind };
   if (e.kind === "selected" && typeof e.package === "string" && e.package.trim() !== "") {
-    return { kind: "selected", package: e.package.trim().slice(0, 40) };
+    const t = e.term as { months?: unknown; rate?: unknown } | null | undefined;
+    const months = Number(t?.months);
+    const rate = Number(t?.rate);
+    return {
+      kind: "selected",
+      package: e.package.trim().slice(0, 40),
+      column: Number.isInteger(e.column) && (e.column as number) >= 1 && (e.column as number) <= 5 ? (e.column as number) : undefined,
+      term: t && Number.isInteger(months) && Number.isFinite(rate) ? { months, rate } : null,
+      removed: Array.isArray(e.removed) ? (e.removed as unknown[]).map(String).map((r) => r.slice(0, 40)).slice(0, 10) : [],
+    };
   }
   return null;
 }

@@ -62,11 +62,15 @@ import { offerRowsFor, tecAssuredProviderId } from "../_shared/provider-rows.ts"
 import type { PricingRule } from "../_shared/planner-pricing.ts";
 import {
   additionalDownForSelections,
+  sessionPaymentBasis,
   customerPriceFor,
   priceFamilies,
   type SavedSelection,
 } from "../_shared/plan-prices.ts";
 import { applyDealPrices, type DealPrice } from "../_shared/menu-prepare.ts";
+import { loadSheet } from "../_shared/menu-prepare-rows.ts";
+import { columnTerms, packageChosenEvent, type Term } from "../_shared/menu-terms.ts";
+import { presetDealType } from "../_shared/menu-presets.ts";
 import type { NormalizedFamily } from "../_shared/normalized-offer.ts";
 import {
   finalizedMaySave,
@@ -366,6 +370,35 @@ serve(async (req: Request) => {
       return json(400, { error: "Invalid decisions", problems });
     }
 
+    // ── A package chosen: its term and what the customer removed ─────────
+    // Checked before anything is written (migration 0046): the term must be
+    // one the column offers, the deal's own first, then its extra terms
+    // (_shared/menu-terms.ts). A term no column offers is refused.
+    let chosen: { column: number | null; term: Term | null; removed: string[] } | null = null;
+    let chosenEvent: string | null = null;
+    if (body.complete === true && menuEvent?.kind === "selected") {
+      const pos = menuEvent.column ?? null;
+      const { sheet } = await loadSheet(supabase as never, session as unknown as Record<string, unknown>);
+      const basis = sessionPaymentBasis(session as unknown as Record<string, unknown>);
+      const terms = columnTerms(
+        presetDealType((session as unknown as Record<string, unknown>).finance_type) === "Financed" && basis.hasPayment
+          ? { months: basis.termMonths, rate: basis.ratePercent }
+          : null,
+        pos === null ? [] : sheet.terms[String(pos)] ?? []
+      );
+      const asked = menuEvent.term ?? null;
+      const term = asked === null
+        ? terms[0] ?? null
+        : terms.find((t) => t.months === asked.months && Math.abs(t.rate - asked.rate) < 1e-9) ?? null;
+      if (asked !== null && term === null) {
+        return json(400, { error: "That payment term is not one this package offers." });
+      }
+      const known = new Set(sheet.categories);
+      const removed = (menuEvent.removed ?? []).filter((c) => known.has(c));
+      chosen = { column: pos, term, removed };
+      chosenEvent = packageChosenEvent(menuEvent.package!, term, removed);
+    }
+
     // ── Upsert the decisions ────────────────────────────────────────────
     // A row is written for declines as well as includes. Without that, a product
     // the customer declined is indistinguishable from one they never reached,
@@ -452,7 +485,13 @@ serve(async (req: Request) => {
 
     // The customer chose a package on the conventional menu: its prices lock.
     // A change after this goes back to Prepare menu, which records it.
-    if (body.complete === true && menuEvent?.kind === "selected") patch.menu_prices_locked_at = new Date().toISOString();
+    if (chosen) {
+      patch.menu_prices_locked_at = new Date().toISOString();
+      const kept = writable
+        .filter((d) => d.disposition === "Included")
+        .map((d) => String(d.product_name ?? d.product_code));
+      patch.menu_choice = { column: chosen.column, name: menuEvent!.package, term: chosen.term, kept, removed: chosen.removed };
+    }
 
     if (body.discovery !== undefined) patch.discovery = body.discovery;
     if (body.mode !== undefined) patch.mode = body.mode;
@@ -495,7 +534,7 @@ serve(async (req: Request) => {
     if (updErr) throw new Error(`Failed to update session: ${updErr.message}`);
 
     // The menu's package, or everything declined, once it is saved.
-    if (menuEvent && body.complete === true) await recordEvent(menuEventName(menuEvent));
+    if (menuEvent && body.complete === true) await recordEvent(chosenEvent ?? menuEventName(menuEvent));
 
     const { count } = await supabase
       .schema("fni")

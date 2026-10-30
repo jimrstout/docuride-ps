@@ -36,6 +36,9 @@ test("the menu's events, signed with initials or System", () => {
   assert.equal(menuEventName(parseMenuEvent({ kind: "selected", package: " Gold " })), "Package selected on the conventional menu: Gold");
   assert.equal(menuEventName(parseMenuEvent({ kind: "declined" })), MENU_DECLINED_EVENT);
   assert.equal(parseMenuEvent({ kind: "selected", package: "" }), null);
+  // The column, the term and the products removed ride along.
+  assert.deepEqual(parseMenuEvent({ kind: "selected", package: "Gold", column: 2, term: { months: 72, rate: 7.74 }, removed: ["Battery"] }),
+    { kind: "selected", package: "Gold", column: 2, term: { months: 72, rate: 7.74 }, removed: ["Battery"] });
   assert.equal(parseMenuEvent("opened"), null);
   assert.equal(signedBy("js"), "JS");
   assert.equal(signedBy(undefined), "System");
@@ -46,7 +49,10 @@ test("the menu's events, signed with initials or System", () => {
   // Opening records the event and changes nothing else.
   assert.match(save, /if \(menuEvent\?\.kind === "opened"\) \{\s*await recordEvent\(menuEventName\(menuEvent\)\);\s*return json\(200,/);
   assert.match(save, /created_by: signedBy\(body\.presented_by\)/);
-  assert.match(save, /if \(menuEvent && body\.complete === true\) await recordEvent\(menuEventName\(menuEvent\)\);/);
+  // A package chosen reads as the package, its term and what was removed
+  // (_shared/menu-terms.ts packageChosenEvent, docs section 26).
+  assert.match(save, /if \(menuEvent && body\.complete === true\) await recordEvent\(chosenEvent \?\? menuEventName\(menuEvent\)\);/);
+  assert.match(save, /chosenEvent = packageChosenEvent\(menuEvent\.package!, term, removed\);/);
   const page = read("apps/ownership-planner/app/menu/[sessionId]/page.tsx");
   assert.match(page, /menu_event: \{ kind: "opened" \}, \.\.\.\(await presenter\(\)\)/);
 });

@@ -120,9 +120,11 @@ test("each column's total and payment are the planner's, to the cent", () => {
   assert.equal(t.totalPayment, direct.totalPayment);
   assert.equal(toCents(t.vehiclePayment + t.planPayment), t.totalPayment);
   const menu = read("apps/ownership-planner/app/menu/[sessionId]/Menu.tsx");
-  assert.match(menu, /const totals = hasPayment \? planTotals\(principal!, prices, rate!, term!, cap\) : null;/);
+  // One payment per term, the deal's own first, each by planTotals (docs section 26).
+  assert.match(menu, /const payments = termsFor\(ci\)\.map\(\(t\) => \(\{ t, totals: planTotals\(principal!, prices, t\.rate, t\.months, cap\) \}\)\);/);
+  assert.match(menu, /columnTerms\(hasPayment \? \{ months: term!, rate: rate! \} : null,/);
   // Cash: the total only, no monthly figure.
-  assert.match(menu, /\{f\.totals \? \(\s*<span className="mn-month">/);
+  assert.match(menu, /\{f\.payments\.length > 0 \? \(\s*<fieldset className="mn-terms">/);
   assert.match(menu, /const cap = isCash \? null : num\(session\.financials\.max_amount_financed\);/);
 });
 

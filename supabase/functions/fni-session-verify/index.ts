@@ -87,6 +87,8 @@ import {
 import { contractDateLine, dayLabel, saleDateLine, storeToday, submitDateProblem } from "../_shared/store-day.ts";
 import { crmSaleDate, freshSaleDate, recordCrmSaleDate, type FreshSaleDate } from "../_shared/crm-sale-date.ts";
 import { productName } from "../_shared/dx1-check.ts";
+import { chosenTermNote, type Term } from "../_shared/menu-terms.ts";
+import { sessionPaymentBasis } from "../_shared/plan-prices.ts";
 import { capChange, editFor, MAX_AMOUNT_FINANCED } from "./save-edits.ts";
 import { onlySameMonthSaleDateMove, priceSheetBoundaries } from "../_shared/sale-date.ts";
 import { SUBMIT_ROW_COLUMNS, submitConfirmation, type SubmitRow } from "../_shared/saved-selections.ts";
@@ -166,6 +168,8 @@ const COLUMNS = [
   "expires_at", "submit_state", "submit_detail",
   // The staff layer over the CRM's figures. Migration 0016.
   "staff_edits",
+  // The package the customer chose on the conventional menu, with its term. Migration 0046.
+  "menu_choice",
   // Which providers the latest rating covered. Multi-provider Part 4.
   "rated_provider_ids",
   // The menu template rating matched, for the hidden-slot notes. Part 7.
@@ -714,6 +718,15 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>, cr
     // The buyer, co-buyer and lienholder, as the contracts will carry them,
     // locked while any contract on the deal is live.
     contract_parties: contractParties(s, edits, contracts.length > 0),
+    // The customer chose a payment term other than the deal's own: staff must
+    // update the deal in DX1 and the CRM. PS never changes them (docs section 26).
+    chosen_term_note: chosenTermNote(
+      ((s.menu_choice as { term?: Term | null } | null)?.term) ?? null,
+      (() => {
+        const b = sessionPaymentBasis(s);
+        return b.hasPayment ? { months: b.termMonths, rate: b.ratePercent } : null;
+      })()
+    ),
     // Why nothing is required, when nothing is. Shown instead of a sheet that
     // looks complete because it is asking for nothing.
     not_ready_reason: reason,
