@@ -1428,3 +1428,76 @@ allowed.
 - **Left as they are:** `rateDate` (when the rate tables were asked for) and
   each rate's `expireDate` (when the offer lapses). Neither is a deal date.
 
+
+## 25. Menu presets and Prepare menu
+
+Managers decide what each conventional menu column offers; staff adjust it
+per deal before presenting. Migration 0045, PRs 80 to 83.
+
+**Presets** (Administration > Menus, `_shared/menu-presets.ts`). They are set
+per menu template (its store, vehicle type and deal conditions), per Financed
+or Cash, per column and per category. Each preset gives:
+- the preferred plan, named as the catalog names it ("Priority Maintenance,
+  Gold"), which covers that plan's version for every vehicle type
+- the term, mileage and deductible, and the deductible type
+
+When a vehicle does not rate for a preset:
+1. The same plan is used at the closest term, a tie going to the shorter. Then
+   the closest mileage and deductible are taken.
+2. If the plan did not rate, the next lower plan by catalog order is used, the
+   same way.
+3. If nothing at or below it rated, the cell is empty with a plain note. A
+   higher plan is never substituted.
+
+A blank preset means the column's coverage level decides, as in section 22.
+
+**Price band** (Administration > Pricing). The pricing rule's retail, a markup
+over dealer cost by cost band, is the default price. Each rule can say how far
+staff may go on a deal: "Staff may price up to" a percent and/or dollars over
+dealer cost, the lower when both are set. The top is never below the rule's
+own price. The bottom is dealer cost plus the rule's minimum markup, and never
+below dealer cost.
+
+**Managers only.** Presets and pricing are changed only by a profile with role
+owner or admin (`fni.is_menu_manager`). Everyone signed in can see them. Every
+change is written to `fni.admin_change_log` first (before, after, who, when);
+a change that cannot be logged is not made.
+
+**Prepare menu** (`/prepare/<session>`, from Details beside Present menu;
+`fni-menu-prepare`, `_shared/menu-prepare.ts`).
+- **Layout.** Columns across, categories down. Each cell starts from the
+  preset with its fallbacks, and staff can switch it to any rated option.
+- **Each cell** shows dealer cost, price and profit.
+- **A price belongs to the option**: the product, term, miles, deductible and
+  type (`optionKey`). One edit changes it in every column. Prices are kept in
+  `fni.session_menu_prices` and survive a re-rate.
+- **Vehicle surcharges** are chosen once for the deal (`sessions.menu_surcharges`).
+  They apply in every column wherever a product offers them, at dealer cost.
+- **Column footers** show total, profit and monthly payment (`planTotals`).
+- **Purchased products** stay locked.
+- **Who may set a price.** Within the band, any signed-in staff. Above it, a
+  manager signs in on the screen and gives a reason. Both are kept in the
+  session event "Price above the band allowed by a manager on Prepare menu".
+- **Locking.** Prices lock when the customer chooses a package.
+  "Return to Prepare menu" unlocks them and records "Returned to Prepare menu
+  after the customer chose a package".
+- **No scrolling at any size**; tabs on a phone.
+
+**Present menu** starts each column from the prepared menu or, when nothing
+was prepared, from the presets as they stand. It uses the deal's prices and
+surcharges. The Ownership Planner shows the same prices.
+
+**The price reaches the contract exactly.**
+- **The save prices every chosen product on the server**
+  (`fni-session-save`, `pricedForSession`): the deal's price for the option,
+  or the rule's, plus its surcharges. That becomes the selection's customer
+  price. The browser's figure is never used when the server can price it.
+- **Submit compares every outgoing price** (each rate's subTotal, options
+  included) with the selection's customer price, to the cent
+  (`_shared/price-guard.ts`).
+- **A penny's difference stops it** before anything is sent: "SAMPLE CARE: the
+  contract would carry $512.35, but the customer's price is $512.34." The
+  session event "Submit stopped: a price differs from the customer's price"
+  records it.
+- **A test session on the QA server** is submitted at the provider's maximum
+  by design (section 15), and is held to that instead.

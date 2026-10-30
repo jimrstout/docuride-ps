@@ -62,9 +62,12 @@ import { offerRowsFor, tecAssuredProviderId } from "../_shared/provider-rows.ts"
 import type { PricingRule } from "../_shared/planner-pricing.ts";
 import {
   additionalDownForSelections,
+  customerPriceFor,
   priceFamilies,
   type SavedSelection,
 } from "../_shared/plan-prices.ts";
+import { applyDealPrices, type DealPrice } from "../_shared/menu-prepare.ts";
+import type { NormalizedFamily } from "../_shared/normalized-offer.ts";
 import {
   finalizedMaySave,
   purchasedKeys,
@@ -110,23 +113,45 @@ const SESSION_COLUMNS = [
  * shown. A quote that is out of date prices nothing, and null is written rather
  * than a guess or a browser figure.
  */
-async function serverAdditionalDown(
+/**
+ * The deal's offers priced on the server: the pricing rules, then the deal's
+ * own prices from Prepare menu (fni.session_menu_prices, _shared/menu-prepare.ts).
+ * Null when there is no current quote. The one pricing every save uses.
+ */
+async function pricedForSession(
   supabase: ReturnType<typeof createClient>,
   s: Record<string, unknown>
-): Promise<{ value: number | null; reason: string | null }> {
+): Promise<NormalizedFamily[] | null> {
   // Every provider of the latest rating. One that is out of date prices nothing.
   const offers = currentRows(
     (await offerRowsFor(supabase, s.id as string)) as unknown as RatingRow[],
     s.rated_provider_ids as string[] | null
   ).filter((o) => o.out_of_date !== true && o.state === "Rated" && o.response_payload !== null);
+  if (offers.length === 0) return null;
 
-  const { data: ruleRows } = await supabase
-    .schema("fni")
-    .from("pricing_rules")
-    .select("*")
-    .eq("tenant_id", s.tenant_id as string)
-    .or(`store_id.eq.${s.store_id},store_id.is.null`)
-    .eq("active", true);
+  const [{ data: ruleRows }, { data: dealRows }] = await Promise.all([
+    supabase
+      .schema("fni")
+      .from("pricing_rules")
+      .select("*")
+      .eq("tenant_id", s.tenant_id as string)
+      .or(`store_id.eq.${s.store_id},store_id.is.null`)
+      .eq("active", true),
+    supabase.schema("fni").from("session_menu_prices").select("option_key, retail_price, above_band, approved_by, reason").eq("session_id", s.id as string),
+  ]);
+  const prices: Record<string, DealPrice> = {};
+  for (const r of (dealRows ?? []) as (DealPrice & { option_key: string })[]) {
+    prices[r.option_key] = { ...r, retail_price: Number(r.retail_price) };
+  }
+  return applyDealPrices(priceFamilies(familiesFromRows(offers), (ruleRows ?? []) as unknown as PricingRule[]), prices);
+}
+
+async function serverAdditionalDown(
+  supabase: ReturnType<typeof createClient>,
+  s: Record<string, unknown>,
+  pricedNow?: NormalizedFamily[] | null
+): Promise<{ value: number | null; reason: string | null }> {
+  const priced = pricedNow === undefined ? await pricedForSession(supabase, s) : pricedNow;
 
   const { data: rows, error } = await supabase
     .schema("fni")
@@ -137,15 +162,10 @@ async function serverAdditionalDown(
   if (error) return { value: null, reason: `could not read selections: ${error.message}` };
 
   const selections = (rows ?? []) as unknown as SavedSelection[];
-  if (selections.length > 0 && offers.length === 0) {
+  if (selections.length > 0 && priced === null) {
     return { value: null, reason: "no current quote to price the selections from" };
   }
-
-  const priced = priceFamilies(
-    familiesFromRows(offers),
-    (ruleRows ?? []) as unknown as PricingRule[]
-  );
-  return additionalDownForSelections(s, priced, selections);
+  return additionalDownForSelections(s, priced ?? [], selections);
 }
 
 interface Decision {
@@ -355,9 +375,34 @@ serve(async (req: Request) => {
     const { writable, locked } = splitLocked(decisions, purchased, providerOf);
     let written = 0;
 
+    // ── The price on the chosen option, worked out here ────────────────
+    // Never the browser's figure: the deal's price for the option (Prepare
+    // menu) or the pricing rule's, plus the surcharges it carries. That is the
+    // selection's customer price, and Submit sends exactly it
+    // (_shared/price-guard.ts). With no current quote nothing can be priced,
+    // and the browser's figure is kept as before; Submit refuses a stale quote.
+    const priced = writable.some((d) => d.disposition === "Included")
+      ? await pricedForSession(supabase, session as Record<string, unknown>)
+      : null;
+    let adjusted = 0;
+    const serverPrice = (d: Decision): number | null => {
+      if (priced === null) return null;
+      return customerPriceFor(
+        priced,
+        String(d.product_code),
+        d.rate_unique_id ?? null,
+        Array.isArray(d.selected_options) ? (d.selected_options as unknown[]).map(String) : [],
+        providerOf(d)
+      );
+    };
+
     if (writable.length > 0) {
       const rows = writable.map((d) => {
         const included = d.disposition === "Included";
+        const server = included ? serverPrice(d) : null;
+        const browser = num(d.customer_price ?? d.retail_price);
+        if (server !== null && browser !== null && Math.round(server * 100) !== Math.round(browser * 100)) adjusted++;
+        const price = server ?? browser;
         return {
           session_id: sessionId,
           provider_id: providerOf(d),
@@ -373,8 +418,8 @@ serve(async (req: Request) => {
           // is tempting but wrong: nothing was sold, and the acknowledgment
           // prints the disposition, not a hypothetical.
           dealer_cost: included ? num(d.dealer_cost) : null,
-          retail_price: included ? num(d.retail_price) : null,
-          customer_price: included ? num(d.customer_price ?? d.retail_price) : null,
+          retail_price: included ? price : null,
+          customer_price: included ? price : null,
           selected_options: d.selected_options ?? null,
           rate_snapshot: d.rate_snapshot ?? null,
           // Per product where the client knows it, session-level otherwise.
@@ -393,6 +438,8 @@ serve(async (req: Request) => {
         throw new Error(`Failed to save decisions: ${upsertErr.message}`);
       }
       written = rows.length;
+      // A count only: never a price in a log.
+      if (adjusted > 0) console.log("fni-session-save priced on the server", { session: sessionId, differed: adjusted });
     }
 
     // ── Update the session ──────────────────────────────────────────────
@@ -402,6 +449,10 @@ serve(async (req: Request) => {
     // Who presented, for the acknowledgment, when a staff member was signed in.
     const presenter = presenterName(body.presented_by_name);
     if (body.complete === true && presenter) patch.presented_by_name = presenter;
+
+    // The customer chose a package on the conventional menu: its prices lock.
+    // A change after this goes back to Prepare menu, which records it.
+    if (body.complete === true && menuEvent?.kind === "selected") patch.menu_prices_locked_at = new Date().toISOString();
 
     if (body.discovery !== undefined) patch.discovery = body.discovery;
     if (body.mode !== undefined) patch.mode = body.mode;
@@ -426,7 +477,7 @@ serve(async (req: Request) => {
 
       // ── The additional down payment, worked out here ─────────────────────
       // Never from a figure the browser sent. See serverAdditionalDown.
-      const down = await serverAdditionalDown(supabase, session as Record<string, unknown>);
+      const down = await serverAdditionalDown(supabase, session as Record<string, unknown>, priced ?? undefined);
       patch.additional_down_payment = down.value;
       if (down.value === null) {
         console.warn(`fni-session-save ${sessionId}: additional down not set (${down.reason})`);

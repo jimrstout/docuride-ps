@@ -236,6 +236,11 @@ export interface SessionPayload {
   purchased?: { provider_id: string | null; provider_product_id: string }[];
   /** The conventional menu's columns for this deal (supabase/functions/_shared/menu-columns.ts). */
   menu_columns?: MenuColumnRow[];
+  /** Each column's choice per category and the deal's surcharges: Prepare menu, or the presets (docs section 25). */
+  menu_prepared?: {
+    cells: Record<string, Record<string, { provider_id: string; product_code: string; rate_unique_id: string } | null>>;
+    surcharges: string[];
+  } | null;
   photos: string[] | null;
   photos_cached_at: string | null;
 }
