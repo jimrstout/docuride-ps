@@ -102,3 +102,7 @@ verify_jwt = false
 
 [functions.fni-documents-to-deal-jacket]
 verify_jwt = false
+
+# The CRM's call each time a deal's documents are generated. FNI_WEBHOOK_SECRET.
+[functions.fni-documents-generated]
+verify_jwt = false

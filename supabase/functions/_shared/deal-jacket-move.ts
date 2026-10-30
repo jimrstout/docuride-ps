@@ -24,7 +24,11 @@
 // taken to be abandoned.
 //
 // A document already in the Deal Jacket is skipped, so this is safe to run
-// any number of times. Only rows PS recorded are ever moved: the caller passes
+// any number of times. Except when documents were regenerated (refile): then
+// an earlier filing is history, not a reason to skip. Every held document is
+// filed again the same way (a same-named file to the trash, then the upload),
+// because signing may have moved the earlier file out of the Deal Jacket
+// (fni-documents-generated). Only rows PS recorded are ever moved: the caller passes
 // them in. The WorkDrive, bucket and database calls are passed in too, so a
 // Node test can run the whole thing.
 
@@ -62,8 +66,11 @@ export interface JacketFolders {
 }
 
 export interface MoveDeps {
-  /** Claim the row for this filing. False: another caller has it, or it is filed. */
-  claim(rowId: string): Promise<boolean>;
+  /**
+   * Claim the row for this filing. False: another caller has it, or it is
+   * filed and this is not a refile.
+   */
+  claim(rowId: string, refile?: boolean): Promise<boolean>;
   /** Give the claim back after a filing that did not finish. */
   release(rowId: string): Promise<void>;
   /** The held PDF, or null if the bucket does not have it. */
@@ -107,21 +114,23 @@ export function skipReason(doc: HeldDocument): string | null {
 export async function moveHeldDocuments(
   docs: HeldDocument[],
   folders: JacketFolders,
-  deps: MoveDeps
+  deps: MoveDeps,
+  opts: { refile?: boolean } = {}
 ): Promise<MoveLine[]> {
+  const refile = opts.refile === true;
   const lines: MoveLine[] = [];
   let items: { id: string; name: string }[] | null = null;
 
   for (const doc of docs) {
     const name = jacketName(doc, folders);
-    const skip = skipReason(doc);
+    const skip = refile ? (skipReason({ ...doc, workdrive_file_id: null })) : skipReason(doc);
     if (skip) {
       lines.push({ contract_number: doc.contract_number, file_name: name, outcome: skip, moved: false });
       continue;
     }
     let claimed: boolean;
     try {
-      claimed = await deps.claim(doc.id);
+      claimed = await deps.claim(doc.id, refile);
     } catch (err) {
       lines.push({ contract_number: doc.contract_number, file_name: name, outcome: deps.problem(err), moved: false });
       continue;
@@ -179,6 +188,9 @@ export async function moveHeldDocuments(
 export const FILED_EVENT = "Contracts filed to Deal Jacket when CRM created the deal's folders";
 export const NOT_FILED_EVENT = "Contract not filed to Deal Jacket";
 export const FILING_FAILED_EVENT = "Contracts not filed to Deal Jacket when CRM created the deal's folders";
+/** After the CRM regenerated the deal's documents (fni-documents-generated). */
+export const REFILED_EVENT = "Contracts filed to Deal Jacket after documents were regenerated";
+export const REFILING_FAILED_EVENT = "Contracts not filed to Deal Jacket after documents were regenerated";
 
 /** A session event to write. */
 export interface FilingEvent {
@@ -191,13 +203,13 @@ export interface FilingEvent {
  * it was already filed, had nothing held, or was being filed by another
  * request at that moment is not a failure.
  */
-export function filingEvents(lines: MoveLine[]): FilingEvent[] {
+export function filingEvents(lines: MoveLine[], filedEvent: string = FILED_EVENT): FilingEvent[] {
   const quiet = new Set([BEING_FILED, ALREADY_FILED, NOTHING_HELD]);
   const filed = lines.filter((l) => l.moved);
   const out: FilingEvent[] = [];
   if (filed.length > 0) {
     out.push({
-      event: FILED_EVENT,
+      event: filedEvent,
       detail: { count: filed.length, contract_numbers: filed.map((l) => l.contract_number) },
     });
   }

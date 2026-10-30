@@ -707,6 +707,23 @@ it is.
   endpoint and Get document never file the same one at once; a claim older
   than five minutes is taken to be abandoned. The row records the Deal
   Jacket folder it was filed into.
+- **Filed again when documents are regenerated** (2026-10-30). The CRM
+  function that starts Generate calls `POST functions/v1/fni-documents-generated`
+  (header `x-webhook-secret`: FNI_WEBHOOK_SECRET; body `{ "zoho_deal_id",
+  "initiated_by" }`). No session: "No F&I session for this deal, nothing to
+  file." No Deal Jacket folder ID yet: "Folders not created yet." (a first
+  Generate; zoho-sync files when the folder IDs arrive). Otherwise it answers
+  at once (`session_found`, `folders_known`, `contracts_queued`, `message`) and
+  files every held document again in the background: a same-named file in the
+  Deal Jacket to the trash, then the upload, as Get document does; VOID kept
+  for a voided contract; an earlier filing is history, not a reason to skip.
+  Each is claimed first, so it never runs alongside a zoho-sync filing of the
+  same contract. Event: "Contracts filed to Deal Jacket after documents were
+  regenerated" with the count, signed with initiated_by's initials or System;
+  one "Contract not filed to Deal Jacket" per contract that failed, left for
+  the next regenerate or the Details button. Why: on 13759 a regenerate after
+  signing (which moves the files the Flow signs to Source Documents) rewrote
+  the same folder IDs, so nothing refiled.
 - **Get document files at once** (2026-10-29) when the deal's folders are
   known: the session's first (from the CRM, via zoho-sync), then dc.deals,
   id by id. Before, it read dc.deals only, so a deal whose folders the CRM

@@ -13,14 +13,16 @@ export { HOLD_BUCKET };
 
 export function liveMoveDeps(supabase: SupabaseClient): MoveDeps {
   return {
-    async claim(rowId) {
+    async claim(rowId, refile = false) {
       // One conditional UPDATE: of two callers, exactly one gets the row back.
-      const { data, error } = await supabase
+      // A refile takes a filed row too; a first filing only an unfiled one.
+      let q = supabase
         .schema("fni")
         .from("agreement_products")
         .update({ filing_started_at: new Date().toISOString() })
-        .eq("id", rowId)
-        .is("workdrive_file_id", null)
+        .eq("id", rowId);
+      if (!refile) q = q.is("workdrive_file_id", null);
+      const { data, error } = await q
         .or(unclaimedFilingFilter(new Date()))
         .select("id")
         .maybeSingle();

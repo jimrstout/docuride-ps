@@ -31,6 +31,8 @@ import { liveMoveDeps } from "./deal-jacket-live.ts";
 import {
   FILED_EVENT,
   FILING_FAILED_EVENT,
+  REFILED_EVENT,
+  REFILING_FAILED_EVENT,
   filingEvents,
   moveHeldDocuments,
   type FilingEvent,
@@ -69,9 +71,10 @@ export async function fileHeldDocuments(
   supabase: SupabaseClient,
   sessionIds: string[],
   folders: JacketFolders,
-  deps: MoveDeps = liveMoveDeps(supabase)
+  deps: MoveDeps = liveMoveDeps(supabase),
+  opts: { refile?: boolean } = {}
 ): Promise<MoveLine[]> {
-  return moveHeldDocuments(await heldDocuments(supabase, sessionIds), folders, deps);
+  return moveHeldDocuments(await heldDocuments(supabase, sessionIds), folders, deps, opts);
 }
 
 /**
@@ -121,6 +124,41 @@ export async function fileWhenFoldersReady(
   console.log("deal-jacket-file: filed on folders ready", {
     filed: events.find((e) => e.event === FILED_EVENT)?.detail.count ?? 0,
     not_filed: events.filter((e) => e.event !== FILED_EVENT).length,
+  });
+  return events;
+}
+
+/**
+ * fni-documents-generated's filing, after the CRM regenerated the deal's
+ * documents: every held document filed again into the session's Deal Jacket,
+ * an earlier filing being history and not a reason to skip. A same-named file
+ * goes to the trash first, as Get document does. Never throws: the outcome is
+ * session events signed `by`, and a contract that failed is left for the next
+ * regeneration or the Details button.
+ */
+export async function refileAfterRegenerate(
+  supabase: SupabaseClient,
+  sessionId: string,
+  folders: JacketFolders,
+  by: string,
+  deps?: MoveDeps
+): Promise<FilingEvent[]> {
+  let events: FilingEvent[];
+  try {
+    events = filingEvents(await fileHeldDocuments(supabase, [sessionId], folders, deps, { refile: true }), REFILED_EVENT);
+  } catch (err) {
+    events = [{ event: REFILING_FAILED_EVENT, detail: { reason: err instanceof Error ? err.message : "Something went wrong." } }];
+  }
+  if (events.length > 0) {
+    const { error } = await supabase
+      .schema("fni")
+      .from("session_events")
+      .insert(events.map((e) => ({ session_id: sessionId, event: e.event, detail: e.detail, created_by: by })));
+    if (error) console.error("deal-jacket-file: refile events not recorded", { code: error.code ?? null });
+  }
+  console.log("deal-jacket-file: refiled after regenerate", {
+    filed: events.find((e) => e.event === REFILED_EVENT)?.detail.count ?? 0,
+    not_filed: events.filter((e) => e.event !== REFILED_EVENT).length,
   });
   return events;
 }

@@ -113,7 +113,9 @@ test("a claim older than five minutes is taken to be abandoned", () => {
     "filing_started_at.is.null,filing_started_at.lt.2026-10-29T12:05:00.000Z"
   );
   const live = read("supabase/functions/_shared/deal-jacket-live.ts");
-  assert.match(live, /\.update\(\{ filing_started_at: new Date\(\)\.toISOString\(\) \}\)\s*\.eq\("id", rowId\)\s*\.is\("workdrive_file_id", null\)\s*\.or\(unclaimedFilingFilter\(new Date\(\)\)\)/);
+  // A first filing claims only an unfiled row; a refile (fni-documents-generated) a filed one too.
+  assert.match(live, /\.update\(\{ filing_started_at: new Date\(\)\.toISOString\(\) \}\)\s*\.eq\("id", rowId\);\s*if \(!refile\) q = q\.is\("workdrive_file_id", null\);/);
+  assert.match(live, /\.or\(unclaimedFilingFilter\(new Date\(\)\)\)/);
 });
 
 test("the session's folders come before dc.deals; the call's before both", () => {
