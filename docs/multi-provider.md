@@ -1258,3 +1258,54 @@ acknowledgment names them, on either path: "Presented by <name>, dealership
 staff" (the Checked by name on that device, else one made from the email;
 `lib/presenter.ts`). Who presented is read from the console cookie by the
 server, never taken from the browser's request.
+
+## 23. The F&I check against DX1
+
+DX1 takes no writes, so F&I products are keyed into it by hand, and a CRM
+function pulls them into the DocuRide record. DX1 stays the source of truth
+for F&I money; PS writes no CRM field here. When staff press Generate, the CRM
+gate DC_Generate_Contract_Gated calls `POST functions/v1/fni-dx1-check`
+(`x-webhook-secret`: FNI_WEBHOOK_SECRET; `{ "zoho_deal_id" }`), which reads the
+record fresh and compares its product slots with the deal's live contracts
+(`_shared/dx1-check.ts`). It is not run from zoho-sync: the DX1 pull writes
+without workflow triggers, so zoho-sync would compare stale values.
+
+**The slots** (names confirmed with getFields): `Sold_1_Warranty_*`,
+`Sold_1_GAP_*`, `Sold_1_PPM_*`, `Sold_1_Aftermarket_1_*` to `_5_*`, each with
+`_DSP` (currency; empty is null or 0.00), `_Desc` (free text, up to 255) and
+`_Term` (free text, up to 255, not a picklist). Seen on recent records: Term is
+almost always "<number> Months", sometimes "<number> MONTHS", a bare number or
+a not-applicable mark; Desc is terse, often capitals with "&". Contract tax is
+ignored.
+
+**Answer**, always HTTP 200 JSON `{ status, blocking, warnings }`:
+
+| status | when |
+|---|---|
+| Nothing to check | no session, or no live contract; both lists empty |
+| Match | everything agrees; both lists empty |
+| Problems | at least one line |
+
+A bad secret is 401. Anything that fails inside, or takes longer than 4.5
+seconds, answers "Nothing to check" with the warning "F&I contracts could not
+be checked against DX1", so the gate lets Generate through.
+
+**Comparison.** Contracts and slots are paired by score: the expected slot
+(Mechanical Protection to Warranty, GAP to GAP, Maintenance to PPM, others to
+Aftermarket) 2, the same price 3, the same term 1, description likeness up to
+2; best first, a pair needs 2, and a slot whose description clearly names
+another product at another price never pairs. Blocking: a price that differs
+by any amount; a term that differs or cannot be read as months ("24", "24
+months", "24 Mo", "2 years" are all 24); a live contract not keyed; a filled
+slot with no live contract (said to match a voided one when it does).
+Warnings: description wording. Descriptions are compared after lower-casing,
+expanding DMS shorthand (T&W, OFFRD, MECH, MAINT, BATT, PROT), folding words
+for the same cover (warranty, care, service contract), and dropping filler
+and the provider's name; the score is the share of DX1's words found in the
+contract's product name, plan and category. 0.6 and up: nothing said; 0.3 to
+0.6: "check the wording"; under 0.3: "does not look like this product". Both
+wordings are shown; price and term carry the blocking.
+
+The result is kept on the session (`dx1_check`, `dx1_checked_at`, migration
+0043); a session event "F&I check against DX1: <status>", signed System, is
+added only when it changes.

@@ -106,3 +106,7 @@ verify_jwt = false
 # The CRM's call each time a deal's documents are generated. FNI_WEBHOOK_SECRET.
 [functions.fni-documents-generated]
 verify_jwt = false
+
+# The CRM's Generate gate asks whether DX1's F&I products match the live contracts. FNI_WEBHOOK_SECRET.
+[functions.fni-dx1-check]
+verify_jwt = false
