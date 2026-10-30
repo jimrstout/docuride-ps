@@ -1253,6 +1253,7 @@ button { cursor: pointer; }
 .vdx1check-head { margin: 0; }
 .vdx1check-list { margin: var(--s1) 0 0; padding-left: 1.2em; }
 .vdx1check-list--warn { color: var(--ink-soft); }
+.vdx1check-fix { margin: var(--s2) 0 0; }
 
 /* The conventional menu's coverage levels for this deal (docs section 22). */
 .vmenu-levels { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s3); margin-top: var(--s4); padding: var(--s3); background: var(--panel); border: var(--bw) solid var(--line); border-radius: 8px; }

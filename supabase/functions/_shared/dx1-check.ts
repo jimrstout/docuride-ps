@@ -33,9 +33,9 @@
 //              cannot be read as months; a live contract has no slot; a filled
 //              slot has no live contract (and says so if it matches a voided
 //              one)
-//   warnings   the description: "check the wording" when partly alike, "does
-//              not look like this product" when hardly at all. Price and term
-//              carry the blocking.
+//   warnings   the description: "check it matches the contract" when partly
+//              alike, and "does not look like this product" too when hardly at
+//              all. Price and term carry the blocking.
 //
 // ── Descriptions ─────────────────────────────────────────────────────────
 // Both sides are normalised: lower case, "&" and "/" as spaces, punctuation
@@ -48,11 +48,23 @@
 // letter apart (5 letters or more).
 //
 //   0.6 and up         the same product: nothing said
-//   0.3 up to 0.6      "check the wording", both wordings shown
-//   under 0.3          "does not look like this product", both shown
+//   0.3 up to 0.6      "check it matches the contract", DX1's wording shown
+//   under 0.3          "does not look like this product", DX1's wording shown
 //
-// Pure, so a Node test can hold it. Lines are for staff in a CRM popup: plain
-// English, values people read, no codes.
+// ── The lines ─────────────────────────────────────────────────────────────
+// Staff read them in a CRM popup, under the gate's own heading and fix steps,
+// and on Details. Each names the product the way the menu does (productName),
+// puts the contract number in parentheses, and says plainly what is wrong:
+//
+//   Battery Protection (contract VLBTE001930-42120) has not been entered in DX1.
+//   Tire and Wheel (contract TWOTE001930-5980): DX1 shows $585.00, but the
+//     contract price is $595.00.
+//   DX1 has a product in Aftermarket 2 for $199.00 that does not match any
+//     contract on this deal.
+//
+// No line starts with "F&I": the gate adds its own heading.
+//
+// Pure, so a Node test can hold it. Plain English, values people read, no codes.
 
 export const SLOTS = [
   { key: "Warranty", label: "Warranty" },
@@ -261,10 +273,40 @@ function inExpected(c: Contract, s: Slot): boolean {
   return e === "Aftermarket" ? s.key.startsWith("Aftermarket") : s.key === e;
 }
 
-/** What a contract is called in a line: "Tire and Wheel contract TWO-1". */
+/** The plain names staff know, by catalog category. */
+const PLAIN: Record<string, string> = {
+  "Mechanical Protection": "Mechanical Protection",
+  "Maintenance": "Maintenance",
+  "Tire and Wheel": "Tire and Wheel",
+  "Theft": "Theft",
+  "Battery": "Battery Protection",
+  "Appearance": "Appearance",
+};
+
+/** Words in a product's own wording that name it, for one with no category. */
+const BY_WORDING: [RegExp, string][] = [
+  [/\bcare\b/i, "Care Coverage"],
+  [/\bbatt(?:ery)?\b/i, "Battery Protection"],
+  [/\btire\b|\bwheel\b|\bt\s*&\s*w\b/i, "Tire and Wheel"],
+  [/\btheft\b/i, "Theft"],
+  [/\bmaint(?:enance)?\b/i, "Maintenance"],
+];
+
+/**
+ * The product's plain name, the way staff see it on the menu: "Battery
+ * Protection", "Tire and Wheel", "GAP". Never the provider's full title.
+ */
+export function productName(c: Contract): string {
+  if (isGap(c)) return "GAP";
+  const plain = c.category ? PLAIN[c.category] : undefined;
+  if (plain) return plain;
+  const wording = `${c.product_name} ${c.plan ?? ""}`;
+  return BY_WORDING.find(([re]) => re.test(wording))?.[1] ?? "Product";
+}
+
+/** What a contract is called in a line: "Tire and Wheel (contract TWO-1)". */
 export function contractName(c: Contract): string {
-  const what = isGap(c) ? "GAP" : c.category && c.category !== "Other" ? c.category : "F&I";
-  return `${what} contract ${c.contract_number}`;
+  return `${productName(c)} (contract ${c.contract_number})`;
 }
 
 function pairScore(c: Contract, s: Slot): number {
@@ -317,34 +359,34 @@ export function compareToDx1(live: Contract[], voided: Contract[], record: Recor
   for (const [c, s] of pairs) {
     const name = contractName(c);
     if (c.cents === null) {
-      warnings.push(`${name} has no price on record in DocuRide, so its price in DX1 (${dollars(s.cents)}) was not checked.`);
+      warnings.push(`${name}: DocuRide has no price on record for this contract, so the DX1 price of ${dollars(s.cents)} was not checked.`);
     } else if (c.cents !== s.cents) {
-      blocking.push(`${name}: DX1 shows ${dollars(s.cents)}, the contract is ${dollars(c.cents)}.`);
+      blocking.push(`${name}: DX1 shows ${dollars(s.cents)}, but the contract price is ${dollars(c.cents)}.`);
     }
 
     const t = termMonths(s.term);
     if (c.term_months === null) {
-      if (s.term !== null) blocking.push(`${name}: DX1 shows a term of ${s.term}, but the contract has no term.`);
+      if (s.term !== null) blocking.push(`${name}: DX1 shows a term of "${s.term}", but the contract has no term.`);
     } else if (s.term === null) {
-      blocking.push(`${name}: DX1 shows no term, the contract is ${monthsText(c.term_months)}.`);
+      blocking.push(`${name}: DX1 shows no term, but the contract term is ${monthsText(c.term_months)}.`);
     } else if (t === null) {
-      blocking.push(`${name}: the term in DX1, "${s.term}", cannot be read as months. The contract is ${monthsText(c.term_months)}.`);
+      blocking.push(`${name}: DX1 shows a term of "${s.term}", which is not a number of months. The contract term is ${monthsText(c.term_months)}.`);
     } else if (t !== c.term_months) {
-      blocking.push(`${name}: DX1 shows ${monthsText(t)}, the contract is ${monthsText(c.term_months)}.`);
+      blocking.push(`${name}: DX1 shows ${monthsText(t)}, but the contract term is ${monthsText(c.term_months)}.`);
     }
 
     const d = descScore(s.desc, c);
     if (s.desc === null) {
-      warnings.push(`${name}: DX1 has no description in ${s.label}.`);
+      warnings.push(`${name}: DX1 has no description in ${s.label}. Add one that matches the contract.`);
     } else if (d !== null && d < DESC_CHECK) {
-      warnings.push(`${name}: DX1's description "${s.desc}" does not look like this product, "${c.product_name}". Price and term were still checked.`);
+      warnings.push(`${name}: the DX1 description reads "${s.desc}", which does not look like this product. Check it matches the contract.`);
     } else if (d !== null && d < DESC_MATCH) {
-      warnings.push(`${name}: check the wording. DX1 says "${s.desc}", the contract is "${c.product_name}".`);
+      warnings.push(`${name}: the DX1 description reads "${s.desc}". Check it matches the contract.`);
     }
   }
 
   for (const c of contracts) {
-    blocking.push(`${contractName(c)} is not keyed in DX1.`);
+    blocking.push(`${contractName(c)} has not been entered in DX1.`);
   }
 
   for (const s of spare) {
@@ -352,8 +394,9 @@ export function compareToDx1(live: Contract[], voided: Contract[], record: Recor
       (v) => (v.cents !== null && v.cents === s.cents) || (descScore(s.desc, v) ?? 0) >= DESC_MATCH
     );
     blocking.push(
-      `${s.label} shows ${dollars(s.cents)} in DX1 but there is no live contract for it.` +
-        (was ? ` It matches ${contractName(was)}, which was voided.` : "")
+      was
+        ? `${contractName(was)} was voided, but DX1 still shows it in ${s.label} for ${dollars(s.cents)}.`
+        : `DX1 has a product in ${s.label} for ${dollars(s.cents)} that does not match any contract on this deal.`
     );
   }
 

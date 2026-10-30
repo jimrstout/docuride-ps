@@ -17,6 +17,7 @@ import {
   descWords,
   expectedSlot,
   pair,
+  productName,
   readSlots,
   sameResult,
   termMonths,
@@ -116,11 +117,11 @@ test("price and term differences block; the description only warns", () => {
   ]));
   assert.equal(r.status, "Problems");
   assert.deepEqual(r.blocking, [
-    "Tire and Wheel contract SAMPLE-1: DX1 shows $585.00, the contract is $595.00.",
-    'Tire and Wheel contract SAMPLE-1: the term in DX1, "N/A", cannot be read as months. The contract is 36 months.',
+    "Tire and Wheel (contract SAMPLE-1): DX1 shows $585.00, but the contract price is $595.00.",
+    'Tire and Wheel (contract SAMPLE-1): DX1 shows a term of "N/A", which is not a number of months. The contract term is 36 months.',
   ]);
   assert.deepEqual(r.warnings, [
-    'Mechanical Protection contract SAMPLE-2: check the wording. DX1 says "SILVER CARE", the contract is "USED ATV/UTV CARE - SAMPLE CARE COVERAGE".',
+    'Mechanical Protection (contract SAMPLE-2): the DX1 description reads "SILVER CARE". Check it matches the contract.',
   ]);
   // A penny is a difference.
   const penny = compareToDx1([TW], [], record([["Aftermarket_1", 595.01, "T&W OFFRD", "36 Months"]]));
@@ -134,15 +135,15 @@ test("a contract not keyed, and a slot with no contract (voided, said so)", () =
     ["Aftermarket_2", 199.0, "THEFT PROT", "36 Months"],
   ]));
   assert.deepEqual(r.blocking, [
-    "Battery contract SAMPLE-3 is not keyed in DX1.",
-    "Aftermarket 2 shows $199.00 in DX1 but there is no live contract for it.",
+    "Battery Protection (contract SAMPLE-3) has not been entered in DX1.",
+    "DX1 has a product in Aftermarket 2 for $199.00 that does not match any contract on this deal.",
   ]);
   const v = compareToDx1([TW], [voidedBatt], record([
     ["Aftermarket_1", 595.0, "T&W OFFRD", "36 Months"],
     ["Aftermarket_2", 145.0, "BATTERY", "24 Months"],
   ]));
   assert.deepEqual(v.blocking, [
-    "Aftermarket 2 shows $145.00 in DX1 but there is no live contract for it. It matches Battery contract SAMPLE-9, which was voided.",
+    "Battery Protection (contract SAMPLE-9) was voided, but DX1 still shows it in Aftermarket 2 for $145.00.",
   ]);
 });
 
@@ -196,7 +197,62 @@ test("every line is plain English, with no em dash", () => {
     ["Aftermarket_1", 1.0, "LASERS", "2 years"],
     ["Aftermarket_4", 145.0, "BATTERY", "24"],
   ]));
-  for (const l of [...r.blocking, ...r.warnings]) assert.doesNotMatch(l, /—|undefined|null|NaN/);
+  for (const l of [...r.blocking, ...r.warnings]) {
+    assert.doesNotMatch(l, /—|undefined|null|NaN/);
+    // The gate adds its own heading; no line repeats it.
+    assert.doesNotMatch(l, /^F&I/);
+  }
+});
+
+test("each line names the product plainly, the contract in parentheses, and what is wrong", () => {
+  const TWO = contract({ contract_number: "SAMPLE-TW-1", term_months: 24, cents: 59500 });
+  const BAT = { ...BATT, contract_number: "SAMPLE-BT-1" };
+  // Not entered.
+  assert.deepEqual(compareToDx1([BAT], [], record([])).blocking, [
+    "Battery Protection (contract SAMPLE-BT-1) has not been entered in DX1.",
+  ]);
+  // Price.
+  assert.deepEqual(compareToDx1([TWO], [], record([["Aftermarket_1", 585.0, "T&W OFFRD", "24 Months"]])).blocking, [
+    "Tire and Wheel (contract SAMPLE-TW-1): DX1 shows $585.00, but the contract price is $595.00.",
+  ]);
+  // Term.
+  assert.deepEqual(compareToDx1([TWO], [], record([["Aftermarket_1", 595.0, "T&W OFFRD", "12 Months"]])).blocking, [
+    "Tire and Wheel (contract SAMPLE-TW-1): DX1 shows 12 months, but the contract term is 24 months.",
+  ]);
+  // In DX1 with no live contract.
+  assert.deepEqual(compareToDx1([TWO], [], record([
+    ["Aftermarket_1", 595.0, "T&W OFFRD", "24 Months"],
+    ["Aftermarket_2", 199.0, "THEFT PROT", "36 Months"],
+  ])).blocking, ["DX1 has a product in Aftermarket 2 for $199.00 that does not match any contract on this deal."]);
+  // Voided, but still in DX1.
+  assert.deepEqual(compareToDx1([TWO], [BAT], record([
+    ["Aftermarket_1", 145.0, "BATTERY", "24 Months"],
+    ["Aftermarket_2", 595.0, "T&W OFFRD", "24 Months"],
+  ])).blocking, ["Battery Protection (contract SAMPLE-BT-1) was voided, but DX1 still shows it in Aftermarket 1 for $145.00."]);
+  // Wording: a warning only.
+  const words = compareToDx1([CARE], [], record([["Warranty", 1899.0, "SILVER CARE", "48 Months"]]));
+  assert.deepEqual(words, {
+    status: "Problems",
+    blocking: [],
+    warnings: ['Mechanical Protection (contract SAMPLE-2): the DX1 description reads "SILVER CARE". Check it matches the contract.'],
+  });
+  // Unavailable: unchanged.
+  assert.deepEqual(FAILED.warnings, ["F&I contracts could not be checked against DX1"]);
+  // The response shape is unchanged.
+  assert.deepEqual(Object.keys(words), ["status", "blocking", "warnings"]);
+});
+
+test("product names are the menu's plain names, never the provider's title", () => {
+  assert.equal(productName(BATT), "Battery Protection");
+  assert.equal(productName(TW), "Tire and Wheel");
+  assert.equal(productName(CARE), "Mechanical Protection");
+  assert.equal(productName(contract({ category: "Maintenance" })), "Maintenance");
+  assert.equal(productName(contract({ category: "Theft" })), "Theft");
+  assert.equal(productName(contract({ category: "Other", product_name: "SAMPLE GAP WAIVER", plan: null })), "GAP");
+  // No category: read from the product's own wording.
+  assert.equal(productName(contract({ category: null, product_name: "USED SAMPLE CARE", plan: null })), "Care Coverage");
+  assert.equal(productName(contract({ category: null, product_name: "SAMPLE BATTERY PLUS", plan: null })), "Battery Protection");
+  assert.equal(productName(contract({ category: "Other", product_name: "SAMPLE WIDGET", plan: null })), "Product");
 });
 
 test("Details shows the latest check, refreshed on load, for signed-in staff only", () => {
@@ -209,6 +265,12 @@ test("Details shows the latest check, refreshed on load, for signed-in staff onl
   const view = read("apps/ownership-planner/components/Dx1Check.tsx");
   assert.match(view, /if \(result\.status === "Nothing to check" && result\.warnings\.length === 0\) return null;/);
   assert.match(view, /fix these before generating documents/);
+  // The same lines, then once, how to fix them.
+  assert.match(view, /\{result\.status === "Problems" \? <p className="vdx1check-fix">\{DX1_FIX\}<\/p> : null\}/);
+  assert.ok(view.includes(
+    '"To fix: in DX1, make sure each F&I product is entered on this deal with the same price and term as its contract, " +\n' +
+    '  "and remove any product whose contract was voided. Then run the F&I Update in DocuRide and check again."'
+  ));
   assert.doesNotMatch(view, /—/);
   // The endpoint takes Details' session id as well as the gate's record id.
   assert.match(read("supabase/functions/fni-dx1-check/index.ts"), /q = UUID\.test\(sessionId\) \? q\.eq\("id", sessionId\) : q\.eq\("zoho_deal_id", zohoId\);/);
