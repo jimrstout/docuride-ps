@@ -38,6 +38,19 @@
 // contract yet puts it back to Products Selected so Submit takes it
 // (_shared/purchased.ts).
 //
+// ── Which presentation, and who (2026-10-30) ────────────────────────────
+//   presentation_path  - "Conventional Menu" from the menu. A save with
+//                        decisions that names none is the Ownership Planner's
+//                        (_shared/presentation.ts).
+//   presented_by       - the signed-in staff member's initials, set by the
+//                        Next.js route from the console cookie, never by the
+//                        browser. Signs the session events; none is "System".
+//   presented_by_name  - their name, for the acknowledgment, kept on a
+//                        finished save.
+//   menu_event         - { kind: "opened" } records "Conventional menu
+//                        opened" and changes nothing else; "selected" (with
+//                        package) and "declined" are recorded after a save.
+//
 // Auth: FNI_WEBHOOK_SECRET via x-webhook-secret header or ?secret= query param.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
@@ -59,6 +72,7 @@ import {
   statusAfterAdding,
   type DealContract,
 } from "../_shared/purchased.ts";
+import { menuEventName, parseMenuEvent, pathForSave, presenterName, signedBy } from "../_shared/presentation.ts";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -165,6 +179,10 @@ interface SaveRequest {
   presented_at?: string;
   dx1_photos?: unknown;
   complete?: boolean;
+  presentation_path?: string;
+  presented_by?: string;
+  presented_by_name?: string;
+  menu_event?: unknown;
 }
 
 function json(status: number, body: unknown): Response {
@@ -270,6 +288,20 @@ serve(async (req: Request) => {
       });
     }
 
+    // ── The menu was opened: recorded, and nothing else changes ─────────
+    const menuEvent = parseMenuEvent(body.menu_event);
+    const recordEvent = async (event: string) => {
+      const { error } = await supabase
+        .schema("fni")
+        .from("session_events")
+        .insert({ session_id: sessionId, event, detail: null, created_by: signedBy(body.presented_by) });
+      if (error) console.error(`fni-session-save ${sessionId}: event not recorded (${error.code ?? "error"})`);
+    };
+    if (menuEvent?.kind === "opened") {
+      await recordEvent(menuEventName(menuEvent));
+      return json(200, { session_id: sessionId, event: "recorded" });
+    }
+
     // ── Validate decisions before writing any of them ───────────────────
     const decisions = Array.isArray(body.decisions) ? body.decisions : [];
     const problems: string[] = [];
@@ -365,6 +397,11 @@ serve(async (req: Request) => {
 
     // ── Update the session ──────────────────────────────────────────────
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    // Which presentation recorded these choices.
+    if (decisions.length > 0) patch.presentation_path = pathForSave(body.presentation_path);
+    // Who presented, for the acknowledgment, when a staff member was signed in.
+    const presenter = presenterName(body.presented_by_name);
+    if (body.complete === true && presenter) patch.presented_by_name = presenter;
 
     if (body.discovery !== undefined) patch.discovery = body.discovery;
     if (body.mode !== undefined) patch.mode = body.mode;
@@ -405,6 +442,9 @@ serve(async (req: Request) => {
       .eq("id", sessionId);
 
     if (updErr) throw new Error(`Failed to update session: ${updErr.message}`);
+
+    // The menu's package, or everything declined, once it is saved.
+    if (menuEvent && body.complete === true) await recordEvent(menuEventName(menuEvent));
 
     const { count } = await supabase
       .schema("fni")

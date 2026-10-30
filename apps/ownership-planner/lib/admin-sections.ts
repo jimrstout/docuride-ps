@@ -64,3 +64,12 @@ export function initialsFor(email: string): string {
     parts.length >= 2 ? parts[0][0] + parts[1][0] : (parts[0] ?? "").replace(/[^a-z0-9]/gi, "").slice(0, 2);
   return (letters || "?").toUpperCase();
 }
+
+/** A name from an email, for the acknowledgment: "jim.stout@example.com" reads "Jim Stout". */
+export function nameFromEmail(email: string): string {
+  return (email.split("@")[0] ?? "")
+    .split(/[._\-+]+/)
+    .filter((p) => /[a-z]/i.test(p))
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+    .join(" ");
+}

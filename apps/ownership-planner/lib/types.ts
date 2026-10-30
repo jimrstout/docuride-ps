@@ -481,6 +481,8 @@ export interface VerifySheet {
    * offer does not match to the cent. Staff choose them again.
    */
   rating_differences?: { message: string; differences: string[] } | null;
+  /** The conventional menu's columns for this deal, with each one's coverage level. */
+  menu_columns?: { position: number; name: string; template_level: string; level: string }[];
   menu_template?: { name: string } | null;
   /** Menu slots hidden from the customer on this deal, with why, for staff. */
   hidden_slots?: { title: string; note: string | null }[];

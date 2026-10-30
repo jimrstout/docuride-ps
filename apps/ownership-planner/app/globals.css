@@ -1245,6 +1245,12 @@ button { cursor: pointer; }
 .vgate > .vfield-note { flex: 1 1 100%; margin: 0; }
 .vgate-open { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; flex: 1 1 100%; }
 .vgate-open .vfield-note { margin: 0; }
+/* The conventional menu's coverage levels for this deal (docs section 22). */
+.vmenu-levels { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s3); margin-top: var(--s4); padding: var(--s3); background: var(--panel); border: var(--bw) solid var(--line); border-radius: 8px; }
+.vmenu-levels-head { flex: 1 1 100%; margin: 0; font-weight: 600; }
+.vmenu-levels-cols { display: flex; flex-wrap: wrap; gap: var(--s3); }
+.vmenu-level { display: grid; gap: 4px; font-size: 0.95rem; }
+.vmenu-level span { color: var(--ink-soft); }
 
 /* "Somebody already did this." Quiet, and only when the session really was
    verified before. */

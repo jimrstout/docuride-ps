@@ -387,7 +387,7 @@ serve(async (req: Request) => {
         mode: s.mode,
         // Derived server-side so the browser and the acknowledgment document
         // cannot disagree about what to call the same session.
-        mode_label: modeLabel(s.mode as string | null),
+        mode_label: modeLabel(s.mode as string | null, s.presented_by_name as string | null),
         store_id: s.store_id,
         deal_id: s.deal_id,
         deal_number: s.deal_number,

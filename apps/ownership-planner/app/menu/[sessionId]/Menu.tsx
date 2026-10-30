@@ -129,6 +129,7 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
 
   // ── Recording the choice, the planner's way ────────────────────────────
   const record = async (chosen: Cell[], name: string) => {
+    const declined = name === "";
     if (once.current) return;
     once.current = true;
     setPhase("saving");
@@ -140,6 +141,10 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
           decisions: saveDecisions(rows, chosen, presentedAt.current),
           presented_at: presentedAt.current,
           complete: true,
+          // The menu's own record: its path, staff-presented, and what was chosen.
+          presentation_path: "Conventional Menu",
+          mode: "Staff-Presented",
+          menu_event: declined ? { kind: "declined" } : { kind: "selected", package: name },
         }),
       });
       if (!res.ok) throw new Error("save");

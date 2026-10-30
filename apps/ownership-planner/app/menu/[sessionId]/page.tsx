@@ -13,6 +13,7 @@ import { edge, EdgeError, isSessionId } from "@/lib/edge";
 import type { SessionPayload } from "@/lib/types";
 import Gate from "../../plan/[sessionId]/Gate";
 import Menu from "./Menu";
+import { presenter } from "@/lib/presenter";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,14 @@ export default async function MenuPage({ params }: { params: Promise<{ sessionId
         body="Something went wrong on our side. Please try again in a moment, or ask the dealership for help."
       />
     );
+  }
+
+  // "Conventional menu opened", signed by the staff member signed in here, or
+  // System. A failure to record it never stops the menu.
+  try {
+    await edge.sessionSave({ session_id: sessionId, menu_event: { kind: "opened" }, ...(await presenter()) });
+  } catch {
+    console.error("menu opened event not recorded:", { session: sessionId });
   }
 
   // The rating's reason is for staff, and never reaches the customer's tab.

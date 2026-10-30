@@ -1220,3 +1220,24 @@ side by side from 1201 pixels wide and 700 tall; between 761 and 1200 wide the
 cells show checkbox and price, with the level and term in the dialog; on
 phones and any window under 700 tall, one column at a time, chosen from tabs.
 Product names are never below 18 pixels.
+
+**Launching it, and the record** (2026-10-30). On Details, "Present menu"
+sits beside "Open presentation". Both show only when the deal is verified,
+rated (rating state Rated) and its rating current; a live contract does not
+block either, since products are added after a contract and the purchased ones
+show locked. Each opens its own customer tab with no way back. Below them, a
+signed-in manager can set each column's coverage level for this deal ("Menu
+coverage levels for this deal"); a level the same as the template's is not
+kept (`sessions.menu_column_levels`).
+
+The session records the path that saved the choices
+(`sessions.presentation_path`: "Ownership Planner" or "Conventional Menu"; a
+save that names none is the planner's). Session events, signed with the
+signed-in staff member's initials or "System": "Conventional menu opened",
+"Package selected on the conventional menu: <column>", "Everything declined on
+the conventional menu" (`_shared/presentation.ts`). The menu saves as
+Staff-Presented. When a staff member is signed in on that browser, the
+acknowledgment names them, on either path: "Presented by <name>, dealership
+staff" (the Checked by name on that device, else one made from the email;
+`lib/presenter.ts`). Who presented is read from the console cookie by the
+server, never taken from the browser's request.

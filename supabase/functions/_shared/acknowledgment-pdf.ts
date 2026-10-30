@@ -51,6 +51,8 @@ export interface AckInput {
   vehicle: string;
   vin: string | null;
   mode: string | null;
+  /** The signed-in staff member who presented, named on the record. */
+  presented_by_name?: string | null;
 
   // The payment inputs are handed over raw and resolved here, by the same
   // function the planner screen uses. Passing a pre-chosen principal would let
@@ -315,7 +317,7 @@ export async function renderAcknowledgment(
   });
   page.drawText("Buyer signature", { x: MARGIN, y: sigBottom - 12, size: 8, font: regular, color: grey });
   page.drawText(
-    `Session ${input.session_id}   ${modeLabel(input.mode)}   ${now.toISOString()}`,
+    `Session ${input.session_id}   ${modeLabel(input.mode, input.presented_by_name)}   ${now.toISOString()}`,
     { x: MARGIN, y: sigBottom - 26, size: 7, font: regular, color: grey }
   );
 

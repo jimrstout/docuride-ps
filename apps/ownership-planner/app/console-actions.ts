@@ -536,6 +536,20 @@ export async function useCrmSaleDate(formData: FormData): Promise<void> {
   await saleDateChoice(formData, "sale_date_use_crm", "saledatecrm");
 }
 
+/**
+ * The coverage level each conventional menu column starts at on this deal,
+ * set by a manager before presenting. A level the same as the template's is
+ * not kept, so the template still decides it.
+ */
+export async function saveMenuLevels(formData: FormData): Promise<void> {
+  const levels = Object.fromEntries(
+    [1, 2, 3, 4, 5]
+      .filter((n) => formData.has(`level_${n}`))
+      .map((n) => [String(n), String(formData.get(`level_${n}`) ?? "")])
+  );
+  await verifyAction(formData, (session_id) => ({ session_id, action: "menu_levels", levels }), "menulevels");
+}
+
 /** Clear the planned sale date: the session stays open to the end of today. */
 export async function clearPlannedSaleDate(formData: FormData): Promise<void> {
   await verifyAction(formData, (session_id) => ({ session_id, action: "planned_sale_date", value: "" }), "plannedcleared");
