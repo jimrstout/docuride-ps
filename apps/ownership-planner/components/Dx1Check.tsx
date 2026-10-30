@@ -5,7 +5,9 @@
 // (supabase/functions/fni-dx1-check). Run when Details loads, for signed-in
 // staff only. Blocking lines first, in the warning colour, then the wording
 // warnings, then, once, how to fix them. Nothing shown when there is nothing
-// to check.
+// to check. The finance term's lines carry their own fix (fni-dx1-check,
+// _shared/finance-term-check.ts), so the products' fix is shown only when a
+// product line is there.
 //
 // No hooks, so a Node test can render it.
 
@@ -14,6 +16,9 @@ import type { Dx1Check as Result } from "@/lib/types";
 export const DX1_FIX =
   "To fix: in DX1, make sure each F&I product is entered on this deal with the same price and term as its contract, " +
   "and remove any product whose contract was voided. Then press Update F-I Products on the DocuRide record and check again.";
+
+/** The finance term's lines, which say their own fix. */
+const TERM_LINE = /^Finance terms[: ]/;
 
 export default function Dx1Check({ result }: { result: Result | null }) {
   if (!result) return null;
@@ -43,7 +48,9 @@ export default function Dx1Check({ result }: { result: Result | null }) {
           {result.warnings.map((l) => <li key={l}>{l}</li>)}
         </ul>
       ) : null}
-      {result.status === "Problems" ? <p className="vdx1check-fix">{DX1_FIX}</p> : null}
+      {result.status === "Problems" && [...result.blocking, ...result.warnings].some((l) => !TERM_LINE.test(l)) ? (
+        <p className="vdx1check-fix">{DX1_FIX}</p>
+      ) : null}
     </div>
   );
 }

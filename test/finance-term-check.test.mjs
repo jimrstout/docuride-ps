@@ -117,3 +117,16 @@ test("fni-dx1-check reads the choice, keeps the shape, and never keeps a failed 
     assert.doesNotMatch(m[1], /rate|months|chosen\.|record\./i);
   }
 });
+
+test("Details: the products' fix line only when a product line is there", async () => {
+  const view = read("apps/ownership-planner/components/Dx1Check.tsx");
+  const TERM_LINE = new RegExp(view.match(/const TERM_LINE = \/(.+)\/;/)[1]);
+  const block = compareFinanceTerm({ months: 72, rate: 7.74 }, crm(60, 5.9)).blocking[0];
+  assert.ok(TERM_LINE.test(block));
+  assert.ok(TERM_LINE.test(TERMS_NOT_CHECKED));
+  for (const product of [
+    "Tire and Wheel (contract SAMPLE-1): DX1 shows $585.00, but the contract price is $595.00.",
+    "DX1 has a product in Aftermarket 2 for $199.00 that does not match any contract on this deal.",
+    "F&I contracts could not be checked against DX1",
+  ]) assert.ok(!TERM_LINE.test(product));
+});
