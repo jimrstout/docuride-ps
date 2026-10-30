@@ -91,6 +91,22 @@ export function dealDates(src: DealDateSource): DealDates {
 // the session's own date. It changes values only; it adds nothing TecAssured
 // did not send, because TecAssured echoes back whatever the rate request
 // carried, and every rate request now carries both dates.
+//
+// Each vehicle also carries (2026-10-30, deal 13759, whose contracts printed
+// a Vehicle Purchase Date other than the Agreement Purchase Date):
+//
+//   effectiveDate                  TecAssured's stamp of the moment it rated,
+//                                  in its own format. Made the sale date, the
+//                                  time of day kept.
+//   attributes["sale.date"], ["api-sale.date"], ["vehicle.purchasedate"]
+//                                  the sale date
+//   attributes["inservice.date"], ["api-inservice.date"]
+//                                  the in-service date: the sale date for a
+//                                  New unit, the one entered for a Used unit
+//
+// The sale date is the CRM's, the only one (_shared/crm-sale-date.ts). Each
+// rate's expireDate, when the offer itself lapses, is not a deal date and is
+// left as it is.
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -127,8 +143,31 @@ export function alignContractDates(
     quote.saleDate = tecAssuredDate(dates.sale, time);
   }
   const want: Record<string, string> = { "sale.date": dates.sale, "inservice.date": dates.inService };
+  const attributeWant: Record<string, string> = {
+    "sale.date": dates.sale,
+    "api-sale.date": dates.sale,
+    "vehicle.purchasedate": dates.sale,
+    "inservice.date": dates.inService,
+    "api-inservice.date": dates.inService,
+  };
   const vehicles = Array.isArray(quote.vehicles) ? quote.vehicles : [];
   for (const v of vehicles as Record<string, unknown>[]) {
+    if (v && typeof v.effectiveDate === "string" && fromTecAssuredDate(v.effectiveDate) !== dates.sale) {
+      const time = v.effectiveDate.match(/, (\d{1,2}:\d{2}:\d{2} [AP]M)$/)?.[1];
+      changed.push(`effectiveDate ${v.effectiveDate} became ${dates.sale}`);
+      v.effectiveDate = tecAssuredDate(dates.sale, time);
+    }
+    const attrs = v?.attributes;
+    if (attrs && typeof attrs === "object" && !Array.isArray(attrs)) {
+      const a = attrs as Record<string, unknown>;
+      for (const [name, value] of Object.entries(attributeWant)) {
+        if (!(name in a)) continue;
+        if (isoDate(a[name]) !== value) {
+          changed.push(`attributes.${name} ${String(a[name] ?? "(none)")} became ${value}`);
+          a[name] = value;
+        }
+      }
+    }
     const form = v?.form as Record<string, unknown> | undefined;
     const props = Array.isArray(form?.properties) ? (form!.properties as Record<string, unknown>[]) : [];
     for (const p of props) {

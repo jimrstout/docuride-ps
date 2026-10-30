@@ -151,6 +151,45 @@ test("a contract's dates are made the session's, in TecAssured's own format", ()
   assert.equal(same.vehicles[0].form.properties.length, 1);
 });
 
+test("every date on the vehicle is the sale date too: the rating stamp and the purchase date (deal 13759)", () => {
+  // As TecAssured returned 13759's quote: rated 26 Oct, sale date 26 Sep.
+  const quote = {
+    saleDate: "Sep 26, 2026, 6:53:26 PM",
+    vehicles: [{
+      effectiveDate: "Oct 26, 2026, 6:53:24 PM",
+      attributes: {
+        "sale.date": "2026-09-26", "api-sale.date": "2026-09-26", "vehicle.purchasedate": "2026-09-26",
+        "inservice.date": "2026-09-26", "api-inservice.date": "2026-09-26", vin: "SAMPLEVIN",
+      },
+      products: [{ rates: [{ expireDate: "Oct 26, 2036, 6:53:24 PM" }] }],
+      form: { properties: [{ property: "sale.date", value: "2026-09-26" }, { property: "inservice.date", value: "2026-09-26" }] },
+    }],
+  };
+  // The CRM sale date is now 30 Oct, a New unit.
+  const changed = alignContractDates(quote, { sale: "2026-10-30", inService: "2026-10-30" });
+  const v = quote.vehicles[0];
+  assert.equal(quote.saleDate, "Oct 30, 2026, 6:53:26 PM");
+  assert.equal(v.effectiveDate, "Oct 30, 2026, 6:53:24 PM");
+  for (const k of ["sale.date", "api-sale.date", "vehicle.purchasedate", "inservice.date", "api-inservice.date"]) {
+    assert.equal(v.attributes[k], "2026-10-30", k);
+  }
+  assert.equal(v.attributes.vin, "SAMPLEVIN");
+  assert.deepEqual(v.form.properties.map((p) => p.value), ["2026-10-30", "2026-10-30"]);
+  // When the offer itself lapses is not a deal date.
+  assert.equal(v.products[0].rates[0].expireDate, "Oct 26, 2036, 6:53:24 PM");
+  assert.equal(changed.length, 9);
+  // A Used unit keeps its own in-service date; nothing missing is added.
+  const used = { saleDate: "Oct 30, 2026, 1:00:00 PM", vehicles: [{ effectiveDate: "Oct 30, 2026, 1:00:00 PM", attributes: { "inservice.date": "2026-10-30" } }] };
+  alignContractDates(used, { sale: "2026-10-30", inService: "2024-05-01" });
+  assert.deepEqual(used.vehicles[0].attributes, { "inservice.date": "2024-05-01" });
+  // Logged as a count, never the dates.
+  const sub = src("../supabase/functions/fni-contract-submit/index.ts");
+  assert.match(sub, /console\.log\("fni-contract-submit dates aligned", \{ session: session_id, count: datesChanged\.length \}\);/);
+  assert.doesNotMatch(sub, /datesChanged\.join/);
+  // A rating's what-if overrides never carry a sale date.
+  assert.doesNotMatch(src("../supabase/functions/fni-rate-vehicle/index.ts"), /"unit_model", "sale_date"/);
+});
+
 test("submit refuses on a bad date and aligns the quote before sending", () => {
   const sub = src("../supabase/functions/fni-contract-submit/index.ts");
   const refuse = sub.indexOf("if (dates.problem || dates.sale === null || dates.inService === null)");
