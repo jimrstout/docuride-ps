@@ -13,7 +13,7 @@ import type { Dx1Check as Result } from "@/lib/types";
 
 export const DX1_FIX =
   "To fix: in DX1, make sure each F&I product is entered on this deal with the same price and term as its contract, " +
-  "and remove any product whose contract was voided. Then run the F&I Update in DocuRide and check again.";
+  "and remove any product whose contract was voided. Then press Update F-I Products on the DocuRide record and check again.";
 
 export default function Dx1Check({ result }: { result: Result | null }) {
   if (!result) return null;
