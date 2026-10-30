@@ -231,6 +231,12 @@ export const edge = {
   adminSaveTemplates: <T>(body: Record<string, unknown>) =>
     call<T>("fni-admin-settings", { method: "POST", body: { ...body, section: "templates" } }),
 
+  /** Prepare menu (fni-menu-prepare): the deal's sheet, and saving it. */
+  menuPrepare: <T>(sessionId: string) =>
+    call<T>("fni-menu-prepare", { method: "GET", query: { session_id: sessionId } }),
+  menuPrepareSave: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-menu-prepare", { method: "POST", body }),
+
   /** Price sheets: one provider's list, or one sheet with its rates. */
   priceSheets: <T>(query: Record<string, string>) =>
     call<T>("fni-price-sheets", { method: "GET", query }),

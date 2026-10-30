@@ -1283,6 +1283,10 @@ export default async function DetailsPage({
               >
                 Present menu
               </a>
+              {/* Before presenting: each column's options and prices, from the presets (docs section 25). */}
+              <Link className="btn btn--quiet" href={`/prepare/${sessionId}`} prefetch={false}>
+                Prepare menu
+              </Link>
               <p className="vfield-note">
                 Each opens in its own tab. Close that tab when you are done. This screen
                 stays open for changes.

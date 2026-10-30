@@ -28,7 +28,8 @@
 //   floor   dealer cost plus the rule's minimum markup, never below dealer cost
 //   top     dealer cost plus the rule's maximum markup (max_markup_percent and
 //           max_markup_dollars, the lower when both are set), or the rule's
-//           own retail when neither is set
+//           own retail when neither is set. Never below the rule's own retail:
+//           the default price never needs a manager.
 //
 // Above the top needs a manager and a reason. Below dealer cost never.
 //
@@ -213,6 +214,7 @@ export function priceBand(dealerCost: number, ruleRetail: number | null, rule: B
     const byDol = dol === null ? Infinity : cents(Number(dol));
     top = cost + Math.min(byPct, byDol);
   }
+  if (ruleRetail !== null) top = Math.max(top, cents(ruleRetail));
   return { floor: Math.min(floor, Math.max(top, cost)), top: Math.max(top, cost) };
 }
 
