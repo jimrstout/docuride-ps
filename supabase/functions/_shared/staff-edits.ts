@@ -71,15 +71,17 @@ export type EditTarget =
  * business importing a staff screen's field list to find out, and the planner
  * least of all.
  *
- * A key absent from this table cannot be edited at all. That is exactly three
+ * A key absent from this table cannot be edited at all. That is exactly four
  * fields: Deal # and Stock #, which identify the deal rather than feeding a rate,
- * and Lender, which is shown so staff can confirm who is financing it. Deal type
+ * Lender, which is shown so staff can confirm who is financing it, and the sale
+ * date, which is changed in the CRM only. Deal type
  * is the field that decides how a deal rates, and that one is editable.
  */
 export const EDIT_TARGETS: Record<string, EditTarget> = {
   // Deal
   deal_type: { kind: "column", column: "finance_type", cast: "text" },
-  sale_date: { kind: "column", column: "sale_date", cast: "date" },
+  // No sale_date: the CRM's Sale_Date is the only sale date, changed in the CRM
+  // only (_shared/crm-sale-date.ts). An old staff_edits.sale_date is ignored.
 
   // Vehicle
   vin: { kind: "column", column: "vin", cast: "text" },

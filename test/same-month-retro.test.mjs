@@ -32,12 +32,12 @@ async function storedFor(session) {
   }).request;
 }
 
-const moved = (edits) => ({ ...SESSION, staff_edits: { ...SESSION.staff_edits, ...edits } });
-const saleEdit = (value) => ({ sale_date: { value, original: "2026-10-26", original_source: "CRM", edited_by: "AB", edited_at: "t" } });
+// The sale date as the CRM now has it (the only sale date, migration 0044).
+const saleMoved = (value) => ({ ...SESSION, sale_date: value });
 
 test("only the sale date moved within the month: marked current", async () => {
   const stored = await storedFor(SESSION);
-  const d = checkRow({ deal_number: "90001", session: moved(saleEdit("2026-10-28")), stored });
+  const d = checkRow({ deal_number: "90001", session: saleMoved("2026-10-28"), stored });
   assert.equal(d.keepCurrent, true);
   assert.deepEqual([d.rated_sale, d.current_sale], ["2026-10-26", "2026-10-28"]);
   // A New unit with no recorded in-service date: it follows the sale date and counts as part of the move.
@@ -46,22 +46,22 @@ test("only the sale date moved within the month: marked current", async () => {
 
 test("a move into another month or year, or across a price sheet boundary, is left out of date", async () => {
   const stored = await storedFor(SESSION);
-  assert.equal(checkRow({ deal_number: "90001", session: moved(saleEdit("2026-11-01")), stored }).keepCurrent, false);
+  assert.equal(checkRow({ deal_number: "90001", session: saleMoved("2026-11-01"), stored }).keepCurrent, false);
   const dec = await storedFor({ ...SESSION, sale_date: "2026-12-31" });
   assert.equal(checkRow({ deal_number: "90001", session: { ...SESSION, sale_date: "2027-01-01" }, stored: dec }).keepCurrent, false);
-  assert.equal(checkRow({ deal_number: "90001", session: moved(saleEdit("2026-10-28")), stored }, ["2026-10-27"]).keepCurrent, false);
-  assert.equal(checkRow({ deal_number: "90001", session: moved(saleEdit("2026-10-28")), stored }, null).keepCurrent, false);
+  assert.equal(checkRow({ deal_number: "90001", session: saleMoved("2026-10-28"), stored }, ["2026-10-27"]).keepCurrent, false);
+  assert.equal(checkRow({ deal_number: "90001", session: saleMoved("2026-10-28"), stored }, null).keepCurrent, false);
 });
 
 test("any other input that differs leaves it out of date, and is named", async () => {
   const stored = await storedFor(SESSION);
-  const d = checkRow({ deal_number: "90001", session: { ...moved(saleEdit("2026-10-28")), odometer: 5 }, stored });
+  const d = checkRow({ deal_number: "90001", session: { ...saleMoved("2026-10-28"), odometer: 5 }, stored });
   assert.equal(d.keepCurrent, false);
   assert.ok(d.differs.includes("odometer") && d.differs.includes("prop:odometer"));
   // A Used unit's own in-service date changing is not the sale date's move.
   const used = { ...SESSION, condition: "Used", in_service_date: "2025-01-01" };
   const usedStored = await storedFor(used);
-  assert.equal(checkRow({ deal_number: "90002", session: { ...used, ...moved(saleEdit("2026-10-28")), in_service_date: "2025-02-01" }, stored: usedStored }).keepCurrent, false);
+  assert.equal(checkRow({ deal_number: "90002", session: { ...used, ...saleMoved("2026-10-28"), in_service_date: "2025-02-01" }, stored: usedStored }).keepCurrent, false);
 });
 
 test("a sale date that did not move is not this rule, whatever else differs", async () => {

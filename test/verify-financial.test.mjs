@@ -86,15 +86,17 @@ test("creation, reopen and Refresh all fill it through the shared mapping", () =
   assert.match(mapSession, /const crm = crmRatingFields\(record/);
   assert.match(mapSession, /agreed_down_payment: crm\.agreed_down_payment,/);
 
-  // Reopen writes the whole shared patch.
+  // Reopen writes the shared patch, the sale date apart: that goes through
+  // recordCrmSaleDate, with its event and month rule (_shared/crm-sale-date.ts).
   const reopen = start.slice(start.indexOf("async function reopen("), start.indexOf("async function ratingInputsChanged("));
-  assert.match(reopen, /\.\.\.crmRatingFields\(record as unknown as Record<string, unknown>\),/);
+  assert.match(reopen, /const \{ sale_date: _sale, \.\.\.crmFields \} = crmRatingFields\(record as unknown as Record<string, unknown>\);/);
+  assert.match(reopen, /\.\.\.crmFields,/);
   assert.match(reopen, /\.update\(patch\)/);
 
   // Refresh from CRM writes the same patch, and the sheet reads the column.
   const verify = src("../supabase/functions/fni-session-verify/index.ts");
   const refresh = verify.slice(verify.indexOf("async function refresh("), verify.indexOf("async function verify("));
-  assert.match(refresh, /const patch = crmRatingFields\(record as unknown as Record<string, unknown>\);/);
+  assert.match(refresh, /const \{ sale_date: _sale, \.\.\.patch \} = crmRatingFields\(record as unknown as Record<string, unknown>\);/);
   assert.match(refresh, /\.update\(patch\)/);
   assert.match(verify, /"agreed_down_payment", "max_amount_financed",/);
 });

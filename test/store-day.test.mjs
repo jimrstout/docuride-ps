@@ -1,7 +1,8 @@
-// A session lasts to the end of its store's day (2026-10-27). Each store has
-// its own time zone (Administration > Stores). Renew for Today replaces +24h
-// and cannot stack. A planned sale date lets a deal be prepared the night
-// before. Contracts are submitted only on the day of the sale.
+// A deal's day is its store's (2026-10-27). Each store has its own time zone
+// (Administration > Stores). Since migration 0044 the CRM sale date is the only
+// sale date: the session is open through it, and contracts are submitted only
+// on it, today at the store. Renew for Today and the planned sale date are
+// retired.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -9,7 +10,8 @@ import { readFileSync } from "node:fs";
 import {
   dayLabel,
   isStoreTimeZone,
-  plannedDateProblem,
+  contractDateLine,
+  saleDateLine,
   STORE_TIME_ZONES,
   storeToday,
   submitDateProblem,
@@ -39,34 +41,30 @@ test("only the listed zones can be set", () => {
   assert.ok(!isStoreTimeZone(""));
 });
 
-test("a contract is submitted only on the day of the sale", () => {
+test("a contract is submitted only on the CRM sale date, today at the store", () => {
   const today = "2026-10-27";
-  assert.equal(submitDateProblem({ sale: today, inService: today, planned: null, today }), null);
-  assert.equal(submitDateProblem({ sale: today, inService: "2026-01-02", planned: today, today }), null);
-  assert.match(
-    submitDateProblem({ sale: "2026-10-26", inService: "2026-10-26", planned: null, today }),
-    /^The sale date is 26 Oct 2026\. Contracts can only be submitted on the day of the sale, and today is 27 Oct 2026 at this store\./
+  assert.equal(submitDateProblem({ sale: today, inService: today, today }), null);
+  assert.equal(submitDateProblem({ sale: today, inService: "2026-01-02", today }), null);
+  assert.equal(
+    submitDateProblem({ sale: "2026-09-26", inService: "2026-09-26", today: "2026-10-30" }),
+    "The sale date in the CRM is 26 Sep 2026. Contracts can only be submitted on the sale date, and today is 30 Oct 2026 at this store. Change the Sale Date in the CRM."
   );
-  assert.match(submitDateProblem({ sale: "2026-10-28", inService: null, planned: null, today }), /^The sale date is 28 Oct 2026\./);
+  assert.equal(submitDateProblem({ sale: "2026-10-28", inService: null, today }), saleDateLine("2026-10-28", today));
   assert.match(
-    submitDateProblem({ sale: today, inService: today, planned: "2026-10-28", today }),
-    /^The planned sale date is 28 Oct 2026, but the sale date is 27 Oct 2026\./
-  );
-  assert.match(
-    submitDateProblem({ sale: today, inService: "2026-10-30", planned: null, today }),
+    submitDateProblem({ sale: today, inService: "2026-10-30", today }),
     /^The in-service date \(30 Oct 2026\) is after the sale date \(27 Oct 2026\)\./
   );
   // A missing sale date is deal-dates.ts's to say.
-  assert.equal(submitDateProblem({ sale: null, inService: null, planned: null, today }), null);
+  assert.equal(submitDateProblem({ sale: null, inService: null, today }), null);
+  assert.equal(dayLabel("2026-01-05"), "5 Jan 2026");
 });
 
-test("a planned sale date cannot be in the past", () => {
-  assert.equal(plannedDateProblem(null, "2026-10-27"), null);
-  assert.equal(plannedDateProblem("2026-10-27", "2026-10-27"), null);
-  assert.equal(plannedDateProblem("2026-10-28", "2026-10-27"), null);
-  assert.equal(plannedDateProblem("2026-10-26", "2026-10-27"), "The planned sale date cannot be in the past. Today is 27 Oct 2026.");
-  assert.equal(plannedDateProblem("tomorrow", "2026-10-27"), "The planned sale date is not a date.");
-  assert.equal(dayLabel("2026-01-05"), "5 Jan 2026");
+test("a live contract dated otherwise than the CRM sale date is named, and nothing more", () => {
+  assert.equal(
+    contractDateLine({ name: "Battery Protection", contract_number: "SAMPLE-BT-1", dated: "2026-10-28" }, "2026-09-26"),
+    "Battery Protection (contract SAMPLE-BT-1) is dated 28 Oct 2026, but the sale date in the CRM is 26 Sep 2026. Void it and submit again on the sale date."
+  );
+  assert.equal(contractDateLine({ name: "Tire and Wheel", contract_number: "SAMPLE-TW-1", dated: "2026-09-26" }, "2026-09-26"), null);
 });
 
 test("the migration is additive and puts the day in Postgres", () => {
@@ -80,18 +78,18 @@ test("the migration is additive and puts the day in Postgres", () => {
   assert.match(m, /revoke all on function fni\.renew_session\(uuid\) from public, anon, authenticated;/);
 });
 
-test("Renew for Today replaces +24h and never adds hours", () => {
+test("Renew for Today is retired: the endpoint says so and renews nothing", () => {
   const f = src("supabase/functions/fni-admin-sessions/index.ts");
-  assert.match(f, /\.rpc\("renew_session", \{ p_session: sessionId \}\)/);
-  assert.match(f, /if \(req\.method === "POST"\) return await renew\(req\);/);
-  assert.doesNotMatch(f, /hours \* 3600_000/);
-  assert.doesNotMatch(f, /MAX_EXTEND_HOURS/);
-  assert.match(f, /\.rpc\("session_renew_targets", \{ p_ids: sessionIds \}\)/);
-  assert.match(f, /renewable: renewable\(s\),/);
+  assert.match(f, /if \(req\.method === "POST"\) \{\s*return json\(410, \{/);
+  assert.doesNotMatch(f, /renew_session|session_renew_targets|renewable|planned_sale_date|staff_edits/);
 });
 
-test("submit refuses a sale date that is not today at the store", () => {
+test("submit reads the CRM sale date first, and refuses one that is not today at the store", () => {
   const f = src("supabase/functions/fni-contract-submit/index.ts");
+  assert.match(f, /const crmRead = await freshSaleDate\(supabase, session as unknown as SaleDateSession, SUBMIT_CRM_BUDGET_MS\);/);
+  assert.match(f, /if \(!crmRead\.fresh && !\(noCrmRecord && session\.is_test === true\)\) \{\s*return await refuse\(503,/);
+  assert.ok(f.indexOf("const crmRead = await freshSaleDate(") < f.indexOf("const dates = dealDates("));
+  assert.doesNotMatch(f, /planned_sale_date/);
   assert.match(f, /const today = storeToday\(/);
   assert.match(f, /const dayProblem = submitDateProblem\(\{/);
   assert.match(f, /if \(dayProblem\) return await refuse\(400, \{ error: dayProblem \}\);/);
@@ -100,12 +98,13 @@ test("submit refuses a sale date that is not today at the store", () => {
   assert.ok(f.indexOf("const dayProblem") < f.indexOf("Step 4: Cut the quote down"));
 });
 
-test("Details reads and sets the planned sale date, and says what Submit would", () => {
+test("Details reads the CRM sale date as it loads, and says what Submit would", () => {
   const f = src("supabase/functions/fni-session-verify/index.ts");
-  assert.match(f, /"planned_sale_date",/);
-  assert.match(f, /day: await dayFor\(supabase, s, edited\),/);
-  assert.match(f, /if \(action === "planned_sale_date"\) return await setPlannedSaleDate\(supabase, s, body\.value\);/);
-  assert.match(f, /\.rpc\("renew_session", \{ p_session: s\.id as string \}\)/);
+  assert.doesNotMatch(f, /"planned_sale_date",|setPlannedSaleDate|renew_session|saleDateChoice/);
+  assert.match(f, /const crmRead = await freshSaleDate\(supabase, loaded as unknown as \{ id: string \}\);/);
+  assert.match(f, /day: await dayFor\(supabase, s, edited, crmRead\),/);
+  assert.match(f, /if \(action === "planned_sale_date" \|\| action === "sale_date_keep_staff" \|\| action === "sale_date_use_crm"\) \{\s*return json\(410, \{ error: SALE_DATE_IN_CRM \}\);/);
+  assert.match(f, /date_line: dates\.sale !== null && dates\.sale !== today \? saleDateLine\(dates\.sale, today\) : null,/);
 });
 
 test("Administration sets each store's time zone, from the listed zones only", () => {

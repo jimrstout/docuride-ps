@@ -73,6 +73,10 @@ import { atMaximum, pricePolicy } from "../_shared/price-cap.ts";
 import { readSubmitResponse } from "../_shared/submit-outcome.ts";
 import { alignContractDates, dealDates, SALE_DATE_MISSING } from "../_shared/deal-dates.ts";
 import { storeToday, submitDateProblem } from "../_shared/store-day.ts";
+import { freshSaleDate, type SaleDateSession } from "../_shared/crm-sale-date.ts";
+
+/** How long Submit waits for the CRM's sale date before refusing. */
+const SUBMIT_CRM_BUDGET_MS = 5000;
 import { renewedBy, STALE_TEST_SUBMIT_EVENT, staleRatingProblem } from "../_shared/sale-date.ts";
 import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
 import { buyerPhoneKeys, cobuyerKeys } from "../_shared/submit-parties.ts";
@@ -379,6 +383,21 @@ serve(async (req: Request) => {
     if (notCleared) return await refuse(403, { error: notCleared });
 
     // ── Step 3c: The deal's dates ──────────────────────────────────────
+    // The sale date is the CRM's, read from the CRM immediately before anything
+    // is sent, whatever zoho-sync last saw (_shared/crm-sale-date.ts). If the
+    // CRM cannot be read, nothing is sent. A test session made without a CRM
+    // record uses its own.
+    const crmRead = await freshSaleDate(supabase, session as unknown as SaleDateSession, SUBMIT_CRM_BUDGET_MS);
+    const noCrmRecord = typeof session.zoho_deal_id !== "string" || session.zoho_deal_id === "";
+    if (!crmRead.fresh && !(noCrmRecord && session.is_test === true)) {
+      return await refuse(503, { error: `${crmRead.problem ?? "The sale date could not be read from the CRM just now."} Nothing was sent. Try again in a moment.` });
+    }
+    if (crmRead.outcome === "Changed") {
+      // A New unit's in-service date moved with it.
+      const { data: moved } = await supabase.schema("fni").from("sessions").select("sale_date, in_service_date").eq("id", session_id).single();
+      if (moved) Object.assign(session, moved);
+    }
+
     // A contract carries the sale date and the in-service date, and neither is
     // ever made up: no sale date, or a used unit with no in-service date, and
     // nothing is sent (_shared/deal-dates.ts).
@@ -389,9 +408,9 @@ serve(async (req: Request) => {
     }
 
     // ── Step 3d: Only on the day of the sale ───────────────────────────
-    // Today in the store's own zone (public.stores.time_zone). A planned sale
-    // date, set for preparing the deal the night before, must be that day too,
-    // and the unit cannot go into service after it was sold (_shared/store-day.ts).
+    // The CRM sale date must be today in the store's own zone
+    // (public.stores.time_zone), and the unit cannot go into service after it
+    // was sold (_shared/store-day.ts).
     const { data: storeRow } = await supabase
       .from("stores")
       .select("time_zone")
@@ -401,14 +420,13 @@ serve(async (req: Request) => {
     const dayProblem = submitDateProblem({
       sale: dates.sale,
       inService: dates.inService,
-      planned: typeof session.planned_sale_date === "string" ? session.planned_sale_date : null,
       today,
     });
     if (dayProblem) return await refuse(400, { error: dayProblem });
 
     // ── Step 3d2: Rated on the deal as it now stands ───────────────────
-    // A rating input that moved after rating (the sale date above all, which
-    // Renew for Today can move to today) leaves the offer out of date. Its
+    // A rating input that moved after rating (the sale date above all, moved
+    // in the CRM into another month) leaves the offer out of date. Its
     // prices were for the old deal, so nothing goes out until it is rated
     // again; alignContractDates below must never paper over a moved date.
     //
@@ -880,6 +898,8 @@ serve(async (req: Request) => {
         // The word that makes the "one live contract per product" index bite.
         // Voiding is what changes it, in fni-contract-void.
         status: "Live",
+        // The sale date it was sent with, for Details to compare with the CRM's.
+        contract_sale_date: dates.sale,
       });
     }
 

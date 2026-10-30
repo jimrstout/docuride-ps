@@ -48,6 +48,9 @@ import { financeFigures, type FinanceSource } from "./finance-basis.ts";
 import { resolveFuelType } from "./fuel-type.ts";
 import { resolveEngineCc } from "./engine-size.ts";
 import { dealDates, isNewUnit, IN_SERVICE_DATE_MISSING, SALE_DATE_MISSING } from "./deal-dates.ts";
+
+/** The sale date's note: where it comes from, and where it is changed. */
+export const SALE_DATE_NOTE = "From the CRM. The sale date is changed in the CRM only.";
 import { resolveVehicleType, vehicleTypeForCode } from "./vehicle-types.ts";
 import {
   EDITED_SOURCE,
@@ -412,7 +415,8 @@ const SPECS: Spec[] = [
     // Sent on every rate and every contract, so needed for every vehicle
     // type, whether or not TecAssured lists it (_shared/deal-dates.ts).
     always_required: true,
-    note: (s) => (dealDates(s).sale === null ? SALE_DATE_MISSING : FROM_CRM),
+    // The CRM's, never edited here (_shared/crm-sale-date.ts).
+    note: (s) => (dealDates(s).sale === null ? SALE_DATE_MISSING : SALE_DATE_NOTE),
   },
 
   // ── Vehicle ────────────────────────────────────────────────────────────

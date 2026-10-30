@@ -12,7 +12,6 @@ import {
   onlySameMonthSaleDateMove,
   priceSheetBoundaries,
   RATING_OUT_OF_DATE,
-  renewDateMoves,
   saleDateMoveNeedsRerate,
   staleRatingProblem,
 } from "../supabase/functions/_shared/sale-date.ts";
@@ -27,14 +26,12 @@ test("a same-month move keeps the rating current and the deal verified", () => {
   assert.equal(saleDateMoveNeedsRerate("2026-10-28", "2026-10-28"), false);
   assert.equal(monthOf("2026-10-28"), "2026-10");
 
-  // Renew: the deal is un-verified and its offers marked only when the move needs a re-rate.
-  const renew = read("supabase/functions/fni-admin-sessions/index.ts");
-  assert.match(renew, /const saleMoved = !!saleMove &&\s*saleDateMoveNeedsRerate\(saleMove\.from, saleMove\.to, sheets === null \? null : priceSheetBoundaries\(sheets\)\);/);
-  assert.match(renew, /if \(saleMoved && s\.verification_state === "Verified"\) \{/);
-  assert.match(renew, /if \(saleMoved\) \{\s*const \{ error: staleErr \} = await supabase\s*\.schema\("fni"\)\s*\.from\("rated_offers"\)\s*\.update\(\{ out_of_date: true \}\)/);
-  // The move's session event is still written, and says whether a re-rate was needed.
-  assert.match(renew, /\.from\("session_events"\)\s*\.insert\(moves\.map\(/);
-  assert.match(renew, /rerate_needed: m\.field === "sale_date" && saleMoved/);
+  // A CRM change: the deal is un-verified and its offers marked only when the
+  // move needs a re-rate, and its event says whether one was (migration 0044).
+  const m = read("supabase/migrations/0044_crm_sale_date_only.sql");
+  assert.match(m, /verification_state = case when p_rerate and s\.verification_state = 'Verified' then 'Needs Verification'/);
+  assert.match(m, /if p_rerate then\s+update fni\.rated_offers set out_of_date = true where session_id = p_session;/);
+  assert.match(m, /jsonb_build_object\('from', s\.sale_date, 'to', p_new, 'rerate_needed', p_rerate\)/);
 });
 
 test("a month boundary (31 Oct to 1 Nov) needs a re-rate", () => {
@@ -72,21 +69,17 @@ test("the store's time zone decides the month", () => {
   const today = storeToday("America/Los_Angeles", now);
   assert.equal(today, "2026-10-31");
   assert.equal(now.toISOString().slice(0, 10), "2026-11-01");
-  // Renew moves 30 Oct to the store's today, 31 Oct: the same month, no re-rate.
-  const [move] = renewDateMoves({ sale: "2026-10-30", planned: null, today });
-  assert.deepEqual([move.from, move.to], ["2026-10-30", "2026-10-31"]);
-  assert.equal(saleDateMoveNeedsRerate(move.from, move.to), false);
+  // A CRM sale date moved from 30 Oct to the store's today, 31 Oct: the same month, no re-rate.
+  assert.equal(saleDateMoveNeedsRerate("2026-10-30", today), false);
   // Judged by the UTC date it would have been November, and a re-rate.
   assert.equal(saleDateMoveNeedsRerate("2026-10-30", now.toISOString().slice(0, 10)), true);
-  // The renew takes today from the store's zone.
-  assert.match(read("supabase/functions/fni-admin-sessions/index.ts"), /const today = storeToday\(\(storeRow as \{ time_zone\?: string \} \| null\)\?\.time_zone \?\? null\);/);
 });
 
 test("a rating out of date for another cause stays out of date after a same-month move", () => {
   assert.equal(staleRatingProblem(offer("2026-10-27", true), "2026-10-28"), RATING_OUT_OF_DATE);
   // Nothing on these paths ever marks an offer current: they only add the mark.
   for (const f of [
-    "supabase/functions/fni-admin-sessions/index.ts",
+    "supabase/functions/_shared/crm-sale-date.ts",
     "supabase/functions/fni-session-verify/index.ts",
     "supabase/functions/fni-session-start/index.ts",
   ]) {
@@ -99,7 +92,7 @@ test("a rating out of date for another cause stays out of date after a same-mont
   assert.ok(early > 0 && early < fn.indexOf('.update({ out_of_date: true })'));
 });
 
-test("editing the sale date on Details, refreshing it from the CRM, or relaunching follows the same rule", () => {
+test("a CRM sale date picked up by refresh, relaunch or zoho-sync follows the same rule", () => {
   const before = { sale_date: "2026-10-27", in_service_date: "2026-10-27", odometer: "5" };
   const after = { sale_date: "2026-10-28", in_service_date: "2026-10-28", odometer: "5" };
   // A New unit: the in-service date follows the sale date.
@@ -119,6 +112,9 @@ test("editing the sale date on Details, refreshing it from the CRM, or relaunchi
   assert.match(verify, /if \(onlySameMonthSaleDateMove\(changed, before, after, sheets === null \? null : priceSheetBoundaries\(sheets\)\)\) \{\s*return \[\];/);
   const start = read("supabase/functions/fni-session-start/index.ts");
   assert.match(start, /if \(onlySameMonthSaleDateMove\(changed, before, after, sheets === null \? null : priceSheetBoundaries\(sheets\)\)\) \{\s*return \[\];/);
+  // Where the CRM's date is recorded, the month rule decides the re-rate.
+  const crm = read("supabase/functions/_shared/crm-sale-date.ts");
+  assert.match(crm, /const rerate = saleDateMoveNeedsRerate\(old, next, sheets === null \? null : priceSheetBoundaries\(sheets\)\);/);
 });
 
 test("a price sheet that starts or ends between the dates counts as a boundary", () => {
@@ -140,7 +136,7 @@ test("a price sheet that starts or ends between the dates counts as a boundary",
 test("the confirmation still shows the rows the submit sends, and no price is written", () => {
   const verify = read("supabase/functions/fni-session-verify/index.ts");
   assert.match(verify, /\.select\(SUBMIT_ROW_COLUMNS\)/);
-  for (const f of ["supabase/functions/_shared/sale-date.ts", "supabase/functions/fni-admin-sessions/index.ts"]) {
+  for (const f of ["supabase/functions/_shared/sale-date.ts", "supabase/functions/_shared/crm-sale-date.ts", "supabase/functions/fni-admin-sessions/index.ts"]) {
     assert.doesNotMatch(read(f), /customer_price|retail_price|dealer_cost|selected_products/, f);
   }
 });

@@ -3,6 +3,7 @@ import { getRecord } from "../_shared/zoho.ts";
 import { mapDeal } from "../_shared/dealmap.ts";
 import { dealFolderArgs, dealFolderLog, type DealFolderOutcome } from "../_shared/deal-folders.ts";
 import { fileWhenFoldersReady } from "../_shared/deal-jacket-file.ts";
+import { crmSaleDate, recordCrmSaleDate } from "../_shared/crm-sale-date.ts";
 import {
   sbInsert,
   sbRpc,
@@ -35,6 +36,12 @@ import {
  * sync has answered. A filing problem is a session event; it never fails the
  * queue row.
  *
+ * Each synced deal's Sale_Date is also recorded on its sessions
+ * (_shared/crm-sale-date.ts, migration 0044): when it differs from the last
+ * one PS saw, the copy is updated, the month rule applied, and the session
+ * event "Sale date changed in the CRM from <old> to <new>" added, signed
+ * System. The CRM sale date is the only sale date; PS never writes it.
+ *
  * verify_jwt is false (supabase/config.toml): Zoho cannot send a Supabase JWT,
  * so the shared secret is the whole of the authentication.
  */
@@ -57,6 +64,20 @@ declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
  * holding up the sync. Background work the runtime keeps alive after the
  * answer; awaited only where there is no runtime to keep it (a local run).
  */
+/** The deal's Sale_Date onto each of its sessions. A failure fails the item, so the sweeper tries again. */
+async function recordSaleDate(zohoId: string, record: Record<string, unknown>): Promise<void> {
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const { data, error } = await supabase
+    .schema("fni")
+    .from("sessions")
+    .select("id, tenant_id, sale_date")
+    .eq("zoho_deal_id", zohoId);
+  if (error) throw new Error(`The deal's sessions could not be read (${error.code ?? "error"}).`);
+  for (const s of (data ?? []) as { id: string; tenant_id: string; sale_date: string | null }[]) {
+    await recordCrmSaleDate(supabase, s, crmSaleDate(record));
+  }
+}
+
 async function fileInBackground(sessionId: string, pending: Promise<unknown>[]): Promise<void> {
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const work = fileWhenFoldersReady(supabase, sessionId).catch((err) =>
@@ -224,6 +245,9 @@ async function drain(started: number, pending: Promise<unknown>[]): Promise<Drai
         if (folders) console.log(`zoho-sync ${head.module}/${head.zoho_id} deal folders`, dealFolderLog(folders));
         // The folders became known with this write: file what is waiting.
         if (folders?.folders_became_ready) await fileInBackground(folders.session_id, pending);
+
+        // The CRM sale date onto the deal's sessions, with its event and month rule.
+        await recordSaleDate(head.zoho_id, record as unknown as Record<string, unknown>);
 
         await markProcessed(ids);
         synced++;

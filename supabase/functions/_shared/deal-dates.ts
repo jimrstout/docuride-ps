@@ -12,7 +12,8 @@
 // So, everywhere a deal date is built or sent (the rate request, the price
 // sheet adapter, the submit, the Verify sheet):
 //
-//   Sale date        required. Missing means no rate and no submit.
+//   Sale date        the CRM's Sale_Date, required. Missing means no rate and
+//                    no submit. Never edited in PS (_shared/crm-sale-date.ts).
 //   In-service date  the session's. Missing on a New unit means the sale date;
 //                    missing on a Used unit means no rate and no submit.
 //
@@ -21,7 +22,7 @@
 // says when we asked. It lives in rate-request.ts, not here.
 
 export const SALE_DATE_MISSING =
-  "Sale date is missing. Add it on the deal and refresh from CRM, or enter it on Verify.";
+  "There is no sale date in the CRM. Add the Sale Date in the CRM.";
 
 export const IN_SERVICE_DATE_MISSING =
   "In-service date is missing. A used unit needs the date it first went into service. " +
