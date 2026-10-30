@@ -1501,3 +1501,48 @@ surcharges. The Ownership Planner shows the same prices.
   records it.
 - **A test session on the QA server** is submitted at the provider's maximum
   by design (section 15), and is held to that instead.
+
+## 26. Payment terms and the customer's choices
+
+A financed menu can show more than one payment term per column, and the
+customer can take products out of a column before choosing. Migration 0046,
+PRs 84 to 89 (`_shared/menu-terms.ts`).
+
+**Terms.**
+- **The deal's term comes first** in every column, from the CRM's finance
+  figures, labelled "the deal's term". It cannot be removed.
+- **Up to two extra terms** per column, three with the deal's. Each has its own
+  months and interest rate; a rate is always required, since the deal's rate
+  never carries to a longer term.
+- **Where they come from.** Managers set them per template and column in
+  Administration > Menus (`fni.menu_preset_terms`, logged under "Menu preset").
+  Prepare menu can change them for the deal (`sessions.menu_terms`).
+- **Financed only.** A cash deal shows a total and no payments.
+- **Payment lines** read "$654.32 a month for 60 months at 5.90%". Payments use
+  the existing rules (`planTotals`) with only the months and rate changed. A
+  term never changes a product's price.
+
+**The customer's choices.**
+- **Remove and add back.** Before choosing, the customer can remove a product
+  from a column. It stays visible, dimmed, with "Add back". Purchased products
+  cannot be removed. Removals are kept in `sessions.menu_removed` and are not
+  session events.
+- **One event on choosing**: "Package chosen: Gold, 72 months at 7.74%.
+  Removed: Tire and Wheel, Battery." The choice is kept in
+  `sessions.menu_choice` (column, name, term, kept and removed), and the prices
+  lock.
+- **A term on the server.** The save checks the chosen term is one the column
+  offers before writing anything: "That payment term is not one this package
+  offers."
+- **Removed products are not submitted.** They are saved as "Managed by
+  Customer", so Submit, which sends Included rows only, never sends them. The
+  price guard (section 25) holds for the products that remain.
+- **The acknowledgment** lists products kept and declined, a removed one as
+  "Removed from the Gold package", and shows the chosen term.
+- **Reset the menu** on Prepare menu brings removed products back and records
+  "Menu reset to the prepared state".
+
+**Another term than the deal's.** Details shows: "The customer chose 72 months
+at 7.74%. The finance terms in the CRM say 60 months at 5.90%. Update the deal
+in DX1 and the CRM before generating documents." PS never changes the CRM's
+finance terms.
