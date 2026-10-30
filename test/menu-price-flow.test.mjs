@@ -159,3 +159,72 @@ test("Present menu starts from the prepared menu, or the presets as they stand",
   // No preset term: the column's level picks the plan, and the shortest term starts it.
   assert.equal(optionFor(sheet, sheet.cells["1"]["Mechanical Protection"].key).option.rate_unique_id, "c24");
 });
+
+// ── A product removed by the customer, and a package chosen on an extra term ──
+
+const TW_FAMILY = { family_code: "TW", provider_id: P, provider_name: "Sample", tiers: [
+  { product_code: "TW-1", product_name: "SAMPLE TIRE", product_type: "TAW", provider_id: P, raw: {}, rates: [rate("t36", 36, 200)] },
+] };
+const twoFamilies = () => [...familiesNow(), structuredClone(TW_FAMILY)];
+const twoQuote = () => {
+  const q = quoteFor();
+  q.quote.vehicles[0].products.push({ unique: "TW-1", label: "SAMPLE TIRE", ptype: "TAW", rates: [
+    { unique: "t36", termMonths: 36, dealerCost: { amount: 200 }, providerMarkup: { adjustment: { amount: 50 } }, subTotal: { amount: 250 }, options: [] },
+  ] });
+  return q;
+};
+const TWO_CATALOG = [
+  { provider_id: P, product_code: "CARE-1", category: "Mechanical Protection", display_name: "Sample Care", is_presentable: true },
+  { provider_id: P, product_code: "TW-1", category: "Tire and Wheel", display_name: "Sample Tire and Wheel", is_presentable: true },
+];
+
+/** Present menu, the customer's choice, the save's pricing, the submit's quote and the guard. */
+function chooseAndSubmit({ removeCategory = null, prices = {} } = {}) {
+  const offers = applyDealPrices(priceFamilies(twoFamilies(), RULES), prices);
+  const rows = menu.buildRows(offers.map((f) => ({ ...f, tiers: f.tiers.map((t) => ({ ...t, available: true })) })), TWO_CATALOG, [], []);
+  const col = [{ name: "Gold", preset_categories: ["Mechanical Protection", "Tire and Wheel"], starting_level: "Lowest" }];
+  const cells = menu.initialCells(rows, col)[0].map((c, i) => (rows[i].category === removeCategory ? { ...c, checked: false } : c));
+  const decisions = menu.saveDecisions(rows, cells, "2026-10-30T12:00:00Z");
+  // Submit reads the Included rows only (use_saved_selections), each at the price the save worked out.
+  const priced = applyDealPrices(priceFamilies(twoFamilies(), RULES), prices);
+  const selections = decisions.filter((d) => d.disposition === "Included").map((d) => ({
+    product_unique: d.product_code, rate_unique: d.rate_unique_id, option_uniques: d.selected_options,
+    retail_price: customerPriceFor(priced, d.product_code, d.rate_unique_id, d.selected_options, P),
+  }));
+  const { quote, resolved } = buildSubmitQuote(twoQuote(), selections);
+  const problems = priceProblems(quote, resolved.map((r) => ({ rate_unique: r.rateUniqueId, product_name: r.productName, price: r.selection.retail_price })));
+  return { rows, cells, decisions, selections, quote, problems, total: menu.columnPrices(rows, cells).reduce((a, p) => a + p, 0) };
+}
+
+test("a product removed by the customer is declined, never submitted, and the rest go at their prices", () => {
+  const all = chooseAndSubmit();
+  const removed = chooseAndSubmit({ removeCategory: "Tire and Wheel" });
+  assert.deepEqual(all.selections.map((s) => s.product_unique), ["CARE-1", "TW-1"]);
+  assert.deepEqual(removed.decisions.filter((d) => d.product_code === "TW-1").map((d) => d.disposition), ["Managed by Customer"]);
+  assert.deepEqual(removed.selections.map((s) => s.product_unique), ["CARE-1"]);
+  // Not in what is sent at all.
+  assert.deepEqual(removed.quote.vehicles[0].products.map((p) => p.unique), ["CARE-1"]);
+  // The remaining price is unchanged, and Submit's guard is satisfied.
+  assert.equal(removed.selections[0].retail_price, all.selections[0].retail_price);
+  assert.equal(all.total - removed.total, 300);
+  assert.deepEqual(removed.problems, []);
+});
+
+test("a package chosen on an extra term: the same product prices, sent exactly, and the term recorded", async () => {
+  const { columnTerms, packageChosenEvent, chosenTermNote } = await import("../supabase/functions/_shared/menu-terms.ts");
+  const prices = { [K24]: { retail_price: 512.34, above_band: false, approved_by: null, reason: null } };
+  const r = chooseAndSubmit({ prices });
+  // The term changes the payment, never a product's price.
+  const terms = columnTerms({ months: 60, rate: 5.9 }, [{ months: 72, rate: 7.74 }]);
+  const { planTotals } = await import("../apps/ownership-planner/lib/money.ts");
+  const deal = planTotals(15000, r.selections.map((s) => s.retail_price), terms[0].rate, terms[0].months, null);
+  const extra = planTotals(15000, r.selections.map((s) => s.retail_price), terms[1].rate, terms[1].months, null);
+  assert.equal(deal.productTotal, extra.productTotal);
+  assert.notEqual(deal.totalPayment, extra.totalPayment);
+  assert.deepEqual(r.selections.map((s) => s.retail_price), [512.34, 300]);
+  assert.deepEqual(r.problems, []);
+  assert.equal(r.quote.vehicles[0].products[0].rates[0].subTotal.amount, 512.34);
+  // The choice is recorded with its term, and Details asks staff to update DX1 and the CRM.
+  assert.equal(packageChosenEvent("Gold", terms[1], []), "Package chosen: Gold, 72 months at 7.74%.");
+  assert.match(chosenTermNote(terms[1], { months: 60, rate: 5.9 }), /^The customer chose 72 months at 7\.74%\. The finance terms in the CRM say 60 months at 5\.90%\./);
+});
