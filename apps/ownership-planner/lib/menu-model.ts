@@ -224,6 +224,10 @@ export function initialCells(rows: MenuRow[], columns: MenuColumnSpec[]): Cell[]
 export interface MenuPrepared {
   cells: Record<string, Record<string, { provider_id: string; product_code: string; rate_unique_id: string } | null>>;
   surcharges: string[];
+  /** Each column's extra payment terms, after the deal's own. */
+  terms?: Record<string, { months: number; rate: number }[]>;
+  /** Products the customer removed from each column, by category. */
+  removed?: Record<string, string[]>;
 }
 
 /**

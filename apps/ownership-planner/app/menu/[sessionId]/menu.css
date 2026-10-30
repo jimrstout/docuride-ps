@@ -184,3 +184,10 @@ button.mn-cell-price { cursor: pointer; }
   .mn-cell-price { font-size: 16px; }
   .mn-phone-name { display: inline; font-weight: 650; color: var(--ink); margin-right: 6px; }
 }
+
+/* Payment lines, one per term (docs section 26). */
+.mn-terms { border: 0; margin: 0; padding: 0; display: grid; gap: 2px; min-width: 0; }
+.mn-term { display: flex; align-items: center; gap: 6px; font-size: 15px; font-variant-numeric: tabular-nums; line-height: 1.25; }
+.mn-term input { width: 18px; height: 18px; margin: 0; accent-color: var(--copper); flex: none; }
+.mn-term.is-picked { font-weight: 650; }
+.mn-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

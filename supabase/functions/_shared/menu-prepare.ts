@@ -382,6 +382,10 @@ export interface PreparedChoice {
 export function preparedForMenu(sheet: PrepareSheet): {
   cells: Record<string, Record<string, PreparedChoice | null>>;
   surcharges: string[];
+  /** Each column's extra terms, after the deal's own (_shared/menu-terms.ts). */
+  terms: Record<string, { months: number; rate: number }[]>;
+  /** Products the customer removed from each column, by category. */
+  removed: Record<string, string[]>;
 } {
   const cells: Record<string, Record<string, PreparedChoice | null>> = {};
   for (const [pos, row] of Object.entries(sheet.cells)) {
@@ -393,5 +397,5 @@ export function preparedForMenu(sheet: PrepareSheet): {
         : null;
     }
   }
-  return { cells, surcharges: sheet.surcharges.chosen };
+  return { cells, surcharges: sheet.surcharges.chosen, terms: sheet.terms, removed: sheet.removed };
 }

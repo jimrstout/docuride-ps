@@ -525,6 +525,13 @@ export default async function DetailsPage({
           </div>
         ) : null}
 
+        {/* ── A payment term other than the deal's (docs section 26) ──────────
+            Extra terms on the menu are a presentation aid. PS never changes the
+            CRM's finance terms; staff update the deal in DX1 and the CRM. */}
+        {sheet.chosen_term_note ? (
+          <p className="console-flash console-flash--bad" role="alert">{sheet.chosen_term_note}</p>
+        ) : null}
+
         {/* ── Where this session stands ──────────────────────────────────── */}
         <dl className="vstate">
           <div>

@@ -46,6 +46,7 @@ import {
   type MenuOfferFamily,
   type MenuRow,
 } from "@/lib/menu-model";
+import { columnTerms, paymentText, rateText, type Term } from "@/lib/menu-terms";
 import "./menu.css";
 
 const DEFAULT_COLUMNS: MenuColumnSpec[] = [
@@ -105,11 +106,18 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
   const isCash = session.financials.payment_basis === "cash";
   const cap = isCash ? null : num(session.financials.max_amount_financed);
 
-  const figures = cells.map((col) => {
+  // Each column's payment terms: the deal's own first, then up to two more
+  // with their own rates (lib/menu-terms.ts, docs section 26). Cash: none.
+  const termsFor = (ci: number): Term[] =>
+    columnTerms(hasPayment ? { months: term!, rate: rate! } : null, initial.menu_prepared?.terms?.[String(ci + 1)] ?? []);
+  const [termPick, setTermPick] = useState<number[]>(() => columns.map(() => 0));
+
+  const figures = cells.map((col, ci) => {
     const prices = columnPrices(rows, col);
     const total = toCents(prices.reduce((a, p) => a + p, 0));
-    const totals = hasPayment ? planTotals(principal!, prices, rate!, term!, cap) : null;
-    return { total, totals };
+    const payments = termsFor(ci).map((t) => ({ t, totals: planTotals(principal!, prices, t.rate, t.months, cap) }));
+    const picked = payments[Math.min(termPick[ci] ?? 0, Math.max(payments.length - 1, 0))] ?? null;
+    return { total, payments, totals: picked?.totals ?? null, term: picked?.t ?? null };
   });
 
   const vehicleName = [session.vehicle.year, session.vehicle.make, session.vehicle.model, session.vehicle.submodel]
@@ -118,7 +126,7 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
   const basisLine = isCash
     ? "Paid in full, so there is no monthly payment."
     : hasPayment
-      ? `Financed over ${term} months at ${rate}%.`
+      ? `Financed over ${term} months at ${rateText(rate!)}.`
       : "The financing terms are not finalized, so totals only.";
 
   const setCell = (col: number, row: number, next: Partial<Cell>) =>
@@ -130,7 +138,7 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
   };
 
   // ── Recording the choice, the planner's way ────────────────────────────
-  const record = async (chosen: Cell[], name: string) => {
+  const record = async (chosen: Cell[], name: string, column: number | null = null, chosenTerm: Term | null = null) => {
     const declined = name === "";
     if (once.current) return;
     once.current = true;
@@ -146,7 +154,16 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
           // The menu's own record: its path, staff-presented, and what was chosen.
           presentation_path: "Conventional Menu",
           mode: "Staff-Presented",
-          menu_event: declined ? { kind: "declined" } : { kind: "selected", package: name },
+          // The column, the payment term and the products removed (docs section 26).
+          menu_event: declined
+            ? { kind: "declined" }
+            : {
+                kind: "selected",
+                package: name,
+                column,
+                term: chosenTerm ? { months: chosenTerm.months, rate: chosenTerm.rate } : null,
+                removed: [],
+              },
         }),
       });
       if (!res.ok) throw new Error("save");
@@ -307,11 +324,24 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
             return (
               <div key={c.name} className={`mn-foot ${ci === shown ? "is-shown" : ""}`} role="cell">
                 <b className="mn-total">{money(f.total)}</b>
-                {f.totals ? (
-                  <span className="mn-month">
-                    {money(f.totals.totalPayment)} a month
-                    <small>{money(f.totals.planPayment)} for protection</small>
-                  </span>
+                {f.payments.length > 0 ? (
+                  <fieldset className="mn-terms">
+                    <legend className="mn-sr">Payment for {c.name}</legend>
+                    {f.payments.map((p, ti) => (
+                      <label key={`${p.t.months}-${p.t.rate}`} className={`mn-term ${f.term === p.t ? "is-picked" : ""}`}>
+                        {f.payments.length > 1 ? (
+                          <input
+                            type="radio"
+                            name={`term-${ci}`}
+                            checked={f.term === p.t}
+                            disabled={phase === "saving"}
+                            onChange={() => setTermPick((all) => all.map((v, i) => (i === ci ? ti : v)))}
+                          />
+                        ) : null}
+                        <span>{paymentText(p.totals.totalPayment, p.t)}</span>
+                      </label>
+                    ))}
+                  </fieldset>
                 ) : null}
                 {f.totals && f.totals.additionalDown > 0 ? (
                   <small className="mn-down">Adds {money(f.totals.additionalDown)} to your money down.</small>
@@ -320,7 +350,7 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
                   type="button"
                   className="mn-btn mn-btn--go"
                   disabled={phase === "saving"}
-                  onClick={() => void record(cells[ci], c.name)}
+                  onClick={() => void record(cells[ci], c.name, ci + 1, f.term)}
                 >
                   {phase === "saving" ? "One moment..." : "Select this package"}
                 </button>

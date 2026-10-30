@@ -240,6 +240,8 @@ export interface SessionPayload {
   menu_prepared?: {
     cells: Record<string, Record<string, { provider_id: string; product_code: string; rate_unique_id: string } | null>>;
     surcharges: string[];
+    terms?: Record<string, { months: number; rate: number }[]>;
+    removed?: Record<string, string[]>;
   } | null;
   photos: string[] | null;
   photos_cached_at: string | null;
@@ -533,6 +535,8 @@ export interface VerifySheet {
   provider_answer?: { at: string; kind: string; text: string } | null;
   /** Why nothing is required, when nothing is. Null when the sheet is normal. */
   not_ready_reason: string | null;
+  /** The customer chose a payment term other than the deal's own (docs section 26). */
+  chosen_term_note?: string | null;
   /**
    * The store's day and the CRM sale date (migrations 0038 and 0044): when this
    * session ends, why Submit would be refused on the deal's dates today, the
