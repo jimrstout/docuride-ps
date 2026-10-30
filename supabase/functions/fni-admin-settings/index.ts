@@ -182,7 +182,7 @@ serve(async (req: Request) => {
         const reply =
           section === "pricing" ? await readPricing(supabase, tenant.id, url.searchParams)
           : section === "providers" ? await readProviders(supabase, tenant.id)
-          : await readTemplates(supabase, tenant.id);
+          : await readTemplates(supabase, tenant.id, url.searchParams.get("operator_id"));
         return json(reply.status, reply.body);
       }
       return json(200, await readSettings(supabase));

@@ -188,7 +188,7 @@ function CoverageBar({ payload }: { payload: PricingPayload }) {
 
 // ── The rules table and the one rule form ────────────────────────────────
 
-function RuleRow({ rule, editHref }: { rule: PricingRuleRow; editHref: string }) {
+function RuleRow({ rule, editHref }: { rule: PricingRuleRow; editHref: string | null }) {
   return (
     <tr>
       <td>
@@ -204,9 +204,11 @@ function RuleRow({ rule, editHref }: { rule: PricingRuleRow; editHref: string })
       <td className="num">{rule.round_to > 0 ? money(rule.round_to) : "Not rounded"}</td>
       <td>{rule.active ? <Badge tone="good">Active</Badge> : <Badge>Turned off</Badge>}</td>
       <td>
-        <Link className="ad-btn ad-btn--secondary" href={editHref} prefetch={false}>
-          Edit
-        </Link>
+        {editHref ? (
+          <Link className="ad-btn ad-btn--secondary" href={editHref} prefetch={false}>
+            Edit
+          </Link>
+        ) : null}
       </td>
     </tr>
   );
@@ -275,6 +277,25 @@ function RuleForm({
           <span>Round to ($)</span>
           <input name="round_to" inputMode="decimal" defaultValue={rule ? String(rule.round_to) : "5"} />
         </label>
+        {/* The band staff may price within on a deal, over dealer cost (migration 0045). */}
+        <label className="ad-field">
+          <span>Staff may price up to (% over dealer cost)</span>
+          <input
+            name="max_markup_percent"
+            inputMode="decimal"
+            defaultValue={rule?.max_markup_percent == null ? "" : String(rule.max_markup_percent)}
+            placeholder="The rule's own price"
+          />
+        </label>
+        <label className="ad-field">
+          <span>Staff may price up to ($ over dealer cost)</span>
+          <input
+            name="max_markup_dollars"
+            inputMode="decimal"
+            defaultValue={rule?.max_markup_dollars == null ? "" : String(rule.max_markup_dollars)}
+            placeholder="The rule's own price"
+          />
+        </label>
         <label className="ad-check">
           <input type="checkbox" name="active" defaultChecked={rule ? rule.active : true} />
           <span>Active</span>
@@ -285,6 +306,11 @@ function RuleForm({
         A rule covers costs from its first number up to, but not including, its
         second, so one rule can end where the next begins. Leave Maximum markup
         blank for no maximum.
+      </p>
+      <p className="ad-help">
+        On Prepare menu, staff may set a deal&apos;s price from dealer cost plus the minimum markup up to the
+        &ldquo;Staff may price up to&rdquo; markup (the lower of the two when both are set). Leave both blank to stop at
+        the rule&apos;s own price. Above that needs a manager and a reason. A price is never below dealer cost.
       </p>
 
       <div className="ad-editor-actions">
@@ -391,7 +417,7 @@ function Preview({ payload, here, cost }: { payload: PricingPayload; here: strin
 
 // ── The page ─────────────────────────────────────────────────────────────
 
-async function Pricing({ params }: { params: Params }) {
+async function Pricing({ params, operatorId }: { params: Params; operatorId: string }) {
   const scopeParam = one(params.scope);
   const scope = UUID_RE.test(scopeParam) ? scopeParam : "all";
   const product = one(params.product);
@@ -403,6 +429,8 @@ async function Pricing({ params }: { params: Params }) {
   try {
     payload = await edge.adminPricing<PricingPayload>({
       scope,
+      // Says whether the signed-in person may change pricing: managers only.
+      operator_id: operatorId,
       ...(product ? { product } : {}),
       ...(cost ? { cost } : {}),
     });
@@ -426,7 +454,9 @@ async function Pricing({ params }: { params: Params }) {
   const here = payload.scope.store_id;
   const keep = { product, cost };
   const editRule = editing ? payload.rules.find((r) => r.id === editing) ?? null : null;
-  const formOpen = adding || editRule !== null;
+  // Managers change pricing and its band (migration 0045); everyone else sees it.
+  const canEdit = payload.can_edit === true;
+  const formOpen = canEdit && (adding || editRule !== null);
   const closeHref = pageHref(here, keep);
 
   const withRules = payload.stores.filter((s) => s.status === "Own rules");
@@ -503,9 +533,11 @@ async function Pricing({ params }: { params: Params }) {
         <section className="ad-panel" aria-labelledby="rules-title">
           <div className="ad-panel-head">
             <h2 id="rules-title">Rules for {payload.scope.name}</h2>
-            <Link className="ad-btn ad-btn--primary" href={`${pageHref(here, { ...keep, add: "1" })}#rule-form`} prefetch={false}>
-              Add rule
-            </Link>
+            {canEdit ? (
+              <Link className="ad-btn ad-btn--primary" href={`${pageHref(here, { ...keep, add: "1" })}#rule-form`} prefetch={false}>
+                Add rule
+              </Link>
+            ) : null}
           </div>
 
           <CoverageBar payload={payload} />
@@ -519,14 +551,16 @@ async function Pricing({ params }: { params: Params }) {
                     ? "No rules of its own. It falls back to All stores, so its products are priced by those rules."
                     : "It falls back to All stores, which has no rules either, so this store shows no products."}
               </p>
-              <div className="ad-copy">
-                <Link className="ad-btn ad-btn--primary" href={`${pageHref(here, { ...keep, add: "1" })}#rule-form`} prefetch={false}>
-                  Add rule
-                </Link>
-                {copySource ? (
-                  <CopyButton from={copySource.id} to={scope} label={`Copy rules from ${copySource.name}`} />
-                ) : null}
-              </div>
+              {canEdit ? (
+                <div className="ad-copy">
+                  <Link className="ad-btn ad-btn--primary" href={`${pageHref(here, { ...keep, add: "1" })}#rule-form`} prefetch={false}>
+                    Add rule
+                  </Link>
+                  {copySource ? (
+                    <CopyButton from={copySource.id} to={scope} label={`Copy rules from ${copySource.name}`} />
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="ad-scroll">
@@ -541,7 +575,7 @@ async function Pricing({ params }: { params: Params }) {
                 </thead>
                 <tbody>
                   {payload.rules.map((r) => (
-                    <RuleRow key={r.id} rule={r} editHref={`${pageHref(here, { ...keep, edit: r.id })}#rule-form`} />
+                    <RuleRow key={r.id} rule={r} editHref={canEdit ? `${pageHref(here, { ...keep, edit: r.id })}#rule-form` : null} />
                   ))}
                 </tbody>
               </table>
@@ -551,12 +585,29 @@ async function Pricing({ params }: { params: Params }) {
           {formOpen ? (
             <RuleForm rule={editRule} scope={scope} products={payload.products} cancelHref={closeHref} />
           ) : null}
+          {canEdit ? null : (
+            <p className="ad-help">Only a manager can change pricing and the band staff may price within.</p>
+          )}
+          {(payload.changes?.length ?? 0) > 0 ? (
+            <div className="ad-panel-body">
+              <h3>Recent changes</h3>
+              <ul className="ad-plain">
+                {payload.changes!.slice(0, 8).map((c, i) => (
+                  <li key={i}>
+                    {c.action} by {c.changed_by},{" "}
+                    {new Date(c.changed_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}
+                    {c.summary ? `: ${c.summary}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
           <footer className="ad-panel-foot">
             <span>
               {payload.rules.length} {payload.rules.length === 1 ? "rule" : "rules"}
             </span>
-            {payload.rules.length > 0 && payload.copy_targets.length > 0 ? (
+            {canEdit && payload.rules.length > 0 && payload.copy_targets.length > 0 ? (
               <form action={copyPricingRules} className="ad-copy">
                 <Working />
                 <input type="hidden" name="scope" value={scope} />
@@ -603,5 +654,5 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
   const operator = await currentOperator();
   if (!operator) return null;
 
-  return <Pricing params={await searchParams} />;
+  return <Pricing params={await searchParams} operatorId={operator.sub} />;
 }

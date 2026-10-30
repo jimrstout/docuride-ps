@@ -18,6 +18,9 @@ import { priceProduct, resolveRule, type PricingRule } from "./planner-pricing.t
 
 /** A rule as stored, with who last changed it. */
 export interface StoredRule extends PricingRule {
+  /** The top of the band staff may price within on a deal (migration 0045). */
+  max_markup_percent?: number | null;
+  max_markup_dollars?: number | null;
   updated_at?: string | null;
   updated_by?: string | null;
 }
@@ -32,6 +35,9 @@ export interface RuleFields {
   markup_max_dollars: number | null;
   round_to: number;
   active: boolean;
+  /** Staff may price a deal up to this markup without a manager. Null: the rule's own retail. */
+  max_markup_percent: number | null;
+  max_markup_dollars: number | null;
 }
 
 /** The costs the preview always shows. */
@@ -106,6 +112,8 @@ export function parseRuleFields(raw: Record<string, unknown>): { fields: RuleFie
   const min = read("markup_min_dollars", "Minimum markup", { required: false, places: 2 });
   const max = read("markup_max_dollars", "Maximum markup", { required: false, places: 2 });
   const round = read("round_to", "Round to", { required: false, places: 2 });
+  const bandPct = read("max_markup_percent", "Staff may price up to, percent", { required: false, places: 3 });
+  const bandDol = read("max_markup_dollars", "Staff may price up to, dollars", { required: false, places: 2 });
 
   if (floor !== null && ceiling !== null && !(floor < ceiling)) {
     errors.push("Dealer cost from must be less than Dealer cost to.");
@@ -132,6 +140,9 @@ export function parseRuleFields(raw: Record<string, unknown>): { fields: RuleFie
       // A blank round-to is the column's default.
       round_to: round ?? 5,
       active,
+      // Blank: staff price up to the rule's own retail.
+      max_markup_percent: bandPct,
+      max_markup_dollars: bandDol,
     },
   };
 }
@@ -249,9 +260,21 @@ export function ruleSummary(
       : `no more than ${money(rule.markup_max_dollars)}`
   );
   parts.push(rule.round_to > 0 ? `rounded to ${money(rule.round_to)}` : "not rounded");
+  const band = bandSentence(rule as Partial<RuleFields>);
   const sentence =
-    `${who} costing ${money(rule.cost_floor)} to ${money(rule.cost_ceiling)}: ${parts.join(", ")}.`;
+    `${who} costing ${money(rule.cost_floor)} to ${money(rule.cost_ceiling)}: ${parts.join(", ")}.` + (band ? ` ${band}` : "");
   return rule.active ? sentence : `Turned off. ${sentence}`;
+}
+
+/** "Staff may price up to 40% or $300 over dealer cost, whichever is lower." Null when neither is set. */
+export function bandSentence(rule: Partial<Pick<RuleFields, "max_markup_percent" | "max_markup_dollars">>): string | null {
+  const pct = rule.max_markup_percent ?? null;
+  const dol = rule.max_markup_dollars ?? null;
+  if (pct === null && dol === null) return null;
+  if (pct !== null && dol !== null) {
+    return `Staff may price up to ${percent(pct)} or ${money(dol)} over dealer cost, whichever is lower; above that needs a manager.`;
+  }
+  return `Staff may price up to ${pct !== null ? percent(pct) : money(dol!)} over dealer cost; above that needs a manager.`;
 }
 
 // ── Stores ─────────────────────────────────────────────────────────────

@@ -29,8 +29,9 @@ import PendingButton from "@/components/PendingButton";
 import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
-import type { TemplateRow, TemplateSlotRow, TemplatesPayload } from "@/lib/types";
-import { moveSlot, saveMenuColumns, saveSlot, saveTemplate } from "@/app/console-actions";
+import type { MenuPresetRow, TemplateRow, TemplateSlotRow, TemplatesPayload } from "@/lib/types";
+import { moveSlot, saveMenuColumns, saveMenuPresets, saveSlot, saveTemplate } from "@/app/console-actions";
+import { deductibleLabel, milesLabel, PRESET_DEDUCTIBLES, PRESET_MILES, PRESET_TERMS, termLabel } from "@/lib/menu-labels";
 import ProgramLabel from "@/components/admin/ProgramLabel";
 import { Badge, Notice, PageHead } from "@/components/admin/Parts";
 
@@ -262,6 +263,175 @@ function ColumnsPanel({ t, editing }: { t: TemplateRow; editing: boolean }) {
   );
 }
 
+const DEAL_TYPES = ["Financed", "Cash"] as const;
+
+/** A preset in plain English: "Priority Maintenance, Gold, 4 years, Unlimited miles". */
+function presetText(p: MenuPresetRow | undefined): string {
+  if (!p) return "The column's coverage level";
+  const deductible = p.deductible === null ? null : Number(p.deductible);
+  const parts = [
+    p.plan_name ?? "The column's coverage level",
+    p.term_months ? termLabel(p.term_months) : null,
+    p.term_miles !== null ? milesLabel(p.term_miles) : null,
+    deductible !== null ? deductibleLabel(deductible, p.disappearing_deductible) : null,
+  ].filter(Boolean);
+  return parts.join(", ");
+}
+
+/**
+ * Presets: per Financed or Cash, what each column offers in each category
+ * (supabase/functions/_shared/menu-presets.ts). A deal starts from them on
+ * Prepare menu. When a vehicle does not rate for one, the closest term is used,
+ * then the next lower plan; failing that the cell is left empty with a note.
+ * Managers change them; everyone signed in sees them.
+ */
+function PresetsPanel({ t, payload, params }: { t: TemplateRow; payload: TemplatesPayload; params: Params }) {
+  const dealType = one(params.presets) === "Cash" ? "Cash" : "Financed";
+  const canEdit = payload.can_edit_presets === true;
+  const editing = canEdit && params.presetedit !== undefined;
+  const { columns } = t.menu_columns;
+  const presets = (t.presets ?? []).filter((p) => p.deal_type === dealType);
+  const at = (pos: number, cat: string) => {
+    const p = presets.find((x) => x.column_position === pos && x.category === cat);
+    const blank = p && p.plan_name === null && p.term_months === null && p.term_miles === null && p.deductible === null && p.disappearing_deductible === null;
+    return blank ? undefined : p;
+  };
+  const plans = payload.plan_names ?? {};
+  const changes = (payload.preset_changes ?? []).filter((c) => (c.record_key ?? "").startsWith(`${t.id}|`));
+  return (
+    <section className="ad-panel" aria-labelledby="presets-title">
+      <div className="ad-panel-head">
+        <h2 id="presets-title">Presets: what each column offers</h2>
+        <div className="ad-seg" role="group" aria-label="Deal type">
+          {DEAL_TYPES.map((d) => (
+            <Link
+              key={d}
+              href={`/admin/menus?template=${t.id}&presets=${d}`}
+              prefetch={false}
+              className={d === dealType ? "ad-btn ad-btn--primary" : "ad-btn ad-btn--secondary"}
+              aria-current={d === dealType ? "page" : undefined}
+            >
+              {d}
+            </Link>
+          ))}
+        </div>
+        {canEdit && !editing ? (
+          <Link href={`/admin/menus?template=${t.id}&presets=${dealType}&presetedit=1`} prefetch={false} className="ad-btn ad-btn--secondary">
+            Edit presets
+          </Link>
+        ) : null}
+      </div>
+      <div className="ad-panel-body">
+        <p className="ad-help">
+          Each deal starts from these on Prepare menu, and staff can change them there. When a vehicle does not rate
+          for a preset, the closest term is used, then the next lower plan. If nothing at or below it rated, the cell is
+          left empty with a note.
+          {canEdit ? null : " Only a manager can change presets."}
+        </p>
+      </div>
+      {editing ? (
+        <div className="ad-panel-body">
+          <form action={saveMenuPresets} className="ad-editor-fields">
+            <Working />
+            <input type="hidden" name="template_id" value={t.id} />
+            <input type="hidden" name="deal_type" value={dealType} />
+            {columns.map((c, ci) => (
+              <fieldset key={c.name} className="ad-fieldset ad-field--wide">
+                <legend>{c.name}</legend>
+                {CATEGORIES.map((cat, ki) => {
+                  const p = at(ci + 1, cat);
+                  const f = (name: string) => `p_${ci + 1}_${ki}_${name}`;
+                  const deductible = p?.deductible === null || p?.deductible === undefined ? "" : String(Number(p.deductible));
+                  return (
+                    <div key={cat} className="ad-preset-row">
+                      <span className="ad-strong">{cat}</span>
+                      <label className="ad-field">
+                        <span>Plan</span>
+                        <select name={f("plan")} defaultValue={p?.plan_name ?? ""}>
+                          <option value="">The column&apos;s coverage level</option>
+                          {(plans[cat] ?? []).map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </label>
+                      <label className="ad-field">
+                        <span>Term</span>
+                        <select name={f("term")} defaultValue={p?.term_months ? String(p.term_months) : ""}>
+                          <option value="">Shortest offered</option>
+                          {PRESET_TERMS.map((m) => <option key={m} value={m}>{termLabel(m)}, or the closest</option>)}
+                        </select>
+                      </label>
+                      <label className="ad-field">
+                        <span>Mileage</span>
+                        <select name={f("miles")} defaultValue={p?.term_miles === null || p?.term_miles === undefined ? "" : String(p.term_miles)}>
+                          <option value="">Any</option>
+                          {PRESET_MILES.map((m) => <option key={m} value={m}>{milesLabel(m)}</option>)}
+                        </select>
+                      </label>
+                      <label className="ad-field">
+                        <span>Deductible</span>
+                        <select name={f("deductible")} defaultValue={deductible}>
+                          <option value="">Lowest offered</option>
+                          {PRESET_DEDUCTIBLES.map((d) => <option key={d} value={d}>{d === 0 ? "No deductible" : `$${d}`}</option>)}
+                        </select>
+                      </label>
+                      <label className="ad-field">
+                        <span>Deductible type</span>
+                        <select
+                          name={f("kind")}
+                          defaultValue={p?.disappearing_deductible === null || p?.disappearing_deductible === undefined ? "" : p.disappearing_deductible ? "Disappearing" : "Standard"}
+                        >
+                          <option value="">Either</option>
+                          <option value="Standard">Standard</option>
+                          <option value="Disappearing">Disappearing</option>
+                        </select>
+                      </label>
+                    </div>
+                  );
+                })}
+              </fieldset>
+            ))}
+            <div className="ad-editor-actions ad-field--wide">
+              <PendingButton className="ad-btn ad-btn--primary" pending="Saving the presets...">Save presets</PendingButton>
+              <Link href={`/admin/menus?template=${t.id}&presets=${dealType}`} prefetch={false} className="ad-btn ad-btn--secondary">Cancel</Link>
+            </div>
+          </form>
+        </div>
+      ) : (
+        <div className="ad-scroll">
+          <table className="ad-table">
+            <thead>
+              <tr>
+                <th scope="col">{dealType}</th>
+                {columns.map((c) => <th key={c.name} scope="col">{c.name}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {CATEGORIES.map((cat) => (
+                <tr key={cat}>
+                  <th scope="row" className="ad-strong">{cat}</th>
+                  {columns.map((c, ci) => <td key={c.name}>{presetText(at(ci + 1, cat))}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {changes.length > 0 ? (
+        <div className="ad-panel-foot">
+          <h3>Recent changes</h3>
+          <ul className="ad-plain">
+            {changes.slice(0, 8).map((c, i) => (
+              <li key={i}>
+                {c.action} by {c.changed_by}, {new Date(c.changed_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}:{" "}
+                {((c.after ?? c.before) as { line?: string } | null)?.line ?? ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 /** Catalog products with no approved description yet, for staff to write one. */
 function NeedsDescription({ payload }: { payload: TemplatesPayload }) {
   const rows = payload.needs_description ?? [];
@@ -398,6 +568,8 @@ function MenuDetail({ t, payload, params }: { t: TemplateRow; payload: Templates
       {slot || addingSlot ? <SlotForm t={t} slot={slot} payload={payload} /> : null}
 
       <ColumnsPanel t={t} editing={params.columns !== undefined} />
+
+      <PresetsPanel t={t} payload={payload} params={params} />
     </>
   );
 }
@@ -409,7 +581,7 @@ export default async function MenusPage({ searchParams }: { searchParams: Promis
 
   let payload: TemplatesPayload;
   try {
-    payload = await edge.adminTemplates<TemplatesPayload>();
+    payload = await edge.adminTemplates<TemplatesPayload>(operator.sub);
   } catch (err) {
     console.error("menus load failed:", err);
     const why = err instanceof EdgeError && err.status === 400 ? err.message : null;

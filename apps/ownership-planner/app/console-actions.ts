@@ -198,7 +198,8 @@ async function pricingWrite(
 
   const scope = pricingScope(formData);
   try {
-    await edge.adminSavePricing({ ...body, scope, updated_by: operator.email });
+    // operator_id: pricing and its band are managers only (migration 0045).
+    await edge.adminSavePricing({ ...body, scope, updated_by: operator.email, operator_id: operator.sub });
   } catch (err) {
     const why = refusal(err);
     if (why !== null) redirect(pricingPage(scope, { refused: why }));
@@ -226,6 +227,8 @@ export async function savePricingRule(formData: FormData): Promise<void> {
         markup_min_dollars: String(formData.get("markup_min_dollars") ?? ""),
         markup_max_dollars: String(formData.get("markup_max_dollars") ?? ""),
         round_to: String(formData.get("round_to") ?? ""),
+        max_markup_percent: String(formData.get("max_markup_percent") ?? ""),
+        max_markup_dollars: String(formData.get("max_markup_dollars") ?? ""),
         active: formData.get("active") === "on",
       },
     },
@@ -942,7 +945,8 @@ function refusedWith(err: unknown): string | null {
 
 async function adminWrite(
   back: string,
-  write: (by: string) => Promise<unknown>,
+  // `operatorId` lets the Edge Function check a manager-only change (migration 0045).
+  write: (by: string, operatorId: string) => Promise<unknown>,
   done: string,
   next?: (result: unknown) => string
 ): Promise<never> {
@@ -951,7 +955,7 @@ async function adminWrite(
 
   let result: unknown;
   try {
-    result = await write(operator.email);
+    result = await write(operator.email, operator.sub);
   } catch (err) {
     const why = refusedWith(err);
     if (why !== null) redirect(withQuery(back, { refused: why }));
@@ -1115,6 +1119,21 @@ export async function saveMenuColumns(fd: FormData): Promise<void> {
   }));
   await adminWrite(`${MENUS}?template=${templateId}`, (by) =>
     edge.adminSaveTemplates({ action: "save_columns", template_id: templateId, columns, updated_by: by }), "saved");
+}
+
+/**
+ * Menu presets for one template and deal type (Financed or Cash). Managers
+ * only: the Edge Function checks, and logs every change with who and when.
+ */
+export async function saveMenuPresets(fd: FormData): Promise<void> {
+  const templateId = field(fd, "template_id");
+  const dealType = field(fd, "deal_type") === "Cash" ? "Cash" : "Financed";
+  const presets: Record<string, string> = {};
+  for (const [k, v] of fd.entries()) if (/^p_\d_\d_[a-z]+$/.test(k)) presets[k] = String(v);
+  await adminWrite(`${MENUS}?template=${templateId}&presets=${dealType}`, (by, operatorId) =>
+    edge.adminSaveTemplates({
+      action: "save_presets", template_id: templateId, deal_type: dealType, presets, updated_by: by, operator_id: operatorId,
+    }), "saved");
 }
 
 // ── Price sheets ──

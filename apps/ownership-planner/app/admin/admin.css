@@ -421,3 +421,8 @@
   #ad-sessions tr.ad-why-row:not([hidden]) { display: block; padding: 0 16px 16px; border-bottom: 1px solid var(--line); }
   #ad-sessions tr.ad-why-row > td { display: block; padding: 0; border: 0; }
 }
+
+/* Menu presets: one row per category inside a column (Administration > Menus). */
+.ad .ad-preset-row { display: grid; grid-template-columns: minmax(9rem, 1.2fr) repeat(5, minmax(8rem, 1fr)); gap: var(--s2, 8px); align-items: end; padding: 6px 0; border-top: 1px solid var(--line, #e3e1dc); }
+.ad .ad-preset-row:first-of-type { border-top: 0; }
+@media (max-width: 900px) { .ad .ad-preset-row { grid-template-columns: 1fr 1fr; } }

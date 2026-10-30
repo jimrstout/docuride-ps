@@ -166,6 +166,8 @@ test("a rule reads from typed text, blank min is 0 and blank max is no maximum",
   assert.deepEqual(r.fields, {
     product_code: null, cost_floor: 0, cost_ceiling: 1200.5, markup_percent: 250,
     markup_min_dollars: 0, markup_max_dollars: null, round_to: 5, active: true,
+    // Blank: staff price up to the rule's own retail (migration 0045).
+    max_markup_percent: null, max_markup_dollars: null,
   });
   assert.equal(fields({ active: undefined }).fields.active, false);
   assert.equal(fields({ product_code: "GAP" }).fields.product_code, "GAP");
@@ -246,7 +248,10 @@ test("the server checks every write, and the browser writes nothing", () => {
   assert.doesNotMatch(page, /supabase/i);
   // Each action checks the operator and sends their email as updated_by.
   assert.match(actions, /const operator = await currentOperator\(\);\s*if \(!operator\) redirect\(PRICING\);/);
-  assert.match(actions, /edge\.adminSavePricing\(\{ \.\.\.body, scope, updated_by: operator\.email \}\)/);
+  assert.match(actions, /edge\.adminSavePricing\(\{ \.\.\.body, scope, updated_by: operator\.email, operator_id: operator\.sub \}\)/);
+  // Managers only, checked on the server before anything else (migration 0045).
+  assert.ok(handler.indexOf("if (!(await isManager(supabase, body.operator_id))) return { status: 403, body: { error: MANAGERS_ONLY } };") > 0);
+  assert.ok(handler.indexOf("isManager(supabase, body.operator_id)") < handler.indexOf("const stores = await menuStores(supabase, tenantId);\n  const activeStoreIds"));
 });
 
 test("every save, edit and copy records who made it", () => {
