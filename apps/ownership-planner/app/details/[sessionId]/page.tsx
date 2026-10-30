@@ -48,8 +48,6 @@ import {
   decodeVin,
   discardEdits,
   refreshFromCrm,
-  setPlannedSaleDate,
-  clearPlannedSaleDate,
   saveVerifyFields,
   setCheckerName,
   verifyAndRate,
@@ -57,8 +55,6 @@ import {
   voidOemContract,
   getContractDocument,
   moveDocumentsToDealJacket,
-  keepStaffSaleDate,
-  useCrmSaleDate,
   rateAgain,
   saveMenuLevels,
 } from "@/app/console-actions";
@@ -67,6 +63,8 @@ import { submitCheck } from "@/lib/submit-check";
 import SubmitConfirm from "@/components/SubmitConfirm";
 import ProviderAnswer from "@/components/ProviderAnswer";
 import Dx1Check from "@/components/Dx1Check";
+import SaleDateWatch from "@/components/SaleDateWatch";
+import { crmRecordUrl, NO_SALE_DATE_LINE, SUBMIT_HELD_FOR_DATE } from "@/lib/crm-link";
 import { sentenceStart, testServerName, vendorName } from "@/lib/vendor";
 import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
@@ -410,7 +408,13 @@ export default async function DetailsPage({
   // that is out of date (lib/submit-check.ts). Submit refuses both itself.
   // On a test session on the QA server an out-of-date rating is a note, not
   // a block (lib/submit-check.ts).
-  const { block: submitBlocked, note: submitNote } = submitCheck(sheet);
+  const { block: submitCheckBlock, note: submitNote } = submitCheck(sheet);
+  // The one date line (docs section 24): the CRM sale date is not today at the
+  // store, or the CRM has none. Said once, at the top; Submit points to it.
+  const dateLine = sheet.day?.date_line ?? (sheet.day && !sheet.day.sale_date ? NO_SALE_DATE_LINE : null);
+  const crmUrl = crmRecordUrl(sheet.day?.crm_record_id);
+  const submitBlocked =
+    dateLine && submitCheckBlock === sheet.day?.submit_problem ? SUBMIT_HELD_FOR_DATE : submitCheckBlock;
   // The contract provider by its record's name ("Riders Advantage"), never
   // written in here, so another provider reads correctly (lib/vendor.ts).
   const vendor = vendorName(sheet);
@@ -505,6 +509,22 @@ export default async function DetailsPage({
           </div>
         ) : null}
 
+        {/* ── The sale date, when it blocks something ─────────────────────────
+            The CRM's Sale_Date is the only sale date, changed in the CRM only
+            (docs section 24). One line, with the record to open; the page then
+            checks the CRM on focus and every 30 seconds until it clears. */}
+        {dateLine ? (
+          <div className="console-flash console-flash--bad vdate-line" role="alert">
+            <p>{dateLine}</p>
+            {crmUrl ? (
+              <a className="btn btn--quiet" href={crmUrl} target="_blank" rel="noopener">
+                Open in CRM
+              </a>
+            ) : null}
+            <SaleDateWatch />
+          </div>
+        ) : null}
+
         {/* ── Where this session stands ──────────────────────────────────── */}
         <dl className="vstate">
           <div>
@@ -589,31 +609,8 @@ export default async function DetailsPage({
               <dd>
                 {storeTime(sheet.day.expires_at, sheet.day.time_zone) || "Not set"}
                 <small>
-                  {sheet.day.planned_sale_date
-                    ? `Planned sale date ${dayLabel(sheet.day.planned_sale_date)}.`
-                    : `Today at this store is ${dayLabel(sheet.day.today)}.`}
+                  The end of the sale date in the CRM. Today at this store is {dayLabel(sheet.day.today)}.
                 </small>
-                {/* Preparing the deal the night before: the session stays open to
-                    the end of the planned day. Never sent to a provider. */}
-                <form action={setPlannedSaleDate} className="vplanned" data-working-panel="">
-                  <Working />
-                  <input type="hidden" name="session_id" value={sheet.session.id} />
-                  <label htmlFor="planned_sale_date">Planned sale date</label>
-                  <input
-                    id="planned_sale_date"
-                    type="date"
-                    name="planned_sale_date"
-                    min={sheet.day.today}
-                    defaultValue={sheet.day.planned_sale_date ?? ""}
-                    required
-                  />
-                  <PendingButton pending="Saving the date...">Save date</PendingButton>
-                  {sheet.day.planned_sale_date ? (
-                    <PendingButton formAction={clearPlannedSaleDate} formNoValidate pending="Clearing the date...">
-                      Clear
-                    </PendingButton>
-                  ) : null}
-                </form>
               </dd>
             </div>
           ) : null}
@@ -806,6 +803,13 @@ export default async function DetailsPage({
           <section className="vcontracts" aria-labelledby="vcontracts-title">
             <h2 id="vcontracts-title">Contracts</h2>
             <Dx1Check result={dx1} />
+            {/* A live contract sent with a date other than the CRM sale date.
+                Named only: nothing is changed or voided for it. */}
+            {(sheet.day?.contract_date_lines?.length ?? 0) > 0 ? (
+              <ul className="console-flash console-flash--bad vcontract-dates" role="alert">
+                {sheet.day!.contract_date_lines!.map((l) => <li key={l}>{l}</li>)}
+              </ul>
+            ) : null}
             <ul className="vcontracts-chosen">
               {sheet.contracts_panel.selections.map((c) => (
                 <li key={c.product_name}>
@@ -1023,35 +1027,6 @@ export default async function DetailsPage({
             {sheet.changed_inputs.length === 1 ? "rating input" : "rating inputs"}, so
             this deal needs verifying again and the old rates are out of date.
           </p>
-        ) : null}
-
-        {/* ── A staff sale date the CRM disagrees with ─────────────────────
-            Renew for Today moves a past sale date to today as a staff edit,
-            which Refresh from CRM never overwrites. While the CRM still holds
-            another date, both are shown with a choice, as on the contract
-            panels (supabase/functions/_shared/sale-date.ts). */}
-        {sheet.sale_date_choice ? (
-          <section className="vparty-choices vsale-choice" aria-label="Sale date">
-            <div className="vparty-choice" data-working-panel="">
-              <p>
-                Sale date: staff value <strong>{dayLabel(sheet.sale_date_choice.staff_value)}</strong>, entered
-                by {sheet.sale_date_choice.edited_by}. CRM now says{" "}
-                <strong>{dayLabel(sheet.sale_date_choice.crm_value)}</strong>.
-              </p>
-              <form action={keepStaffSaleDate}>
-                <Working />
-                <input type="hidden" name="session_id" value={sheet.session.id} />
-                <input type="hidden" name="checker_name" value={checker} />
-                <PendingButton pending="Keeping...">Keep staff value</PendingButton>
-              </form>
-              <form action={useCrmSaleDate}>
-                <Working />
-                <input type="hidden" name="session_id" value={sheet.session.id} />
-                <input type="hidden" name="checker_name" value={checker} />
-                <PendingButton pending="Switching...">Use CRM value</PendingButton>
-              </form>
-            </div>
-          </section>
         ) : null}
 
         {/* Put work that blocks verification ahead of the reference sheet. Each

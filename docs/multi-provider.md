@@ -864,7 +864,7 @@ TecAssured adapter, the price-sheet path, the Details sheet and the submit:
 
 | Date | Where it comes from | When it is missing |
 |---|---|---|
-| Sale date | the session (the CRM's Sale_Date, or a staff entry on Details) | No rate and no submit: "Sale date is missing. Add it on the deal and refresh from CRM, or enter it on Verify." (the Edge Function wording, unchanged in the navigation work) |
+| Sale date | the CRM's Sale_Date, the only sale date (section 24) | No rate and no submit: "There is no sale date in the CRM. Add the Sale Date in the CRM." |
 | In-service date | the session's own; for a New unit, the sale date | Used unit: no rate and no submit, with a plain-English message asking for it |
 | rateDate | today | Never missing. It says when we asked, not anything about the deal. |
 
@@ -1005,6 +1005,12 @@ provider answers with an HTTP failure keeps the same with the attempt
 whole.
 
 ## 20. Session dates: the store's day
+
+**Superseded in part by section 24 (2026-10-30).** The CRM sale date is now
+the only sale date. The session is open through 23:59:59 on it, and Renew for
+Today, the planned sale date and the staff sale date are retired. The store's
+time zone, `storeToday` and the month rule below still apply. What follows is
+kept as the record of how it worked before.
 
 A deal is sold on a day, in a store, so a planning session lasts until the end
 of that store's day rather than for a fixed number of hours. Migration 0038.
@@ -1336,3 +1342,89 @@ same price and term as its contract, and remove any product whose contract was
 voided. Then press Update F-I Products on the DocuRide record and check
 again." Nothing is shown when there is nothing to check. The check never holds the page: it
 answers within 4.5 seconds, and a failure shows nothing.
+
+## 24. The CRM sale date is the only sale date
+
+Deal 13759 showed the problem (30 Oct 2026). It had a CRM sale date of 26 Sep,
+a staff-edited sale date of 28 Oct, a blank planned sale date, open until
+28 Oct, the store's today 30 Oct, and a rating dated 26 Oct. Its contracts
+printed a Vehicle Purchase Date different from their Agreement Purchase Date.
+Too many dates, each with its own rule. Now there is one. Migration 0044,
+PRs 75 to 79.
+
+**One sale date.** The CRM DocuRide record's `Sale_Date`. Staff change it in
+the CRM only; PS never writes it and never edits it. `fni.sessions.sale_date`
+is the last value PS read, kept only to notice changes.
+
+**Retired.** These are gone:
+- the staff sale date edit (no longer an edit target; migration 0044 removed
+  each one with the event "Staff sale date retired: the CRM sale date is
+  used", signed System)
+- the planned sale date with Save date and Clear (the column stays, unused)
+- Renew for Today (its SQL functions stay, unused)
+- Keep staff value / Use CRM value for the sale date, and its row in the
+  "values differ from the CRM" table
+
+Old callers of those actions get a 410 with a plain reason.
+
+**Derived from the CRM sale date, in the store's time zone:**
+
+| What | Rule |
+|---|---|
+| Open until | 23:59:59 on the sale date (`fni.sessions_set_expiry`, on insert and whenever `sale_date` changes); the end of today with no sale date |
+| Submit | only when the sale date is today at the store; the in-service date cannot be later |
+| Rating current | while the sale date stays in the month it was rated for, with no Published price sheet starting or ending in between (`saleDateMoveNeedsRerate`, unchanged) |
+
+**Read fresh from the CRM** (`_shared/crm-sale-date.ts`):
+- by zoho-sync on every CRM edit
+- when Details loads, and on Refresh from CRM or a relaunch
+- before every rating and Rate again
+- immediately before Submit, which sends nothing if the CRM cannot be read
+  within 5 seconds
+
+A changed value goes through `fni.record_crm_sale_date`. That function:
+- writes only over the value the caller read
+- adds the event "Sale date changed in the CRM from <old> to <new>", signed
+  System
+- applies the month rule: a move into another month marks the offers out of
+  date and sends a verified deal back to Needs Verification
+- moves a New unit's in-service date with it
+
+**On Details:**
+- **One date line, at the top, whenever the date blocks something.** For
+  example: "The sale date in the CRM is 26 Sep 2026. Contracts can only be
+  submitted on the sale date, and today is 30 Oct 2026 at this store. Change
+  the Sale Date in the CRM."
+- **Open in CRM** sits beside the line and opens the record in a new tab
+  (`lib/crm-link.ts`).
+- **It clears on its own.** While the line shows, the page checks again when
+  the tab regains focus and every 30 seconds (`components/SaleDateWatch.tsx`).
+  Refresh from CRM stays as a fallback.
+- **Submit's own note** says "Submit opens on the sale date. See the sale date
+  above."
+- **No other date warnings.**
+- **Live contracts sent with another date** are named in the Contracts panel:
+  "Battery Protection (contract ...) is dated 28 Oct 2026, but the sale date in
+  the CRM is 26 Sep 2026. Void it and submit again on the sale date." Nothing
+  is changed or voided automatically. Each contract records the date it was
+  sent with (`agreement_products.contract_sale_date`). Contracts from before
+  0044 took the day they were submitted at the store.
+
+**Rating with live contracts.** Rating, Rate again and Confirm and Continue
+work while contracts are live, and a Finalized session rates while it has
+one. Purchased products are never moved or marked, and the session keeps its
+status while any contract is live (`_shared/purchased.ts`). Open presentation
+and Present menu need verified, rated and current; live contracts are
+allowed.
+
+**Dates sent to TecAssured** (`_shared/deal-dates.ts`):
+- **The sale date:** `saleDate`, `vehiclePurchaseDate` and `sale.date` in the
+  rate request. At submit, `quote.saleDate`, the form's `sale.date`, each
+  vehicle's `effectiveDate` (TecAssured's stamp of the rating moment, time of
+  day kept) and its `sale.date`, `api-sale.date` and `vehicle.purchasedate`
+  attributes.
+- **The in-service date:** the sale date for a New unit, the entered one for a
+  Used unit. Sent as `inServiceDate` and `inservice.date` / `api-inservice.date`.
+- **Left as they are:** `rateDate` (when the rate tables were asked for) and
+  each rate's `expireDate` (when the offer lapses). Neither is a deal date.
+

@@ -78,38 +78,6 @@ export async function signOut(): Promise<void> {
   redirect(SESSIONS);
 }
 
-/**
- * Renew for Today: the session lasts to 23:59:59 on its store's day, or on its
- * planned sale date when that is later. It never adds hours, so a second press
- * changes nothing (+24h stacked: deal 13437 gained 48 hours).
- *
- * A sale date or planned sale date before today moves to today first, recorded
- * against the signed-in person's initials, the ones their admin avatar shows.
- * Never the Checked by name: that is a label typed on Details, not who is
- * signed in (supabase/functions/_shared/sale-date.ts).
- */
-export async function renewSession(formData: FormData): Promise<void> {
-  // Checked here and not only on the page: a Server Action is a POST endpoint
-  // like any other, and the page having rendered the button is not evidence
-  // that whoever called it was allowed to.
-  const operator = await currentOperator();
-  if (!operator) redirect(SESSIONS);
-
-  const sessionId = String(formData.get("session_id") ?? "");
-  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
-
-  try {
-    await edge.adminRenew<{ expires_at: string }>(sessionId, initialsFor(operator.email));
-  } catch (err) {
-    console.error(`console renew failed for ${sessionId}:`, err);
-    redirect(withNotice(SESSIONS, "renewfailed"));
-  }
-
-  // The list is the feedback: the row's expiry moves and the Expired mark
-  // clears. Nothing else needs to be said.
-  revalidatePath(SESSIONS);
-  redirect(SESSIONS);
-}
 
 
 /**
@@ -453,20 +421,6 @@ export async function refreshFromCrm(formData: FormData): Promise<void> {
   await verifyAction(formData, (session_id) => ({ session_id, action: "refresh" }), "refreshed");
 }
 
-/**
- * Set the day this deal is planned to be sold, to prepare it the night before.
- * The session then stays open to the end of that day at its store. It is never
- * sent to a provider, and at submit it must be the sale date.
- */
-export async function setPlannedSaleDate(formData: FormData): Promise<void> {
-  const value = String(formData.get("planned_sale_date") ?? "").trim();
-  await verifyAction(
-    formData,
-    (session_id) => ({ session_id, action: "planned_sale_date", value }),
-    value === "" ? "plannedcleared" : "planned"
-  );
-}
-
 // ── Who goes on the contracts ─────────────────────────────────────────────
 //
 // The buyer, co-buyer and lienholder panels on Details. Signed-in operators
@@ -517,26 +471,6 @@ export async function useCrmValue(formData: FormData): Promise<void> {
 }
 
 /**
- * The CRM holds a different sale date from the staff one: keep the staff date,
- * or drop it and use the CRM's. Named like a sheet edit, by Checked by.
- */
-async function saleDateChoice(formData: FormData, action: string, onOk: string): Promise<void> {
-  const sessionId = String(formData.get("session_id") ?? "");
-  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
-  const who = await checkerFor(formData);
-  if (who === "") return backToVerify(sessionId, "needname");
-  await verifyAction(formData, (session_id) => ({ session_id, action, edited_by: who }), onOk);
-}
-
-export async function keepStaffSaleDate(formData: FormData): Promise<void> {
-  await saleDateChoice(formData, "sale_date_keep_staff", "saledatekept");
-}
-
-export async function useCrmSaleDate(formData: FormData): Promise<void> {
-  await saleDateChoice(formData, "sale_date_use_crm", "saledatecrm");
-}
-
-/**
  * The coverage level each conventional menu column starts at on this deal,
  * set by a manager before presenting. A level the same as the template's is
  * not kept, so the template still decides it.
@@ -548,11 +482,6 @@ export async function saveMenuLevels(formData: FormData): Promise<void> {
       .map((n) => [String(n), String(formData.get(`level_${n}`) ?? "")])
   );
   await verifyAction(formData, (session_id) => ({ session_id, action: "menu_levels", levels }), "menulevels");
-}
-
-/** Clear the planned sale date: the session stays open to the end of today. */
-export async function clearPlannedSaleDate(formData: FormData): Promise<void> {
-  await verifyAction(formData, (session_id) => ({ session_id, action: "planned_sale_date", value: "" }), "plannedcleared");
 }
 
 /**

@@ -145,17 +145,6 @@ export const edge = {
       query: { limit: String(limit) },
     }),
 
-  /**
-   * Renew for Today: past sale and planned sale dates move to today, then the
-   * session lasts to the end of its store's day. `renewedBy` is the signed-in
-   * person's initials; without it the moves are recorded as System.
-   */
-  adminRenew: <T>(sessionId: string, renewedBy?: string) =>
-    call<T>("fni-admin-sessions", {
-      method: "POST",
-      body: renewedBy ? { session_id: sessionId, renewed_by: renewedBy } : { session_id: sessionId },
-    }),
-
   // Staff re-rating a session by hand, after fixing whatever stopped it. The
   // planner only ever rates from "Pending", so this is the one way to ask again.
   adminRate: <T>(sessionId: string) =>
