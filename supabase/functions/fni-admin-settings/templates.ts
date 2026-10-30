@@ -33,6 +33,7 @@ import { columnsFor, parseColumns } from "../_shared/menu-columns.ts";
 import type { Reply } from "./providers.ts";
 import { CATEGORIES, DEAL_TYPES, parsePresets, presetLine, type Preset } from "../_shared/menu-presets.ts";
 import { isManager, logChanges, MANAGERS_ONLY, recentChanges, type Change } from "./managers.ts";
+import { parseTerms, rateText } from "../_shared/menu-terms.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -110,6 +111,11 @@ export async function readTemplates(supabase: SupabaseClient, tenantId: string, 
     : { data: [], error: null };
   if (colErr) throw new Error(`Failed to read the menu columns: ${colErr.message}`);
 
+  const { data: termRows, error: tErr } = ids.length
+    ? await supabase.schema("fni").from("menu_preset_terms").select("template_id, column_position, slot, term_months, rate_percent").in("template_id", ids)
+    : { data: [], error: null };
+  if (tErr) throw new Error(`Failed to read the menu payment terms: ${tErr.message}`);
+
   const { data: presetRows, error: pErr } = ids.length
     ? await supabase.schema("fni").from("menu_presets").select(PRESET_COLUMNS).in("template_id", ids)
     : { data: [], error: null };
@@ -142,6 +148,10 @@ export async function readTemplates(supabase: SupabaseClient, tenantId: string, 
         conditions_line: conditionsLine(t as never, storeName),
         slots: ((slots ?? []) as { template_id: string }[]).filter((s) => s.template_id === t.id),
         presets: ((presetRows ?? []) as (Preset & { template_id: string })[]).filter((p) => p.template_id === t.id),
+        // Extra payment terms per column, Financed deals only (migration 0046).
+        preset_terms: ((termRows ?? []) as { template_id: string; column_position: number; slot: number; term_months: number | null; rate_percent: number | string | null }[])
+          .filter((r) => r.template_id === t.id && r.term_months !== null && r.rate_percent !== null)
+          .map((r) => ({ column_position: r.column_position, slot: r.slot, months: r.term_months!, rate: Number(r.rate_percent) })),
         menu_columns: columnsFor(
           ((columnRows ?? []) as {
             template_id: string; position: number; name: string; preset_categories: string[] | null; starting_level: string | null;
@@ -315,6 +325,27 @@ export async function writeTemplates(
       const parsed = parsePresets((body.presets ?? {}) as Record<string, unknown>, columns.length, names);
       if ("errors" in parsed) return { status: 400, body: { error: parsed.errors.join(" ") } };
 
+      // Payment terms: Financed only, up to two extra per column, each with a rate
+      // (_shared/menu-terms.ts). Cash deals show a total and no payments.
+      const termForm = (body.terms ?? {}) as Record<string, unknown>;
+      const wantTerms: { column_position: number; slot: number; term_months: number | null; rate_percent: number | null }[] = [];
+      if (dealType === "Financed") {
+        const termErrors: string[] = [];
+        for (let pos = 1; pos <= columns.length; pos++) {
+          const got = parseTerms(
+            [1, 2].map((slot) => ({ months: termForm[`t_${pos}_${slot}_months`], rate: termForm[`t_${pos}_${slot}_rate`] })),
+            columns[pos - 1].name
+          );
+          if ("errors" in got) termErrors.push(...got.errors);
+          else [1, 2].forEach((slot) => wantTerms.push({
+            column_position: pos, slot,
+            term_months: got.terms[slot - 1]?.months ?? null,
+            rate_percent: got.terms[slot - 1]?.rate ?? null,
+          }));
+        }
+        if (termErrors.length > 0) return { status: 400, body: { error: termErrors.join(" ") } };
+      }
+
       const { data: beforeRows, error: bErr } = await supabase
         .schema("fni").from("menu_presets").select(PRESET_COLUMNS).eq("template_id", templateId).eq("deal_type", dealType);
       if (bErr) return { status: 500, body: { error: bErr.message } };
@@ -342,6 +373,35 @@ export async function writeTemplates(
       for (const r of removed) {
         changes.push({ area: "Menu preset", record_key: recordKey(r), action: "Removed", before: record(r), after: null });
       }
+      // Terms that changed, logged under the presets' area with their own key.
+      const { data: termRows, error: tErr } = dealType === "Financed"
+        ? await supabase.schema("fni").from("menu_preset_terms").select("column_position, slot, term_months, rate_percent").eq("template_id", templateId)
+        : { data: [], error: null };
+      if (tErr) return { status: 500, body: { error: tErr.message } };
+      const termBefore = (termRows ?? []) as { column_position: number; slot: number; term_months: number | null; rate_percent: number | string | null }[];
+      const termUpserts = wantTerms.filter((w) => {
+        const was = termBefore.find((b) => b.column_position === w.column_position && b.slot === w.slot);
+        const wasMonths = was?.term_months ?? null;
+        const wasRate = was?.rate_percent === null || was?.rate_percent === undefined ? null : Number(was.rate_percent);
+        return wasMonths !== w.term_months || wasRate !== w.rate_percent;
+      });
+      for (const w of termUpserts) {
+        const was = termBefore.find((b) => b.column_position === w.column_position && b.slot === w.slot) ?? null;
+        const line = (t: { term_months: number | null; rate_percent: number | string | null } | null) =>
+          t && t.term_months !== null && t.rate_percent !== null
+            ? `${colName(w.column_position)}, extra term ${w.slot}: ${t.term_months} months at ${rateText(Number(t.rate_percent))}`
+            : null;
+        const before = was && line(was) ? { line: line(was) } : null;
+        const after = line(w) ? { line: line(w) } : null;
+        changes.push({
+          area: "Menu preset",
+          record_key: `terms|${templateId}|${w.column_position}|${w.slot}`,
+          action: before === null ? "Created" : after === null ? "Removed" : "Changed",
+          before,
+          after,
+        });
+      }
+
       if (changes.length === 0) return { status: 200, body: { ok: true, changed: 0 } };
 
       // The record first: a change that cannot be logged is not made.
@@ -361,6 +421,13 @@ export async function writeTemplates(
         const { error } = await supabase.schema("fni").from("menu_presets")
           .update({ plan_name: null, term_months: null, term_miles: null, deductible: null, disappearing_deductible: null, updated_at: now, updated_by: by })
           .eq("template_id", templateId).eq("deal_type", dealType).eq("column_position", r.column_position).eq("category", r.category);
+        if (error) return { status: 500, body: { error: error.message } };
+      }
+      if (termUpserts.length > 0) {
+        const { error } = await supabase.schema("fni").from("menu_preset_terms").upsert(
+          termUpserts.map((w) => ({ ...w, template_id: templateId, updated_at: now, updated_by: by })),
+          { onConflict: "template_id,column_position,slot" }
+        );
         if (error) return { status: 500, body: { error: error.message } };
       }
       await touch(templateId);

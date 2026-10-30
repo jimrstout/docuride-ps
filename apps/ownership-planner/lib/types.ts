@@ -635,6 +635,8 @@ export interface TemplateRow {
   menu_columns: { columns: MenuColumnRow[]; is_default: boolean };
   /** Presets per Financed or Cash, column and category (migration 0045). */
   presets?: MenuPresetRow[];
+  /** Extra payment terms per column, Financed only (migration 0046). */
+  preset_terms?: { column_position: number; slot: number; months: number; rate: number }[];
 }
 
 /** One menu preset (supabase/functions/_shared/menu-presets.ts). */

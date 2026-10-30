@@ -151,7 +151,7 @@ test("managers only, every change logged first, nothing deleted", () => {
   assert.match(page, /\{canEdit && !editing \? \(/);
   assert.match(page, /edge\.adminTemplates<TemplatesPayload>\(operator\.sub\)/);
   const actions = read("apps/ownership-planner/app/console-actions.ts");
-  assert.match(actions, /action: "save_presets", template_id: templateId, deal_type: dealType, presets, updated_by: by, operator_id: operatorId,/);
+  assert.match(actions, /action: "save_presets", template_id: templateId, deal_type: dealType, presets, terms, updated_by: by, operator_id: operatorId,/);
 });
 
 test("the pricing band reads in plain English, and the rule keeps it", async () => {
