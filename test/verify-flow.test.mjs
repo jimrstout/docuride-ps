@@ -178,8 +178,9 @@ test("Open presentation opens the plan in a new tab, with no handle back", () =>
   assert.match(link, /target="_blank"/);
   assert.match(link, /rel="noopener"/);
   assert.match(link, /Open presentation/);
-  // Shown only once verified and current, and the planner still opens at step 1.
-  assert.match(page, /presentable = verified && !sheet\.rating\.out_of_date/);
+  // Shown only once verified, rated and current (2026-10-30), and the planner
+  // still opens at step 1.
+  assert.match(page, /presentable = verified && sheet\.rating\.state === "Rated" && !sheet\.rating\.out_of_date/);
   assert.match(page, /\{presentable \? \(\s*<div className="vgate-open">/);
   const planner = src("../apps/ownership-planner/app/plan/[sessionId]/Planner.tsx");
   assert.match(planner, /const \[at, setAt\] = useState\(0\)/);

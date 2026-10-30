@@ -32,6 +32,7 @@ import { menuFor, ratingDeal } from "../_shared/rate-session.ts";
 import { priceSheetRequiredInputs } from "../_shared/adapters/price-sheet.ts";
 import { publishedSheetDates, publishedSheetFor } from "../_shared/price-sheet-rows.ts";
 import { PROVIDER_ANSWER_EVENT, providerAnswerText, type ProviderAnswer } from "../_shared/provider-answer.ts";
+import { columnsFor, isLevel } from "../_shared/menu-columns.ts";
 import {
   HELD_MESSAGE,
   isRatedAgainEvent,
@@ -172,6 +173,9 @@ const COLUMNS = [
   "rated_provider_ids",
   // The menu template rating matched, for the hidden-slot notes. Part 7.
   "menu_template_id",
+  // The coverage level a manager set for each conventional menu column on
+  // this deal. Migration 0042.
+  "menu_column_levels",
 ].join(",");
 
 async function loadSession(
@@ -665,6 +669,8 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>) {
     },
     // Selections Rate again could not keep, with what changed (_shared/spent-rates.ts).
     rating_differences: differences,
+    // The conventional menu's columns for this deal, and each one's coverage level.
+    menu_columns: await menuColumnsFor(supabase, s),
     // The template the deal matches now. Rating records it on the session.
     menu_template: menu.template ? { name: menu.template.name } : null,
     // Slots hidden from the customer on this deal, with the reason for staff.
@@ -1190,6 +1196,56 @@ async function setPlannedSaleDate(
   return json(200, await sheetFor(supabase, fresh));
 }
 
+// ── The conventional menu's columns for this deal ─────────────────────────
+//
+// The menu template's columns (or the default layout), each with the coverage
+// level its products start at: the template's, unless a manager set one for
+// this deal (sessions.menu_column_levels, by column position).
+
+async function menuColumnsFor(supabase: SupabaseClient, s: Record<string, unknown>) {
+  const templateId = typeof s.menu_template_id === "string" ? s.menu_template_id : null;
+  const { data } = templateId
+    ? await supabase
+        .schema("fni")
+        .from("menu_template_columns")
+        .select("position, name, preset_categories, starting_level")
+        .eq("template_id", templateId)
+    : { data: [] };
+  const deal = (s.menu_column_levels ?? {}) as Record<string, unknown>;
+  return columnsFor(
+    (data ?? []) as { position: number; name: string; preset_categories: string[] | null; starting_level: string | null }[]
+  ).columns.map((c, i) => {
+    const own = deal[String(i + 1)];
+    return { position: i + 1, name: c.name, template_level: c.starting_level, level: isLevel(own) ? own : c.starting_level };
+  });
+}
+
+/** A manager's coverage level for each column on this deal. Only the ones that differ are kept. */
+async function setMenuLevels(
+  supabase: SupabaseClient,
+  s: Record<string, unknown>,
+  raw: unknown
+): Promise<Response> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return json(400, { error: "The coverage levels are missing." });
+  const columns = await menuColumnsFor(supabase, s);
+  const levels: Record<string, string> = {};
+  for (const c of columns) {
+    const v = (raw as Record<string, unknown>)[String(c.position)];
+    if (v === undefined || v === "") continue;
+    if (!isLevel(v)) return json(400, { error: `${c.name}'s coverage level must be Lowest, Middle or Highest.` });
+    if (v !== c.template_level) levels[String(c.position)] = v;
+  }
+  const { error } = await supabase
+    .schema("fni")
+    .from("sessions")
+    .update({ menu_column_levels: Object.keys(levels).length > 0 ? levels : null })
+    .eq("id", s.id as string);
+  if (error) return json(500, { error: error.message });
+  console.log(`fni-session-verify menu_levels ${s.id}: ${Object.keys(levels).length} set for this deal`);
+  const fresh = (await loadSession(supabase, s.id as string))!;
+  return json(200, await sheetFor(supabase, fresh));
+}
+
 // ── refresh: re-pull the deal from the CRM ────────────────────────────────
 
 async function refresh(
@@ -1426,6 +1482,7 @@ serve(async (req: Request) => {
       return await saleDateAction(supabase, s, action, who);
     }
     if (action === "discard_edits") return await discardEdits(supabase, s);
+    if (action === "menu_levels") return await setMenuLevels(supabase, s, body.levels);
 
     if (action === "verify") {
       const who = typeof body.verified_by === "string" ? body.verified_by.trim() : "";

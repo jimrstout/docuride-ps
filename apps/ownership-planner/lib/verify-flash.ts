@@ -136,6 +136,8 @@ export function flashMessage(
       };
     case "rateagainfailed":
       return { tone: "bad", text: flash.detail ?? "The deal could not be rated again." };
+    case "menulevels":
+      return { tone: "ok", text: "Saved. The menu opens with these coverage levels on this deal." };
     case "submitready":
       return { tone: "ok", text: "Review the products, then press Confirm Submit." };
     case "spentrefreshed":

@@ -29,9 +29,14 @@ export function isSessionMode(v: unknown): v is SessionMode {
  * document somebody signs, so all three modes name themselves.
  *
  * An unset mode reads as self-guided: a session nobody marked is one nobody
- * was driving.
+ * was driving. When a staff member was signed in when the choices were
+ * recorded (sessions.presented_by_name), they are named instead:
+ * "Presented by <name>, dealership staff".
  */
-export function modeLabel(mode: string | null | undefined): string {
+export function modeLabel(mode: string | null | undefined, presentedBy?: string | null): string {
+  // A signed-in staff member is named (2026-10-30).
+  const who = typeof presentedBy === "string" ? presentedBy.trim() : "";
+  if (who !== "") return `Presented by ${who}, dealership staff`;
   switch (mode) {
     case "Staff-Presented":
       return "Presented by dealership staff";

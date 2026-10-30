@@ -60,6 +60,7 @@ import {
   keepStaffSaleDate,
   useCrmSaleDate,
   rateAgain,
+  saveMenuLevels,
 } from "@/app/console-actions";
 import { rateAgainAvailable } from "@/lib/rate-again";
 import { submitCheck } from "@/lib/submit-check";
@@ -400,9 +401,11 @@ export default async function DetailsPage({
   // The contract provider by its record's name ("Riders Advantage"), never
   // written in here, so another provider reads correctly (lib/vendor.ts).
   const vendor = vendorName(sheet);
-  // Verified, and nothing a rate depends on has moved since. Only then is there
-  // a presentation to open.
-  const presentable = verified && !sheet.rating.out_of_date;
+  // Verified, rated, and nothing a rate depends on has moved since. Only then
+  // is there a presentation to open, the planner or the menu. A live contract
+  // does not block it: products are added after a contract, and the purchased
+  // ones show locked (lib/purchased.ts).
+  const presentable = verified && sheet.rating.state === "Rated" && !sheet.rating.out_of_date;
   const byGroup = (g: FieldGroup) => sheet.fields.filter((f) => f.group === g);
   const attention = sheet.fields.filter((f) => f.missing || f.invalid);
 
@@ -1284,13 +1287,48 @@ export default async function DetailsPage({
               >
                 Open presentation
               </a>
+              {/* The conventional menu: the same rules, its own customer tab,
+                  straight into the package columns (docs section 22). */}
+              <a
+                className="btn btn--go"
+                href={`/menu/${sessionId}`}
+                target="_blank"
+                rel="noopener"
+              >
+                Present menu
+              </a>
               <p className="vfield-note">
-                Opens in its own tab. Close that tab when you are done. This screen
+                Each opens in its own tab. Close that tab when you are done. This screen
                 stays open for changes.
               </p>
             </div>
           ) : null}
         </form>
+
+        {/* ── The menu's coverage levels for this deal ─────────────────────
+            Before presenting, a manager can start any column at a different
+            level of each product (Lowest, Middle or Highest) on this deal.
+            The template's level is the default (docs section 22). */}
+        {presentable && operator && (sheet.menu_columns?.length ?? 0) > 0 ? (
+          <form action={saveMenuLevels} className="vmenu-levels" data-working-panel="">
+            <Working />
+            <input type="hidden" name="session_id" value={sessionId} />
+            <p className="vmenu-levels-head">Menu coverage levels for this deal</p>
+            <div className="vmenu-levels-cols">
+              {sheet.menu_columns!.map((c) => (
+                <label key={c.position} className="vmenu-level">
+                  <span>{c.name}</span>
+                  <select name={`level_${c.position}`} defaultValue={c.level}>
+                    {["Lowest", "Middle", "Highest"].map((l) => (
+                      <option key={l} value={l}>{l}{l === c.template_level ? " (menu's own)" : ""}</option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+            <PendingButton pending="Saving the levels...">Save levels</PendingButton>
+          </form>
+        ) : null}
       </main>
     </div>
     </WorkingArea>

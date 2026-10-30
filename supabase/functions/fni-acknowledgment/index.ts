@@ -150,6 +150,7 @@ serve(async (req: Request) => {
         vehicle: [s.unit_year, s.unit_make, s.unit_model].filter(Boolean).join(" "),
         vin: (s.vin as string) ?? null,
         mode: (s.mode as string) ?? null,
+        presented_by_name: (s.presented_by_name as string) ?? null,
         // Handed over raw. The renderer resolves which tier this deal falls
         // into with the same function the planner screen uses, so the signed
         // document and the screen cannot disagree -- including about whether
