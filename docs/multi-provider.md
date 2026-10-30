@@ -1333,6 +1333,6 @@ added only when it changes.
 "fix these before generating documents", then the wording warnings, then once:
 "To fix: in DX1, make sure each F&I product is entered on this deal with the
 same price and term as its contract, and remove any product whose contract was
-voided. Then run the F&I Update in DocuRide and check again." Nothing is shown
-when there is nothing to check. The check never holds the page: it
+voided. Then press Update F-I Products on the DocuRide record and check
+again." Nothing is shown when there is nothing to check. The check never holds the page: it
 answers within 4.5 seconds, and a failure shows nothing.
