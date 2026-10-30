@@ -66,6 +66,13 @@ import type { PricingRule } from "../_shared/planner-pricing.ts";
 import { renewedBy } from "../_shared/sale-date.ts";
 import { freshSaleDate, type SaleDateSession } from "../_shared/crm-sale-date.ts";
 import {
+  notPurchased,
+  purchasedKeys,
+  ratingRefused,
+  statusAfterRatingWithContracts,
+  type DealContract,
+} from "../_shared/purchased.ts";
+import {
   compareRefreshed,
   REFRESHED_HELD_EVENT,
   REFRESHED_UNCHANGED_EVENT,
@@ -128,6 +135,20 @@ interface SessionRow {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
+
+/** The products the deal's live contracts hold (_shared/purchased.ts). */
+async function purchasedFor(supabase: SupabaseClient, sessionId: string): Promise<Set<string>> {
+  const { data: agreements } = await supabase.schema("fni").from("agreements").select("id").eq("session_id", sessionId);
+  const ids = ((agreements ?? []) as { id: string }[]).map((a) => a.id);
+  if (ids.length === 0) return new Set();
+  const { data, error } = await supabase
+    .schema("fni")
+    .from("agreement_products")
+    .select("provider_id, provider_product_id, status")
+    .in("agreement_id", ids);
+  if (error) throw new Error(`The deal's contracts could not be read: ${error.message}`);
+  return purchasedKeys((data ?? []) as DealContract[]);
+}
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -211,8 +232,11 @@ serve(async (req: Request) => {
     }
     providerId = await tecAssuredProviderId(supabase, sess.tenant_id);
 
-    const terminalStatuses = ["Finalized", "Written Back", "Cancelled"];
-    if (terminalStatuses.includes(sess.status)) {
+    // A finished session rates while it has a live contract: products can be
+    // added after a contract (_shared/purchased.ts). Rating never touches a
+    // purchased product.
+    const purchased = await purchasedFor(supabase, sess.id);
+    if (ratingRefused(sess.status, purchased)) {
       return json(400, { error: `Session is ${sess.status} and cannot be re-rated` });
     }
 
@@ -264,7 +288,7 @@ serve(async (req: Request) => {
     }
 
     if (body.rate_again === true) {
-      return await rateAgain(supabase, sess, rateSource, body.rated_by);
+      return await rateAgain(supabase, sess, rateSource, body.rated_by, purchased);
     }
 
     if (body.refresh_spent === true) {
@@ -315,10 +339,16 @@ serve(async (req: Request) => {
       )
     );
     const keptProviders = new Set(kept.filter((o) => o.kept!.current).map((o) => o.provider.id));
-    const nextStatus = statusAfterRating(
+    // Only the choices not yet submitted decide; with a live contract the
+    // status stays, so the contracts panel and Submit stay where they are.
+    const nextStatus = statusAfterRatingWithContracts(
       String(sess.status),
-      productCount,
-      choicesStillOffered((chosenRows ?? []) as ChosenRate[], offeredRates, keptProviders)
+      statusAfterRating(
+        String(sess.status),
+        productCount,
+        choicesStillOffered(notPurchased((chosenRows ?? []) as ChosenRate[], purchased), offeredRates, keptProviders)
+      ),
+      purchased
     );
     const ta = outcomes.find((o) => o.tecassured);
 
@@ -568,7 +598,8 @@ async function rateAgain(
   supabase: SupabaseClient,
   sess: SessionRow,
   rateSource: Record<string, unknown>,
-  by: unknown
+  by: unknown,
+  purchased: Set<string>
 ): Promise<Response> {
   const who = renewedBy(by);
   const event = ratedAgainEvent(who);
@@ -584,14 +615,6 @@ async function rateAgain(
   if (submitState !== "Idle") {
     return json(409, { session_id: sess.id, outcome: "refused", error: "A submit is running or its outcome is not known, so the deal cannot be rated again now." });
   }
-  const { data: agreements } = await supabase.schema("fni").from("agreements").select("id").eq("session_id", sess.id);
-  const agreementIds = ((agreements ?? []) as { id: string }[]).map((a) => a.id);
-  const { data: contractRows } = agreementIds.length > 0
-    ? await supabase.schema("fni").from("agreement_products").select("status").in("agreement_id", agreementIds)
-    : { data: [] };
-  if (((contractRows ?? []) as { status: string }[]).some((c) => c.status === "Live" || c.status === "Submit Status Unknown")) {
-    return json(409, { session_id: sess.id, outcome: "refused", error: "A contract on this deal is live, so it cannot be rated again. Void it first." });
-  }
 
   const { data: chosen, error: chosenErr } = await supabase
     .schema("fni")
@@ -601,7 +624,12 @@ async function rateAgain(
     .eq("disposition", "Included")
     .eq("providers.contract_method", "Through API");
   if (chosenErr) return json(500, { error: `The customer's choices could not be read: ${chosenErr.message}` });
-  const selections = (chosen ?? []) as unknown as (SpentSelection & { id: string })[];
+  // A purchased product is never moved onto the fresh rating or marked: its
+  // contract stands as written (_shared/purchased.ts).
+  const selections = notPurchased(
+    (chosen ?? []) as unknown as (SpentSelection & { id: string; provider_id: string | null; provider_product_id: string | null })[],
+    purchased
+  );
 
   // The quote the selections were made from, read before it is replaced.
   const beforeRows = await offerRowsFor(supabase, sess.id);
@@ -627,8 +655,8 @@ async function rateAgain(
     .schema("fni")
     .from("sessions")
     .update({
-      // With selections, the status stays: the customer's choices stand.
-      ...(selections.length === 0 ? { status: statusAfterRating(String(sess.status), productCount, true) } : {}),
+      // With selections, or a live contract, the status stays: the customer's choices stand.
+      ...(selections.length === 0 && purchased.size === 0 ? { status: statusAfterRating(String(sess.status), productCount, true) } : {}),
       menu_template_id: template?.id ?? null,
       rated_provider_ids: outcomes.map((o) => o.provider.id),
       ...(taAnswered ? { credential_id: ta.tecassured!.credentialId, dealer_code_used: ta.tecassured!.dealer_code } : {}),

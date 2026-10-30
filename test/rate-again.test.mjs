@@ -40,26 +40,50 @@ const sel = (code, name, rateId, price) => ({
 });
 
 test("offered when signed in, not when signed out", () => {
-  assert.equal(rateAgainAvailable({ signedIn: true, submitState: "Idle", liveContracts: 0 }), true);
-  assert.equal(rateAgainAvailable({ signedIn: false, submitState: "Idle", liveContracts: 0 }), false);
-  // Whatever the rating says: nothing about the rating is an input.
-  assert.match(read(PAGE), /rateAgainAvailable\(\{\s*signedIn: !!operator,\s*submitState: sheet\.submit_state,\s*liveContracts: sheet\.contracts\.length,\s*\}\) \? \(/);
+  assert.equal(rateAgainAvailable({ signedIn: true, submitState: "Idle" }), true);
+  assert.equal(rateAgainAvailable({ signedIn: false, submitState: "Idle" }), false);
+  // Whatever the rating says, and whatever contracts are live: neither is an input.
+  assert.match(read(PAGE), /rateAgainAvailable\(\{ signedIn: !!operator, submitState: sheet\.submit_state \}\) \? \(/);
   // The action needs a signed-in person too.
   const actions = read("apps/ownership-planner/app/console-actions.ts");
   const action = actions.slice(actions.indexOf("export async function rateAgain("));
   assert.match(action, /const operator = await currentOperator\(\);\s*if \(!operator\) redirect\(SESSIONS\);/);
 });
 
-test("not offered while a submit is running or a contract is live", () => {
+test("not offered while a submit is running; a live contract does not stop it", () => {
   for (const submitState of ["In Progress", "Submit Status Unknown"]) {
-    assert.equal(rateAgainAvailable({ signedIn: true, submitState, liveContracts: 0 }), false, submitState);
+    assert.equal(rateAgainAvailable({ signedIn: true, submitState }), false, submitState);
   }
-  assert.equal(rateAgainAvailable({ signedIn: true, submitState: "Idle", liveContracts: 1 }), false);
-  // The Edge Function refuses both itself, before rating.
+  // The Edge Function refuses a running submit itself, before rating, and
+  // no longer refuses a live contract.
   const fn = rateAgainFn();
   const rates = fn.indexOf("await rateSession(");
   assert.ok(fn.indexOf('if (submitState !== "Idle")') < rates);
-  assert.ok(fn.indexOf('c.status === "Live" || c.status === "Submit Status Unknown"') < rates);
+  assert.doesNotMatch(fn, /cannot be rated again\. Void it first\./);
+  // Purchased products are left out before anything is compared or moved.
+  assert.ok(fn.indexOf("const selections = notPurchased(") < fn.indexOf("compareRefreshed("));
+});
+
+test("rating with live contracts: purchased products are never touched, and the status stays", async () => {
+  const { notPurchased, purchasedKeys, ratingRefused, statusAfterRatingWithContracts } = await import("../supabase/functions/_shared/purchased.ts");
+  const bought = purchasedKeys([
+    { provider_id: "p1", provider_product_id: "BATT", status: "Live" },
+    { provider_id: "p1", provider_product_id: "TIRE", status: "Voided" },
+  ]);
+  assert.deepEqual(notPurchased([sel("BATT", "Sample Battery", "100", 400), sel("TIRE", "Sample Tire", "200", 300)], bought).map((s) => s.provider_product_id), ["TIRE"]);
+  // A rating keeps the status while a contract is live, so the contracts panel stays.
+  assert.equal(statusAfterRatingWithContracts("Finalized", "Rated", bought), "Finalized");
+  assert.equal(statusAfterRatingWithContracts("Products Selected", "Rated", new Set()), "Rated");
+  // A Finalized session rates while it has a live contract; Written Back and Cancelled never.
+  assert.equal(ratingRefused("Finalized", bought), false);
+  assert.equal(ratingRefused("Finalized", new Set()), true);
+  assert.equal(ratingRefused("Written Back", bought), true);
+  assert.equal(ratingRefused("Cancelled", bought), true);
+  assert.equal(ratingRefused("Agreement Created", bought), false);
+  const fn = read("supabase/functions/fni-rate-vehicle/index.ts");
+  assert.match(fn, /const purchased = await purchasedFor\(supabase, sess\.id\);\s*if \(ratingRefused\(sess\.status, purchased\)\) \{/);
+  assert.match(fn, /choicesStillOffered\(notPurchased\(\(chosenRows \?\? \[\]\) as ChosenRate\[\], purchased\), offeredRates, keptProviders\)/);
+  assert.match(fn, /selections\.length === 0 && purchased\.size === 0 \? \{ status: statusAfterRating\(/);
 });
 
 test("selections the fresh offer matches to the cent are kept on the fresh rate", () => {
@@ -70,8 +94,8 @@ test("selections the fresh offer matches to the cent are kept on the fresh rate"
   // Rate again moves each matching one on its own; any other stays where it was.
   const fn = rateAgainFn();
   assert.match(fn, /if \(l\.status !== "unchanged" \|\| l\.from_rate === l\.to_rate\) continue;[\s\S]*?\.update\(\{ rate_unique_id: l\.to_rate, rate_snapshot: l\.snapshot \}\)/);
-  // With selections the status stays, so the contracts panel stays.
-  assert.match(fn, /\.\.\.\(selections\.length === 0 \? \{ status: statusAfterRating\(/);
+  // With selections, or a live contract, the status stays, so the contracts panel stays.
+  assert.match(fn, /\.\.\.\(selections\.length === 0 && purchased\.size === 0 \? \{ status: statusAfterRating\(/);
 });
 
 test("differences are listed on Details as out of date", () => {
@@ -134,6 +158,6 @@ test("every press is recorded as Rated again by the initials, or by System", () 
   const fn = rateAgainFn();
   assert.match(fn, /const who = renewedBy\(by\);\s*const event = ratedAgainEvent\(who\);/);
   assert.match(fn, /\.insert\(\{ session_id: sess\.id, event, detail, created_by: who \}\)/);
-  assert.match(read(RATE), /return await rateAgain\(supabase, sess, rateSource, body\.rated_by\);/);
+  assert.match(read(RATE), /return await rateAgain\(supabase, sess, rateSource, body\.rated_by, purchased\);/);
   assert.match(read("apps/ownership-planner/app/console-actions.ts"), /rate_again: true,[\s\S]*?rated_by: initialsFor\(operator\.email\),/);
 });
