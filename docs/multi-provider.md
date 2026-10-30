@@ -1288,7 +1288,7 @@ ignored.
 
 | status | when |
 |---|---|
-| Nothing to check | no session, or no live contract; both lists empty |
+| Nothing to check | no session, or no live contract and no chosen term to compare; both lists empty |
 | Match | everything agrees; both lists empty |
 | Problems | at least one line |
 
@@ -1342,6 +1342,25 @@ same price and term as its contract, and remove any product whose contract was
 voided. Then press Update F-I Products on the DocuRide record and check
 again." Nothing is shown when there is nothing to check. The check never holds the page: it
 answers within 4.5 seconds, and a failure shows nothing.
+
+**The chosen finance term** (`_shared/finance-term-check.ts`, PRs 90 and 91).
+When the customer chose a package on a term other than the deal's own
+(section 26), the same check compares that term with the record's
+`Term_Months` (integer, exactly) and `Interest_Rate` (percent, at two decimal
+places, so 7.7 and 7.70 are the same). Names confirmed with getFields.
+- Nothing to compare: a cash deal, no package chosen, or a package on the
+  deal's own term.
+- Either differs: one blocking line, "Finance terms: the customer chose 72
+  months at 7.74%, but the CRM shows 60 months at 5.90%. Update the deal in
+  DX1, press Update on this DocuRide record, then generate again."
+- The term or rate cannot be read: the warning "Finance terms could not be
+  checked against the CRM." It never blocks.
+- The term is checked even when the deal has no live contract yet.
+- Details shows the line with the others. The products' fix line shows only
+  when a product line is there. When the CRM catches up, the line and the
+  section 26 note both clear on their own.
+- The response shape, statuses and time limit are unchanged, and the Deluge
+  gate needs no change.
 
 ## 24. The CRM sale date is the only sale date
 
