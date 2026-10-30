@@ -355,6 +355,9 @@ export interface PricingRuleRow {
   markup_max_dollars: number | null;
   round_to: number;
   active: boolean;
+  /** The top of the band staff may price within on a deal (migration 0045). */
+  max_markup_percent?: number | null;
+  max_markup_dollars?: number | null;
   updated_at: string | null;
   updated_by: string | null;
   /** The rule in one plain sentence. */
@@ -372,6 +375,10 @@ export interface PricingPreviewRow {
 
 export interface PricingPayload {
   stores: { id: string; name: string; status: PricingStoreStatus }[];
+  /** Managers change pricing and its band; everyone signed in sees them. */
+  can_edit?: boolean;
+  /** The latest pricing changes, newest first. */
+  changes?: AdminChangeRow[];
   /** How many active rules All stores has. */
   all_stores_active_rules: number;
   scope: { store_id: string | null; name: string };
@@ -621,6 +628,33 @@ export interface TemplateRow {
   slots: TemplateSlotRow[];
   /** The conventional menu's columns, or the default layout (is_default). */
   menu_columns: { columns: MenuColumnRow[]; is_default: boolean };
+  /** Presets per Financed or Cash, column and category (migration 0045). */
+  presets?: MenuPresetRow[];
+}
+
+/** One menu preset (supabase/functions/_shared/menu-presets.ts). */
+export interface MenuPresetRow {
+  deal_type: "Financed" | "Cash";
+  column_position: number;
+  category: string;
+  plan_name: string | null;
+  term_months: number | null;
+  term_miles: number | null;
+  deductible: number | string | null;
+  disappearing_deductible: boolean | null;
+  updated_at: string;
+  updated_by: string;
+}
+
+/** One logged change in Administration (fni.admin_change_log). */
+export interface AdminChangeRow {
+  record_key?: string;
+  action: string;
+  before?: unknown;
+  after?: unknown;
+  changed_by: string;
+  changed_at: string;
+  summary?: string | null;
 }
 
 /** A conventional menu column (supabase/functions/_shared/menu-columns.ts). */
@@ -648,6 +682,11 @@ export interface TemplatesPayload {
   templates: TemplateRow[];
   /** Catalog products with no approved description yet. */
   needs_description: { id: string; provider_id: string; provider_name: string; code: string; name: string }[];
+  /** Each category's plans as the catalog names them, lowest first. */
+  plan_names?: Record<string, string[]>;
+  /** Managers change presets; everyone signed in sees them. */
+  can_edit_presets?: boolean;
+  preset_changes?: AdminChangeRow[];
 }
 
 export interface PriceSheetRow {

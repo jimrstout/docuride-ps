@@ -7,6 +7,14 @@
 // POST { section: "templates", action: "save_slot", slot_id, ...slot, updated_by }
 // POST { section: "templates", action: "move_slot", slot_id, direction: "up" | "down", updated_by }
 // POST { section: "templates", action: "save_columns", template_id, columns: [...], updated_by }
+// POST { section: "templates", action: "save_presets", template_id, deal_type, presets: {...},
+//        updated_by, operator_id }
+//
+// Presets (migration 0045, _shared/menu-presets.ts): per template, Financed or
+// Cash, column and category, the preferred plan, term, mileage and deductible.
+// Managers only (managers.ts); everyone signed in sees them. Every change is
+// logged with who and when. The GET takes ?operator_id= to say whether the
+// signed-in person may change them.
 //
 // Each template also carries its conventional menu columns (two to five, or the
 // default layout until some are saved: _shared/menu-columns.ts), and the
@@ -23,6 +31,8 @@ import { conditionsLine, parseSlot, parseTemplate } from "../_shared/menu-admin.
 import { VEHICLE_TYPES } from "../_shared/vehicle-types.ts";
 import { columnsFor, parseColumns } from "../_shared/menu-columns.ts";
 import type { Reply } from "./providers.ts";
+import { CATEGORIES, DEAL_TYPES, parsePresets, presetLine, type Preset } from "../_shared/menu-presets.ts";
+import { isManager, logChanges, MANAGERS_ONLY, recentChanges, type Change } from "./managers.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -41,7 +51,7 @@ async function context(supabase: SupabaseClient, tenantId: string) {
   if (cErr) throw new Error(`Failed to read the catalog: ${cErr.message}`);
   const products = ((catalog ?? []) as unknown as {
     id: string; provider_id: string; product_code: string; display_name: string;
-    category: string; provider_program_name: string | null; provider: { name: string } | null;
+    category: string; provider_program_name: string | null; provider: { name: string } | null; display_order: number | null;
   }[]).map((c) => ({
     id: c.id,
     provider_id: c.provider_id,
@@ -50,11 +60,28 @@ async function context(supabase: SupabaseClient, tenantId: string) {
     name: c.display_name,
     category: c.category,
     program: c.provider_program_name,
+    order: c.display_order ?? 0,
   }));
   return { stores: (stores ?? []) as { id: string; name: string }[], products };
 }
 
-export async function readTemplates(supabase: SupabaseClient, tenantId: string): Promise<Reply> {
+/** Each category's plans as the catalog names them, lowest first. */
+function planNames(products: { name: string; category: string; order: number }[]): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const c of CATEGORIES) {
+    const seen = new Map<string, number>();
+    for (const p of products.filter((p) => p.category === c)) {
+      seen.set(p.name, Math.min(seen.get(p.name) ?? Infinity, p.order));
+    }
+    out[c] = [...seen.entries()].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])).map(([n]) => n);
+  }
+  return out;
+}
+
+const PRESET_COLUMNS =
+  "template_id, deal_type, column_position, category, provider_id, plan_name, term_months, term_miles, deductible, disappearing_deductible, updated_at, updated_by";
+
+export async function readTemplates(supabase: SupabaseClient, tenantId: string, operatorId: string | null = null): Promise<Reply> {
   const { stores, products } = await context(supabase, tenantId);
   const { data: templates, error } = await supabase
     .schema("fni")
@@ -83,6 +110,11 @@ export async function readTemplates(supabase: SupabaseClient, tenantId: string):
     : { data: [], error: null };
   if (colErr) throw new Error(`Failed to read the menu columns: ${colErr.message}`);
 
+  const { data: presetRows, error: pErr } = ids.length
+    ? await supabase.schema("fni").from("menu_presets").select(PRESET_COLUMNS).in("template_id", ids)
+    : { data: [], error: null };
+  if (pErr) throw new Error(`Failed to read the menu presets: ${pErr.message}`);
+
   // Products with no approved description yet, by the planner's own rule
   // (fni.product_catalog_presentable).
   const { data: unwritten, error: wErr } = await supabase
@@ -101,10 +133,15 @@ export async function readTemplates(supabase: SupabaseClient, tenantId: string):
       stores,
       products,
       vehicle_types: VEHICLE_TYPES,
+      plan_names: planNames(products),
+      // Whether the signed-in person may change presets: managers only.
+      can_edit_presets: await isManager(supabase, operatorId),
+      preset_changes: await recentChanges(supabase, tenantId, "Menu preset"),
       templates: ((templates ?? []) as Record<string, unknown>[]).map((t) => ({
         ...t,
         conditions_line: conditionsLine(t as never, storeName),
         slots: ((slots ?? []) as { template_id: string }[]).filter((s) => s.template_id === t.id),
+        presets: ((presetRows ?? []) as (Preset & { template_id: string })[]).filter((p) => p.template_id === t.id),
         menu_columns: columnsFor(
           ((columnRows ?? []) as {
             template_id: string; position: number; name: string; preset_categories: string[] | null; starting_level: string | null;
@@ -263,6 +300,71 @@ export async function writeTemplates(
       if (error) return { status: 400, body: { error: error.message } };
       await touch(templateId);
       return { status: 200, body: { ok: true, columns: parsed.columns.length } };
+    }
+
+    case "save_presets": {
+      if (!(await isManager(supabase, body.operator_id))) return { status: 403, body: { error: MANAGERS_ONLY } };
+      const templateId = await ownTemplate(body.template_id);
+      if (!templateId) return { status: 404, body: { error: "That menu no longer exists." } };
+      const dealType = String(body.deal_type ?? "");
+      if (!(DEAL_TYPES as readonly string[]).includes(dealType)) return { status: 400, body: { error: "Choose Financed or Cash." } };
+      const { data: colRows } = await supabase
+        .schema("fni").from("menu_template_columns").select("position, name").eq("template_id", templateId);
+      const { columns } = columnsFor((colRows ?? []) as never);
+      const names = new Set(products.map((p) => p.name));
+      const parsed = parsePresets((body.presets ?? {}) as Record<string, unknown>, columns.length, names);
+      if ("errors" in parsed) return { status: 400, body: { error: parsed.errors.join(" ") } };
+
+      const { data: beforeRows, error: bErr } = await supabase
+        .schema("fni").from("menu_presets").select(PRESET_COLUMNS).eq("template_id", templateId).eq("deal_type", dealType);
+      if (bErr) return { status: 500, body: { error: bErr.message } };
+      // A cleared preset is kept as an empty row (nothing here deletes): it reads as none.
+      const empty = (p: Preset) =>
+        p.plan_name === null && p.term_months === null && p.term_miles === null && p.deductible === null && p.disappearing_deductible === null;
+      const before = ((beforeRows ?? []) as Preset[]).filter((p) => !empty(p));
+      const key = (p: Preset) => `${p.column_position}|${p.category}`;
+      const same = (a: Preset, b: Preset) =>
+        a.plan_name === b.plan_name && a.term_months === b.term_months && a.term_miles === b.term_miles &&
+        Number(a.deductible ?? -1) === Number(b.deductible ?? -1) && a.disappearing_deductible === b.disappearing_deductible;
+      const colName = (pos: number) => columns[pos - 1]?.name;
+      const record = (p: Preset) => ({ line: presetLine(p, colName(p.column_position)), ...p });
+      const recordKey = (p: Preset) => `${templateId}|${dealType}|${p.column_position}|${p.category}`;
+
+      const changes: Change[] = [];
+      const upserts: Preset[] = [];
+      for (const p of parsed.presets) {
+        const was = before.find((b) => key(b) === key(p));
+        if (was && same(was, p)) continue;
+        upserts.push(p);
+        changes.push({ area: "Menu preset", record_key: recordKey(p), action: was ? "Changed" : "Created", before: was ? record(was) : null, after: record(p) });
+      }
+      const removed = before.filter((b) => !parsed.presets.some((p) => key(p) === key(b)));
+      for (const r of removed) {
+        changes.push({ area: "Menu preset", record_key: recordKey(r), action: "Removed", before: record(r), after: null });
+      }
+      if (changes.length === 0) return { status: 200, body: { ok: true, changed: 0 } };
+
+      // The record first: a change that cannot be logged is not made.
+      try {
+        await logChanges(supabase, tenantId, by, changes);
+      } catch (err) {
+        return { status: 500, body: { error: err instanceof Error ? err.message : String(err) } };
+      }
+      if (upserts.length > 0) {
+        const { error } = await supabase.schema("fni").from("menu_presets").upsert(
+          upserts.map((p) => ({ ...p, template_id: templateId, deal_type: dealType, updated_at: now, updated_by: by })),
+          { onConflict: "template_id,deal_type,column_position,category" }
+        );
+        if (error) return { status: 500, body: { error: error.message } };
+      }
+      for (const r of removed) {
+        const { error } = await supabase.schema("fni").from("menu_presets")
+          .update({ plan_name: null, term_months: null, term_miles: null, deductible: null, disappearing_deductible: null, updated_at: now, updated_by: by })
+          .eq("template_id", templateId).eq("deal_type", dealType).eq("column_position", r.column_position).eq("category", r.category);
+        if (error) return { status: 500, body: { error: error.message } };
+      }
+      await touch(templateId);
+      return { status: 200, body: { ok: true, changed: changes.length } };
     }
 
     default:

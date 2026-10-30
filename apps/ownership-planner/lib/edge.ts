@@ -221,8 +221,12 @@ export const edge = {
     call<T>("fni-admin-settings", { method: "POST", body: { ...body, section: "wording" } }),
 
   /** The Menus section: every menu template with its slots. */
-  adminTemplates: <T>() =>
-    call<T>("fni-admin-settings", { method: "GET", query: { section: "templates" } }),
+  /** `operatorId` says whether the signed-in person may change presets (managers only). */
+  adminTemplates: <T>(operatorId?: string) =>
+    call<T>("fni-admin-settings", {
+      method: "GET",
+      query: operatorId ? { section: "templates", operator_id: operatorId } : { section: "templates" },
+    }),
 
   adminSaveTemplates: <T>(body: Record<string, unknown>) =>
     call<T>("fni-admin-settings", { method: "POST", body: { ...body, section: "templates" } }),

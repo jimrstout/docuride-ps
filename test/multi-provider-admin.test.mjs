@@ -117,7 +117,7 @@ test("every write names the operator, and nothing deletes", () => {
   const actions = src("../apps/ownership-planner/app/console-actions.ts");
   const part6 = actions.slice(actions.indexOf("// ── Providers, Menus and Price sheets"));
   assert.match(part6, /const operator = await currentOperator\(\);\s*if \(!operator\) redirect\(back\);/);
-  assert.match(part6, /result = await write\(operator\.email\);/);
+  assert.match(part6, /result = await write\(operator\.email, operator\.sub\);/);
   for (const f of [
     "../supabase/functions/fni-admin-settings/providers.ts",
     "../supabase/functions/fni-admin-settings/templates.ts",

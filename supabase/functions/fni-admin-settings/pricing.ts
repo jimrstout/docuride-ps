@@ -31,10 +31,11 @@ import {
   validateRule,
   type StoredRule,
 } from "../_shared/pricing-admin.ts";
+import { isManager, logChanges, MANAGERS_ONLY, recentChanges, type Change } from "./managers.ts";
 
 const RULE_COLUMNS =
   "id, tenant_id, store_id, provider_id, product_code, cost_floor, cost_ceiling, markup_percent, " +
-  "markup_max_dollars, markup_min_dollars, round_to, active, updated_at, updated_by";
+  "markup_max_dollars, markup_min_dollars, round_to, active, max_markup_percent, max_markup_dollars, updated_at, updated_by";
 
 /** The answer to a pricing request: a status and a body. index.ts sends it. */
 export interface PricingReply {
@@ -68,6 +69,8 @@ function asRule(r: Record<string, unknown>): StoredRule {
     markup_min_dollars: n(r.markup_min_dollars) ?? 0,
     round_to: n(r.round_to) ?? 0,
     active: r.active === true,
+    max_markup_percent: n(r.max_markup_percent),
+    max_markup_dollars: n(r.max_markup_dollars),
     updated_at: (r.updated_at as string | null) ?? null,
     updated_by: (r.updated_by as string | null) ?? null,
   };
@@ -184,9 +187,11 @@ export async function readPricing(
   if ("error" in scope) return { status: 400, body: { error: scope.error } };
   const storeId = scope.storeId;
 
-  const [rules, products] = await Promise.all([
+  const [rules, products, canEdit, changes] = await Promise.all([
     tenantRules(supabase, tenantId),
     scopeProducts(supabase, tenantId, storeId),
+    isManager(supabase, params.get("operator_id")),
+    recentChanges(supabase, tenantId, "Price band"),
   ]);
   const nameOf = (code: string | null) =>
     code === null ? null : (products.find((p) => p.code === code)?.name ?? code);
@@ -207,6 +212,14 @@ export async function readPricing(
     status: 200,
     body: {
       stores: stores.map((s) => ({ ...s, status: storeStatus(rules, s.id) })),
+      // Managers change pricing and its band; everyone signed in sees them.
+      can_edit: canEdit,
+      changes: changes.map((c) => ({
+        action: c.action,
+        changed_by: c.changed_by,
+        changed_at: c.changed_at,
+        summary: ((c.after ?? c.before) as { summary?: string } | null)?.summary ?? null,
+      })),
       all_stores_active_rules: rules.filter((r) => r.active && r.store_id === null).length,
       scope: {
         store_id: storeId,
@@ -250,6 +263,10 @@ export async function writePricing(
     return refused(["A change to pricing needs the name of whoever is signed in."]);
   }
 
+  // Pricing sets the retail and the band staff may price within: managers only
+  // (migration 0045). Every change is logged with who and when.
+  if (!(await isManager(supabase, body.operator_id))) return { status: 403, body: { error: MANAGERS_ONLY } };
+
   const stores = await menuStores(supabase, tenantId);
   const activeStoreIds = new Set(stores.map((s) => s.id));
   const scope = readScope(body.scope, stores);
@@ -259,6 +276,16 @@ export async function writePricing(
   const rules = await tenantRules(supabase, tenantId);
   const now = new Date().toISOString();
   const action = body.action;
+  const log = async (changes: Change[]) => {
+    try {
+      await logChanges(supabase, tenantId, updatedBy, changes);
+      return null;
+    } catch (err) {
+      return { status: 500, body: { error: err instanceof Error ? err.message : String(err) } } as PricingReply;
+    }
+  };
+  const logged = (r: Partial<StoredRule> | null) =>
+    r === null ? null : { summary: ruleSummary(r as never, r.product_code ?? null), ...r };
 
   if (action === "save") {
     const parsed = parseRuleFields((body.rule ?? {}) as Record<string, unknown>);
@@ -285,6 +312,15 @@ export async function writePricing(
     if (errors.length > 0) return refused(errors);
 
     const row = { ...fields, updated_at: now, updated_by: updatedBy };
+    const before = ruleId === null ? null : rules.find((r) => r.id === ruleId) ?? null;
+    const failed = await log([{
+      area: "Price band",
+      record_key: ruleId ?? `new|${storeId ?? "all"}|${fields.product_code ?? "all"}|${fields.cost_floor}`,
+      action: ruleId === null ? "Created" : "Changed",
+      before: logged(before),
+      after: logged({ ...fields, store_id: storeId }),
+    }]);
+    if (failed) return failed;
     const { error } = ruleId === null
       ? await supabase.schema("fni").from("pricing_rules")
           .insert({ ...row, tenant_id: tenantId, store_id: storeId })
@@ -300,6 +336,8 @@ export async function writePricing(
     if (!existing || existing.store_id !== storeId) {
       return refused(["That rule is no longer here. Reload the page and try again."]);
     }
+    const failed = await log([{ area: "Price band", record_key: ruleId, action: "Removed", before: logged(existing), after: null }]);
+    if (failed) return failed;
     const { error } = await supabase.schema("fni").from("pricing_rules")
       .delete().eq("id", ruleId).eq("tenant_id", tenantId);
     if (error) return { status: 500, body: { error: `Failed to delete the rule: ${error.message}` } };
@@ -326,9 +364,19 @@ export async function writePricing(
         markup_min_dollars: r.markup_min_dollars,
         round_to: r.round_to,
         active: r.active,
+        max_markup_percent: r.max_markup_percent ?? null,
+        max_markup_dollars: r.max_markup_dollars ?? null,
         updated_at: now,
         updated_by: updatedBy,
       }));
+    const failed = await log(copies.map((c, i) => ({
+      area: "Price band" as const,
+      record_key: `copy|${to.storeId ?? "all"}|${i}`,
+      action: "Created" as const,
+      before: null,
+      after: logged(c as never),
+    })));
+    if (failed) return failed;
     // One insert, so a copy lands whole or not at all.
     const { error } = await supabase.schema("fni").from("pricing_rules").insert(copies);
     if (error) return { status: 500, body: { error: `Failed to copy the rules: ${error.message}` } };
