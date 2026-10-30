@@ -339,3 +339,47 @@ export function checkPreparation(sheet: PrepareSheet, p: Preparation): Preparati
   }
   return { errors: [...new Set(errors)], above_band: above, writes };
 }
+
+// ── What Present menu takes from it ───────────────────────────────────────
+
+/**
+ * The deal's prices onto the priced families, in place: each rate's retail
+ * price becomes the deal's price for its option where one was set. The
+ * planner, the menu and the save all price from these, so the price on the
+ * chosen option is the one the customer pays (fni-session-get,
+ * fni-session-save). Prices in dollars, as the families hold them.
+ */
+export function applyDealPrices(families: NormalizedFamily[], prices: Record<string, DealPrice>): NormalizedFamily[] {
+  for (const f of families) for (const t of f.tiers) {
+    const provider = t.provider_id ?? f.provider_id ?? "";
+    for (const r of t.rates) {
+      const deal = prices[optionKey(provider, t.product_code, r)];
+      if (deal) r.retail_price = deal.retail_price;
+    }
+  }
+  return families;
+}
+
+export interface PreparedChoice {
+  provider_id: string;
+  product_code: string;
+  rate_unique_id: string;
+}
+
+/** Each column's choice per category, and the deal's surcharges, for the menu's cells. */
+export function preparedForMenu(sheet: PrepareSheet): {
+  cells: Record<string, Record<string, PreparedChoice | null>>;
+  surcharges: string[];
+} {
+  const cells: Record<string, Record<string, PreparedChoice | null>> = {};
+  for (const [pos, row] of Object.entries(sheet.cells)) {
+    cells[pos] = {};
+    for (const [category, cell] of Object.entries(row)) {
+      const found = cell.key ? optionFor(sheet, cell.key) : null;
+      cells[pos][category] = found
+        ? { provider_id: found.plan.provider_id, product_code: found.plan.product_code, rate_unique_id: found.option.rate_unique_id }
+        : null;
+    }
+  }
+  return { cells, surcharges: sheet.surcharges.chosen };
+}

@@ -220,6 +220,33 @@ export function initialCells(rows: MenuRow[], columns: MenuColumnSpec[]): Cell[]
   return columns.map((c) => rows.map((r) => initialCell(r, c)));
 }
 
+/** A column's choice per category from Prepare menu, or the presets (fni-session-get menu_prepared). */
+export interface MenuPrepared {
+  cells: Record<string, Record<string, { provider_id: string; product_code: string; rate_unique_id: string } | null>>;
+  surcharges: string[];
+}
+
+/**
+ * The columns as prepared (docs section 25): each row checked when its
+ * category's choice in that column is one of its plans, on that rate, with
+ * the deal's surcharges the rate offers. A purchased row stays as it is.
+ * Without a prepared menu, the columns' own rule (initialCells).
+ */
+export function preparedCells(rows: MenuRow[], columns: MenuColumnSpec[], prepared: MenuPrepared | null | undefined): Cell[][] {
+  if (!prepared) return initialCells(rows, columns);
+  return columns.map((column, i) =>
+    rows.map((row) => {
+      if (row.purchased) return initialCell(row, column);
+      const choice = row.category ? prepared.cells[String(i + 1)]?.[row.category] ?? null : null;
+      const tier = choice ? row.tiers.find((t) => t.product_code === choice.product_code && t.available) : undefined;
+      const rate = tier?.rates.find((r) => r.rate_unique_id === choice!.rate_unique_id);
+      if (!tier || !rate) return { ...initialCell(row, column), checked: false };
+      const offered = new Set(rate.options.filter((o) => !o.mandatory).map((o) => o.code));
+      return { checked: true, tier: tier.product_code, rate: rate.rate_unique_id, options: prepared.surcharges.filter((c) => offered.has(c)) };
+    })
+  );
+}
+
 export function tierOf(row: MenuRow, cell: Cell): RowTier | undefined {
   return row.tiers.find((t) => t.product_code === cell.tier) ?? row.tiers[0];
 }

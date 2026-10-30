@@ -204,9 +204,16 @@ test("the planner and the server share one surcharge rule", () => {
 
 test("the save takes no price from the browser", () => {
   const save = src("../supabase/functions/fni-session-save/index.ts");
-  const start = save.indexOf("async function serverAdditionalDown(");
-  const fn = save.slice(start, save.indexOf("\n}\n", start));
-  assert.doesNotMatch(fn, /body\.|decisions|customer_price|retail_price/);
+  // The server's pricing (pricedForSession, with the deal's own prices) and the
+  // additional down payment from it.
+  const start = save.indexOf("async function pricedForSession(");
+  const end = save.indexOf("\n}\n", save.indexOf("async function serverAdditionalDown("));
+  const fn = save.slice(start, end);
+  assert.doesNotMatch(fn, /body\.|decisions|customer_price/);
+  // retail_price only as the deal's own price, read from the server (Prepare menu).
+  for (const line of fn.split("\n").filter((l) => l.includes("retail_price"))) {
+    assert.match(line, /session_menu_prices|retail_price: Number\(r\.retail_price\)/, line);
+  }
   // Every provider's stored quote, read on the server (0021: one row each).
   assert.match(fn, /offerRowsFor\(supabase, s\.id as string\)/);
   assert.match(fn, /\.from\("pricing_rules"\)/);

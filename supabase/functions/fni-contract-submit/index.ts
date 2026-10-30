@@ -74,6 +74,7 @@ import { readSubmitResponse } from "../_shared/submit-outcome.ts";
 import { alignContractDates, dealDates, SALE_DATE_MISSING } from "../_shared/deal-dates.ts";
 import { storeToday, submitDateProblem } from "../_shared/store-day.ts";
 import { freshSaleDate, type SaleDateSession } from "../_shared/crm-sale-date.ts";
+import { PRICE_GUARD_EVENT, priceProblems } from "../_shared/price-guard.ts";
 
 /** How long Submit waits for the CRM's sale date before refusing. */
 const SUBMIT_CRM_BUDGET_MS = 5000;
@@ -694,6 +695,32 @@ serve(async (req: Request) => {
       quote: submitQuote,
     };
     if (Object.keys(lienholder).length > 0) submitPayload.lienholder = lienholder;
+
+    // ── Step 5b: Exactly the customer's price, to the cent ─────────────
+    // Every product's outgoing price against the selection's customer price,
+    // which the save worked out on the server (_shared/price-guard.ts). A test
+    // session on the QA server goes at the provider's maximum by design, and
+    // is held to that. A penny's difference stops the submit here, before
+    // anything is sent, with the product and both prices in plain English.
+    const problems = priceProblems(
+      submitQuote,
+      toSubmit.map((r) => ({
+        rate_unique: r.rateUniqueId,
+        product_name: r.productName,
+        price: policy === "Test at maximum" ? r.selection.retail_price : (customerPrice.get(r.rateUniqueId) ?? r.selection.retail_price),
+      }))
+    );
+    if (problems.length > 0) {
+      const { error: guardErr } = await supabase.schema("fni").from("session_events").insert({
+        session_id,
+        event: PRICE_GUARD_EVENT,
+        detail: { problems },
+        created_by: renewedBy(body.submitted_by),
+      });
+      if (guardErr) console.error("fni-contract-submit price guard event not recorded", { session: session_id, code: guardErr.code ?? null });
+      console.warn("fni-contract-submit stopped by the price guard", { session: session_id, products: problems.length });
+      return await refuse(409, { error: `Nothing was sent. ${problems.join(" ")}`, problems });
+    }
 
     // The quote's dates are the ones TecAssured echoed when it rated, and its
     // own stamp of when it rated. Each is made the CRM sale date (or the

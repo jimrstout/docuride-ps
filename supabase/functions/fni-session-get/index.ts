@@ -39,6 +39,8 @@ import { resolvedSlotsFor } from "../_shared/menu-template-rows.ts";
 import { PricingRule } from "../_shared/planner-pricing.ts";
 import { priceFamilies, sessionCap, sessionPaymentBasis } from "../_shared/plan-prices.ts";
 import { modeLabel } from "../_shared/session-mode.ts";
+import { loadSheet } from "../_shared/menu-prepare-rows.ts";
+import { applyDealPrices, preparedForMenu } from "../_shared/menu-prepare.ts";
 import {
   CatalogRow,
   classifyCoverage,
@@ -242,6 +244,16 @@ serve(async (req: Request) => {
     // uses to price the saved selections. One pricing, so the page and the
     // save cannot disagree.
     const pricedFamilies = priceFamilies(families, rules);
+
+    // ── The deal's prepared menu (docs section 25) ─────────────────────
+    // Prices set on Prepare menu belong to the option, so they replace the
+    // rule's price wherever that option appears: the planner, the menu and the
+    // save (fni-session-save) all read the same price. Present menu starts
+    // each column from the prepared cells, or from the presets as they stand
+    // when nothing was prepared, with the deal's surcharges.
+    const prepared = superseded ? null : await loadSheet(supabase, s as Record<string, unknown>);
+    if (prepared) applyDealPrices(pricedFamilies, prepared.input.prices);
+    const menuPrepared = prepared && prepared.sheet.categories.length > 0 ? preparedForMenu(prepared.sheet) : null;
 
     // Catalog copy is keyed on the product code, which is the tier.
     const tiers = allTiers(pricedFamilies);
@@ -513,6 +525,10 @@ serve(async (req: Request) => {
       selections: selections ?? [],
       purchased,
       menu_columns: menuColumns,
+      // Each column's choice per category, and the deal's surcharges: the
+      // prepared menu, or the presets as they stand (_shared/menu-prepare.ts).
+      // No price or cost: those are on the families, as before.
+      menu_prepared: menuPrepared,
       photos: s.dx1_photos ?? null,
       photos_cached_at: s.dx1_photos_cached_at ?? null,
     });

@@ -36,7 +36,7 @@ import {
   cellPrice,
   columnPrices,
   declinedCells,
-  initialCells,
+  preparedCells,
   rateOf,
   saveDecisions,
   tierOf,
@@ -87,7 +87,9 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
     [initial]
   );
 
-  const [cells, setCells] = useState<Cell[][]>(() => initialCells(rows, columns));
+  // The prepared menu (Prepare menu, or the presets as they stand), with the
+  // deal's prices already on the offers; else the columns' own rule.
+  const [cells, setCells] = useState<Cell[][]>(() => preparedCells(rows, columns, initial.menu_prepared));
   const [shown, setShown] = useState(0);
   const [editing, setEditing] = useState<{ col: number; row: number } | null>(null);
   const [phase, setPhase] = useState<Phase>("menu");
