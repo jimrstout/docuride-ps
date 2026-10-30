@@ -116,15 +116,14 @@ test("Administration sets each store's time zone, from the listed zones only", (
   assert.match(stores, /\.update\(\{ time_zone: body\.time_zone \}\)\s*\.eq\("id", body\.store_id\)\s*\.eq\("tenant_id", tenantId\)/);
 });
 
-test("Sessions offers Renew for Today, not +24h, and only when it gives longer", async () => {
+test("Sessions has no Renew for Today: a session runs through its CRM sale date", async () => {
   const page = src("apps/ownership-planner/app/admin/sessions/page.tsx");
-  assert.match(page, /\{row\.renewable \? \(\s*<form action=\{renewSession\}>/);
-  assert.match(page, /pending="Renewing for today\.\.\."/);
-  assert.match(page, />\s*Renew for Today\s*<\/PendingButton>/);
+  assert.doesNotMatch(page, /renewSession|Renew for Today|renewable|renew_to/);
+  assert.match(page, /\? "Ended with its sale date"/);
   assert.doesNotMatch(page, />\s*\+24h\s*<|extendSession|Adding 24 hours/);
   const actions = src("apps/ownership-planner/app/console-actions.ts");
-  assert.match(actions, /await edge\.adminRenew<\{ expires_at: string \}>\(sessionId, initialsFor\(operator\.email\)\);/);
-  assert.doesNotMatch(actions, /EXTEND_HOURS|adminExtend/);
+  assert.doesNotMatch(actions, /adminRenew|renewSession|EXTEND_HOURS|adminExtend/);
+  assert.doesNotMatch(src("apps/ownership-planner/lib/edge.ts"), /adminRenew/);
   const { storeTime } = await import("../apps/ownership-planner/lib/store-time.ts");
   assert.equal(storeTime("2026-10-28T03:59:59Z", "America/New_York"), "11:59 PM, 27 Oct (EDT)");
   assert.equal(storeTime("2026-10-28T04:59:59Z", "America/Chicago"), "11:59 PM, 27 Oct (CDT)");
@@ -132,26 +131,47 @@ test("Sessions offers Renew for Today, not +24h, and only when it gives longer",
   assert.equal(storeTime(null, "America/Chicago"), "");
 });
 
-test("Details shows when the deal ends, sets the planned sale date, and holds Submit off the sale day", async () => {
+test("Details: one date line with Open in CRM, no date controls of its own, and Submit pointing to it", async () => {
   const page = src("apps/ownership-planner/app/details/[sessionId]/page.tsx");
   assert.match(page, /<dt>Open until<\/dt>/);
-  assert.match(page, /<form action=\{setPlannedSaleDate\} className="vplanned" data-working-panel="">/);
-  assert.match(page, /min=\{sheet\.day\.today\}/);
-  assert.match(page, /<PendingButton formAction=\{clearPlannedSaleDate\} formNoValidate pending="Clearing the date\.\.\.">/);
-  // The reason (not the sale day, or a rating out of date) is said beside a
-  // disabled Submit (lib/submit-check.ts).
-  assert.match(page, /const \{ block: submitBlocked, note: submitNote \} = submitCheck\(sheet\);/);
+  // Gone: the planned sale date, its Save date and Clear, and Keep staff value / Use CRM value.
+  assert.doesNotMatch(page, /setPlannedSaleDate|clearPlannedSaleDate|vplanned|planned_sale_date|sale_date_choice|keepStaffSaleDate|useCrmSaleDate/);
+  // The one date line, with the CRM record in a new tab and the watcher.
+  assert.match(page, /const dateLine = sheet\.day\?\.date_line \?\? \(sheet\.day && !sheet\.day\.sale_date \? NO_SALE_DATE_LINE : null\);/);
+  assert.match(page, /<a className="btn btn--quiet" href=\{crmUrl\} target="_blank" rel="noopener">\s*Open in CRM\s*<\/a>/);
+  assert.match(page, /<SaleDateWatch \/>\s*<\/div>\s*\) : null\}/);
+  assert.ok(page.indexOf("{dateLine ? (") < page.indexOf('<dl className="vstate">'));
+  // Live contracts dated otherwise, named in the Contracts panel.
+  assert.match(page, /\{sheet\.day!\.contract_date_lines!\.map\(\(l\) => <li key=\{l\}>\{l\}<\/li>\)\}/);
+  // Submit says once that it waits for the date, rather than the date again.
+  assert.match(page, /dateLine && submitCheckBlock === sheet\.day\?\.submit_problem \? SUBMIT_HELD_FOR_DATE : submitCheckBlock;/);
   assert.match(page, /blocked=\{\s*submitBlocked \?\?/);
   const modal = src("apps/ownership-planner/components/SubmitConfirm.tsx");
   assert.match(modal, /\{blocked \? \(\s*<p className="console-flash console-flash--bad" role="alert">\{blocked\}<\/p>/);
   assert.match(modal, /onClick=\{show\} disabled=\{!!blocked\}/);
-  // Submit and Confirm and Continue (which rates) are busy buttons.
   assert.match(modal, /pending="Submitting contracts\.\.\."/);
   const actions = src("apps/ownership-planner/app/console-actions.ts");
-  assert.match(actions, /\(session_id\) => \(\{ session_id, action: "planned_sale_date", value \}\)/);
+  assert.doesNotMatch(actions, /planned_sale_date|sale_date_keep_staff|sale_date_use_crm/);
+
+  const link = await import("../apps/ownership-planner/lib/crm-link.ts");
+  assert.equal(link.crmRecordUrl("4742556000231058020"), "https://crm.zoho.com/crm/org735391176/tab/CustomModule24/4742556000231058020");
+  assert.equal(link.crmRecordUrl("13759"), null);
+  assert.equal(link.crmRecordUrl(null), null);
+  assert.equal(link.NO_SALE_DATE_LINE, "There is no sale date in the CRM. Add the Sale Date in the CRM.");
+  assert.equal(link.DATE_WATCH_MS, 30000);
+
+  // The watcher: on focus and every 30 seconds, never while the page is working.
+  const watch = src("apps/ownership-planner/components/SaleDateWatch.tsx");
+  assert.match(watch, /^"use client";/);
+  assert.match(watch, /window\.setInterval\(check, DATE_WATCH_MS\)/);
+  assert.match(watch, /window\.addEventListener\("focus", check\)/);
+  assert.match(watch, /if \(document\.querySelector\('\[aria-busy="true"\]'\)\) return;/);
+  assert.match(watch, /router\.refresh\(\);/);
+
   const { flashMessage } = await import("../apps/ownership-planner/lib/verify-flash.ts");
-  assert.equal(flashMessage({ code: "planned", detail: null }).text, "Planned sale date saved. This deal stays open until the end of that day.");
-  assert.equal(flashMessage({ code: "plannedcleared", detail: null }).text, "Planned sale date cleared. This deal stays open until the end of today.");
+  for (const code of ["planned", "plannedcleared", "saledatekept", "saledatecrm"]) {
+    assert.doesNotMatch(flashMessage({ code, detail: null })?.text ?? "", /[Pp]lanned sale date|staff sale date/, code);
+  }
 });
 
 test("Administration > Stores sets each store's time zone", () => {

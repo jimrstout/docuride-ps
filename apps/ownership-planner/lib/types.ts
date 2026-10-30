@@ -295,15 +295,6 @@ export interface ConsoleSessionRow {
     /** Each failed provider's exact text, for "Show details" (lib/rating-error.ts). */
     failures?: { provider: string; text: string; at: string | null }[];
   };
-  /** The day the deal is planned to be sold, when staff set one on Details. */
-  planned_sale_date?: string | null;
-  /**
-   * Renew for Today is offered: it would give the session longer, or move a
-   * sale date or planned sale date that is before today at the store.
-   */
-  renewable?: boolean;
-  /** What Renew for Today would set: 23:59:59 on the store's day. */
-  renew_to?: string | null;
   /** The store's time zone, for showing that moment in the store's own time. */
   time_zone?: string | null;
 }
@@ -531,29 +522,26 @@ export interface VerifySheet {
   /** Why nothing is required, when nothing is. Null when the sheet is normal. */
   not_ready_reason: string | null;
   /**
-   * The store's day (migration 0038): when this session ends, the planned sale
-   * date, and why Submit would be refused on the deal's dates today, if it would.
+   * The store's day and the CRM sale date (migrations 0038 and 0044): when this
+   * session ends, why Submit would be refused on the deal's dates today, the
+   * one date line Details shows, and each live contract sent with another date.
    */
   day?: {
     time_zone: string | null;
     today: string;
     expires_at: string | null;
-    planned_sale_date: string | null;
+    /** The CRM's Sale_Date, the only sale date. */
     sale_date: string | null;
+    /** The DocuRide record to open in the CRM. */
+    crm_record_id?: string | null;
+    /** Read from the CRM as this page loaded. */
+    sale_date_fresh?: boolean;
     submit_problem: string | null;
+    date_line?: string | null;
+    contract_date_lines?: string[];
   };
   /** Who goes on the contracts (supabase/functions/_shared/contract-parties.ts). */
   contract_parties?: ContractParties;
-  /**
-   * A staff sale date the CRM disagrees with (supabase/functions/_shared/sale-date.ts),
-   * offered as Keep staff value / Use CRM value. Null when they agree or it was kept.
-   */
-  sale_date_choice?: {
-    staff_value: string;
-    crm_value: string;
-    edited_by: string;
-    edited_at: string;
-  } | null;
   fields: VerifyField[];
   missing: VerifyField[];
   ready: boolean;

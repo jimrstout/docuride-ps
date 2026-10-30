@@ -30,7 +30,7 @@ import type { ConsoleListPayload, ConsoleSessionRow, PricingPayload } from "@/li
 import { SIGN_IN_NOTICES } from "@/components/admin/SignIn";
 import { Badge, Notice, PageHead, type Tone } from "@/components/admin/Parts";
 import { SessionFilters, type FilterOption } from "@/components/admin/SessionFilters";
-import { renewSession, rateSession } from "@/app/console-actions";
+import { rateSession } from "@/app/console-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -244,13 +244,12 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
           )}
           <small>
           {row.expired
-            ? row.renewable ? "Renew available" : "Ended"
+            ? "Ended with its sale date"
             : row.time_zone ? `Until ${storeTime(row.expires_at, row.time_zone)}` : since(row.expires_at, now)}
         </small>
         </td>
 
         <td className="ad-row-actions">
-          {/* The panel Renew for Today locks while it runs (components/Working.tsx). */}
           <div className="ad-actions" data-working-panel="">
             {/* The customer's menu opens in a new tab, so this list stays where
                 it was and one person can work several deals at once. */}
@@ -262,23 +261,6 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
             >
               Open
             </a>
-            {/* Renew for Today: to the end of the store's day, never more, so it
-                cannot stack the way +24h did. Shown when it would give the
-                session longer, or move a past sale date or planned sale date
-                to today (fni-admin-sessions decides, in the store's zone). */}
-            {row.renewable ? (
-              <form action={renewSession}>
-                <Working />
-                <input type="hidden" name="session_id" value={row.id} />
-                <PendingButton
-                  className="ad-btn ad-btn--secondary"
-                  pending="Renewing for today..."
-                  title={row.renew_to ? `Open until ${storeTime(row.renew_to, row.time_zone)}` : undefined}
-                >
-                  Renew for Today
-                </PendingButton>
-              </form>
-            ) : null}
             {/* Details is where rating starts now, so it is the button that is
                 always here. Rate on its own is for re-asking after a failure on a
                 deal that is already verified. */}
@@ -423,6 +405,6 @@ export default async function SessionsPage({
   if (!operator) return null;
 
   const params = await searchParams;
-  const key = ["renewfailed", "bad"].find((k) => params[k] !== undefined);
+  const key = ["bad"].find((k) => params[k] !== undefined);
   return <SessionList notice={key ? SIGN_IN_NOTICES[key] : null} />;
 }
