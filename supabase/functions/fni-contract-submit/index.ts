@@ -695,10 +695,13 @@ serve(async (req: Request) => {
     };
     if (Object.keys(lienholder).length > 0) submitPayload.lienholder = lienholder;
 
-    // The quote's dates are the ones TecAssured echoed when it rated. Each is
-    // made the session's own, so a contract never carries another day.
+    // The quote's dates are the ones TecAssured echoed when it rated, and its
+    // own stamp of when it rated. Each is made the CRM sale date (or the
+    // in-service date), so a contract never carries another day
+    // (_shared/deal-dates.ts).
     const datesChanged = alignContractDates(submitQuote, { sale: dates.sale, inService: dates.inService });
-    if (datesChanged.length > 0) console.log(`fni-contract-submit dates aligned: ${datesChanged.join("; ")}`);
+    // A count only: the dates themselves are deal data.
+    if (datesChanged.length > 0) console.log("fni-contract-submit dates aligned", { session: session_id, count: datesChanged.length });
 
     // ── Step 6: Submit ─────────────────────────────────────────────────
     //

@@ -279,7 +279,8 @@ serve(async (req: Request) => {
         // deal's finance figures by hand should be able to set it.
         "finance_term_total", "interest_rate", "tila_amount_financed",
         "finance_type", "in_service_date", "vin", "unit_year",
-        "unit_make", "unit_model", "sale_date", "vehicle_properties",
+        // Never sale_date: the CRM's is the only sale date (_shared/crm-sale-date.ts).
+        "unit_make", "unit_model", "vehicle_properties",
       ];
 
       for (const key of allowedOverrides) {
