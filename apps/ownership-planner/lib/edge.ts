@@ -172,6 +172,10 @@ export const edge = {
       fresh: opts.fresh,
     }),
 
+  /** The F&I check against DX1 (fni-dx1-check). Reads the CRM, never writes it. */
+  dx1Check: <T>(sessionId: string) =>
+    call<T>("fni-dx1-check", { method: "POST", body: { session_id: sessionId } }),
+
   verifyAction: <T>(body: Record<string, unknown>) =>
     call<T>("fni-session-verify", { method: "POST", body }),
 
