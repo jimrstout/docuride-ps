@@ -23,7 +23,7 @@
 .pm *, .pm *::before, .pm *::after { box-sizing: border-box; }
 
 .pm-head { grid-row: 1; }
-.pm-note { grid-row: 2; }
+.pm-notes { grid-row: 2; display: grid; }
 .pm-tabs { grid-row: 3; }
 .pm-grid { grid-row: 4; }
 .pm-head {
@@ -37,6 +37,7 @@
 
 .pm-note { margin: 8px 20px 0; padding: 8px 12px; border-radius: 8px; background: var(--good-bg, #e8f3ec); color: var(--good-fg, #1d5a35); font-size: 15px; }
 .pm-note--bad { background: var(--warn-bg); color: var(--warn-fg); }
+.pm-dialog .pm-note { margin: 0; }
 
 .pm-tabs { display: none; }
 
@@ -79,6 +80,11 @@
 .pm-sub { grid-column: 1 / -1; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-price { font-weight: 650; font-variant-numeric: tabular-nums; text-align: left; }
 .pm-profit { color: var(--ink-soft); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+/* A typed price that cannot be used as it stands (docs section 29): shown, never counted. */
+.pm-price--entered { text-decoration: line-through; color: var(--ink-soft); }
+.pm-not-applied { color: var(--warn-fg); font-weight: 650; }
+.pm-problem { margin: 0; }
+.pm-problem + .pm-problem { margin-top: 4px; }
 
 .pm-foot {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; row-gap: 1px; align-content: start; padding: 6px 10px;

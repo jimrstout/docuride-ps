@@ -28,6 +28,9 @@ import {
   findOption,
   initialState,
   needsManager,
+  priceProblem,
+  priceProblems,
+  saveBlocked,
   offersSurcharges,
   payloadOf,
   priceOf,
@@ -112,7 +115,13 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
       setMessage({ tone: "ok", text: "Menu prepared. Present menu will use it." });
     });
 
+  // Typed prices that cannot be used as they stand: listed in the banner, never
+  // in the totals. Below dealer cost blocks Save outright; outside the staff
+  // range needs a manager, who approves it on Save.
+  const problems = priceProblems(sheet, state);
+  const blocked = saveBlocked(sheet, state);
   const onSave = () => {
+    if (blocked) return;
     if (overBand.length > 0) managerDialog.current?.showModal();
     else save(false);
   };
@@ -199,7 +208,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
           {locked ? (
             <button type="button" className="pm-btn pm-btn--go" onClick={unlock} disabled={pending}>Return to Prepare menu</button>
           ) : (
-            <button type="button" className="pm-btn pm-btn--go" onClick={onSave} disabled={pending}>
+            <button type="button" className="pm-btn pm-btn--go" onClick={onSave} disabled={pending || blocked}>
               {pending ? "Saving..." : "Save"}
             </button>
           )}
@@ -207,11 +216,24 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
         </div>
       </header>
 
-      {(data.service_drive_lines ?? []).map((line) => (
-        <p key={line} className="pm-note pm-note--bad" role="alert">{line}</p>
-      ))}
-      {message ? <p className={message.tone === "ok" ? "pm-note" : "pm-note pm-note--bad"} role="status">{message.text}</p> : null}
-      {skipped.map((line) => <p key={line} className="pm-note" role="status">{line}</p>)}
+      {/* Every note in one place above the grid, so two never sit on top of each other. */}
+      <div className="pm-notes">
+        {(data.service_drive_lines ?? []).map((line) => (
+          <p key={line} className="pm-note pm-note--bad" role="alert">{line}</p>
+        ))}
+        {message ? <p className={message.tone === "ok" ? "pm-note" : "pm-note pm-note--bad"} role="status">{message.text}</p> : null}
+        {skipped.map((line) => <p key={line} className="pm-note" role="status">{line}</p>)}
+        {problems.length > 0 ? (
+          <div className="pm-note pm-note--bad" role="alert">
+            {problems.map((p) => <p key={p.key} className="pm-problem">{p.text}</p>)}
+            <p className="pm-problem">
+              {blocked
+                ? "Not applied, and Save is blocked until each price below the minimum allowable price is fixed."
+                : "Not applied until a manager approves them on Save."}
+            </p>
+          </div>
+        ) : null}
+      </div>
 
       <div className="pm-tabs" role="tablist" aria-label="Columns">
         {sheet.columns.map((c) => (
@@ -263,8 +285,17 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
                 >
                   <span className="pm-plan">{found.plan.plan_name}</span>
                   <span className="pm-sub">{found.option.label}</span>
-                  <span className="pm-price">{dollars(f.price)}</span>
-                  <span className="pm-profit">Profit {dollars(f.profit)}</span>
+                  {f.not_applied ? (
+                    <>
+                      <span className="pm-price pm-price--entered">{dollars(f.entered)}</span>
+                      <span className="pm-profit pm-not-applied">Not applied</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="pm-price">{dollars(f.price)}</span>
+                      <span className="pm-profit">Profit {dollars(f.profit)}</span>
+                    </>
+                  )}
                 </button>
               );
             })}
@@ -374,8 +405,12 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
                 <p className="pm-help">
                   {rangeText(edited.option)} This price applies in every column that offers {edited.plan.plan_name},{" "}
                   {edited.option.label}.
-                  {cellFigures(edited.option, state).below_cost ? " This price is below dealer cost, so it will not save." : ""}
                 </p>
+                {(() => {
+                  const typed = state.prices[edited.option.key];
+                  const p = typed === undefined ? null : priceProblem(edited.plan.plan_name, edited.option, typed);
+                  return p ? <p className="pm-note pm-note--bad" role="alert">{p.text} Not applied.</p> : null;
+                })()}
               </>
             ) : null}
             <label className="pm-check">
