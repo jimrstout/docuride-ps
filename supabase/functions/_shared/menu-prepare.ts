@@ -23,6 +23,7 @@ import type { NormalizedFamily, RateVariant } from "./normalized-offer.ts";
 import { resolveRule, type PricingRule } from "./planner-pricing.ts";
 import type { MenuColumn } from "./menu-columns.ts";
 import { countGroups, plainLabel } from "./surcharge-display.ts";
+import { isServiceDriveName, serviceDrivePresetNote } from "./service-drive.ts";
 import {
   CATEGORIES,
   checkPrice,
@@ -323,7 +324,11 @@ export function buildSheet(input: SheetInput): PrepareSheet {
         continue;
       }
       const r = resolvePreset(preset, usable, level);
-      cells[pos][category] = { key: r.rate?.key ?? null, note: r.note };
+      // A preset naming a service drive plan: that plan is never offered, so
+      // the fallback above picked the closest point-of-sale plan. The saved
+      // preset is left for a manager to fix in Administration > Menus.
+      const note = isServiceDriveName(preset.plan_name) ? serviceDrivePresetNote(r.plan?.plan_name ?? null) : r.note;
+      cells[pos][category] = { key: r.rate?.key ?? null, note };
     }
   }
 
