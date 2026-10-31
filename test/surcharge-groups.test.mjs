@@ -143,3 +143,30 @@ test("the dialog renders groups, the picker and the note, and fits in two column
   const css = read("apps/ownership-planner/app/prepare/[sessionId]/prepare.css");
   assert.match(css, /\.pm-surcharge-groups--two \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
 });
+
+test("each cell's dialog names the surcharges applied to that product, with a way to change them", () => {
+  const MAND = opt("Service_Drive", "SERVICE DRIVE FEE", 25, true);
+  const families = FAMILIES();
+  families[0].tiers[0].rates[0].options = [COMMERCIAL, opt("HVAC", "HVAC Equipped", 80), opt("SNOW", "Snow Removal", 120), MAND];
+  const sheet = buildSheet({ families: priceFamilies(families, RULES), catalog: CATALOG, rules: RULES, columns: COLUMNS, presets: [],
+    prepared: null, prices: {}, surcharges: [], purchased: new Set(), purchased_prices: {} });
+  const care = sheet.plans["Mechanical Protection"][0].options[0];
+  const maint = sheet.plans["Maintenance"][0].options[0];
+  assert.deepEqual(care.mandatory_codes, ["Service_Drive"]);
+  let state = model.initialState(sheet);
+  // Only what it always carries, named for people.
+  assert.deepEqual(model.surchargeNames(sheet, care, state), ["Service Drive Fee"]);
+  state = model.toggleSurcharge(model.toggleSurcharge(state, "HVAC"), "SNOW");
+  assert.deepEqual(model.surchargeNames(sheet, care, state), ["Service Drive Fee", "HVAC Equipped", "Snow Removal"]);
+  // A chosen surcharge another product offers is not this one's.
+  assert.deepEqual(model.surchargeNames(sheet, sheet.plans["Battery"][0].options[0], model.toggleSurcharge(state, "Lithium")), ["Lithium Battery"]);
+  // A product that offers none says nothing.
+  assert.deepEqual(model.surchargeNames(sheet, maint, state), []);
+  assert.equal(model.offersSurcharges(maint), false);
+  assert.equal(model.offersSurcharges(care), true);
+
+  const view = read("apps/ownership-planner/app/prepare/[sessionId]/Prepare.tsx");
+  assert.match(view, /`Includes surcharges: \$\{names\.join\(", "\)\}\.`/);
+  assert.match(view, /cellDialog\.current\?\.close\(\);\s*surchargeDialog\.current\?\.showModal\(\);/);
+  assert.match(view, />\s*Change surcharges\s*</);
+});

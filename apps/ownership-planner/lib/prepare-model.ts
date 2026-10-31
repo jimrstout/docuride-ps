@@ -35,6 +35,8 @@ export interface SheetOption {
   surcharge_codes: string[];
   mandatory_cost: number;
   option_costs: Record<string, number>;
+  /** The codes of the surcharges it always carries. Absent from a server before 2026-10-31. */
+  mandatory_codes?: string[];
 }
 
 export interface SheetPlan {
@@ -62,7 +64,7 @@ export interface PrepareSheet {
   categories: string[];
   plans: Record<string, SheetPlan[]>;
   cells: Record<string, Record<string, { key: string | null; note: string | null }>>;
-  surcharges: { available: { code: string; label: string }[]; chosen: string[]; groups?: SurchargeGroup[] };
+  surcharges: { available: { code: string; label: string }[]; chosen: string[]; groups?: SurchargeGroup[]; labels?: Record<string, string> };
   prepared: boolean;
   purchased: { category: string; plan_name: string; price: number }[];
   /** Each column's extra payment terms after the deal's own; none on a cash deal. */
@@ -144,6 +146,21 @@ export function findOption(sheet: PrepareSheet, key: string | null): { category:
 /** The option's price on screen, before surcharges: what staff typed, or the sheet's. */
 export function priceOf(o: SheetOption, state: PrepareState): number | null {
   return state.prices[o.key] ?? o.price;
+}
+
+/**
+ * The surcharges on an option as chosen on screen, named: the ones it always
+ * carries, then the deal's it offers. "Includes surcharges: HVAC Equipped, Snow Removal".
+ */
+export function surchargeNames(sheet: PrepareSheet, o: SheetOption, state: PrepareState): string[] {
+  const labels = sheet.surcharges.labels ?? Object.fromEntries(sheet.surcharges.available.map((a) => [a.code, a.label]));
+  const codes = [...(o.mandatory_codes ?? []), ...state.surcharges.filter((c) => c in o.option_costs)];
+  return [...new Set(codes)].map((c) => labels[c] ?? c);
+}
+
+/** The option offers a surcharge the deal could choose. */
+export function offersSurcharges(o: SheetOption): boolean {
+  return Object.keys(o.option_costs).length > 0;
 }
 
 /** What the option's surcharges cost on this deal, as chosen on screen. */
