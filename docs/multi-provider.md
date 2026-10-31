@@ -1638,3 +1638,48 @@ Prepare menu say "Mechanical Protection, Service Drive is a service drive plan
 and cannot be submitted.", and Submit refuses it in the same words before
 anything is sent, recording "Submit stopped: a service drive plan cannot be
 submitted".
+
+## 29. The staff price range
+
+Managers set both ends of the range staff may price within on a deal, per
+pricing band, as markups over dealer cost (Administration > Pricing). PRs 101
+to 104, migration 0047.
+
+**The rule.** Staff may price anywhere from the staff minimum markup to the
+staff maximum markup. Below the minimum or above the maximum needs a manager to
+sign in on Prepare menu and give a reason; both are recorded on the price
+(`session_menu_prices.above_band` or `below_band`, `approved_by`, `reason`) and
+in a session event ("Price above the band allowed by a manager on Prepare menu",
+"Price below the band allowed by a manager on Prepare menu"). No price may go
+below dealer cost, a manager included.
+
+**The settings** (`fni.pricing_rules`, managers only, every change logged under
+"Price band"):
+
+| Field | Label | Column |
+|---|---|---|
+| Staff minimum markup | dollars over dealer cost | `markup_min_dollars` |
+| Staff maximum markup | percent and/or dollars over dealer cost, the lower when both are set; blank stops at the suggested price | `max_markup_percent`, `max_markup_dollars` |
+
+The staff maximum (dollars) cannot be below the staff minimum.
+
+**Setup values.** The bands were seeded at setup and never deliberately chosen.
+Until a manager saves each band once (`band_reviewed_at`, `band_reviewed_by`),
+Administration > Pricing says "These pricing bands still have their setup
+values. Review and save them." The values were not changed.
+
+**Where the minimum markup is used** (2026-11-01):
+
+1. The staff floor (`priceBand`, `_shared/menu-presets.ts`): dealer cost plus
+   the staff minimum markup. Below it needs a manager.
+2. The suggested price (`priceFor`, `_shared/planner-pricing.ts`): dealer cost
+   plus the markup percent, capped by "Suggested price, most markup", and never
+   below cost plus the staff minimum markup. So the suggested price is always
+   inside the staff range and a default price never needs a manager. One
+   setting serves both: raising the staff minimum also raises the suggested
+   price on low-cost products.
+3. Administration > Pricing: the rules table, the form and each rule's sentence.
+
+**Prepare menu** says, in each cell's dialog: "Staff may price from $396.00 to
+$920.00, before surcharges. Outside that range needs a manager. No price may go
+below dealer cost ($321.00)."
