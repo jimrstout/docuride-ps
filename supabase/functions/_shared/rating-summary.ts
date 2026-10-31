@@ -11,6 +11,7 @@
 // Pure, so the planner page, Verify and the save all read one answer.
 
 import { groupOffers, type NormalizedFamily, type NormalizedOffer } from "./normalized-offer.ts";
+import { isServiceDriveOption } from "./service-drive.ts";
 import { normalizeOffer } from "./planner-offers.ts";
 
 /** A rated_offers row with its provider embedded. */
@@ -45,9 +46,24 @@ export function currentRows(rows: RatingRow[], ratedProviderIds: string[] | null
 export function familiesFromRow(row: RatingRow): NormalizedFamily[] {
   if (row.state !== "Rated" || row.out_of_date || row.response_payload == null) return [];
   const provider = row.provider ? { id: row.provider.id, name: row.provider.name } : null;
-  if (row.provider?.adapter === "TecAssured") return normalizeOffer(row.response_payload, provider);
+  if (row.provider?.adapter === "TecAssured") return pointOfSale(normalizeOffer(row.response_payload, provider));
   const offers = (row.response_payload as { offers?: NormalizedOffer[] }).offers;
-  return Array.isArray(offers) ? groupOffers(offers) : [];
+  return Array.isArray(offers) ? pointOfSale(groupOffers(offers)) : [];
+}
+
+/**
+ * Only what can be sold at the time of the vehicle sale (_shared/service-drive.ts):
+ * the Service Drive Surcharge is never offered. Every reader of a rating comes
+ * through here, so the menu, Prepare menu, the planner and the save all agree.
+ */
+function pointOfSale(families: NormalizedFamily[]): NormalizedFamily[] {
+  return families.map((f) => ({
+    ...f,
+    tiers: f.tiers.map((t) => ({
+      ...t,
+      rates: t.rates.map((r) => ({ ...r, options: (r.options ?? []).filter((o) => !isServiceDriveOption(o)) })),
+    })),
+  }));
 }
 
 /** Every current provider's offered families, together. */
