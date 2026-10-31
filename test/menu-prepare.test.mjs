@@ -146,16 +146,16 @@ test("the column footer's payment is the menu's own, to the cent", () => {
   assert.equal(model.columnFigures(sheet, s, "1", () => null).monthly, null);
 });
 
-test("the server's check: never below dealer cost, above the band needs a manager, purchased stays locked", () => {
+test("the server's check: never below dealer cost, outside the range needs a manager, purchased stays locked", () => {
   const sheet = buildSheet(input({ purchased: new Set([`${P}:BAT-1`]), purchased_prices: { [`${P}:BAT-1`]: 145 } }));
   const k = keyOf(sheet, "c24");
   assert.deepEqual(checkPreparation(sheet, { cells: {}, prices: { [k]: 52000 }, surcharges: [] }), {
-    errors: [], above_band: [], writes: [{ key: k, retail_cents: 52000, above_band: false }],
+    errors: [], above_band: [], below_band: [], writes: [{ key: k, retail_cents: 52000, above_band: false, below_band: false }],
   });
   const over = checkPreparation(sheet, { cells: {}, prices: { [k]: 60000 }, surcharges: [] });
   assert.deepEqual([over.errors, over.above_band, over.writes[0].above_band], [[], [k], true]);
   assert.deepEqual(checkPreparation(sheet, { cells: {}, prices: { [k]: 29999 }, surcharges: [] }).errors,
-    ["Sample Care, 2 years / Unlimited miles, No deductible: A price cannot be below dealer cost."]);
+    ["Sample Care, 2 years / Unlimited miles, No deductible: No price may go below dealer cost."]);
   const bat = keyOf(sheet, "t1");
   assert.deepEqual(checkPreparation(sheet, { cells: { "1": { Battery: bat } }, prices: { [bat]: 20000 }, surcharges: ["NOPE"] }).errors, [
     "A surcharge chosen is not offered on this vehicle.",
@@ -178,13 +178,13 @@ test("money reads as money", () => {
   assert.equal(model.readCents("abc"), null);
 });
 
-test("the endpoint: secret, managers above the band, locked once chosen, events, nothing priced in a log", () => {
+test("the endpoint: secret, managers outside the range, locked once chosen, events, nothing priced in a log", () => {
   const fn = read("supabase/functions/fni-menu-prepare/index.ts");
   assert.match(fn, /if \(!secretsMatch\(presented, Deno\.env\.get\("FNI_WEBHOOK_SECRET"\)\)\) return json\(401/);
   assert.match(fn, /if \(s\.menu_prices_locked_at\) return json\(409, \{ error: LOCKED \}\);/);
-  assert.match(fn, /if \(check\.above_band\.length > 0 && \(!\(await isManager\(supabase, body\.manager_id\)\) \|\| reason === "" \|\| managerName === ""\)\) \{\s*return json\(403, \{ error: NEEDS_MANAGER/);
+  assert.match(fn, /const outside = check\.above_band\.length \+ check\.below_band\.length;\s*if \(outside > 0 && \(!\(await isManager\(supabase, body\.manager_id\)\) \|\| reason === "" \|\| managerName === ""\)\) \{\s*return json\(403, \{ error: NEEDS_MANAGER/);
   assert.match(fn, /\.rpc\("is_menu_manager", \{ p_user: id \}\)/);
-  assert.ok(fn.includes('event: ABOVE_BAND_EVENT'));
+  assert.match(fn, /\[\[check\.above_band, ABOVE_BAND_EVENT\], \[check\.below_band, BELOW_BAND_EVENT\]\]/);
   assert.ok(fn.includes('event: UNLOCKED_EVENT'));
   assert.match(fn, /export const ABOVE_BAND_EVENT = "Price above the band allowed by a manager on Prepare menu";/);
   for (const m of fn.matchAll(/console\.\w+\("[^"]*",([^;]*)\);/g)) assert.doesNotMatch(m[1], /price\b|retail|reason|manager_name|label/, m[1]);

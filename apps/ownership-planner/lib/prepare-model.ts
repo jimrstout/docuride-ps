@@ -30,6 +30,8 @@ export interface SheetOption {
   price: number | null;
   band: Band;
   above_band: boolean;
+  /** Below the staff minimum markup, allowed by a manager. Absent from a server before migration 0047. */
+  below_band?: boolean;
   approved_by: string | null;
   reason: string | null;
   surcharge_codes: string[];
@@ -175,7 +177,10 @@ export interface CellFigures {
   price: number | null;
   profit: number | null;
   above_band: boolean;
-  below_floor: boolean;
+  /** Below the staff minimum markup: a manager can allow it. */
+  below_band: boolean;
+  /** Below dealer cost: never, a manager included. */
+  below_cost: boolean;
 }
 
 /** Dealer cost and price both carry the surcharges, which pass through at cost. */
@@ -187,7 +192,8 @@ export function cellFigures(o: SheetOption, state: PrepareState): CellFigures {
     price: price === null ? null : price + extra,
     profit: price === null ? null : price - o.dealer_cost,
     above_band: price !== null && price > o.band.top,
-    below_floor: price !== null && (price < o.band.floor || price < o.dealer_cost),
+    below_band: price !== null && price < o.band.floor && price >= o.dealer_cost,
+    below_cost: price !== null && price < o.dealer_cost,
   };
 }
 
@@ -250,14 +256,26 @@ export function payloadOf(
   return { cells: state.cells, prices, surcharges: state.surcharges, ...(financed ? { terms: state.terms } : {}) };
 }
 
-/** Whether a manager must sign in: any price on screen above its band. */
+/**
+ * Whether a manager must sign in: any price changed on screen outside the staff
+ * range, below the minimum markup or above the maximum. Below dealer cost is
+ * not a manager's to allow, so it is not here: it does not save.
+ */
 export function needsManager(sheet: PrepareSheet, state: PrepareState): string[] {
   return Object.entries(state.prices)
     .filter(([key, cents]) => {
       const o = findOption(sheet, key)?.option;
-      return !!o && cents !== o.price && cents > o.band.top;
+      return !!o && cents !== o.price && cents >= o.dealer_cost && (cents > o.band.top || cents < o.band.floor);
     })
     .map(([key]) => key);
+}
+
+/** The staff range in the cell dialog (docs section 29). */
+export function rangeText(o: SheetOption): string {
+  return (
+    `Staff may price from ${dollars(o.band.floor)} to ${dollars(o.band.top)}, before surcharges. ` +
+    `Outside that range needs a manager. No price may go below dealer cost (${dollars(o.dealer_cost)}).`
+  );
 }
 
 /** "$1,234.56" from cents. */

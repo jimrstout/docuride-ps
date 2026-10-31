@@ -49,6 +49,8 @@ export interface CatalogPlan {
 export interface DealPrice {
   retail_price: number;
   above_band: boolean;
+  /** Below the staff minimum markup, allowed by a manager (migration 0047). */
+  below_band?: boolean;
   approved_by: string | null;
   reason: string | null;
 }
@@ -70,6 +72,8 @@ export interface SheetOption {
   price: number | null;
   band: Band;
   above_band: boolean;
+  /** Priced below the staff minimum markup, allowed by a manager. */
+  below_band: boolean;
   approved_by: string | null;
   reason: string | null;
   /** The codes of the surcharges that apply to it on this deal. */
@@ -259,6 +263,7 @@ export function buildSheet(input: SheetInput): PrepareSheet {
             price: deal ? cents(deal.retail_price) : rulePrice,
             band,
             above_band: deal?.above_band ?? false,
+            below_band: deal?.below_band ?? false,
             approved_by: deal?.approved_by ?? null,
             reason: deal?.reason ?? null,
             surcharge_codes: s.codes,
@@ -388,17 +393,21 @@ export interface PreparationCheck {
   errors: string[];
   /** Options priced above the band: a manager and a reason are needed. */
   above_band: string[];
-  writes: { key: string; retail_cents: number; above_band: boolean }[];
+  /** Options priced below the staff minimum markup: a manager and a reason are needed. */
+  below_band: string[];
+  writes: { key: string; retail_cents: number; above_band: boolean; below_band: boolean }[];
 }
 
 /**
  * Check what Prepare menu sends against the sheet. Plain English, one sentence
- * per problem. A price is never below dealer cost; above the band is allowed
- * only with a manager, which the caller checks.
+ * per problem. A price is never below dealer cost; outside the staff range
+ * (below the minimum markup or above the maximum) is allowed only with a
+ * manager, which the caller checks.
  */
 export function checkPreparation(sheet: PrepareSheet, p: Preparation): PreparationCheck {
   const errors: string[] = [];
   const above: string[] = [];
+  const below: string[] = [];
   const writes: PreparationCheck["writes"] = [];
   const known = new Set(sheet.surcharges.available.map((s) => s.code));
   for (const code of p.surcharges) if (!known.has(code)) errors.push("A surcharge chosen is not offered on this vehicle.");
@@ -425,9 +434,10 @@ export function checkPreparation(sheet: PrepareSheet, p: Preparation): Preparati
     const check = checkPrice(priceCents, option.dealer_cost / 100, option.band);
     if (!check.ok) { errors.push(`${name}: ${check.reason}`); continue; }
     if (check.above_band) above.push(key);
-    writes.push({ key, retail_cents: priceCents, above_band: check.above_band });
+    if (check.below_band) below.push(key);
+    writes.push({ key, retail_cents: priceCents, above_band: check.above_band, below_band: check.below_band });
   }
-  return { errors: [...new Set(errors)], above_band: above, writes };
+  return { errors: [...new Set(errors)], above_band: above, below_band: below, writes };
 }
 
 // ── What Present menu takes from it ───────────────────────────────────────

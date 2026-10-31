@@ -2,7 +2,7 @@
 
 // app/prepare/[sessionId]/actions.ts: saving Prepare menu.
 //
-// Signed-in staff only. A price above the band needs a manager to sign in on
+// Signed-in staff only. A price outside the staff range needs a manager to sign in on
 // the screen and give a reason: their email and password are checked here
 // through fni-admin-auth, never kept, and fni-menu-prepare checks the manager
 // role (fni.is_menu_manager) before saving. The manager's name and the reason
@@ -42,7 +42,7 @@ export async function savePreparedMenu(
 
   let approval: { manager_id: string; manager_name: string; reason: string } | Record<string, never> = {};
   if (manager) {
-    if (manager.reason.trim() === "") return { ok: false, error: "Give a reason for the price above the band." };
+    if (manager.reason.trim() === "") return { ok: false, error: "Give a reason for the price outside the staff range." };
     try {
       const signedIn = await edge.adminAuth<{ user_id: string; email: string }>(manager.email.trim(), manager.password);
       approval = { manager_id: signedIn.user_id, manager_name: nameFromEmail(signedIn.email), reason: manager.reason.trim() };

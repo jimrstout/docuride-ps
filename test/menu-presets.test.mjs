@@ -106,10 +106,11 @@ test("the band: never below dealer cost, the minimum markup up to the maximum, t
   // An odd cost keeps its cents: 33.3% of $199.99 is $66.60 (66.597 rounded).
   assert.deepEqual(priceBand(199.99, null, { max_markup_percent: 33.3 }), { floor: 19999, top: 26659 });
 
-  assert.deepEqual(checkPrice(40000, 300, band), { ok: true, above_band: false });
-  assert.deepEqual(checkPrice(42001, 300, band), { ok: true, above_band: true });
-  assert.deepEqual(checkPrice(29999, 300, band), { ok: false, reason: "A price cannot be below dealer cost." });
-  assert.deepEqual(checkPrice(31000, 300, band), { ok: false, reason: "The price is below the lowest this product may be sold for." });
+  assert.deepEqual(checkPrice(40000, 300, band), { ok: true, above_band: false, below_band: false });
+  assert.deepEqual(checkPrice(42001, 300, band), { ok: true, above_band: true, below_band: false });
+  assert.deepEqual(checkPrice(29999, 300, band), { ok: false, reason: "No price may go below dealer cost." });
+  // Below the staff minimum markup: a manager can allow it (docs section 29).
+  assert.deepEqual(checkPrice(31000, 300, band), { ok: true, above_band: false, below_band: true });
   assert.equal(checkPrice(400.5, 300, band).ok, false);
 });
 

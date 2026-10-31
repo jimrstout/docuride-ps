@@ -48,11 +48,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 
 export const PREPARED_EVENT = "Menu prepared";
 export const ABOVE_BAND_EVENT = "Price above the band allowed by a manager on Prepare menu";
+export const BELOW_BAND_EVENT = "Price below the band allowed by a manager on Prepare menu";
 export const UNLOCKED_EVENT = "Returned to Prepare menu after the customer chose a package";
 export const RESET_EVENT = "Menu reset to the prepared state";
 export const LOCKED =
   "The customer chose a package, so its prices are locked. Return to Prepare menu to change them; that is recorded on the deal.";
-export const NEEDS_MANAGER = "A price above the band needs a manager to sign in and give a reason.";
+export const NEEDS_MANAGER = "A price outside the staff range needs a manager to sign in and give a reason.";
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
@@ -178,8 +179,11 @@ serve(async (req: Request) => {
 
     const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 500) : "";
     const managerName = typeof body.manager_name === "string" ? body.manager_name.trim().slice(0, 120) : "";
-    if (check.above_band.length > 0 && (!(await isManager(supabase, body.manager_id)) || reason === "" || managerName === "")) {
-      return json(403, { error: NEEDS_MANAGER, above_band: check.above_band });
+    // Outside the staff range, either way, needs a manager and a reason (docs
+    // section 29). Below dealer cost was refused above, for everyone.
+    const outside = check.above_band.length + check.below_band.length;
+    if (outside > 0 && (!(await isManager(supabase, body.manager_id)) || reason === "" || managerName === "")) {
+      return json(403, { error: NEEDS_MANAGER, above_band: check.above_band, below_band: check.below_band });
     }
 
     const now = new Date().toISOString();
@@ -190,8 +194,9 @@ serve(async (req: Request) => {
           option_key: w.key,
           retail_price: w.retail_cents / 100,
           above_band: w.above_band,
-          approved_by: w.above_band ? managerName : null,
-          reason: w.above_band ? reason : null,
+          below_band: w.below_band,
+          approved_by: w.above_band || w.below_band ? managerName : null,
+          reason: w.above_band || w.below_band ? reason : null,
           set_by: who,
           set_at: now,
         })),
@@ -212,14 +217,15 @@ serve(async (req: Request) => {
     const events: Record<string, unknown>[] = [
       { session_id: id, event: PREPARED_EVENT, detail: { prices_set: check.writes.length, surcharges: surcharges.length }, created_by: who },
     ];
-    if (check.above_band.length > 0) {
+    for (const [keys, event] of [[check.above_band, ABOVE_BAND_EVENT], [check.below_band, BELOW_BAND_EVENT]] as const) {
+      if (keys.length === 0) continue;
       events.push({
         session_id: id,
-        event: ABOVE_BAND_EVENT,
+        event,
         detail: {
           manager: managerName,
           reason,
-          products: check.above_band.map((k) => {
+          products: keys.map((k) => {
             const f = optionFor(sheet, k);
             return f ? `${f.plan.plan_name}, ${f.option.label}` : k;
           }),
@@ -230,7 +236,7 @@ serve(async (req: Request) => {
     const { error: eErr } = await supabase.schema("fni").from("session_events").insert(events);
     if (eErr) console.error("fni-menu-prepare events not recorded", { session: id, code: eErr.code ?? null });
 
-    console.log("fni-menu-prepare saved", { session: id, prices: check.writes.length, above_band: check.above_band.length, surcharges: surcharges.length });
+    console.log("fni-menu-prepare saved", { session: id, prices: check.writes.length, above_band: check.above_band.length, below_band: check.below_band.length, surcharges: surcharges.length });
     return await reply(supabase, (await session(supabase, id))!, 200, { saved: true });
   } catch (err) {
     console.error("fni-menu-prepare error", { kind: err instanceof Error ? err.name : "error" });
