@@ -537,6 +537,8 @@ export interface VerifySheet {
   not_ready_reason: string | null;
   /** The customer chose a payment term other than the deal's own (docs section 26). */
   chosen_term_note?: string | null;
+  /** One line per selection saved on a service drive plan, which Submit refuses (docs section 28). */
+  service_drive_lines?: string[];
   /**
    * The store's day and the CRM sale date (migrations 0038 and 0044): when this
    * session ends, why Submit would be refused on the deal's dates today, the

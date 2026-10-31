@@ -55,3 +55,83 @@ export function serviceDrivePresetNote(fallback: string | null): string {
     ? `Preset plan is for service drive sales only; using ${fallback} instead.`
     : "Preset plan is for service drive sales only, and no other plan is offered here.";
 }
+
+// ── A selection already on a service drive plan ──────────────────────────
+// Saved before these plans were left out. It is not changed: staff see a plain
+// line on Details and Prepare menu, and Submit refuses it with the same words.
+
+export const SERVICE_DRIVE_EVENT = "Submit stopped: a service drive plan cannot be submitted";
+
+/** "Mechanical Protection, Service Drive is a service drive plan and cannot be submitted." */
+export function serviceDriveLine(name: string): string {
+  return `${name} is a service drive plan and cannot be submitted.`;
+}
+
+export interface SavedSelection {
+  provider_product_id: string | null;
+  product_name: string | null;
+  disposition?: string | null;
+  rate_snapshot?: unknown;
+}
+
+/**
+ * The Included selections on a service drive plan, each named as the catalog
+ * names it (else as saved). By name, the catalog's or the saved one, or a
+ * Service Drive Surcharge the saved rate had to carry.
+ */
+export function serviceDriveSelections(rows: SavedSelection[], catalogNames: Record<string, string>): { code: string; name: string }[] {
+  const out: { code: string; name: string }[] = [];
+  for (const r of rows) {
+    if (r.disposition !== undefined && r.disposition !== "Included") continue;
+    const code = r.provider_product_id ?? "";
+    const catalog = catalogNames[code] ?? null;
+    const options = ((r.rate_snapshot as { options?: unknown } | null)?.options ?? []) as { code?: unknown; unique?: unknown; label?: unknown; mandatory?: unknown }[];
+    const mandatory = Array.isArray(options) && options.some((o) => o?.mandatory === true && isServiceDriveOption(o));
+    if (isServiceDriveName(catalog) || isServiceDriveName(r.product_name) || mandatory) {
+      if (!out.some((o) => o.code === code)) out.push({ code, name: catalog ?? r.product_name ?? "A product" });
+    }
+  }
+  return out;
+}
+
+/** A product in a rated quote, by its unique, as the provider sent it. */
+export function quoteProduct(payload: unknown, unique: string): Record<string, unknown> | null {
+  const root = (payload as { quote?: unknown } | null)?.quote ?? payload;
+  const vehicles = ((root as { vehicles?: unknown } | null)?.vehicles ?? []) as { products?: unknown }[];
+  for (const v of Array.isArray(vehicles) ? vehicles : []) {
+    for (const p of (Array.isArray(v?.products) ? v.products : []) as Record<string, unknown>[]) {
+      if (String(p?.unique ?? "") === unique) return p;
+    }
+  }
+  return null;
+}
+
+/** A product in a rated quote that is a service drive plan: its label, blurb or a mandatory Service Drive Surcharge. */
+export function isServiceDriveQuoteProduct(payload: unknown, unique: string): boolean {
+  const p = quoteProduct(payload, unique);
+  if (!p) return false;
+  const rates = (Array.isArray(p.rates) ? p.rates : []) as { options?: unknown }[];
+  return isServiceDrivePlan({
+    product_name: p.label ?? p.desc,
+    raw: p,
+    rates: rates.map((r) => ({ options: (Array.isArray(r?.options) ? r.options : []) as { code?: unknown; label?: unknown; mandatory?: unknown }[] })),
+  });
+}
+
+/** The session's lines for Details and Prepare menu: one per Included selection on a service drive plan. */
+export async function serviceDriveLines(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  sessionId: string
+): Promise<string[]> {
+  const { data } = await supabase.schema("fni").from("selected_products")
+    .select("provider_product_id, product_name, disposition, rate_snapshot").eq("session_id", sessionId).eq("disposition", "Included");
+  const rows = (data ?? []) as SavedSelection[];
+  if (rows.length === 0) return [];
+  const codes = [...new Set(rows.map((r) => r.provider_product_id).filter((c): c is string => !!c))];
+  const { data: catalog } = codes.length
+    ? await supabase.schema("fni").from("product_catalog").select("product_code, display_name").in("product_code", codes).is("store_id", null)
+    : { data: [] };
+  const names = Object.fromEntries(((catalog ?? []) as { product_code: string; display_name: string }[]).map((c) => [c.product_code, c.display_name]));
+  return serviceDriveSelections(rows, names).map((s) => serviceDriveLine(s.name));
+}

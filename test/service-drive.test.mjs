@@ -126,3 +126,57 @@ test("the preset pickers leave service drive plans out, and saving one is refuse
   const page = src("../apps/ownership-planner/app/admin/menus/page.tsx");
   assert.match(page, /\{p\.plan_name\} \(not offered: choose another\)/);
 });
+
+// ── A selection already on a service drive plan ──────────────────────────
+
+import { SERVICE_DRIVE_EVENT, isServiceDriveQuoteProduct, serviceDriveLine, serviceDriveSelections } from "../supabase/functions/_shared/service-drive.ts";
+
+test("a saved selection on a service drive plan is found, named as the catalog names it, and not changed", () => {
+  const catalog = { "C-SD": "Mechanical Protection, Service Drive", "P-SD": "Mechanical Protection, Premium Service Drive", "C-1": "Mechanical Protection" };
+  const rows = [
+    { provider_product_id: "C-SD", product_name: "Mechanical Protection, Service Drive", disposition: "Included" },
+    { provider_product_id: "P-SD", product_name: "SAMPLE PREMIUM CARE-SVC DRIVE", disposition: "Included" },
+    // Declined: nothing to submit, nothing to say.
+    { provider_product_id: "C-SD", product_name: "Mechanical Protection, Service Drive", disposition: "Managed by Customer" },
+    { provider_product_id: "C-1", product_name: "Mechanical Protection", disposition: "Included" },
+    // Known only by the surcharge its saved rate had to carry.
+    { provider_product_id: "X-9", product_name: "SAMPLE CARE", disposition: "Included", rate_snapshot: { options: [{ unique: "Service_Drive", mandatory: true }] } },
+  ];
+  const before = JSON.stringify(rows);
+  assert.deepEqual(serviceDriveSelections(rows, catalog), [
+    { code: "C-SD", name: "Mechanical Protection, Service Drive" },
+    { code: "P-SD", name: "Mechanical Protection, Premium Service Drive" },
+    { code: "X-9", name: "SAMPLE CARE" },
+  ]);
+  assert.equal(JSON.stringify(rows), before);
+  assert.equal(serviceDriveLine("Mechanical Protection, Service Drive"),
+    "Mechanical Protection, Service Drive is a service drive plan and cannot be submitted.");
+});
+
+test("Submit refuses a service drive plan with the same words and a session event, before anything is sent", () => {
+  // The provider's fixture: 86_3 is USED ATV/UTV CARE-SVC DRIVE.
+  assert.ok(isServiceDriveQuoteProduct(QUOTE, "86_3"));
+  assert.ok(!isServiceDriveQuoteProduct(QUOTE, "16_3"));
+  assert.ok(!isServiceDriveQuoteProduct(QUOTE, "84_7"));
+  const submit = src("../supabase/functions/fni-contract-submit/index.ts");
+  const step = submit.slice(submit.indexOf("// ── Step 4a: Never a service drive plan"), submit.indexOf("// And every one must have a dealer cost"));
+  assert.match(step, /serviceDriveLine\(sdNames\[r\.providerProductId\] \?\? r\.productName\)/);
+  assert.match(step, /event: SERVICE_DRIVE_EVENT,\s*detail: \{ products: serviceDrive\.map\(\(x\) => x\.code\) \}/);
+  assert.match(step, /return await refuse\(409, \{ error: `Nothing was sent\. \$\{serviceDrive\.map\(\(x\) => x\.line\)\.join\(" "\)\}`/);
+  // Logs carry the session and a count only.
+  assert.match(step, /console\.warn\("fni-contract-submit stopped: service drive plan", \{ session: session_id, products: serviceDrive\.length \}\)/);
+  // Before the quote is cut down and sent.
+  assert.ok(submit.indexOf("Step 4a: Never a service drive plan") < submit.indexOf("const { quote: submitQuote } = buildSubmitQuote("));
+  assert.equal(SERVICE_DRIVE_EVENT, "Submit stopped: a service drive plan cannot be submitted");
+});
+
+test("Details and Prepare menu show the same plain line", () => {
+  const verify = src("../supabase/functions/fni-session-verify/index.ts");
+  assert.match(verify, /service_drive_lines: await serviceDriveLines\(supabase, s\.id as string\)/);
+  const prep = src("../supabase/functions/fni-menu-prepare/index.ts");
+  assert.match(prep, /service_drive_lines: serviceDrive,/);
+  const details = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  assert.match(details, /\(sheet\.service_drive_lines \?\? \[\]\)\.map\(\(line\) => \(\s*<p key=\{line\} className="console-flash console-flash--bad" role="alert">\{line\}<\/p>/);
+  const screen = src("../apps/ownership-planner/app/prepare/[sessionId]/Prepare.tsx");
+  assert.match(screen, /\(data\.service_drive_lines \?\? \[\]\)\.map\(\(line\) => \(\s*<p key=\{line\} className="pm-note pm-note--bad" role="alert">\{line\}<\/p>/);
+});
