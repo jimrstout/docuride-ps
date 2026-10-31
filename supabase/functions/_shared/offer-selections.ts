@@ -19,6 +19,8 @@
 // contract. It is a module so that test/planner-offer-shape.test.mjs can run it
 // against the real 78KB quote in test/fixtures/.
 
+import { isServiceDriveOption } from "./service-drive.ts";
+
 export interface ProductSelection {
   product_unique: string;
   rate_unique: string;
@@ -165,7 +167,12 @@ export function applySelections(
             // A mandatory option is not a choice, so it rides along whether or
             // not the customer ticked it. Real quotes do use mandatory: true --
             // the Service Drive surcharge on USED ATV/UTV CARE-SVC DRIVE.
-            if (selectedOptions.has(optUnique) || o.mandatory === true) {
+            // The Service Drive Surcharge is never sent: PS sells only at the
+            // time of the vehicle sale (_shared/service-drive.ts). A plan that
+            // requires it is refused before this (fni-contract-submit).
+            if (isServiceDriveOption(o)) {
+              o.selected = false;
+            } else if (selectedOptions.has(optUnique) || o.mandatory === true) {
               o.selected = true;
               optionCostTotal += amountOf(o.dealerCost) ?? 0;
             } else {

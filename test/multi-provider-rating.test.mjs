@@ -43,7 +43,11 @@ const sheetOffers = rateFromSheet(
 
 test("a TecAssured-only rating reads back exactly as before", () => {
   const families = familiesFromRows([row(RA)]);
-  assert.deepEqual(families, normalizeOffer(QUOTE, { id: RA.id, name: RA.name }));
+  // As before, less the Service Drive Surcharge, which PS never offers (_shared/service-drive.ts).
+  const expected = normalizeOffer(QUOTE, { id: RA.id, name: RA.name }).map((f) => ({ ...f, tiers: f.tiers.map((t) => ({
+    ...t, rates: t.rates.map((r) => ({ ...r, options: r.options.filter((o) => o.code !== "Service_Drive") })) })) }));
+  assert.deepEqual(families, expected);
+  assert.ok(families.flatMap((f) => f.tiers.flatMap((t) => t.rates.flatMap((r) => r.options))).every((o) => o.code !== "Service_Drive"));
   const s = ratingSummary([row(RA)]);
   assert.equal(s.state, "Rated");
   assert.equal(s.product_count, 11);

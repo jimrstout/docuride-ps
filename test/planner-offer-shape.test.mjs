@@ -111,26 +111,29 @@ test("the old behaviour would have been 754_6 and Unknown", () => {
 });
 
 test("a mandatory option rides along unticked, and is costed", () => {
-  // USED ATV/UTV CARE-SVC DRIVE carries Service_Drive as mandatory: true.
+  // Mock: Trailer made mandatory on USED ATV/UTV CARE (the fixture's only
+  // mandatory option is the Service Drive Surcharge, which is never sent).
   const offer = fresh();
-  const resolved = applySelections(offer, [
-    { product_unique: "86_3", rate_unique: "2210-5", retail_price: 1200 },
-  ]);
+  const rate = offer.quote.vehicles[0].products.find((p) => p.unique === "16_3").rates.find((x) => x.unique === "1898-5");
+  const trailer = rate.options.find((o) => o.unique === "Trailer");
+  trailer.mandatory = true;
+  const r = applySelections(offer, [{ product_unique: "16_3", rate_unique: "1898-5", retail_price: 1500 }])[0];
+  assert.equal(trailer.selected, true, "a mandatory option must be selected");
+  assert.equal(r.optionCostTotal, trailer.dealerCost.amount);
+  // Everything the customer did not tick stays off.
+  for (const o of rate.options.filter((x) => x.unique !== "Trailer")) assert.equal(o.selected, false);
+});
 
-  const r = resolved[0];
-  assert.equal(r.dealerCost, 903);
-
-  const rate = offer.quote.vehicles[0].products
-    .find((p) => p.unique === "86_3").rates.find((x) => x.unique === "2210-5");
+test("the Service Drive Surcharge is never selected, even where the provider marks it mandatory", () => {
+  // USED ATV/UTV CARE-SVC DRIVE carries Service_Drive as mandatory: true. PS
+  // sells only at the vehicle sale, and Submit refuses that plan before this.
+  const offer = fresh();
+  const r = applySelections(offer, [{ product_unique: "86_3", rate_unique: "2210-5", retail_price: 1200 }])[0];
+  const rate = offer.quote.vehicles[0].products.find((p) => p.unique === "86_3").rates.find((x) => x.unique === "2210-5");
   const svc = rate.options.find((o) => o.unique === "Service_Drive");
   assert.equal(svc.mandatory, true);
-  assert.equal(svc.selected, true, "a mandatory option must be selected");
-  // Its dealerCost is 0.0 here, so it adds nothing -- but it was counted.
+  assert.equal(svc.selected, false);
   assert.equal(r.optionCostTotal, 0);
-  // Everything the customer did not tick stays off.
-  for (const o of rate.options.filter((x) => x.unique !== "Service_Drive")) {
-    assert.equal(o.selected, false);
-  }
 });
 
 test("a ticked option is added to the option cost", () => {
@@ -188,13 +191,28 @@ test("selling at the offered price is not over the cap", () => {
 });
 
 test("a ticked option raises the cap by its cost", () => {
-  // Service_Drive is 250, so 1044 + 50 + 250 = 1344 becomes sellable.
-  const r = applySelections(fresh(), [
-    { product_unique: "84_7", rate_unique: "2192", option_uniques: ["Service_Drive"], retail_price: 1344 },
+  // Trailer on USED ATV/UTV CARE: the cap rises by exactly its dealer cost.
+  const offer = fresh();
+  const base = applySelections(fresh(), [{ product_unique: "16_3", rate_unique: "1898-5", retail_price: 100 }])[0];
+  const trailer = offer.quote.vehicles[0].products.find((p) => p.unique === "16_3").rates.find((x) => x.unique === "1898-5")
+    .options.find((o) => o.unique === "Trailer").dealerCost.amount;
+  const r = applySelections(offer, [{ product_unique: "16_3", rate_unique: "1898-5", option_uniques: ["Trailer"], retail_price: 100 }])[0];
+  assert.equal(r.optionCostTotal, trailer);
+  assert.equal(Math.round((r.offeredPrice - base.offeredPrice) * 100), Math.round(trailer * 100));
+});
+
+test("the Service Drive Surcharge, even ticked, is never sent or costed", () => {
+  // It is optional on the maintenance plans; it marks a sale after the vehicle sale.
+  const offer = fresh();
+  const r = applySelections(offer, [
+    { product_unique: "84_7", rate_unique: "2192", option_uniques: ["Service_Drive"], retail_price: 1094 },
   ])[0];
-  assert.equal(r.optionCostTotal, 250);
-  assert.equal(r.offeredPrice, 1344);
-  assert.equal(r.overCap, false);
+  assert.equal(r.optionCostTotal, 0);
+  const svc = offer.quote.vehicles[0].products.find((p) => p.unique === "84_7").rates.find((x) => x.unique === "2192")
+    .options.find((o) => o.unique === "Service_Drive");
+  assert.equal(svc.selected, false);
+  const { quote } = buildSubmitQuote(fresh(), [{ product_unique: "84_7", rate_unique: "2192", option_uniques: ["Service_Drive"], retail_price: 1094 }]);
+  assert.deepEqual(quote.vehicles[0].products[0].rates[0].options, []);
 });
 
 // ── Submit takes a pruned quote ──────────────────────────────────────────
@@ -226,13 +244,13 @@ test("the pruned quote keeps the envelope that ties it to the rate", () => {
 });
 
 test("pruning keeps mandatory options and drops the rest", () => {
-  const { quote, resolved } = buildSubmitQuote(fresh(), [
-    { product_unique: "86_3", rate_unique: "2210-5", retail_price: 903 },
-  ]);
+  // Mock: Trailer made mandatory on USED ATV/UTV CARE.
+  const offer = fresh();
+  offer.quote.vehicles[0].products.find((p) => p.unique === "16_3").rates.find((x) => x.unique === "1898-5")
+    .options.find((o) => o.unique === "Trailer").mandatory = true;
+  const { quote, resolved } = buildSubmitQuote(offer, [{ product_unique: "16_3", rate_unique: "1898-5", retail_price: 1500 }]);
   const options = quote.vehicles[0].products[0].rates[0].options;
-  assert.equal(options.length, 1);
-  assert.equal(options[0].unique, "Service_Drive");
-  assert.equal(options[0].mandatory, true);
+  assert.deepEqual(options.map((o) => [o.unique, o.mandatory]), [["Trailer", true]]);
   assert.equal(resolved.length, 1);
 });
 
