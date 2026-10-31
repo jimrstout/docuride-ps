@@ -292,3 +292,48 @@ export function readCents(typed: string): number | null {
   const [whole, frac = ""] = s.split(".");
   return Number(whole) * 100 + Number((frac + "00").slice(0, 2));
 }
+
+/**
+ * "Apply to all columns" in a cell's dialog: the option chosen in one column
+ * set on the same category in every column, "Not included" ones too. Its price
+ * is the option's one shared price, as always. A column whose cell is locked
+ * by a purchased product, or that does not offer the option, is skipped and
+ * named in one plain line each. Nothing is saved until Save.
+ *
+ * Today a purchase locks its category in every column, and every column
+ * offers the same rated options, so neither skip arises from the sheet as
+ * built; the checks are per column so they hold if either changes.
+ */
+export function applyToAllColumns(
+  sheet: PrepareSheet,
+  state: PrepareState,
+  fromPos: string,
+  category: string,
+  check: {
+    locked?: (pos: string, category: string) => boolean;
+    offers?: (pos: string, key: string) => boolean;
+  } = {}
+): { state: PrepareState; skipped: string[] } {
+  const key = state.cells[fromPos]?.[category] ?? null;
+  const locked = check.locked ?? ((_pos: string, cat: string) => sheet.purchased.some((p) => p.category === cat));
+  const offers = check.offers ?? ((_pos: string, k: string) => {
+    const found = findOption(sheet, k);
+    return !!found && found.category === category && !found.plan.purchased;
+  });
+  const cells = { ...state.cells };
+  const skipped: string[] = [];
+  for (const c of sheet.columns) {
+    const pos = String(c.position);
+    if (pos === fromPos) continue;
+    if (locked(pos, category)) {
+      skipped.push(`${c.name} was not changed: a purchased product is locked there.`);
+      continue;
+    }
+    if (key !== null && !offers(pos, key)) {
+      skipped.push(`${c.name} was not changed: this plan is not available for this vehicle in that column.`);
+      continue;
+    }
+    cells[pos] = { ...cells[pos], [category]: key };
+  }
+  return { state: { ...state, cells }, skipped };
+}

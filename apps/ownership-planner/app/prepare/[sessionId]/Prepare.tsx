@@ -23,6 +23,7 @@ import {
   columnFigures,
   dollars,
   alsoAppliesTo,
+  applyToAllColumns,
   countChosen,
   findOption,
   initialState,
@@ -46,6 +47,9 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
   const [data, setData] = useState(initial);
   const [state, setState] = useState<PrepareState>(() => initialState(initial.sheet));
   const [editing, setEditing] = useState<{ pos: string; category: string } | null>(null);
+  // "Apply to all columns" in the cell dialog: unchecked each time it opens.
+  const [applyAll, setApplyAll] = useState(false);
+  const [skipped, setSkipped] = useState<string[]>([]);
   const [message, setMessage] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [pending, start] = useTransition();
   const [manager, setManager] = useState({ email: "", password: "", reason: "" });
@@ -135,6 +139,8 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
   const open = (pos: string, category: string) => {
     if (locked) return;
     setEditing({ pos, category });
+    setApplyAll(false);
+    setSkipped([]);
     cellDialog.current?.showModal();
   };
 
@@ -205,6 +211,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
         <p key={line} className="pm-note pm-note--bad" role="alert">{line}</p>
       ))}
       {message ? <p className={message.tone === "ok" ? "pm-note" : "pm-note pm-note--bad"} role="status">{message.text}</p> : null}
+      {skipped.map((line) => <p key={line} className="pm-note" role="status">{line}</p>)}
 
       <div className="pm-tabs" role="tablist" aria-label="Columns">
         {sheet.columns.map((c) => (
@@ -287,7 +294,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
         </div>
       </div>
 
-      <dialog ref={cellDialog} className="pm-dialog" onClose={() => setEditing(null)}>
+      <dialog ref={cellDialog} className="pm-dialog" onClose={() => { setEditing(null); setApplyAll(false); }}>
         {editing ? (
           <div className="pm-dialog-body">
             <h2>{sheet.columns.find((c) => String(c.position) === editing.pos)?.name}: {editing.category}</h2>
@@ -371,8 +378,28 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
                 </p>
               </>
             ) : null}
+            <label className="pm-check">
+              <input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} /> Apply to all columns
+            </label>
             <div className="pm-dialog-actions">
-              <button type="button" className="pm-btn pm-btn--go" onClick={() => cellDialog.current?.close()}>Done</button>
+              <button
+                type="button"
+                className="pm-btn pm-btn--go"
+                onClick={() => {
+                  // Set on the same category in every column, as the open one now stands.
+                  // Nothing is saved until Save.
+                  if (applyAll && editing) {
+                    const r = applyToAllColumns(sheet, state, editing.pos, editing.category);
+                    setState(r.state);
+                    setSkipped(r.skipped);
+                  } else {
+                    setSkipped([]);
+                  }
+                  cellDialog.current?.close();
+                }}
+              >
+                Done
+              </button>
             </div>
           </div>
         ) : null}
