@@ -11,7 +11,7 @@
 // Pure, so the planner page, Verify and the save all read one answer.
 
 import { groupOffers, type NormalizedFamily, type NormalizedOffer } from "./normalized-offer.ts";
-import { isServiceDriveOption } from "./service-drive.ts";
+import { isServiceDriveOption, isServiceDrivePlan } from "./service-drive.ts";
 import { normalizeOffer } from "./planner-offers.ts";
 
 /** A rated_offers row with its provider embedded. */
@@ -53,17 +53,22 @@ export function familiesFromRow(row: RatingRow): NormalizedFamily[] {
 
 /**
  * Only what can be sold at the time of the vehicle sale (_shared/service-drive.ts):
- * the Service Drive Surcharge is never offered. Every reader of a rating comes
- * through here, so the menu, Prepare menu, the planner and the save all agree.
+ * no service drive plan, and the Service Drive Surcharge never offered. Every
+ * reader of a rating comes through here, so the menu, Prepare menu, the planner
+ * and the save all agree.
  */
-function pointOfSale(families: NormalizedFamily[]): NormalizedFamily[] {
-  return families.map((f) => ({
-    ...f,
-    tiers: f.tiers.map((t) => ({
-      ...t,
-      rates: t.rates.map((r) => ({ ...r, options: (r.options ?? []).filter((o) => !isServiceDriveOption(o)) })),
-    })),
-  }));
+export function pointOfSale(families: NormalizedFamily[]): NormalizedFamily[] {
+  return families
+    .map((f) => ({
+      ...f,
+      tiers: f.tiers
+        .filter((t) => !isServiceDrivePlan(t))
+        .map((t) => ({
+          ...t,
+          rates: t.rates.map((r) => ({ ...r, options: (r.options ?? []).filter((o) => !isServiceDriveOption(o)) })),
+        })),
+    }))
+    .filter((f) => f.tiers.length > 0);
 }
 
 /** Every current provider's offered families, together. */

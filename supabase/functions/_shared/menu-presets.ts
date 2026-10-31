@@ -35,6 +35,8 @@
 //
 // Pure, so a Node test can hold it. Words are for staff: plain English.
 
+import { isServiceDriveName } from "./service-drive.ts";
+
 export const CATEGORIES = [
   "Mechanical Protection", "Maintenance", "Tire and Wheel", "Theft", "Battery", "Appearance", "Other",
 ] as const;
@@ -259,7 +261,8 @@ export function parsePresets(
       const deductible = intOrNull(f("deductible"));
       const kind = String(f("kind") ?? "").trim();
       if (plan === "" && term === null && miles === null && deductible === null && kind === "") return;
-      if (plan !== "" && !planNames.has(plan)) errors.push(`Column ${pos}, ${category}: "${plan}" is not a plan in the catalog.`);
+      if (plan !== "" && isServiceDriveName(plan)) errors.push(`Column ${pos}, ${category}: ${plan} is for service drive sales only. Choose another plan.`);
+      else if (plan !== "" && !planNames.has(plan)) errors.push(`Column ${pos}, ${category}: "${plan}" is not a plan in the catalog.`);
       if (Number.isNaN(term) || term === 0) errors.push(`Column ${pos}, ${category}: the term is not a number of months.`);
       if (Number.isNaN(miles)) errors.push(`Column ${pos}, ${category}: the mileage is not a number.`);
       if (Number.isNaN(deductible)) errors.push(`Column ${pos}, ${category}: the deductible is not a dollar amount.`);

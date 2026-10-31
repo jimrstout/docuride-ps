@@ -29,6 +29,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { conditionsLine, parseSlot, parseTemplate } from "../_shared/menu-admin.ts";
 import { VEHICLE_TYPES } from "../_shared/vehicle-types.ts";
+import { isServiceDriveName } from "../_shared/service-drive.ts";
 import { columnsFor, parseColumns } from "../_shared/menu-columns.ts";
 import type { Reply } from "./providers.ts";
 import { CATEGORIES, DEAL_TYPES, parsePresets, presetLine, type Preset } from "../_shared/menu-presets.ts";
@@ -66,12 +67,16 @@ async function context(supabase: SupabaseClient, tenantId: string) {
   return { stores: (stores ?? []) as { id: string; name: string }[], products };
 }
 
-/** Each category's plans as the catalog names them, lowest first. */
+/**
+ * Each category's plans as the catalog names them, lowest first, for the
+ * preset pickers. Service drive plans are left out: PS sells only at the time
+ * of the vehicle sale (_shared/service-drive.ts).
+ */
 function planNames(products: { name: string; category: string; order: number }[]): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   for (const c of CATEGORIES) {
     const seen = new Map<string, number>();
-    for (const p of products.filter((p) => p.category === c)) {
+    for (const p of products.filter((p) => p.category === c && !isServiceDriveName(p.name))) {
       seen.set(p.name, Math.min(seen.get(p.name) ?? Infinity, p.order));
     }
     out[c] = [...seen.entries()].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])).map(([n]) => n);

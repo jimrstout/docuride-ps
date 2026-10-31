@@ -378,6 +378,11 @@ function PresetsPanel({ t, payload, params }: { t: TemplateRow; payload: Templat
                         <select name={f("plan")} defaultValue={p?.plan_name ?? ""}>
                           <option value="">The column&apos;s coverage level</option>
                           {(plans[cat] ?? []).map((n) => <option key={n} value={n}>{n}</option>)}
+                          {/* A saved plan no longer offered (a service drive plan) stays visible, so
+                              it is never cleared without a manager choosing to. Saving it is refused. */}
+                          {p?.plan_name && !(plans[cat] ?? []).includes(p.plan_name) ? (
+                            <option value={p.plan_name}>{p.plan_name} (not offered: choose another)</option>
+                          ) : null}
                         </select>
                       </label>
                       <label className="ad-field">
