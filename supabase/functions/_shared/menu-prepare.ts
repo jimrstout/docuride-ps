@@ -76,6 +76,8 @@ export interface SheetOption {
   /** Cents: what it always carries (mandatory options), and each surcharge it offers, by code. */
   mandatory_cost: number;
   option_costs: Record<string, number>;
+  /** The codes of the surcharges it always carries. */
+  mandatory_codes: string[];
 }
 
 export interface SheetPlan {
@@ -97,7 +99,13 @@ export interface PrepareSheet {
   categories: string[];
   plans: Record<string, SheetPlan[]>;
   cells: Record<string, Record<string, SheetCell>>;
-  surcharges: { available: { code: string; label: string }[]; chosen: string[]; groups: SurchargeGroup[] };
+  surcharges: {
+    available: { code: string; label: string }[];
+    chosen: string[];
+    groups: SurchargeGroup[];
+    /** Every surcharge's name for people, mandatory ones too, by code. */
+    labels: Record<string, string>;
+  };
   prepared: boolean;
   /** Products already under a live contract: shown locked, in every column, at the price sold. */
   purchased: { category: string; plan_name: string; price: number }[];
@@ -188,6 +196,15 @@ export function surchargeGroups(
   return out;
 }
 
+/** Every surcharge's name for people, by code, mandatory ones too: for the line in each cell's dialog. */
+export function surchargeLabels(families: NormalizedFamily[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of families) for (const t of f.tiers) for (const r of t.rates) {
+    for (const o of r.options ?? []) if (!(o.code in out)) out[o.code] = plainLabel(o.label);
+  }
+  return out;
+}
+
 /** The level index a column's starting level gives among n plans (as migration 0042). */
 function levelIndex(level: string, n: number): number {
   if (n <= 1) return 0;
@@ -219,10 +236,13 @@ export function buildSheet(input: SheetInput): PrepareSheet {
           const s = surchargesOf(r, chosen);
           const optionCosts: Record<string, number> = {};
           let mandatory = 0;
+          const mandatoryCodes: string[] = [];
           for (const o of r.options ?? []) {
             const c = Math.round(Number(o.cost_delta ?? 0) * 100);
-            if (o.mandatory) mandatory += c;
-            else optionCosts[o.code] = c;
+            if (o.mandatory) {
+              mandatory += c;
+              mandatoryCodes.push(o.code);
+            } else optionCosts[o.code] = c;
           }
           return {
             key,
@@ -243,6 +263,7 @@ export function buildSheet(input: SheetInput): PrepareSheet {
             surcharge_codes: s.codes,
             mandatory_cost: mandatory,
             option_costs: optionCosts,
+            mandatory_codes: mandatoryCodes,
           };
         });
       if (options.length === 0) continue;
@@ -328,6 +349,7 @@ export function buildSheet(input: SheetInput): PrepareSheet {
         available,
         chosen: input.surcharges.filter((c) => available.some((s) => s.code === c)),
         groups: surchargeGroups(categories, plans, available),
+        labels: surchargeLabels(input.families),
       };
     })(),
     prepared: input.prepared !== null,

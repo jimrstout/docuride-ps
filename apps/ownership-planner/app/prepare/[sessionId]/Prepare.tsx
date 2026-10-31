@@ -27,10 +27,12 @@ import {
   findOption,
   initialState,
   needsManager,
+  offersSurcharges,
   payloadOf,
   priceOf,
   readCents,
   setCount,
+  surchargeNames,
   surchargesOf,
   toggleSurcharge as toggleSurchargeIn,
   type PreparePayload,
@@ -330,6 +332,28 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
                   </div>
                   <div><dt>Profit</dt><dd>{dollars(cellFigures(edited.option, state).profit)}</dd></div>
                 </dl>
+                {(() => {
+                  const names = surchargeNames(sheet, edited.option, state);
+                  if (names.length === 0 && !offersSurcharges(edited.option)) return null;
+                  return (
+                    <p className="pm-help pm-surcharge-line">
+                      {names.length > 0 ? `Includes surcharges: ${names.join(", ")}.` : "No surcharges."}{" "}
+                      {offersSurcharges(edited.option) ? (
+                        <button
+                          type="button"
+                          className="pm-linkbtn"
+                          onClick={() => {
+                            cellDialog.current?.close();
+                            surchargeDialog.current?.showModal();
+                          }}
+                          disabled={locked || pending}
+                        >
+                          Change surcharges
+                        </button>
+                      ) : null}
+                    </p>
+                  );
+                })()}
                 {surchargesOf(edited.option, state) > 0 ? (
                   <p className="pm-help">
                     With this vehicle&apos;s surcharges at dealer cost ({dollars(surchargesOf(edited.option, state))}), the
