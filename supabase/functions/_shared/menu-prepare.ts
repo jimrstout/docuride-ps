@@ -22,6 +22,7 @@
 import type { NormalizedFamily, RateVariant } from "./normalized-offer.ts";
 import { resolveRule, type PricingRule } from "./planner-pricing.ts";
 import type { MenuColumn } from "./menu-columns.ts";
+import { plainLabel } from "./surcharge-display.ts";
 import {
   CATEGORIES,
   checkPrice,
@@ -139,11 +140,11 @@ function surchargesOf(rate: RateVariant, chosen: Set<string>): { cost: number; c
   return { cost, codes };
 }
 
-/** Every surcharge a deal can choose: each non-mandatory option any rate offers, once. */
+/** Every surcharge a deal can choose: each non-mandatory option any rate offers, once, named for people (plainLabel). */
 export function surchargeChoices(families: NormalizedFamily[]): { code: string; label: string }[] {
   const seen = new Map<string, string>();
   for (const f of families) for (const t of f.tiers) for (const r of t.rates) {
-    for (const o of r.options ?? []) if (!o.mandatory && !seen.has(o.code)) seen.set(o.code, o.label);
+    for (const o of r.options ?? []) if (!o.mandatory && !seen.has(o.code)) seen.set(o.code, plainLabel(o.label));
   }
   return [...seen.entries()].map(([code, label]) => ({ code, label })).sort((a, b) => a.label.localeCompare(b.label));
 }
