@@ -116,6 +116,23 @@
 .pm-check { display: flex; gap: 8px; align-items: center; }
 .pm-dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
+/* Surcharges dialog: one group per category, two columns of groups when there
+   are more than two, so it fits without scrolling. One column on a phone. */
+.pm-dialog:has(.pm-surcharge-groups--two) { width: min(820px, calc(100vw - 32px)); }
+.pm-surcharge-groups { display: grid; gap: 12px 24px; align-items: start; }
+.pm-surcharge-groups--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pm-surcharge-group { display: grid; gap: 6px; }
+.pm-surcharge-group h3 {
+  margin: 0; padding-bottom: 4px; border-bottom: 1px solid var(--line, #e3dfd6);
+  font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft);
+}
+.pm-surcharge-group .pm-check { flex-wrap: wrap; font-size: 15px; }
+.pm-field--inline { grid-template-columns: 1fr auto; align-items: center; column-gap: 8px; }
+.pm-field--inline span { font-size: 15px; color: inherit; }
+.pm-field--inline select { padding: 4px 8px; }
+.pm-also { flex-basis: 100%; margin-left: 26px; font-size: 13px; color: var(--ink-soft); }
+.pm-field--inline .pm-also { grid-column: 1 / -1; margin-left: 0; }
+
 .pm-plain { max-width: 640px; margin: 10vh auto; padding: 0 16px; font-family: var(--font-sans); }
 
 /* A phone, or a short window: one column at a time, from tabs. */
@@ -139,3 +156,9 @@
 .pm-pay { font-size: 13px; }
 .pm-pay--deal { font-weight: 650; }
 .pm-linkbtn { justify-self: start; font: inherit; font-size: 14px; border: 0; background: none; padding: 0; color: var(--copper-ink); text-decoration: underline; cursor: pointer; }
+
+/* A phone held upright: the Surcharges groups in one column. */
+@media (max-width: 560px) {
+  .pm-surcharge-groups--two { grid-template-columns: minmax(0, 1fr); }
+  .pm-dialog-body { padding: 16px; gap: 10px; }
+}

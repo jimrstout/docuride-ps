@@ -22,13 +22,17 @@ import {
   cellFigures,
   columnFigures,
   dollars,
+  alsoAppliesTo,
+  countChosen,
   findOption,
   initialState,
   needsManager,
   payloadOf,
   priceOf,
   readCents,
+  setCount,
   surchargesOf,
+  toggleSurcharge as toggleSurchargeIn,
   type PreparePayload,
   type PrepareState,
 } from "@/lib/prepare-model";
@@ -49,6 +53,12 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
   const managerDialog = useRef<HTMLDialogElement>(null);
 
   const { sheet, payment, session } = data;
+  // The Surcharges dialog's groups, by category. A server from before the
+  // grouping sends none: then one plain list.
+  const groups = sheet.surcharges.groups ??
+    (sheet.surcharges.available.length > 0
+      ? [{ category: "Surcharges", items: sheet.surcharges.available.map((a) => ({ kind: "one" as const, ...a })) }]
+      : []);
   const locked = !!session.locked_at;
 
   const monthlyOf = (prices: number[]) =>
@@ -78,8 +88,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
   const setPrice = (key: string, cents: number) => setState((s) => ({ ...s, prices: { ...s.prices, [key]: cents } }));
   const setTerms = (pos: string, terms: { months: number; rate: number }[]) =>
     setState((s) => ({ ...s, terms: { ...s.terms, [pos]: terms } }));
-  const toggleSurcharge = (code: string) =>
-    setState((s) => ({ ...s, surcharges: s.surcharges.includes(code) ? s.surcharges.filter((c) => c !== code) : [...s.surcharges, code] }));
+  const toggleSurcharge = (code: string) => setState((s) => toggleSurchargeIn(s, code));
 
   const save = (withManager: boolean) =>
     start(async () => {
@@ -371,12 +380,38 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
         <div className="pm-dialog-body">
           <h2>Surcharges for this vehicle</h2>
           <p className="pm-help">Set once for the deal. Each applies in every column, wherever the product offers it, at its dealer cost.</p>
-          {sheet.surcharges.available.length === 0 ? <p>None are offered on this vehicle.</p> : null}
-          {sheet.surcharges.available.map((s) => (
-            <label key={s.code} className="pm-check">
-              <input type="checkbox" checked={state.surcharges.includes(s.code)} onChange={() => toggleSurcharge(s.code)} /> {s.label}
-            </label>
-          ))}
+          {groups.length === 0 ? <p>None are offered on this vehicle.</p> : null}
+          <div className={`pm-surcharge-groups${groups.length > 2 ? " pm-surcharge-groups--two" : ""}`}>
+            {groups.map((g) => (
+              <section key={g.category} className="pm-surcharge-group" aria-label={g.category}>
+                <h3>{g.category}</h3>
+                {g.items.map((item) => {
+                  const also = alsoAppliesTo(groups, g.category, item);
+                  if (item.kind === "count") {
+                    return (
+                      <label key={item.label} className="pm-field pm-field--inline">
+                        <span>{item.label}</span>
+                        <select
+                          value={countChosen(state, item) ?? ""}
+                          onChange={(e) => setState((s) => setCount(s, item, e.target.value || null))}
+                        >
+                          <option value="">None</option>
+                          {item.choices.map((c) => <option key={c.code} value={c.code}>{c.count}</option>)}
+                        </select>
+                        {also ? <small className="pm-also">{also}</small> : null}
+                      </label>
+                    );
+                  }
+                  return (
+                    <label key={item.code} className="pm-check">
+                      <input type="checkbox" checked={state.surcharges.includes(item.code)} onChange={() => toggleSurcharge(item.code)} /> {item.label}
+                      {also ? <small className="pm-also">{also}</small> : null}
+                    </label>
+                  );
+                })}
+              </section>
+            ))}
+          </div>
           <div className="pm-dialog-actions">
             <button type="button" className="pm-btn pm-btn--go" onClick={() => surchargeDialog.current?.close()}>Done</button>
           </div>

@@ -46,12 +46,23 @@ export interface SheetPlan {
   options: SheetOption[];
 }
 
+/** One choice in the Surcharges dialog: a surcharge, or a count picker ("Additional batteries"). */
+export type SurchargeItem =
+  | { kind: "one"; code: string; label: string }
+  | { kind: "count"; label: string; choices: { count: number; code: string }[] };
+
+/** A category's surcharges, in menu row order (_shared/menu-prepare.ts surchargeGroups). */
+export interface SurchargeGroup {
+  category: string;
+  items: SurchargeItem[];
+}
+
 export interface PrepareSheet {
   columns: { position: number; name: string }[];
   categories: string[];
   plans: Record<string, SheetPlan[]>;
   cells: Record<string, Record<string, { key: string | null; note: string | null }>>;
-  surcharges: { available: { code: string; label: string }[]; chosen: string[] };
+  surcharges: { available: { code: string; label: string }[]; chosen: string[]; groups?: SurchargeGroup[] };
   prepared: boolean;
   purchased: { category: string; plan_name: string; price: number }[];
   /** Each column's extra payment terms after the deal's own; none on a cash deal. */
@@ -83,6 +94,40 @@ export function initialState(sheet: PrepareSheet): PrepareState {
     cells[pos] = Object.fromEntries(Object.entries(row).map(([cat, c]) => [cat, c.key]));
   }
   return { cells, prices: {}, surcharges: [...sheet.surcharges.chosen], terms: { ...(sheet.terms ?? {}) } };
+}
+
+/** The deal's surcharges with one turned on or off. One setting, whichever heading it is under. */
+export function toggleSurcharge(state: PrepareState, code: string): PrepareState {
+  const on = state.surcharges.includes(code);
+  return { ...state, surcharges: on ? state.surcharges.filter((c) => c !== code) : [...state.surcharges, code] };
+}
+
+/** A count picker's choice: exactly one of its codes, or none. */
+export function setCount(state: PrepareState, item: Extract<SurchargeItem, { kind: "count" }>, code: string | null): PrepareState {
+  const all = new Set(item.choices.map((c) => c.code));
+  const rest = state.surcharges.filter((c) => !all.has(c));
+  return { ...state, surcharges: code && all.has(code) ? [...rest, code] : rest };
+}
+
+/** The count chosen in a picker, or null for None. */
+export function countChosen(state: PrepareState, item: Extract<SurchargeItem, { kind: "count" }>): string | null {
+  return item.choices.find((c) => state.surcharges.includes(c.code))?.code ?? null;
+}
+
+/** The codes an item stands for. */
+export function itemCodes(item: SurchargeItem): string[] {
+  return item.kind === "one" ? [item.code] : item.choices.map((c) => c.code);
+}
+
+/** "Also applies to Tire and Wheel": the other categories offering the same surcharge, or null. */
+export function alsoAppliesTo(groups: SurchargeGroup[], category: string, item: SurchargeItem): string | null {
+  const codes = new Set(itemCodes(item));
+  const others = groups
+    .filter((g) => g.category !== category && g.items.some((i) => itemCodes(i).some((c) => codes.has(c))))
+    .map((g) => g.category);
+  if (others.length === 0) return null;
+  const list = others.length === 1 ? others[0] : `${others.slice(0, -1).join(", ")} and ${others[others.length - 1]}`;
+  return `Also applies to ${list}`;
 }
 
 export function findOption(sheet: PrepareSheet, key: string | null): { category: string; plan: SheetPlan; option: SheetOption } | null {

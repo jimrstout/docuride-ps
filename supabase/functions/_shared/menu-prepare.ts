@@ -22,7 +22,7 @@
 import type { NormalizedFamily, RateVariant } from "./normalized-offer.ts";
 import { resolveRule, type PricingRule } from "./planner-pricing.ts";
 import type { MenuColumn } from "./menu-columns.ts";
-import { plainLabel } from "./surcharge-display.ts";
+import { countGroups, plainLabel } from "./surcharge-display.ts";
 import {
   CATEGORIES,
   checkPrice,
@@ -97,7 +97,7 @@ export interface PrepareSheet {
   categories: string[];
   plans: Record<string, SheetPlan[]>;
   cells: Record<string, Record<string, SheetCell>>;
-  surcharges: { available: { code: string; label: string }[]; chosen: string[] };
+  surcharges: { available: { code: string; label: string }[]; chosen: string[]; groups: SurchargeGroup[] };
   prepared: boolean;
   /** Products already under a live contract: shown locked, in every column, at the price sold. */
   purchased: { category: string; plan_name: string; price: number }[];
@@ -108,6 +108,17 @@ export interface PrepareSheet {
   terms: Record<string, { months: number; rate: number }[]>;
   /** Products the customer removed from each column before choosing, by category. */
   removed: Record<string, string[]>;
+}
+
+/** One choice in the Surcharges dialog: a surcharge, or a count picker ("Additional batteries"). */
+export type SurchargeItem =
+  | { kind: "one"; code: string; label: string }
+  | { kind: "count"; label: string; choices: { count: number; code: string }[] };
+
+/** A category's surcharges in the Surcharges dialog, in menu row order. */
+export interface SurchargeGroup {
+  category: string;
+  items: SurchargeItem[];
 }
 
 export interface SheetInput {
@@ -147,6 +158,34 @@ export function surchargeChoices(families: NormalizedFamily[]): { code: string; 
     for (const o of r.options ?? []) if (!o.mandatory && !seen.has(o.code)) seen.set(o.code, plainLabel(o.label));
   }
   return [...seen.entries()].map(([code, label]) => ({ code, label })).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/**
+ * The Surcharges dialog: one group per category whose rated options offer a
+ * surcharge, in menu row order, each with only its own. A surcharge offered in
+ * several categories is in each: it is one setting for the deal. Counts of one
+ * item are one picker (countGroups).
+ */
+export function surchargeGroups(
+  categories: string[],
+  plans: Record<string, SheetPlan[]>,
+  available: { code: string; label: string }[]
+): SurchargeGroup[] {
+  const label = new Map(available.map((a) => [a.code, a.label]));
+  const out: SurchargeGroup[] = [];
+  for (const category of categories) {
+    const codes = new Set<string>();
+    for (const p of plans[category] ?? []) for (const o of p.options) for (const c of Object.keys(o.option_costs)) if (label.has(c)) codes.add(c);
+    if (codes.size === 0) continue;
+    const counts = countGroups([...codes]);
+    const counted = new Set(counts.flatMap((g) => g.choices.map((c) => c.code)));
+    const items: SurchargeItem[] = [
+      ...counts.map((g) => ({ kind: "count" as const, label: g.label, choices: g.choices })),
+      ...[...codes].filter((c) => !counted.has(c)).map((c) => ({ kind: "one" as const, code: c, label: label.get(c)! })),
+    ].sort((a, b) => a.label.localeCompare(b.label));
+    out.push({ category, items });
+  }
+  return out;
 }
 
 /** The level index a column's starting level gives among n plans (as migration 0042). */
@@ -283,7 +322,14 @@ export function buildSheet(input: SheetInput): PrepareSheet {
     purchased: purchasedRows,
     terms: Object.fromEntries(columns.map((c) => [String(c.position), (input.terms?.[String(c.position)] ?? []).slice(0, 2)])),
     removed: Object.fromEntries(columns.map((c) => [String(c.position), input.removed?.[String(c.position)] ?? []])),
-    surcharges: { available: surchargeChoices(input.families), chosen: input.surcharges.filter((c) => surchargeChoices(input.families).some((s) => s.code === c)) },
+    surcharges: (() => {
+      const available = surchargeChoices(input.families);
+      return {
+        available,
+        chosen: input.surcharges.filter((c) => available.some((s) => s.code === c)),
+        groups: surchargeGroups(categories, plans, available),
+      };
+    })(),
     prepared: input.prepared !== null,
   };
 }
@@ -329,6 +375,10 @@ export function checkPreparation(sheet: PrepareSheet, p: Preparation): Preparati
   const writes: PreparationCheck["writes"] = [];
   const known = new Set(sheet.surcharges.available.map((s) => s.code));
   for (const code of p.surcharges) if (!known.has(code)) errors.push("A surcharge chosen is not offered on this vehicle.");
+  // A count picker sends one count: never two numbers of the same item.
+  for (const g of countGroups([...known])) {
+    if (g.choices.filter((c) => p.surcharges.includes(c.code)).length > 1) errors.push(`Choose one number of ${g.label.toLowerCase()}.`);
+  }
   for (const [pos, row] of Object.entries(p.cells ?? {})) {
     const col = sheet.columns.find((c) => String(c.position) === pos);
     if (!col) { errors.push("A column chosen is not on this menu."); continue; }
