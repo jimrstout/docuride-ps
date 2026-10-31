@@ -1599,3 +1599,42 @@ options use the same names.
 **Each cell's dialog** says what the product carries on this deal, under the
 price: "Includes surcharges: HVAC Equipped, Snow Removal.", the ones it always
 carries first, with "Change surcharges" to open the dialog.
+
+## 28. Point of sale only: no service drive products
+
+DocuRide PS sells only at the time of the vehicle sale. Products sold
+afterwards, in the service department, are not supported (`_shared/service-drive.ts`,
+PRs 97 to 100).
+
+**The Service Drive Surcharge** marks a product sold after the vehicle sale; it
+is not a vehicle surcharge. It is stripped from every offer where a rating is
+read (`familiesFromRow`), so the Surcharges dialog, Prepare menu, the menu and
+the planner never show it, and `buildSubmitQuote` never selects it, even where
+the provider marks it mandatory.
+
+**Service drive plans** are left out at the same place, so they are never
+offered; left out of the preset plan pickers in Administration > Menus; and a
+preset naming one is refused on save.
+
+How the provider marks them (rated offers, 2026-10-31): only by name. The label
+carries "CARE-SVC DRIVE" and the blurb "- SERVICE DRIVE" (86_3, 88_3, 2064_141,
+2066_141). There is no flag: `properties` is empty, `attributes` holds only a
+product code, and `rateClass` is the point-of-sale plan's. The Care pair carry
+the Service Drive Surcharge as mandatory, a second signal; the Premium pair
+carry nothing, so the name is the one that finds all four.
+
+**Rating.** The rate request says nothing about the sale context, and no
+point-of-sale indicator was found in the request, the responses or our provider
+notes. The provider returns service drive plans as separate products beside
+the point-of-sale ones, so they are filtered after rating.
+
+**A preset naming a service drive plan** is not changed. The picker shows it
+marked "(not offered: choose another)". On Prepare menu the fallback picks the
+closest point-of-sale plan below it, with "Preset plan is for service drive
+sales only; using Mechanical Protection, Premium instead."
+
+**A selection already on a service drive plan** is not changed. Details and
+Prepare menu say "Mechanical Protection, Service Drive is a service drive plan
+and cannot be submitted.", and Submit refuses it in the same words before
+anything is sent, recording "Submit stopped: a service drive plan cannot be
+submitted".
