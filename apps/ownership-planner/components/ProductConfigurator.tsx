@@ -9,6 +9,7 @@
 "use client";
 
 import { money } from "@/lib/money";
+import { plainLabel } from "@/lib/surcharge-display";
 import type { SurchargeOption } from "@/lib/types";
 
 export default function ProductConfigurator({
@@ -40,7 +41,7 @@ export default function ProductConfigurator({
               onChange={(e) => onToggle(o.code, e.target.checked)}
             />
             <label htmlFor={id}>
-              <span className="config-label">{o.label}</span>
+              <span className="config-label">{plainLabel(o.label)}</span>
               {o.cost_delta > 0 && (
                 <span className="config-cost">
                   adds {money(o.cost_delta)}
