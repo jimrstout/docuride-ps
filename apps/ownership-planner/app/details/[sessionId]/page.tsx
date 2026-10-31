@@ -528,6 +528,9 @@ export default async function DetailsPage({
         {/* ── A payment term other than the deal's (docs section 26) ──────────
             Extra terms on the menu are a presentation aid. PS never changes the
             CRM's finance terms; staff update the deal in DX1 and the CRM. */}
+        {(sheet.service_drive_lines ?? []).map((line) => (
+          <p key={line} className="console-flash console-flash--bad" role="alert">{line}</p>
+        ))}
         {sheet.chosen_term_note ? (
           <p className="console-flash console-flash--bad" role="alert">{sheet.chosen_term_note}</p>
         ) : null}

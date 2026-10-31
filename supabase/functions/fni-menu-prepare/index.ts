@@ -33,6 +33,7 @@
 // Auth: FNI_WEBHOOK_SECRET, as every staff function. Logs carry the session
 // id, counts and outcomes only: never a price, a product or a name.
 
+import { serviceDriveLines } from "../_shared/service-drive.ts";
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
@@ -63,7 +64,7 @@ async function session(supabase: SupabaseClient, id: string): Promise<Record<str
 }
 
 async function reply(supabase: SupabaseClient, s: Record<string, unknown>, status = 200, extra: Record<string, unknown> = {}) {
-  const { sheet, out_of_date } = await loadSheet(supabase, s);
+  const [{ sheet, out_of_date }, serviceDrive] = await Promise.all([loadSheet(supabase, s), serviceDriveLines(supabase, String(s.id))]);
   const basis = sessionPaymentBasis(s);
   return json(status, {
     ...extra,
@@ -86,6 +87,8 @@ async function reply(supabase: SupabaseClient, s: Record<string, unknown>, statu
       financed: presetDealType(s.finance_type) === "Financed",
     },
     sheet,
+    // A selection saved on a service drive plan: Submit refuses it (_shared/service-drive.ts).
+    service_drive_lines: serviceDrive,
   });
 }
 

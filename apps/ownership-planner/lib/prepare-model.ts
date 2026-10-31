@@ -78,6 +78,8 @@ export interface PreparePayload {
   out_of_date: boolean;
   payment: { has_payment: boolean; principal: number | null; rate: number | null; term_months: number | null; cap: number | null; financed?: boolean };
   sheet: PrepareSheet;
+  /** One line per selection saved on a service drive plan, which Submit refuses. */
+  service_drive_lines?: string[];
 }
 
 /** What staff have on screen. */

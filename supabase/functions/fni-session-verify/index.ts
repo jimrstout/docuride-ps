@@ -22,6 +22,7 @@
 // Auth: FNI_WEBHOOK_SECRET, as every other fni function. The console's sign-in
 // decides who reaches the layer that holds the secret.
 
+import { serviceDriveLines } from "../_shared/service-drive.ts";
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
@@ -727,6 +728,9 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>, cr
         return b.hasPayment ? { months: b.termMonths, rate: b.ratePercent } : null;
       })()
     ),
+    // A selection saved on a service drive plan: kept, but Submit refuses it
+    // (_shared/service-drive.ts). One plain line each.
+    service_drive_lines: await serviceDriveLines(supabase, s.id as string),
     // Why nothing is required, when nothing is. Shown instead of a sheet that
     // looks complete because it is asking for nothing.
     not_ready_reason: reason,

@@ -200,6 +200,9 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
         </div>
       </header>
 
+      {(data.service_drive_lines ?? []).map((line) => (
+        <p key={line} className="pm-note pm-note--bad" role="alert">{line}</p>
+      ))}
       {message ? <p className={message.tone === "ok" ? "pm-note" : "pm-note pm-note--bad"} role="status">{message.text}</p> : null}
 
       <div className="pm-tabs" role="tablist" aria-label="Columns">

@@ -75,6 +75,7 @@ import { alignContractDates, dealDates, SALE_DATE_MISSING } from "../_shared/dea
 import { storeToday, submitDateProblem } from "../_shared/store-day.ts";
 import { freshSaleDate, type SaleDateSession } from "../_shared/crm-sale-date.ts";
 import { PRICE_GUARD_EVENT, priceProblems } from "../_shared/price-guard.ts";
+import { SERVICE_DRIVE_EVENT, isServiceDriveName, isServiceDriveQuoteProduct, serviceDriveLine } from "../_shared/service-drive.ts";
 
 /** How long Submit waits for the CRM's sale date before refusing. */
 const SUBMIT_CRM_BUDGET_MS = 5000;
@@ -509,6 +510,31 @@ serve(async (req: Request) => {
         error: "Some selections were not found in the rated offer. Re-rate and present again.",
         missing: notFound.map((s) => ({ product_unique: s.product_unique, rate_unique: s.rate_unique })),
       });
+    }
+
+    // ── Step 4a: Never a service drive plan ────────────────────────────
+    // PS sells only at the time of the vehicle sale (_shared/service-drive.ts).
+    // A selection saved on one before these plans were left out is not
+    // changed: it is refused here, before anything is sent, in the words
+    // Details and Prepare menu show.
+    const sdCodes = [...new Set(resolved.map((r) => r.providerProductId))];
+    const { data: sdCatalog } = sdCodes.length
+      ? await supabase.schema("fni").from("product_catalog").select("product_code, display_name").in("product_code", sdCodes).is("store_id", null)
+      : { data: [] };
+    const sdNames = Object.fromEntries(((sdCatalog ?? []) as { product_code: string; display_name: string }[]).map((c) => [c.product_code, c.display_name]));
+    const serviceDrive = resolved
+      .filter((r) => isServiceDriveName(sdNames[r.providerProductId]) || isServiceDriveName(r.productName) || isServiceDriveQuoteProduct(offerPayload, r.providerProductId))
+      .map((r) => ({ code: r.providerProductId, line: serviceDriveLine(sdNames[r.providerProductId] ?? r.productName) }));
+    if (serviceDrive.length > 0) {
+      const { error: sdErr } = await supabase.schema("fni").from("session_events").insert({
+        session_id,
+        event: SERVICE_DRIVE_EVENT,
+        detail: { products: serviceDrive.map((x) => x.code) },
+        created_by: renewedBy(body.submitted_by),
+      });
+      if (sdErr) console.error("fni-contract-submit service drive event not recorded", { session: session_id, code: sdErr.code ?? null });
+      console.warn("fni-contract-submit stopped: service drive plan", { session: session_id, products: serviceDrive.length });
+      return await refuse(409, { error: `Nothing was sent. ${serviceDrive.map((x) => x.line).join(" ")}`, service_drive: serviceDrive.map((x) => x.code) });
     }
 
     // And every one must have a dealer cost, because the row that records the
