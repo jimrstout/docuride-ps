@@ -1565,3 +1565,37 @@ PRs 84 to 89 (`_shared/menu-terms.ts`).
 at 7.74%. The finance terms in the CRM say 60 months at 5.90%. Update the deal
 in DX1 and the CRM before generating documents." PS never changes the CRM's
 finance terms.
+
+## 27. The Surcharges dialog
+
+Surcharges are set once per deal on Prepare menu (section 25). PRs 93 to 96.
+
+**Grouped by product.** One heading per category whose rated options offer a
+surcharge, in menu row order, each with only its own surcharges
+(`surchargeGroups`, `_shared/menu-prepare.ts`). A category with none has no
+heading. More than two headings sit in two columns, one column on a phone, so
+the dialog fits without scrolling.
+
+**Shared surcharges.** A surcharge offered by more than one category is listed
+under each, as one setting for the deal: checked under one, checked under all,
+with "Also applies to Tire and Wheel". Each product still carries it at its own
+dealer cost.
+
+**Counts.** Options that count one item, `Add_<n>_<item>` with two or more
+counts (Add One Battery to Add Seven Batteries), are one picker, "Additional
+batteries", None and 1 to 7. Only one count is ever sent; the server refuses
+two ("Choose one number of additional batteries."). Lithium Battery is a
+different battery, not a count, and stays a checkbox. The provider's own
+`conflict` list on each option was empty on every rated offer (2026-10-31), so
+no other options are treated as alternatives.
+
+**Names** (`_shared/surcharge-display.ts`, `plainLabel`). Shown in plain title
+case without the provider's dealer suffix: "GPS EQUIPPED" as "GPS Equipped",
+"Commercial Use - All Dealers" as "Commercial Use". Acronyms stay in capitals;
+a name already in mixed case is left as the provider spells it. Display only:
+the provider's code is saved and submitted unchanged. The customer's product
+options use the same names.
+
+**Each cell's dialog** says what the product carries on this deal, under the
+price: "Includes surcharges: HVAC Equipped, Snow Removal.", the ones it always
+carries first, with "Change surcharges" to open the dialog.
