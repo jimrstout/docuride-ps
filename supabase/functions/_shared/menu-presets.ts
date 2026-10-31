@@ -221,15 +221,19 @@ export function priceBand(dealerCost: number, ruleRetail: number | null, rule: B
 }
 
 export type PriceCheck =
-  | { ok: true; above_band: boolean }
+  | { ok: true; above_band: boolean; below_band: boolean }
   | { ok: false; reason: string };
 
-/** Whether staff may set this price, and whether it needs a manager. */
+/**
+ * Whether a price may be set, and whether it needs a manager (docs section 29).
+ * Staff price anywhere from the staff minimum markup (band.floor) to the staff
+ * maximum (band.top). Below the floor or above the top needs a manager and a
+ * reason. Below dealer cost is refused for everyone, a manager included.
+ */
 export function checkPrice(priceCents: number, dealerCost: number, band: Band): PriceCheck {
   if (!Number.isInteger(priceCents) || priceCents < 0) return { ok: false, reason: "The price is not a dollar amount." };
-  if (priceCents < cents(dealerCost)) return { ok: false, reason: "A price cannot be below dealer cost." };
-  if (priceCents < band.floor) return { ok: false, reason: "The price is below the lowest this product may be sold for." };
-  return { ok: true, above_band: priceCents > band.top };
+  if (priceCents < cents(dealerCost)) return { ok: false, reason: "No price may go below dealer cost." };
+  return { ok: true, above_band: priceCents > band.top, below_band: priceCents < band.floor };
 }
 
 // ── Saving presets ────────────────────────────────────────────────────────

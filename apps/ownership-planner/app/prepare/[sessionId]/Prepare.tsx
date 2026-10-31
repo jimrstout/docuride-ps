@@ -10,7 +10,7 @@
 // The vehicle's surcharges are chosen once, for the whole deal, and apply in
 // every column. Each column's footer: total, profit and monthly payment.
 //
-// Saving checks the prices on the server. A price above the band needs a
+// Saving checks the prices on the server. A price outside the staff range needs a
 // manager to sign in here and give a reason. Once the customer has chosen a
 // package the prices are locked; returning to Prepare menu unlocks them and is
 // recorded on the deal.
@@ -30,6 +30,7 @@ import {
   offersSurcharges,
   payloadOf,
   priceOf,
+  rangeText,
   readCents,
   setCount,
   surchargeNames,
@@ -248,7 +249,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
                   key={pos}
                   data-col={pos}
                   type="button"
-                  className={f.above_band ? "pm-cell pm-cell--over" : "pm-cell"}
+                  className={f.above_band || f.below_band || f.below_cost ? "pm-cell pm-cell--over" : "pm-cell"}
                   onClick={() => open(pos, category)}
                   disabled={locked}
                   title={note ?? undefined}
@@ -364,10 +365,9 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
                   </p>
                 ) : null}
                 <p className="pm-help">
-                  Staff may price from {dollars(edited.option.band.floor)} to {dollars(edited.option.band.top)}, before
-                  surcharges. Above that needs a manager. Never below dealer cost. This price applies in every column
-                  that offers {edited.plan.plan_name}, {edited.option.label}.
-                  {cellFigures(edited.option, state).below_floor ? " This price is too low, so it will not save." : ""}
+                  {rangeText(edited.option)} This price applies in every column that offers {edited.plan.plan_name},{" "}
+                  {edited.option.label}.
+                  {cellFigures(edited.option, state).below_cost ? " This price is below dealer cost, so it will not save." : ""}
                 </p>
               </>
             ) : null}
@@ -455,7 +455,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
         >
           <h2>A manager must approve</h2>
           <p className="pm-help">
-            {overBand.length === 1 ? "One price is" : `${overBand.length} prices are`} above the band. A manager signs in here
+            {overBand.length === 1 ? "One price is" : `${overBand.length} prices are`} outside the staff range. A manager signs in here
             and gives a reason. Both are recorded on the deal.
           </p>
           <label className="pm-field"><span>Manager email</span>

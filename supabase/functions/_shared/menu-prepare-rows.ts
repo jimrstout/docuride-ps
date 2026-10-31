@@ -55,7 +55,7 @@ export async function loadSheet(supabase: SupabaseClient, s: Record<string, unkn
       templateId
         ? supabase.schema("fni").from("menu_presets").select("*").eq("template_id", templateId).eq("deal_type", presetDealType(s.finance_type))
         : Promise.resolve({ data: [] }),
-      supabase.schema("fni").from("session_menu_prices").select("option_key, retail_price, above_band, approved_by, reason").eq("session_id", sessionId),
+      supabase.schema("fni").from("session_menu_prices").select("option_key, retail_price, above_band, below_band, approved_by, reason").eq("session_id", sessionId),
       supabase.schema("fni").from("agreements").select("id").eq("session_id", sessionId),
       templateId && financed
         ? supabase.schema("fni").from("menu_preset_terms").select("column_position, slot, term_months, rate_percent").eq("template_id", templateId)
@@ -77,7 +77,7 @@ export async function loadSheet(supabase: SupabaseClient, s: Record<string, unkn
 
   const prices: Record<string, DealPrice> = {};
   for (const r of (priceRows ?? []) as (DealPrice & { option_key: string })[]) {
-    prices[r.option_key] = { retail_price: Number(r.retail_price), above_band: r.above_band, approved_by: r.approved_by, reason: r.reason };
+    prices[r.option_key] = { retail_price: Number(r.retail_price), above_band: r.above_band, below_band: r.below_band === true, approved_by: r.approved_by, reason: r.reason };
   }
 
   const ids = ((agreements ?? []) as { id: string }[]).map((a) => a.id);
