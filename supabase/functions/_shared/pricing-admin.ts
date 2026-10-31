@@ -23,6 +23,9 @@ export interface StoredRule extends PricingRule {
   max_markup_dollars?: number | null;
   updated_at?: string | null;
   updated_by?: string | null;
+  /** When a manager last saved the band (migration 0047). Null: still the setup values. */
+  band_reviewed_at?: string | null;
+  band_reviewed_by?: string | null;
 }
 
 /** The fields a person edits. Store and tenant come from the scope, not the form. */
@@ -109,17 +112,20 @@ export function parseRuleFields(raw: Record<string, unknown>): { fields: RuleFie
   const floor = read("cost_floor", "Dealer cost from", { required: true, places: 2 });
   const ceiling = read("cost_ceiling", "Dealer cost to", { required: true, places: 2 });
   const pct = read("markup_percent", "Markup percent", { required: true, places: 3 });
-  const min = read("markup_min_dollars", "Minimum markup", { required: false, places: 2 });
-  const max = read("markup_max_dollars", "Maximum markup", { required: false, places: 2 });
+  const min = read("markup_min_dollars", "Staff minimum markup", { required: false, places: 2 });
+  const max = read("markup_max_dollars", "Suggested price, most markup", { required: false, places: 2 });
   const round = read("round_to", "Round to", { required: false, places: 2 });
-  const bandPct = read("max_markup_percent", "Staff may price up to, percent", { required: false, places: 3 });
-  const bandDol = read("max_markup_dollars", "Staff may price up to, dollars", { required: false, places: 2 });
+  const bandPct = read("max_markup_percent", "Staff maximum markup, percent", { required: false, places: 3 });
+  const bandDol = read("max_markup_dollars", "Staff maximum markup, dollars", { required: false, places: 2 });
 
   if (floor !== null && ceiling !== null && !(floor < ceiling)) {
     errors.push("Dealer cost from must be less than Dealer cost to.");
   }
   if (min !== null && max !== null && min > max) {
-    errors.push("Minimum markup cannot be more than the maximum markup.");
+    errors.push("Staff minimum markup cannot be more than the suggested price's most markup.");
+  }
+  if (min !== null && bandDol !== null && bandDol < min) {
+    errors.push("Staff maximum markup cannot be less than the staff minimum markup.");
   }
 
   if (errors.length > 0) return { errors };
@@ -266,16 +272,29 @@ export function ruleSummary(
   return rule.active ? sentence : `Turned off. ${sentence}`;
 }
 
-/** "Staff may price up to 40% or $300 over dealer cost, whichever is lower." Null when neither is set. */
-export function bandSentence(rule: Partial<Pick<RuleFields, "max_markup_percent" | "max_markup_dollars">>): string | null {
+/**
+ * The staff range in a sentence: "Staff can price from $75 over dealer cost up
+ * to 40% or $300 over, whichever is lower. Outside that needs a manager."
+ */
+export function bandSentence(rule: Partial<Pick<RuleFields, "markup_min_dollars" | "max_markup_percent" | "max_markup_dollars">>): string {
+  const min = Number(rule.markup_min_dollars ?? 0);
   const pct = rule.max_markup_percent ?? null;
   const dol = rule.max_markup_dollars ?? null;
-  if (pct === null && dol === null) return null;
-  if (pct !== null && dol !== null) {
-    return `Staff may price up to ${percent(pct)} or ${money(dol)} over dealer cost, whichever is lower; above that needs a manager.`;
-  }
-  return `Staff may price up to ${pct !== null ? percent(pct) : money(dol!)} over dealer cost; above that needs a manager.`;
+  const from = min > 0 ? `from ${money(min)} over dealer cost` : "from dealer cost";
+  const to = pct !== null && dol !== null
+    ? `up to ${percent(pct)} or ${money(dol)} over, whichever is lower`
+    : pct !== null || dol !== null
+      ? `up to ${pct !== null ? percent(pct) : money(dol!)} over`
+      : "up to the rule's own price";
+  return `Staff can price ${from} ${to}. Outside that needs a manager.`;
 }
+
+/** Bands still on their setup values: no manager has saved them since migration 0047. */
+export function unreviewedBands(rules: Pick<StoredRule, "band_reviewed_at">[]): number {
+  return rules.filter((r) => !r.band_reviewed_at).length;
+}
+
+export const BAND_NOTICE = "These pricing bands still have their setup values. Review and save them.";
 
 // ── Stores ─────────────────────────────────────────────────────────────
 

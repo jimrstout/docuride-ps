@@ -367,6 +367,9 @@ export interface PricingRuleRow {
   max_markup_dollars?: number | null;
   updated_at: string | null;
   updated_by: string | null;
+  /** When a manager last saved the band (migration 0047). Null: still the setup values. */
+  band_reviewed_at?: string | null;
+  band_reviewed_by?: string | null;
   /** The rule in one plain sentence. */
   summary: string;
 }
@@ -391,6 +394,8 @@ export interface PricingPayload {
   scope: { store_id: string | null; name: string };
   products: { code: string; name: string }[];
   rules: PricingRuleRow[];
+  /** "These pricing bands still have their setup values. Review and save them." Null once every band is saved by a manager. */
+  band_notice?: string | null;
   preview: {
     product_code: string | null;
     rows: PricingPreviewRow[];

@@ -156,9 +156,11 @@ test("managers only, every change logged first, nothing deleted", () => {
 
 test("the pricing band reads in plain English, and the rule keeps it", async () => {
   const { bandSentence, parseRuleFields } = await import("../supabase/functions/_shared/pricing-admin.ts");
-  assert.equal(bandSentence({ max_markup_percent: 40, max_markup_dollars: 150 }), "Staff may price up to 40% or $150 over dealer cost, whichever is lower; above that needs a manager.");
-  assert.equal(bandSentence({ max_markup_percent: null, max_markup_dollars: 75 }), "Staff may price up to $75 over dealer cost; above that needs a manager.");
-  assert.equal(bandSentence({}), null);
+  assert.equal(bandSentence({ markup_min_dollars: 75, max_markup_percent: 40, max_markup_dollars: 150 }),
+    "Staff can price from $75 over dealer cost up to 40% or $150 over, whichever is lower. Outside that needs a manager.");
+  assert.equal(bandSentence({ max_markup_percent: null, max_markup_dollars: 75 }),
+    "Staff can price from dealer cost up to $75 over. Outside that needs a manager.");
+  assert.equal(bandSentence({ markup_min_dollars: 50 }), "Staff can price from $50 over dealer cost up to the rule's own price. Outside that needs a manager.");
   const r = parseRuleFields({ cost_floor: "0", cost_ceiling: "1000", markup_percent: "50", max_markup_percent: "60", max_markup_dollars: "-1" });
-  assert.deepEqual(r.errors, ["Staff may price up to, dollars cannot be negative."]);
+  assert.deepEqual(r.errors, ["Staff maximum markup, dollars cannot be negative."]);
 });

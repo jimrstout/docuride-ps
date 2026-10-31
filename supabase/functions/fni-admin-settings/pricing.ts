@@ -21,6 +21,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   SAMPLE_COSTS,
+  BAND_NOTICE,
   copyRefusal,
   gapSentence,
   parseRuleFields,
@@ -28,6 +29,7 @@ import {
   pricingGaps,
   ruleSummary,
   storeStatus,
+  unreviewedBands,
   validateRule,
   type StoredRule,
 } from "../_shared/pricing-admin.ts";
@@ -35,7 +37,8 @@ import { isManager, logChanges, MANAGERS_ONLY, recentChanges, type Change } from
 
 const RULE_COLUMNS =
   "id, tenant_id, store_id, provider_id, product_code, cost_floor, cost_ceiling, markup_percent, " +
-  "markup_max_dollars, markup_min_dollars, round_to, active, max_markup_percent, max_markup_dollars, updated_at, updated_by";
+  "markup_max_dollars, markup_min_dollars, round_to, active, max_markup_percent, max_markup_dollars, updated_at, updated_by, " +
+  "band_reviewed_at, band_reviewed_by";
 
 /** The answer to a pricing request: a status and a body. index.ts sends it. */
 export interface PricingReply {
@@ -73,6 +76,8 @@ function asRule(r: Record<string, unknown>): StoredRule {
     max_markup_dollars: n(r.max_markup_dollars),
     updated_at: (r.updated_at as string | null) ?? null,
     updated_by: (r.updated_by as string | null) ?? null,
+    band_reviewed_at: (r.band_reviewed_at as string | null) ?? null,
+    band_reviewed_by: (r.band_reviewed_by as string | null) ?? null,
   };
 }
 
@@ -226,6 +231,8 @@ export async function readPricing(
         name: storeId === null ? "All stores" : stores.find((s) => s.id === storeId)!.name,
       },
       products,
+      // Until a manager saves each band once, its values are the setup ones (migration 0047).
+      band_notice: unreviewedBands(own) > 0 ? BAND_NOTICE : null,
       rules: own.map((r) => ({
         ...r,
         product_name: nameOf(r.product_code),
@@ -311,7 +318,8 @@ export async function writePricing(
     const errors = validateRule(fields, storeId, rules, ruleId, activeStoreIds, { product: nameOf });
     if (errors.length > 0) return refused(errors);
 
-    const row = { ...fields, updated_at: now, updated_by: updatedBy };
+    // A manager saving the rule has reviewed its band (migration 0047).
+    const row = { ...fields, updated_at: now, updated_by: updatedBy, band_reviewed_at: now, band_reviewed_by: updatedBy };
     const before = ruleId === null ? null : rules.find((r) => r.id === ruleId) ?? null;
     const failed = await log([{
       area: "Price band",
@@ -368,6 +376,9 @@ export async function writePricing(
         max_markup_dollars: r.max_markup_dollars ?? null,
         updated_at: now,
         updated_by: updatedBy,
+        // A copy keeps whether its values were reviewed: copying is not a review.
+        band_reviewed_at: r.band_reviewed_at ?? null,
+        band_reviewed_by: r.band_reviewed_by ?? null,
       }));
     const failed = await log(copies.map((c, i) => ({
       area: "Price band" as const,

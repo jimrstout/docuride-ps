@@ -113,8 +113,8 @@ const COLUMNS = [
   "Dealer cost from",
   "Dealer cost to",
   "Markup percent",
-  "Minimum markup ($)",
-  "Maximum markup ($)",
+  "Staff minimum markup ($)",
+  "Suggested price, most markup ($)",
   "Round to ($)",
   "Active",
 ];
@@ -195,6 +195,7 @@ function RuleRow({ rule, editHref }: { rule: PricingRuleRow; editHref: string | 
         <span className="ad-strong">{rule.product_name ?? (rule.product_code === null ? "All products" : rule.product_code)}</span>
         <small>{rule.summary}</small>
         <small>{lastChanged(rule)}</small>
+        {rule.band_reviewed_at ? null : <small className="ad-warn-text">Setup values: not yet reviewed by a manager.</small>}
       </td>
       <td className="num">{money(rule.cost_floor)}</td>
       <td className="num">{money(rule.cost_ceiling)}</td>
@@ -261,11 +262,7 @@ function RuleForm({
           <input name="markup_percent" inputMode="decimal" defaultValue={rule ? String(rule.markup_percent) : ""} required />
         </label>
         <label className="ad-field">
-          <span>Minimum markup ($)</span>
-          <input name="markup_min_dollars" inputMode="decimal" defaultValue={rule ? String(rule.markup_min_dollars) : "0"} />
-        </label>
-        <label className="ad-field">
-          <span>Maximum markup ($)</span>
+          <span>Suggested price, most markup ($)</span>
           <input
             name="markup_max_dollars"
             inputMode="decimal"
@@ -277,9 +274,13 @@ function RuleForm({
           <span>Round to ($)</span>
           <input name="round_to" inputMode="decimal" defaultValue={rule ? String(rule.round_to) : "5"} />
         </label>
-        {/* The band staff may price within on a deal, over dealer cost (migration 0045). */}
+        {/* The range staff may price within on a deal, over dealer cost (migrations 0045, 0047). */}
         <label className="ad-field">
-          <span>Staff may price up to (% over dealer cost)</span>
+          <span>Staff minimum markup ($ over dealer cost)</span>
+          <input name="markup_min_dollars" inputMode="decimal" defaultValue={rule ? String(rule.markup_min_dollars) : "0"} />
+        </label>
+        <label className="ad-field">
+          <span>Staff maximum markup (% over dealer cost)</span>
           <input
             name="max_markup_percent"
             inputMode="decimal"
@@ -288,7 +289,7 @@ function RuleForm({
           />
         </label>
         <label className="ad-field">
-          <span>Staff may price up to ($ over dealer cost)</span>
+          <span>Staff maximum markup ($ over dealer cost)</span>
           <input
             name="max_markup_dollars"
             inputMode="decimal"
@@ -302,15 +303,14 @@ function RuleForm({
         </label>
       </div>
 
+      <p className="ad-help ad-strong">Staff can price between these. Outside them needs a manager.</p>
       <p className="ad-help">
         A rule covers costs from its first number up to, but not including, its
-        second, so one rule can end where the next begins. Leave Maximum markup
-        blank for no maximum.
-      </p>
-      <p className="ad-help">
-        On Prepare menu, staff may set a deal&apos;s price from dealer cost plus the minimum markup up to the
-        &ldquo;Staff may price up to&rdquo; markup (the lower of the two when both are set). Leave both blank to stop at
-        the rule&apos;s own price. Above that needs a manager and a reason. A price is never below dealer cost.
+        second, so one rule can end where the next begins. The suggested price is
+        dealer cost plus the markup percent, no more than the most markup (blank
+        for no limit), and never below the staff minimum markup. Staff maximum
+        markup: the lower of the two when both are set; blank stops at the
+        suggested price. No price is ever below dealer cost.
       </p>
 
       <div className="ad-editor-actions">
@@ -513,6 +513,14 @@ async function Pricing({ params, operatorId }: { params: Params; operatorId: str
           <span><span className="ad-dot ad-dot--warn" />No pricing: products will not be shown</span>
         </p>
       </div>
+
+      {payload.band_notice ? (
+        <section className="ad-panel ad-panel--warn" aria-label="Pricing bands to review">
+          <div className="ad-panel-body">
+            <p role="status">{payload.band_notice}</p>
+          </div>
+        </section>
+      ) : null}
 
       {unpriced.length > 0 ? (
         <section className="ad-panel ad-panel--warn" aria-label="Stores with no pricing">

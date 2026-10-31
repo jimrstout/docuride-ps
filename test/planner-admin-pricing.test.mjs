@@ -130,7 +130,7 @@ test("the note about changes applying right away is at the top", () => {
 test("the rules table has the columns asked for", () => {
   for (const c of [
     "Applies to", "Dealer cost from", "Dealer cost to", "Markup percent",
-    "Minimum markup ($)", "Maximum markup ($)", "Round to ($)", "Active",
+    "Staff minimum markup ($)", "Suggested price, most markup ($)", "Round to ($)", "Active",
   ]) {
     assert.ok(page.includes(`"${c}"`), c);
   }
@@ -144,11 +144,13 @@ test("the rules table has the columns asked for", () => {
 test("each rule is summarised in plain English", () => {
   assert.equal(
     ruleSummary(parkersburg()[0]),
-    "Products costing $0 to $400: 250% markup, at least $75, no more than $600, rounded to $5."
+    "Products costing $0 to $400: 250% markup, at least $75, no more than $600, rounded to $5. " +
+      "Staff can price from $75 over dealer cost up to the rule's own price. Outside that needs a manager."
   );
   assert.equal(
     ruleSummary(rule({ product_code: "GAP", markup_min_dollars: 0, markup_max_dollars: null, cost_floor: 400, cost_ceiling: 5000, markup_percent: 12.5, round_to: 0 }), "Guaranteed Asset Protection"),
-    "Guaranteed Asset Protection costing $400 to $5,000: 12.5% markup, no maximum, not rounded."
+    "Guaranteed Asset Protection costing $400 to $5,000: 12.5% markup, no maximum, not rounded. " +
+      "Staff can price from dealer cost up to the rule's own price. Outside that needs a manager."
   );
   assert.match(ruleSummary(rule({ active: false })), /^Turned off\. Products costing/);
   assert.match(page, /\{rule\.summary\}/);
@@ -182,8 +184,8 @@ test("from must be less than to", () => {
 
 test("percent, min, max and round-to cannot be negative", () => {
   for (const [key, label] of [
-    ["markup_percent", "Markup percent"], ["markup_min_dollars", "Minimum markup"],
-    ["markup_max_dollars", "Maximum markup"], ["round_to", "Round to"], ["cost_floor", "Dealer cost from"],
+    ["markup_percent", "Markup percent"], ["markup_min_dollars", "Staff minimum markup"],
+    ["markup_max_dollars", "Suggested price, most markup"], ["round_to", "Round to"], ["cost_floor", "Dealer cost from"],
   ]) {
     assert.ok(fields({ [key]: "-1" }).errors.includes(`${label} cannot be negative.`), key);
   }
@@ -194,7 +196,7 @@ test("percent, min, max and round-to cannot be negative", () => {
 
 test("min cannot be more than max when both are set", () => {
   assert.deepEqual(fields({ markup_min_dollars: "700", markup_max_dollars: "600" }).errors,
-    ["Minimum markup cannot be more than the maximum markup."]);
+    ["Staff minimum markup cannot be more than the suggested price's most markup."]);
   assert.ok("fields" in fields({ markup_min_dollars: "700", markup_max_dollars: "" }));
   assert.ok("fields" in fields({ markup_min_dollars: "600", markup_max_dollars: "600" }));
 });
@@ -255,8 +257,8 @@ test("the server checks every write, and the browser writes nothing", () => {
 });
 
 test("every save, edit and copy records who made it", () => {
-  assert.match(handler, /const row = \{ \.\.\.fields, updated_at: now, updated_by: updatedBy \};/);
-  assert.match(handler, /updated_at: now,\s*updated_by: updatedBy,\s*\}\)\);/);
+  assert.match(handler, /const row = \{ \.\.\.fields, updated_at: now, updated_by: updatedBy, band_reviewed_at: now, band_reviewed_by: updatedBy \};/);
+  assert.match(handler, /updated_at: now,\s*updated_by: updatedBy,/);
   assert.match(handler, /A change to pricing needs the name of whoever is signed in\./);
   const sql = read("supabase/migrations/0020_pricing_rules_updated_by.sql");
   assert.match(sql, /alter table fni\.pricing_rules add column if not exists updated_by text;/);
