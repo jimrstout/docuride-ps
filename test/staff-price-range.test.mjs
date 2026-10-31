@@ -71,7 +71,7 @@ const onScreen = (cents) => ({ ...model.initialState(sheet), prices: { [K]: cent
 test("the cell dialog says the range, the manager rule and dealer cost, plainly", () => {
   assert.deepEqual(option.band, { floor: 39600, top: 92000 });
   assert.equal(model.rangeText(option),
-    "Staff may price from $396.00 to $920.00, before surcharges. Outside that range needs a manager. No price may go below dealer cost ($321.00).");
+    "Staff may price from $396.00 to $920.00, before surcharges. Outside that range needs a manager. The minimum allowable price is $321.00.");
   assert.doesNotMatch(model.rangeText(option), /—/);
 });
 
@@ -111,7 +111,7 @@ test("a manager below the floor is accepted with a reason, and it is recorded on
 
 test("any price below dealer cost is refused, a manager included", () => {
   const c = at(32099);
-  assert.deepEqual(c.errors, ["Sample Care, 2 years / Unlimited miles, No deductible: No price may go below dealer cost."]);
+  assert.deepEqual(c.errors, ["Sample Care, 2 years / Unlimited miles, No deductible: $320.99 is below the minimum allowable price of $321.00."]);
   assert.deepEqual(c.writes, []);
   // Not a manager's to allow: the screen does not ask for one, and says it will not save.
   assert.deepEqual(model.needsManager(sheet, onScreen(32099)), []);

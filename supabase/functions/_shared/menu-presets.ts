@@ -220,6 +220,11 @@ export function priceBand(dealerCost: number, ruleRetail: number | null, rule: B
   return { floor: Math.min(floor, Math.max(top, cost)), top: Math.max(top, cost) };
 }
 
+/** "$1,234.56" from cents, as Prepare menu shows money. */
+function centsText(c: number): string {
+  return `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export type PriceCheck =
   | { ok: true; above_band: boolean; below_band: boolean }
   | { ok: false; reason: string };
@@ -232,7 +237,9 @@ export type PriceCheck =
  */
 export function checkPrice(priceCents: number, dealerCost: number, band: Band): PriceCheck {
   if (!Number.isInteger(priceCents) || priceCents < 0) return { ok: false, reason: "The price is not a dollar amount." };
-  if (priceCents < cents(dealerCost)) return { ok: false, reason: "No price may go below dealer cost." };
+  if (priceCents < cents(dealerCost)) {
+    return { ok: false, reason: `${centsText(priceCents)} is below the minimum allowable price of ${centsText(cents(dealerCost))}.` };
+  }
   return { ok: true, above_band: priceCents > band.top, below_band: priceCents < band.floor };
 }
 

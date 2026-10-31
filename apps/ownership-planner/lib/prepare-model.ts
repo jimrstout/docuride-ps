@@ -181,20 +181,87 @@ export interface CellFigures {
   below_band: boolean;
   /** Below dealer cost: never, a manager included. */
   below_cost: boolean;
+  /** Cents typed on screen when it is not the price in use, or null. */
+  entered: number | null;
+  /** The typed price cannot be saved as it stands, so the last valid price is used (docs section 29). */
+  not_applied: boolean;
+}
+
+/**
+ * Whether a typed price can be used as it stands: at or above dealer cost and
+ * inside the staff range. One outside the range needs a manager, who approves
+ * it on Save; one below dealer cost never can be. The sheet's own price was
+ * saved under these rules (a manager's approval included), so it always counts.
+ */
+export function enteredIsValid(o: SheetOption, cents: number): boolean {
+  return cents === o.price || (cents >= o.dealer_cost && cents >= o.band.floor && cents <= o.band.top);
+}
+
+/**
+ * The price in use, before surcharges: what staff typed when it can be used,
+ * else the last valid price (the sheet's). An invalid entry never reaches the
+ * column totals, profits or payments.
+ */
+export function appliedPrice(o: SheetOption, state: PrepareState): number | null {
+  const typed = state.prices[o.key];
+  return typed !== undefined && enteredIsValid(o, typed) ? typed : o.price;
 }
 
 /** Dealer cost and price both carry the surcharges, which pass through at cost. */
 export function cellFigures(o: SheetOption, state: PrepareState): CellFigures {
   const extra = surchargesOf(o, state);
-  const price = priceOf(o, state);
+  const typed = priceOf(o, state);
+  const price = appliedPrice(o, state);
+  const notApplied = typed !== null && typed !== price;
   return {
     dealer_cost: o.dealer_cost + extra,
     price: price === null ? null : price + extra,
     profit: price === null ? null : price - o.dealer_cost,
-    above_band: price !== null && price > o.band.top,
-    below_band: price !== null && price < o.band.floor && price >= o.dealer_cost,
-    below_cost: price !== null && price < o.dealer_cost,
+    above_band: typed !== null && typed > o.band.top,
+    below_band: typed !== null && typed < o.band.floor && typed >= o.dealer_cost,
+    below_cost: typed !== null && typed < o.dealer_cost,
+    entered: notApplied ? typed : null,
+    not_applied: notApplied,
   };
+}
+
+/**
+ * The plain line for a typed price that cannot be used as it stands, or null.
+ * "Mechanical Protection, Premium, 2 years / Unlimited miles, $100 Disappearing
+ * Deductible: $400.00 is below the minimum allowable price of $530.50. A
+ * manager can approve a lower price, down to $455.50."
+ */
+export function priceProblem(planName: string, o: SheetOption, cents: number): { kind: "below_cost" | "below_floor" | "above_top"; text: string } | null {
+  if (enteredIsValid(o, cents)) return null;
+  const name = `${planName}, ${o.label}`;
+  if (cents < o.dealer_cost) {
+    return { kind: "below_cost", text: `${name}: ${dollars(cents)} is below the minimum allowable price of ${dollars(o.dealer_cost)}.` };
+  }
+  if (cents < o.band.floor) {
+    return {
+      kind: "below_floor",
+      text: `${name}: ${dollars(cents)} is below the minimum allowable price of ${dollars(o.band.floor)}. ` +
+        `A manager can approve a lower price, down to ${dollars(o.dealer_cost)}.`,
+    };
+  }
+  return { kind: "above_top", text: `${name}: ${dollars(cents)} is above the staff maximum of ${dollars(o.band.top)}. A manager can approve it.` };
+}
+
+/** Every typed price that cannot be used as it stands, in plain lines, for the banner. */
+export function priceProblems(sheet: PrepareSheet, state: PrepareState): { key: string; kind: "below_cost" | "below_floor" | "above_top"; text: string }[] {
+  const out: { key: string; kind: "below_cost" | "below_floor" | "above_top"; text: string }[] = [];
+  for (const [key, cents] of Object.entries(state.prices)) {
+    const found = findOption(sheet, key);
+    if (!found) continue;
+    const p = priceProblem(found.plan.plan_name, found.option, cents);
+    if (p) out.push({ key, ...p });
+  }
+  return out;
+}
+
+/** Save is blocked while any typed price is below dealer cost: no one may approve it. */
+export function saveBlocked(sheet: PrepareSheet, state: PrepareState): boolean {
+  return priceProblems(sheet, state).some((p) => p.kind === "below_cost");
 }
 
 export interface ColumnFigures {
@@ -274,7 +341,7 @@ export function needsManager(sheet: PrepareSheet, state: PrepareState): string[]
 export function rangeText(o: SheetOption): string {
   return (
     `Staff may price from ${dollars(o.band.floor)} to ${dollars(o.band.top)}, before surcharges. ` +
-    `Outside that range needs a manager. No price may go below dealer cost (${dollars(o.dealer_cost)}).`
+    `Outside that range needs a manager. The minimum allowable price is ${dollars(o.dealer_cost)}.`
   );
 }
 

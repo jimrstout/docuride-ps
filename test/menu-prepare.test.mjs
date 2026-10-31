@@ -155,7 +155,7 @@ test("the server's check: never below dealer cost, outside the range needs a man
   const over = checkPreparation(sheet, { cells: {}, prices: { [k]: 60000 }, surcharges: [] });
   assert.deepEqual([over.errors, over.above_band, over.writes[0].above_band], [[], [k], true]);
   assert.deepEqual(checkPreparation(sheet, { cells: {}, prices: { [k]: 29999 }, surcharges: [] }).errors,
-    ["Sample Care, 2 years / Unlimited miles, No deductible: No price may go below dealer cost."]);
+    ["Sample Care, 2 years / Unlimited miles, No deductible: $299.99 is below the minimum allowable price of $300.00."]);
   const bat = keyOf(sheet, "t1");
   assert.deepEqual(checkPreparation(sheet, { cells: { "1": { Battery: bat } }, prices: { [bat]: 20000 }, surcharges: ["NOPE"] }).errors, [
     "A surcharge chosen is not offered on this vehicle.",
