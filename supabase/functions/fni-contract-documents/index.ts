@@ -47,6 +47,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument } from "npm:pdf-lib@1.17.1";
 import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { presentedSecret } from "../_shared/presented-secret.ts";
 import { staffGate } from "../_shared/staff-gate.ts";
 import { contractCallRefusal } from "../_shared/contract-guard.ts";
 import { assignPositions, buyerNameFor, otherSignatureTypes, prefixProblem, signatureData } from "../_shared/contract-documents.ts";
@@ -96,7 +97,7 @@ serve(async (req: Request) => {
   if (req.method !== "POST") return json(405, { error: "POST only" });
 
   const url = new URL(req.url);
-  const presented = url.searchParams.get("secret") ?? req.headers.get("x-webhook-secret");
+  const presented = presentedSecret(req);
   if (!secretsMatch(presented, Deno.env.get("FNI_WEBHOOK_SECRET"))) {
     return json(401, { error: "Unauthorized" });
   }

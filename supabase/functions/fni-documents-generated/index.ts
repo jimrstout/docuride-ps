@@ -32,6 +32,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { presentedSecret } from "../_shared/presented-secret.ts";
 import { dcDealFolders } from "../_shared/dc-deal-folders.ts";
 import { heldDocuments, refileAfterRegenerate } from "../_shared/deal-jacket-file.ts";
 import { resolveFolders } from "../_shared/deal-jacket-request.ts";
@@ -54,7 +55,7 @@ serve(async (req: Request) => {
   if (req.method !== "POST") return json(405, { error: "POST only" });
 
   const url = new URL(req.url);
-  const presented = req.headers.get("x-webhook-secret") ?? url.searchParams.get("secret");
+  const presented = presentedSecret(req);
   const configured = Deno.env.get("FNI_WEBHOOK_SECRET");
   if (!secretsMatch(presented, configured)) {
     // Lengths and presence only, never the values.

@@ -36,6 +36,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getRecord, ZohoRecord } from "../_shared/zoho.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { presentedSecret } from "../_shared/presented-secret.ts";
 import { tecAssuredAccount } from "../_shared/provider-rows.ts";
 import { publishedSheetDates } from "../_shared/price-sheet-rows.ts";
 import { onlySameMonthSaleDateMove, priceSheetBoundaries } from "../_shared/sale-date.ts";
@@ -356,7 +357,7 @@ serve(async (req: Request) => {
   const url = new URL(req.url);
 
   const presented =
-    url.searchParams.get("secret") ?? req.headers.get("x-webhook-secret");
+    presentedSecret(req);
   if (!secretsMatch(presented, Deno.env.get("FNI_WEBHOOK_SECRET"))) {
     return json(401, { error: "Unauthorized" });
   }

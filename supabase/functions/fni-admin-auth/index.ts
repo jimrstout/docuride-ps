@@ -25,6 +25,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { presentedSecret } from "../_shared/presented-secret.ts";
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -44,7 +45,7 @@ serve(async (req: Request) => {
 
   const url = new URL(req.url);
   const presented =
-    req.headers.get("x-webhook-secret") ?? url.searchParams.get("secret");
+    presentedSecret(req);
   if (!secretsMatch(presented, Deno.env.get("FNI_WEBHOOK_SECRET"))) {
     return json(401, { error: "Unauthorized" });
   }

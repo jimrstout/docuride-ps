@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { presentedSecret, secretForm } from "../_shared/presented-secret.ts";
 import { getRecord } from "../_shared/zoho.ts";
 import { mapDeal } from "../_shared/dealmap.ts";
 import { dealFolderArgs, dealFolderLog, type DealFolderOutcome } from "../_shared/deal-folders.ts";
@@ -271,9 +272,10 @@ Deno.serve(async (req: Request) => {
   const started = Date.now();
   const url = new URL(req.url);
 
-  // Query for Zoho (its webhook builder sets the URL, not headers); header for
-  // the pg_cron sweeper, so the secret stays out of request logs.
-  const presented = url.searchParams.get("secret") ?? req.headers.get("x-webhook-secret");
+  // The x-webhook-secret header first (the pg_cron sweeper, and the CRM
+  // webhook once it sends one), then ?secret= in the address, which the CRM
+  // webhook has used so far. A header keeps the secret out of request logs.
+  const presented = presentedSecret(req);
   const configured = Deno.env.get("ZOHO_WEBHOOK_SECRET");
   if (!secretsMatch(presented, configured)) {
     // Lengths and presence only, never the values themselves. This is enough
@@ -282,11 +284,7 @@ Deno.serve(async (req: Request) => {
     console.warn("zoho-sync auth failed", {
       configuredSet: configured !== undefined,
       configuredLength: configured?.length ?? 0,
-      presentedVia: url.searchParams.get("secret")
-        ? "query"
-        : req.headers.get("x-webhook-secret")
-        ? "header"
-        : "none",
+      presentedVia: secretForm(req),
       presentedLength: presented?.length ?? 0,
     });
     return json(401, { error: "Bad secret" });
