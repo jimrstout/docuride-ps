@@ -17,8 +17,10 @@
 // ── What it does ────────────────────────────────────────────────────────
 // The request is the one a real rating sends, built by the same code
 // (_shared/rate-request.ts) from the same session with the same staff
-// corrections, with only the probe's values changed (_shared/rate-probe.ts).
-// It is sent on the QA server only: a login that is not Test is refused.
+// corrections, with only the probe's values changed: any form property or
+// top-level field (_shared/rate-probe.ts). Coded fields still go out as the
+// provider's codes (_shared/coded-values.ts). It is sent on the QA server
+// only: a login that is not Test is refused.
 //
 // ── What it never does ──────────────────────────────────────────────────
 // It writes nothing but its own row in fni.rate_probes. Never fni.sessions,
@@ -32,6 +34,7 @@ import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
 import { parseRequiredProperties, readRateProperties } from "../_shared/rate-properties.ts";
 import { buildRateRequest, type RateSource } from "../_shared/rate-request.ts";
+import { codeRequest, type FormCodes } from "../_shared/coded-values.ts";
 import {
   applyProbeOverrides,
   NEVER_PROBE_DEAL,
@@ -120,7 +123,14 @@ serve(async (req: Request) => {
     if (built.missing.length > 0) {
       return await fail(`The deal does not carry ${built.missing.map((m) => m.name).join(", ")}, so it cannot be rated.`, { environment });
     }
-    const request = applyProbeOverrides(built.request, parsed.overrides);
+    // The probe's properties, then every coded field as the provider's code
+    // (by the codes its form last stated for this vehicle type), then the
+    // top-level values exactly as given: a probe of a raw field means it.
+    const seen = cached?.form_codes;
+    const formCodes = seen && typeof seen === "object" && !Array.isArray(seen) ? (seen as FormCodes) : null;
+    const coded = codeRequest(applyProbeOverrides(built.request, { properties: parsed.overrides.properties, top: {} }), formCodes);
+    if ("problem" in coded) return await fail(coded.problem, { environment });
+    const request = applyProbeOverrides(coded.request, { properties: {}, top: parsed.overrides.top });
 
     let response: unknown;
     try {
