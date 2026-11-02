@@ -191,13 +191,13 @@ function Field({ field, vendor }: { field: VerifyField; vendor: string }) {
     field.differs_from_crm && field.original !== null && field.original_source !== "Missing";
 
   const state =
-    field.invalid ? "is-invalid"
+    field.invalid || field.problem ? "is-invalid"
     : field.missing ? "is-missing"
     : changedFromCrm ? "is-changed"
     : "";
 
   // Shown in full only when the person has something to do about this field.
-  const needsHelp = field.missing || field.invalid;
+  const needsHelp = field.missing || field.invalid || Boolean(field.problem);
 
   // ── The tooltip ────────────────────────────────────────────────────────
   // Nothing on the row says where the value came from or who changed it. The
@@ -286,7 +286,9 @@ function Field({ field, vendor }: { field: VerifyField; vendor: string }) {
 
       <MissingMarker field={field} />
 
-      {needsHelp && (help || field.note) ? (
+      {field.problem ? (
+        <p className="vfield-note" role="alert">{field.problem}</p>
+      ) : needsHelp && (help || field.note) ? (
         <p className="vfield-note">{help ?? field.note}</p>
       ) : null}
 
@@ -456,7 +458,7 @@ export default async function DetailsPage({
   // Prepare presentation saved for this deal (fni-menu-prepare, migration 0045).
   const step = nextStep(presentable, !!sheet.prepared);
   const byGroup = (g: FieldGroup) => sheet.fields.filter((f) => f.group === g);
-  const attention = sheet.fields.filter((f) => f.missing || f.invalid);
+  const attention = sheet.fields.filter((f) => f.missing || f.invalid || f.problem);
 
   // The rating's badge: Rated is good; Out of date and Failed need doing; the
   // rest (Not Offered, Pending) are neutral.
@@ -1303,6 +1305,8 @@ export default async function DetailsPage({
                       Still needed before this can be rated:{" "}
                       <b>{sheet.missing.map((f) => f.label).join(", ")}</b>.
                     </>
+                  ) : (sheet.problems ?? []).length > 0 ? (
+                    <>{(sheet.problems ?? []).map((f) => f.problem).join(" ")}</>
                   ) : (
                     <>This deal cannot be rated yet.</>
                   )}

@@ -442,6 +442,8 @@ export interface VerifyField {
   differs_from_crm: boolean;
   /** An edit that could not be read as a number or a date. Blocks Verify. */
   invalid: boolean;
+  /** A value present but not one the provider can rate on (engine size 0). Blocks Verify and rating. */
+  problem?: string | null;
   edited_by: string | null;
   edited_at: string | null;
 }
@@ -583,6 +585,8 @@ export interface VerifySheet {
   crm_warning: string | null;
   /** Edits that could not be read. Verify is refused while any exists. */
   invalid: VerifyField[];
+  /** Values present but not ones the provider can rate on. */
+  problems?: VerifyField[];
   /** The amount financed is already over the finance company's maximum.
    *  A warning only; it does not block Confirm. */
   over_cap_warning: string | null;

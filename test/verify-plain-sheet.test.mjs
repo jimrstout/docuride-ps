@@ -66,7 +66,8 @@ test("a value changed away from the CRM gets only a copper edge on its box", () 
 });
 
 test("invalid edits keep their error treatment", () => {
-  assert.match(fieldFn, /field\.invalid \? "is-invalid"/);
+  // An engine size of 0 gets the same treatment (field.problem).
+  assert.match(fieldFn, /field\.invalid \|\| field\.problem \? "is-invalid"/);
   assert.match(fieldFn, /aria-invalid=\{field\.invalid \? true : undefined\}/);
   assert.match(css, /\.vfield\.is-invalid \{ border-left-color: var\(--warn-fg\); background: var\(--warn-bg\); \}/);
   assert.match(css, /\.vfield\.is-invalid input \{ border-color: var\(--warn-fg\); \}/);

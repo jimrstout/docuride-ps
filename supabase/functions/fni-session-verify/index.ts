@@ -1395,6 +1395,8 @@ async function verify(
       error: sheet.invalid.length > 0
         ? `These edits could not be read, so they are not in force: ` +
           `${sheet.invalid.map((f) => f.label).join(", ")}. Correct them before verifying.`
+        : sheet.problems.length > 0
+        ? sheet.problems.map((f) => f.problem).join(" ")
         : reason ??
           `Not every field ${vendor} asks for has a value yet: ` +
           `${sheet.missing.map((f) => f.label).join(", ")}.`,
