@@ -179,6 +179,9 @@ const COLUMNS = [
   // The coverage level a manager set for each conventional menu column on
   // this deal. Migration 0042.
   "menu_column_levels",
+  // Whether Prepare presentation has been saved for this deal, by whom and
+  // when (fni-menu-prepare, migration 0045). Details shows one next step from it.
+  "menu_prepared_at", "menu_prepared_by",
 ].join(",");
 
 async function loadSession(
@@ -674,6 +677,12 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>, cr
     rating_differences: differences,
     // The conventional menu's columns for this deal, and each one's coverage level.
     menu_columns: await menuColumnsFor(supabase, s),
+    // Prepare presentation saved for this deal: when, and the initials of who.
+    // Null until it has been. Details' next step reads it: rated and not
+    // prepared, Prepare is the next step; prepared, presenting is.
+    prepared: s.menu_prepared_at
+      ? { at: s.menu_prepared_at as string, by: (s.menu_prepared_by as string | null) ?? null }
+      : null,
     // The template the deal matches now. Rating records it on the session.
     menu_template: menu.template ? { name: menu.template.name } : null,
     // Slots hidden from the customer on this deal, with the reason for staff.
