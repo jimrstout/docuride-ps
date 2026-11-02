@@ -282,6 +282,8 @@ const PLAIN: Record<string, string> = {
   "Tire and Wheel": "Tire and Wheel",
   "Theft": "Theft",
   "Battery": "Battery Protection",
+  "GAP": "GAP",
+  "Wear Care": "Wear Care",
   "Appearance": "Appearance",
 };
 

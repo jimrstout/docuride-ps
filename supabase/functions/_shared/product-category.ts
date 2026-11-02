@@ -12,7 +12,8 @@
 // it decides when the catalog has no row:
 //   PPM  Maintenance            THP  Theft
 //   VSA  Mechanical Protection  BAT  Battery
-//   TAW  Tire and Wheel
+//   TAW  Tire and Wheel         GAP  GAP
+//   CMB  Wear Care
 // and a contract, which keeps only the provider's name for the product, is
 // read by the words in that name ("... - RIDERS ADVANTAGE PPM" is Maintenance).
 //
@@ -25,6 +26,9 @@ export const PROVIDER_TYPE_CATEGORY: Readonly<Record<string, string>> = {
   TAW: "Tire and Wheel",
   THP: "Theft",
   BAT: "Battery",
+  GAP: "GAP",
+  // The provider files Wear Care under CMB; it is the only CMB product seen.
+  CMB: "Wear Care",
 };
 
 /** "PPM" to "Maintenance". Null for a type this table does not know. */
@@ -40,6 +44,8 @@ const BY_WORDING: [RegExp, string][] = [
   [/\bbatt(?:ery)?\b/i, "Battery"],
   [/\btire\b|\bwheel\b|\bt\s*&\s*w\b/i, "Tire and Wheel"],
   [/\btheft\b/i, "Theft"],
+  [/\bgap\b/i, "GAP"],
+  [/\bwear\s*care\b/i, "Wear Care"],
 ];
 
 /** "USED BRONZE ATV - RIDERS ADVANTAGE PPM" to "Maintenance". Null when nothing says. */

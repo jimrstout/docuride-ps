@@ -40,7 +40,7 @@ export const dynamic = "force-dynamic";
 type Params = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : "");
 
-const CATEGORIES = ["Mechanical Protection", "Maintenance", "Tire and Wheel", "Theft", "Battery", "Appearance", "Other"];
+const CATEGORIES = ["Mechanical Protection", "Maintenance", "Tire and Wheel", "Theft", "Battery", "GAP", "Wear Care", "Appearance", "Other"];
 const LEVELS = ["Lowest", "Middle", "Highest"] as const;
 const COLUMN_ROWS = [1, 2, 3, 4, 5];
 

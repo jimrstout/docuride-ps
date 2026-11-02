@@ -48,7 +48,7 @@
 import { isServiceDriveName } from "./service-drive.ts";
 
 export const CATEGORIES = [
-  "Mechanical Protection", "Maintenance", "Tire and Wheel", "Theft", "Battery", "Appearance", "Other",
+  "Mechanical Protection", "Maintenance", "Tire and Wheel", "Theft", "Battery", "GAP", "Wear Care", "Appearance", "Other",
 ] as const;
 
 export const DEAL_TYPES = ["Financed", "Cash"] as const;
