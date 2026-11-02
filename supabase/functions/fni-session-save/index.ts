@@ -153,7 +153,9 @@ async function pricedForSession(
   for (const r of (dealRows ?? []) as (DealPrice & { option_key: string })[]) {
     prices[r.option_key] = { ...r, retail_price: Number(r.retail_price) };
   }
-  return applyDealPrices(priceFamilies(familiesFromRows(offers), (ruleRows ?? []) as unknown as PricingRule[]), prices);
+  // Deal prices only while they fit the current rating (_shared/stale-offers.ts).
+  const rules = (ruleRows ?? []) as unknown as PricingRule[];
+  return applyDealPrices(priceFamilies(familiesFromRows(offers), rules), prices, rules);
 }
 
 async function serverAdditionalDown(

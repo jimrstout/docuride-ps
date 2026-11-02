@@ -28,6 +28,8 @@ import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-
 import { secretsMatch } from "../_shared/supabase.ts";
 import { presentedSecret } from "../_shared/presented-secret.ts";
 import { unplacedOffers } from "../_shared/menu-templates.ts";
+import { loadSheet } from "../_shared/menu-prepare-rows.ts";
+import { providerMessages } from "../_shared/stale-offers.ts";
 import { staffCheck, staffGate } from "../_shared/staff-gate.ts";
 import { staffInitials } from "../_shared/staff-auth.ts";
 import {
@@ -637,6 +639,28 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>, cr
       )
     : null;
 
+  // ── What rating again took away, and what the provider said ──────────
+  // A prepared menu's choices no longer offered, and deal prices that no
+  // longer fit, from the same sheet Prepare and Present menu read; and the
+  // provider's words about any product it did not rate ("No rates
+  // available"), naming the product (_shared/stale-offers.ts).
+  const ratingNotices: string[] = [];
+  if (summary.state === "Rated" && !summary.out_of_date) {
+    if (s.menu_prepared) ratingNotices.push(...(await loadSheet(supabase, s)).sheet.notices);
+    const codes = rows.flatMap((r) => {
+      const ps = ((r.response_payload as { quote?: { vehicles?: { products?: { unique?: string }[] }[] } } | null)?.quote?.vehicles ?? [])
+        .flatMap((v) => v.products ?? []);
+      return ps.map((p) => String(p.unique ?? ""));
+    });
+    const { data: named } = codes.length
+      ? await supabase.schema("fni").from("product_catalog").select("product_code, display_name").in("product_code", codes).is("store_id", null)
+      : { data: [] };
+    const names = new Map(((named ?? []) as { product_code: string; display_name: string }[]).map((c) => [c.product_code, c.display_name]));
+    for (const r of rows) {
+      ratingNotices.push(...providerMessages(r.response_payload, (code, label) => names.get(code) ?? label.split(" - ")[0]));
+    }
+  }
+
   const [duplicates, contracts, oemContracts, panel, providerAnswer, differences] = await Promise.all([
     duplicateVinSessions(supabase, s),
     liveContracts(supabase, s.id as string),
@@ -700,6 +724,9 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>, cr
     // Offers no menu row shows, said in words rather than dropped: "2
     // Maintenance plans were offered but no menu row uses them."
     unplaced_offers: resolved ? unplacedOffers(resolved, familiesFromRows(rows)) : [],
+    // What rating again took off the menu, prices it no longer applies, and
+    // the provider's words about products it did not rate.
+    rating_notices: ratingNotices,
     // Slots hidden from the customer on this deal, with the reason for staff.
     hidden_slots: (resolved ?? [])
       .filter((r) => r.hidden)
