@@ -139,6 +139,65 @@ for (const label of ["Present menu", "Present storyboard"]) {
   await ctx.close();
 }
 
+// ── Buttons ──────────────────────────────────────────────────────────────
+// Pressed twice: one request reaches the server, the button shows busy from
+// the press (within 100 ms), and stays busy until its result is on the
+// screen; for a Details action, the next render of Details (its render
+// marker changes), for the customer's menu, the "chosen" screen.
+async function buttonCase(label, path, locate, { calls, done, expect = 1 }) {
+  const ctx = await signedIn(browser, app.base);
+  const page = await ctx.newPage();
+  await page.goto(app.base + path, { waitUntil: "networkidle" });
+  edge.state.delayMs = SLOW;
+  const before = { ...edge.state.calls };
+  await page.evaluate((doneJs) => {
+    const stampBefore = document.querySelector("[data-working-render]")?.getAttribute("data-working-render") ?? null;
+    const isDone = new Function("stampBefore", doneJs);
+    const w = (window.__watch = { pressed: 0, busyAt: null, droppedBeforeDone: false, doneAt: null });
+    const busyNow = () => !!document.querySelector('[aria-busy="true"], .working-overlay');
+    const tick = () => {
+      if (!w.pressed) return requestAnimationFrame(tick);
+      const t = performance.now() - w.pressed;
+      const busy = busyNow();
+      if (busy && w.busyAt === null) w.busyAt = t;
+      if (isDone(stampBefore)) { w.doneAt = t; return; }
+      if (w.busyAt !== null && !busy) w.droppedBeforeDone = true;
+      requestAnimationFrame(tick);
+    };
+    document.addEventListener("pointerdown", () => { if (!w.pressed) w.pressed = performance.now(); }, { capture: true, once: true });
+    requestAnimationFrame(tick);
+  }, done);
+  await locate(page).dblclick();
+  try {
+    await page.waitForFunction(() => window.__watch.doneAt !== null, null, { timeout: 30000 });
+  } catch {
+    check(false, `${label}: the result was not drawn in 30 seconds`);
+    await ctx.close();
+    edge.state.delayMs = 0;
+    return;
+  }
+  const w = await page.evaluate(() => window.__watch);
+  await page.waitForTimeout(300);
+  const sent = calls.map((k) => (edge.state.calls[k] ?? 0) - (before[k] ?? 0));
+  check(w.busyAt !== null && w.busyAt < 100, `${label}: busy showed at ${w.busyAt?.toFixed(0)} ms`);
+  check(!w.droppedBeforeDone, `${label}: busy stayed up until the result was drawn (${w.doneAt?.toFixed(0)} ms)`);
+  check(sent.every((n) => n === expect), `${label}: pressed twice, sent ${calls.map((k, i) => `${k} x${sent[i]}`).join(", ")}`);
+  await ctx.close();
+  edge.state.delayMs = 0;
+}
+
+const DETAILS_REDRAWN = `const now = document.querySelector("[data-working-render]")?.getAttribute("data-working-render"); return !!now && now !== stampBefore;`;
+await buttonCase("Details: Rate", "/details/10000001-aaaa-4aaa-8aaa-aaaaaaaaaaaa", (p) => p.locator(".vnext button", { hasText: "Rate" }),
+  { calls: ["POST fni-session-verify", "POST fni-rate-vehicle"], done: DETAILS_REDRAWN });
+await buttonCase("Details: Rate again", "/details/20000002-aaaa-4aaa-8aaa-aaaaaaaaaaaa", (p) => p.locator(".vnext button", { hasText: "Rate again" }),
+  { calls: ["POST fni-rate-vehicle"], done: DETAILS_REDRAWN });
+await buttonCase("Details: Save changes", "/details/10000001-aaaa-4aaa-8aaa-aaaaaaaaaaaa", (p) => p.locator(".vtools button", { hasText: "Save changes" }),
+  { calls: ["POST fni-session-verify"], done: DETAILS_REDRAWN });
+await buttonCase("Details: Refresh from CRM", "/details/10000001-aaaa-4aaa-8aaa-aaaaaaaaaaaa", (p) => p.locator(".vh-top button", { hasText: "Refresh from CRM" }),
+  { calls: ["POST fni-session-verify"], done: DETAILS_REDRAWN });
+await buttonCase("Customer menu: Select this package", "/menu/30000003-aaaa-4aaa-8aaa-aaaaaaaaaaaa", (p) => p.locator("button", { hasText: "Select this package" }).first(),
+  { calls: ["POST fni-acknowledgment"], done: `return !document.querySelector("button.mn-btn--go") || /chose|Thank|recorded/i.test(document.body.innerText) && !document.querySelector('[aria-busy="true"]');` });
+
 await browser.close();
 app.stop();
 edge.close();

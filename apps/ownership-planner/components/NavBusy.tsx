@@ -104,7 +104,22 @@ export function NavWatcher() {
     if (here === last.current) return;
     last.current = here;
     const j = navBusy();
-    if (j && !j.newTab) requestAnimationFrame(() => navBusy() === j && endNav());
+    if (!j || j.newTab) return;
+    // A loading screen (app/details/[sessionId]/loading.tsx) means the page's
+    // data is still on the way: wait for it to give way to the page.
+    const drawn = () => !document.querySelector("[data-page-loading]");
+    const finish = () => requestAnimationFrame(() => navBusy() === j && endNav());
+    if (drawn()) {
+      finish();
+      return;
+    }
+    const obs = new MutationObserver(() => {
+      if (!drawn()) return;
+      obs.disconnect();
+      finish();
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+    return () => obs.disconnect();
   }, [here]);
 
   useEffect(() => {

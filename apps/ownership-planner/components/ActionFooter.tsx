@@ -6,6 +6,8 @@
 
 "use client";
 
+import Control from "@/components/Control";
+
 export type SaveState = "idle" | "saving" | "saved" | "error";
 
 export default function ActionFooter({
@@ -35,9 +37,9 @@ export default function ActionFooter({
   return (
     <div className="actions">
       {showBack ? (
-        <button type="button" className="btn btn--quiet" onClick={onBack}>
+        <Control className="btn btn--quiet" onPress={onBack}>
           <Arrow back /> {backLabel}
-        </button>
+        </Control>
       ) : (
         <span />
       )}
@@ -47,14 +49,13 @@ export default function ActionFooter({
       </p>
 
       {showNext ? (
-        <button
-          type="button"
+        <Control
           className="btn btn--go"
-          onClick={onNext}
+          onPress={onNext}
           disabled={nextDisabled}
         >
           {nextLabel} <Arrow />
-        </button>
+        </Control>
       ) : (
         <span />
       )}

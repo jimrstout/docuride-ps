@@ -44,8 +44,8 @@ test("every field is editable, read-only when locked, with its history and the C
   assert.match(c, /\{editable \? <Input field=\{field\} id=\{id\} \/> : <p className="vfield-value">/);
   assert.match(c, /Entered by Staff: \{field\.edited_by \?\? "unknown"\}, \{stamp\(field\.edited_at\)\}\. Was \{field\.was \?\? "not set"\}\./);
   assert.match(c, /CRM now says \{field\.crm_value \?\? "nothing"\}\./);
-  assert.match(c, /<PendingButton pending="Keeping\.\.\.">Keep staff value<\/PendingButton>/);
-  assert.match(c, /<PendingButton pending="Switching\.\.\.">Use CRM value<\/PendingButton>/);
+  assert.match(c, /<Control type="submit" busyText="Keeping\.\.\.">Keep staff value<\/Control>/);
+  assert.match(c, /<Control type="submit" busyText="Switching\.\.\.">Use CRM value<\/Control>/);
   assert.match(c, /"Cash deal, no lienholder\."/);
   assert.match(c, /Business \{lower\(party\.party\)\}: <strong>/);
   assert.match(c, /<summary>Add a \{lower\(party\.party\)\}<\/summary>/);

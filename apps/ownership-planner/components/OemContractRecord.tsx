@@ -8,6 +8,7 @@
 // form and the server records the contract. Nothing is sent to any provider:
 // the contract was written on the OEM's own system.
 
+import Control from "@/components/Control";
 import { useRef, useState } from "react";
 import { useWorking, Working } from "@/components/Working";
 import { oemContractUploadUrl, recordOemContract } from "@/app/console-actions";
@@ -82,10 +83,12 @@ export default function OemContractRecord({
         <input type="file" name="document" accept=".pdf,.jpg,.jpeg,.png" required />
       </label>
       {problem ? <p className="note note--flag" role="alert">{problem}</p> : null}
-      <button type="submit" className="btn btn--quiet" disabled={state !== "idle"} aria-busy={state !== "idle" || undefined}>
-        {state !== "idle" ? <span className="btn-spinner" aria-hidden="true" /> : null}
-        {state === "uploading" ? "Uploading…" : state === "saving" ? "Recording…" : "Record contract"}
-      </button>
+      {/* Busy from the press until the contract is recorded: the upload starts
+          the page's working state from this button, and the save that follows
+          ends it (components/Control.tsx). */}
+      <Control type="submit" className="btn btn--quiet" busyText={state === "saving" ? "Recording..." : "Uploading..."}>
+        Record contract
+      </Control>
     </form>
   );
 }

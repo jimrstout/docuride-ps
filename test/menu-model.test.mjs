@@ -200,5 +200,5 @@ test("every screen size fits: tabs for phones and short windows, the price opens
   assert.match(css, /@media \(max-width: 760px\), \(max-height: 699px\) \{/);
   assert.match(css, /@media \(min-width: 761px\) and \(max-width: 1200px\) and \(min-height: 700px\) \{/);
   const menu = read("apps/ownership-planner/app/menu/[sessionId]/Menu.tsx");
-  assert.match(menu, /className="mn-cell-price"[\s\S]{0,400}?onClick=\{\(\) => openCell\(ci, ri\)\}/);
+  assert.match(menu, /className="mn-cell-price"[\s\S]{0,400}?onPress=\{\(\) => openCell\(ci, ri\)\}/);
 });

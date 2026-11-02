@@ -7,6 +7,7 @@
 
 "use client";
 
+import Control from "@/components/Control";
 import type { DiscoveryQuestion } from "@/lib/profiles";
 
 export default function OwnershipQuestion({
@@ -29,19 +30,18 @@ export default function OwnershipQuestion({
         {question.options.map((o) => {
           const on = chosen.includes(o.value);
           return (
-            <button
+            <Control
               key={o.value}
-              type="button"
               className={`choice ${on ? "is-chosen" : ""}`}
               aria-pressed={on}
-              onClick={() => onToggle(o.value)}
+              onPress={() => onToggle(o.value)}
             >
               <span className="choice-box" aria-hidden="true">{on ? <span className="tick" /> : null}</span>
               <span className="choice-text">
                 <b>{o.label}</b>
                 <small>{o.hint}</small>
               </span>
-            </button>
+            </Control>
           );
         })}
       </div>

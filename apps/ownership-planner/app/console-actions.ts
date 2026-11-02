@@ -251,19 +251,25 @@ async function backToVerify(
   sessionId: string,
   code: string | null = null,
   detail: string | null = null
-): Promise<never> {
+): Promise<void> {
   if (code !== null) {
     const jar = await cookies();
     jar.set(VERIFY_FLASH_COOKIE, encodeVerifyFlash(code, detail), VERIFY_FLASH_OPTIONS);
   }
-  redirect(`/details/${sessionId}`);
+  // Refreshed in place, not redirected. Every action here is pressed on this
+  // deal's Details and answers with this deal's Details. A redirect to the
+  // page already showing made Next draw an empty window until the new page's
+  // data arrived (seconds, since Details reads the deal and the DX1 check as
+  // it renders), and the busy overlay went with it. A refresh keeps the page
+  // on the screen, busy, until the refreshed one replaces it.
+  revalidatePath(`/details/${sessionId}`);
 }
 
 async function verifyAction(
   formData: FormData,
   build: (sessionId: string) => Record<string, unknown>,
   onOk: string | null = null
-): Promise<never> {
+): Promise<void> {
   const sessionId = String(formData.get("session_id") ?? "");
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
@@ -770,7 +776,7 @@ export async function oemContractUploadUrl(
   }
 }
 
-async function oemWrite(fd: FormData, build: (by: string) => Record<string, unknown>): Promise<never> {
+async function oemWrite(fd: FormData, build: (by: string) => Record<string, unknown>): Promise<void> {
   const operator = await currentOperator();
   if (!operator) redirect(SESSIONS);
   const sessionId = String(fd.get("session_id") ?? "");

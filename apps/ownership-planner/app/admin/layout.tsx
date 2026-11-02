@@ -51,9 +51,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // sidebar becomes a row of icons. CSS shows one of them.
   const signOutForm = (
     <form action={signOut}>
-      <button type="submit" className="ad-signout">
+      <Control type="submit" className="ad-signout" busyText="Signing out...">
         Sign out
-      </button>
+      </Control>
     </form>
   );
 

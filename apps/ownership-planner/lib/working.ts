@@ -134,8 +134,11 @@ export const RENDER_WAIT_MS = 90_000;
 /**
  * True once the screen shows a render other than the one the action started
  * on. `before` null means the page has no marker, so there is nothing to wait
- * for. A marker that has gone (an error page drew instead) has also moved on.
+ * for. A marker that has merely gone is not the answer: Next can show an empty
+ * page, or the loading screen, between the old page and the new one, and the
+ * answer is drawn only once a new marker is on the screen. (An error page
+ * never draws one; the long give-up ends the wait.)
  */
 export function caughtUp(before: string | null, now: string | null): boolean {
-  return before === null || now !== before;
+  return before === null || (now !== null && now !== before);
 }

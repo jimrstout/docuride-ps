@@ -24,7 +24,7 @@ const SWEPT = [
   "apps/ownership-planner/components/VehicleTypeChoice.tsx",
   "apps/ownership-planner/components/OemContractRecord.tsx",
   "apps/ownership-planner/components/VerifySidebarFields.tsx",
-  "apps/ownership-planner/components/PendingButton.tsx",
+  "apps/ownership-planner/components/Control.tsx",
   "apps/ownership-planner/components/Working.tsx",
   "apps/ownership-planner/components/LongText.tsx",
   "apps/ownership-planner/components/RatingErrorText.tsx",

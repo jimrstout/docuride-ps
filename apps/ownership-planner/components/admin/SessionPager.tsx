@@ -19,6 +19,7 @@
 // list with every matching row, and no buttons. Without JavaScript every row
 // shows, as before.
 
+import Control from "@/components/Control";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { countLine, pageHolding, pagesFor } from "@/lib/session-pages";
 
@@ -131,22 +132,20 @@ export function SessionPager({ tableId, total }: { tableId: string; total: numbe
       </span>
       {paged ? (
         <span className="ad-pager" role="group" aria-label="Pages">
-          <button
-            type="button"
+          <Control
             className="ad-btn ad-btn--secondary"
-            onClick={() => layout(page.current - 1)}
+            onPress={() => layout(page.current - 1)}
             disabled={view.page === 0}
           >
             Previous
-          </button>
-          <button
-            type="button"
+          </Control>
+          <Control
             className="ad-btn ad-btn--secondary"
-            onClick={() => layout(page.current + 1)}
+            onPress={() => layout(page.current + 1)}
             disabled={view.page >= view.pages - 1}
           >
             Next
-          </button>
+          </Control>
         </span>
       ) : (
         <span>Most recent first</span>

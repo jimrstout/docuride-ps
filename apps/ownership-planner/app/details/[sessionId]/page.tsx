@@ -66,7 +66,6 @@ import SaleDateWatch from "@/components/SaleDateWatch";
 import { crmRecordUrl, NO_SALE_DATE_LINE, SUBMIT_HELD_FOR_DATE } from "@/lib/crm-link";
 import { initialsFor } from "@/lib/admin-sections";
 import { sentenceStart, testServerName, vendorName } from "@/lib/vendor";
-import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
 import RatingErrorText from "@/components/RatingErrorText";
 import ContractParties from "@/components/ContractParties";
@@ -469,9 +468,6 @@ export default async function DetailsPage({
   return (
     <WorkingArea>
     <div className="vh vh--fit">
-      {/* New on every render: the busy state ends only once this changes, so
-          the spinner stays up until the answer is on the screen. */}
-      <RenderStamp />
       <header className="vh-top">
         <div className="vh-crumb">
           <h1 className="sr-only">Deal {sheet.session.deal_number ?? "(no number)"} details</h1>
@@ -489,9 +485,9 @@ export default async function DetailsPage({
           <form action={refreshFromCrm}>
             <Working />
             <input type="hidden" name="session_id" value={sheet.session.id} />
-            <PendingButton working="page" pending="Refreshing from CRM...">
+            <Control type="submit" working="page" busyText="Refreshing from CRM...">
               Refresh from CRM
-            </PendingButton>
+            </Control>
           </form>
         </div>
       </header>
@@ -709,9 +705,9 @@ export default async function DetailsPage({
                   name="note"
                   placeholder={`What you found with ${vendor} (optional)`}
                 />
-                <PendingButton working="page" pending="Clearing the notice...">
+                <Control type="submit" working="page" busyText="Clearing the notice...">
                   I have checked with {vendor}
-                </PendingButton>
+                </Control>
               </form>
             </section>
           ) : null}
@@ -806,9 +802,9 @@ export default async function DetailsPage({
                         }))} />
                         <div className="vattention-actions">
                           {attention.some((f) => f.key === "engine.ccs" || f.key === "fuel.type") ? (
-                            <button type="submit" form="vin-decode" className="btn btn--quiet" title="Decoding reloads this page. Save any other edits first.">Decode VIN</button>
+                            <Control type="submit" form="vin-decode" className="btn btn--quiet" working="page" busyText="Decoding the VIN..." title="Decoding reloads this page. Save any other edits first.">Decode VIN</Control>
                           ) : null}
-                          <button type="submit" form="vsheet" className="btn btn--quiet">Save changes</button>
+                          <Control type="submit" form="vsheet" className="btn btn--quiet" busyText="Saving changes...">Save changes</Control>
                         </div>
                       </aside>
                     ) : null}
@@ -854,9 +850,9 @@ export default async function DetailsPage({
                         form. They stay separate forms on purpose: a VIN decode is not a save
                         and must not post half-typed values, and Discard throws work away. */}
                     <div className="vtools">
-                      <PendingButton form="vsheet" pending="Saving changes...">
+                      <Control type="submit" form="vsheet" busyText="Saving changes...">
                         Save changes
-                      </PendingButton>
+                      </Control>
 
                       <form
                         id="vin-decode"
@@ -865,9 +861,9 @@ export default async function DetailsPage({
                       >
                         <Working />
                         <input type="hidden" name="session_id" value={sheet.session.id} />
-                        <PendingButton working="page" pending="Decoding the VIN...">
+                        <Control type="submit" working="page" busyText="Decoding the VIN...">
                           Decode the VIN
-                        </PendingButton>
+                        </Control>
                       </form>
 
                       {decodeDidNotAnswer(sheet) ? (
@@ -883,9 +879,9 @@ export default async function DetailsPage({
                         >
                           <Working />
                           <input type="hidden" name="session_id" value={sheet.session.id} />
-                          <PendingButton working="page" pending="Reloading from CRM...">
+                          <Control type="submit" working="page" busyText="Reloading from CRM...">
                             Discard my edits and reload from CRM
-                          </PendingButton>
+                          </Control>
                         </form>
                       ) : null}
 
@@ -982,7 +978,7 @@ export default async function DetailsPage({
                                           <label className="vcontracts-confirm">
                                             <input type="checkbox" name="confirm" required /> Cancel with {vendor}
                                           </label>
-                                          <PendingButton working="page" pending="Voiding..." leave={VOID_LEAVE}>Void</PendingButton>
+                                          <Control type="submit" working="page" busyText="Voiding..." leave={VOID_LEAVE}>Void</Control>
                                         </form>
                                       )}
                                     </div>
@@ -1110,9 +1106,9 @@ export default async function DetailsPage({
                                       <Working />
                                       <input type="hidden" name="session_id" value={sheet.session.id} />
                                       <input type="hidden" name="contract_number" value={c.contract_number} />
-                                      <PendingButton pending="Getting the document...">
+                                      <Control type="submit" busyText="Getting the document...">
                                         {c.workdrive_url ? "Get document again" : "Get document"}
-                                      </PendingButton>
+                                      </Control>
                                     </form>
                                     <form action={voidContract} className="oem-record">
                                       <Working />
@@ -1125,7 +1121,7 @@ export default async function DetailsPage({
                                       <label className="vcontracts-confirm">
                                         <input type="checkbox" name="confirm" required /> Cancel this contract with {vendor}
                                       </label>
-                                      <PendingButton working="page" pending="Voiding..." leave={VOID_LEAVE}>Void</PendingButton>
+                                      <Control type="submit" working="page" busyText="Voiding..." leave={VOID_LEAVE}>Void</Control>
                                     </form>
                                   </div>
                                 ) : null}
@@ -1138,9 +1134,9 @@ export default async function DetailsPage({
                           <form action={moveDocumentsToDealJacket} className="vcontracts-move">
                             <Working />
                             <input type="hidden" name="session_id" value={sheet.session.id} />
-                            <PendingButton working="page" pending="Moving documents to the Deal Jacket...">
+                            <Control type="submit" working="page" busyText="Moving documents to the Deal Jacket...">
                               Move documents to Deal Jacket
-                            </PendingButton>
+                            </Control>
                             <small>
                               {sheet.contracts_panel.waiting_count}{" "}
                               {sheet.contracts_panel.waiting_count === 1 ? "document is" : "documents are"} waiting. The CRM will
@@ -1192,7 +1188,7 @@ export default async function DetailsPage({
                                         <span>Why it is being voided</span>
                                         <input name="void_reason" required />
                                       </label>
-                                      <PendingButton working="page" pending="Voiding the record...">Void record</PendingButton>
+                                      <Control type="submit" working="page" busyText="Voiding the record...">Void record</Control>
                                     </form>
                                 </>
                               ) : (
@@ -1249,7 +1245,7 @@ export default async function DetailsPage({
                             </label>
                           ))}
                         </div>
-                        <PendingButton pending="Saving the levels...">Save levels</PendingButton>
+                        <Control type="submit" busyText="Saving the levels...">Save levels</Control>
                       </form>
                     ) : null}
                   </>
@@ -1324,14 +1320,14 @@ export default async function DetailsPage({
               <form action={verifyAndRate} className="vgate">
                 <Working />
                 <input type="hidden" name="session_id" value={sheet.session.id} />
-                <PendingButton
+                <Control type="submit"
                   className="btn btn--go"
                   working="page"
-                  pending="Rating..."
+                  busyText="Rating..."
                   disabled={!sheet.ready}
                 >
                   Rate
-                </PendingButton>
+                </Control>
               </form>
             ) : (
               <>
@@ -1341,7 +1337,7 @@ export default async function DetailsPage({
                   <form action={rateAgain} className="vrate-again">
                     <Working />
                     <input type="hidden" name="session_id" value={sheet.session.id} />
-                    <PendingButton working="page" pending="Rating again...">Rate again</PendingButton>
+                    <Control type="submit" working="page" busyText="Rating again...">Rate again</Control>
                   </form>
                 ) : null}
                 {/* Before presenting: each column's options and prices, from the presets (docs section 25). */}
@@ -1353,12 +1349,12 @@ export default async function DetailsPage({
                 </Control>
                 {step === "prepare" ? (
                   <>
-                    <button type="button" className="btn btn--quiet" disabled aria-describedby="vnext-why">
+                    <Control className="btn btn--quiet" disabled aria-describedby="vnext-why">
                       Present menu
-                    </button>
-                    <button type="button" className="btn btn--quiet" disabled aria-describedby="vnext-why">
+                    </Control>
+                    <Control className="btn btn--quiet" disabled aria-describedby="vnext-why">
                       Present storyboard
-                    </button>
+                    </Control>
                     <p id="vnext-why" className="vnext-why">{PREPARE_FIRST}</p>
                   </>
                 ) : (
@@ -1379,6 +1375,11 @@ export default async function DetailsPage({
           </div>
         </footer>
       </main>
+      {/* New on every render, and last in the page: the busy state ends only
+          once this changes, and it can only change once everything above it
+          has been drawn. React can draw a page in parts; a marker at the top
+          once changed while the rest of the page was still on its way. */}
+      <RenderStamp />
     </div>
     </WorkingArea>
   );

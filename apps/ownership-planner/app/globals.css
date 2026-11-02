@@ -1684,3 +1684,13 @@ button.is-busy, .btn.is-busy, .ad-btn.is-busy, button[aria-busy="true"] { flex: 
 }
 a[aria-busy="true"] { cursor: progress; }
 a[aria-disabled="true"] { pointer-events: none; }
+
+/* A press that failed, beside the control that was pressed (components/Control). */
+.control-error { display: inline-block; margin-left: 8px; font-size: 0.85rem; font-weight: 600; color: var(--warn-fg, #9a3412); }
+
+/* A page on its way, while its data loads (app/details/[sessionId]/loading.tsx). */
+.page-loading {
+  min-height: 100vh; min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 12px;
+  background: var(--page); color: var(--ink-soft); font-size: var(--fs-base);
+}
+.page-loading p { margin: 0; }

@@ -11,7 +11,7 @@
 // ticked. The Edge Function refuses without it and records it as the session
 // event "Contract detail changes confirmed for DX1" (contract-parties.ts).
 //
-// Confirm Submit is the page's usual busy button (components/PendingButton.tsx,
+// Confirm Submit is the page's usual busy button (components/Control.tsx,
 // components/Working.tsx): one spinner, one label, and a second tap cannot
 // send again. While it runs the modal cannot be closed. When the submit has
 // answered, the modal closes and the result is shown on the page.
@@ -26,7 +26,7 @@
 // the buttons stay in view (app/globals.css, .vconfirm).
 
 import { useEffect, useRef, useState } from "react";
-import PendingButton from "@/components/PendingButton";
+import Control from "@/components/Control";
 import SubmitSummary from "@/components/SubmitSummary";
 import { Working, useWorking } from "@/components/Working";
 import { DX1_CONFIRMATION } from "@/lib/contract-parties";
@@ -106,20 +106,20 @@ export default function SubmitConfirm({
         <p className="vsubmit-note" role="status">{note}</p>
       ) : null}
       {refreshFirst ? (
-        <PendingButton
+        <Control type="submit"
           className="btn"
           working="page"
-          pending="Refreshing the rating..."
+          busyText="Refreshing the rating..."
           formAction={refreshSpentRates}
           formNoValidate
           disabled={!!blocked}
         >
           Submit contracts
-        </PendingButton>
+        </Control>
       ) : (
-        <button type="button" className="btn" onClick={show} disabled={!!blocked} aria-haspopup="dialog">
+        <Control className="btn" onPress={show} disabled={!!blocked} aria-haspopup="dialog">
           Submit contracts
-        </button>
+        </Control>
       )}
 
       <dialog
@@ -161,18 +161,18 @@ export default function SubmitConfirm({
           ) : null}
         </div>
         <div className="vconfirm-actions">
-          <button type="button" className="btn btn--quiet" onClick={cancel} disabled={busy}>
+          <Control className="btn btn--quiet" onPress={cancel} disabled={busy}>
             Cancel
-          </button>
-          <PendingButton
+          </Control>
+          <Control type="submit"
             className="btn btn--go"
             working="page"
-            pending="Submitting contracts..."
+            busyText="Submitting contracts..."
             leave={SUBMIT_LEAVE}
             disabled={!open || !!blocked || !!held || (needsDx1 && !ticked)}
           >
             Confirm Submit
-          </PendingButton>
+          </Control>
         </div>
       </dialog>
     </form>

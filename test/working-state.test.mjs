@@ -85,7 +85,8 @@ test("no staff form sends with a plain button: each says what it is doing", () =
   for (const f of files) {
     const s = readFileSync(f, "utf8");
     for (const m of s.matchAll(/<form\b[^>]*action=\{(?!signOut)[^}]+\}[^>]*>([\s\S]*?)<\/form>/g)) {
-      assert.doesNotMatch(m[1], /<button\s+type="submit"/, `${f}: a plain submit button`);
+      // A raw button would send with no busy state; the shared control is the only button.
+      assert.doesNotMatch(m[1], /<button\b/, `${f}: a plain submit button`);
     }
   }
 });
@@ -96,14 +97,14 @@ test("the whole-deal actions cover the page, Submit and Void warn before leaving
     "Refreshing from CRM...", "Voiding...", "Moving documents to the Deal Jacket...",
     "Rating...", "Rating again...", "Decoding the VIN...", "Reloading from CRM...",
   ]) {
-    assert.match(page, new RegExp(`working="page"[^>]*pending="${label.replace(/\./g, "\\.")}"`), label);
+    assert.match(page, new RegExp(`working="page"[^>]*busyText="${label.replace(/\./g, "\\.")}"`), label);
   }
   // Submit's busy button is Confirm Submit, in its modal (components/SubmitConfirm.tsx).
   const modal = src("components/SubmitConfirm.tsx");
-  assert.match(modal, /working="page"\s+pending="Submitting contracts\.\.\."\s+leave=\{SUBMIT_LEAVE\}/);
-  assert.equal((page.match(/pending="Voiding\.\.\." leave=\{VOID_LEAVE\}/g) ?? []).length, 2);
+  assert.match(modal, /working="page"\s+busyText="Submitting contracts\.\.\."\s+leave=\{SUBMIT_LEAVE\}/);
+  assert.equal((page.match(/busyText="Voiding\.\.\." leave=\{VOID_LEAVE\}/g) ?? []).length, 2);
   // Smaller ones lock their panel.
-  assert.match(page, /<PendingButton pending="Getting the document\.\.\.">/);
+  assert.match(page, /<Control type="submit" busyText="Getting the document\.\.\.">/);
   assert.match(page, /data-working-panel=""/);
   // A vehicle type change is a whole-deal change.
   assert.match(src("components/VehicleTypeChoice.tsx"), /form\.dataset\.workingIntent = VEHICLE_TYPE_INTENT;/);
@@ -112,7 +113,7 @@ test("the whole-deal actions cover the page, Submit and Void warn before leaving
   assert.match(src("app/admin/layout.tsx"), /<WorkingArea>\s*<div className="ad">/);
   const sessions = src("app/admin/sessions/page.tsx");
   // The list has no busy actions any more: one Open link per row, to Details.
-  assert.doesNotMatch(sessions, /<PendingButton/);
+  assert.doesNotMatch(sessions, /<Control type="submit"/);
 });
 
 test("the area blocks other sends, locks, warns, announces and keeps entries", () => {

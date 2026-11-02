@@ -151,8 +151,8 @@ test("Details: one date line with Open in CRM, no date controls of its own, and 
   assert.match(page, /blocked=\{\s*submitBlocked \?\?/);
   const modal = src("apps/ownership-planner/components/SubmitConfirm.tsx");
   assert.match(modal, /\{blocked \? \(\s*<p className="console-flash console-flash--bad" role="alert">\{blocked\}<\/p>/);
-  assert.match(modal, /onClick=\{show\} disabled=\{!!blocked\}/);
-  assert.match(modal, /pending="Submitting contracts\.\.\."/);
+  assert.match(modal, /onPress=\{show\} disabled=\{!!blocked\}/);
+  assert.match(modal, /busyText="Submitting contracts\.\.\."/);
   const actions = src("apps/ownership-planner/app/console-actions.ts");
   assert.doesNotMatch(actions, /planned_sale_date|sale_date_keep_staff|sale_date_use_crm/);
 

@@ -14,7 +14,6 @@
 // table (?edit=<id>), so the page works with no JavaScript.
 
 import Control from "@/components/Control";
-import PendingButton from "@/components/PendingButton";
 import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
@@ -80,7 +79,7 @@ function ProviderForm({ p, stores }: { p: ProviderRow | null; stores: ProvidersP
             </p>
           )}
           <div className="ad-editor-actions ad-field--wide">
-            <PendingButton className="ad-btn ad-btn--primary" pending="Saving...">{p ? "Save" : "Add provider"}</PendingButton>
+            <Control type="submit" className="ad-btn ad-btn--primary" busyText="Saving...">{p ? "Save" : "Add provider"}</Control>
             <Control href="/admin/providers" className="ad-btn ad-btn--secondary">Cancel</Control>
           </div>
         </form>
@@ -103,7 +102,7 @@ function ProviderForm({ p, stores }: { p: ProviderRow | null; stores: ProvidersP
                 </label>
               ))}
             </div>
-            <PendingButton className="ad-btn ad-btn--secondary" pending="Saving the stores...">Save stores</PendingButton>
+            <Control type="submit" className="ad-btn ad-btn--secondary" busyText="Saving the stores...">Save stores</Control>
           </form>
         ) : p ? (
           <p className="ad-help">

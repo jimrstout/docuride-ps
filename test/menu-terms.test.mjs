@@ -75,7 +75,8 @@ test("presets: Financed only, managers only, every change logged", () => {
 test("the menu: a payment line per term, the term chosen with the package, checked by the save", () => {
   const menu = read("apps/ownership-planner/app/menu/[sessionId]/Menu.tsx");
   assert.match(menu, /<span>\{paymentText\(p\.totals\.totalPayment, p\.t\)\}<\/span>/);
-  assert.match(menu, /onClick=\{\(\) => void record\(cells\[ci\], c\.name, ci \+ 1, f\.term\)\}/);
+  // The press waits on the save, so the button stays busy until it is recorded.
+  assert.match(menu, /onPress=\{\(\) => record\(cells\[ci\], c\.name, ci \+ 1, f\.term\)\}/);
   assert.match(menu, /term: chosenTerm \? \{ months: chosenTerm\.months, rate: chosenTerm\.rate \} : null,/);
   const save = read("supabase/functions/fni-session-save/index.ts");
   assert.match(save, /const term = asked === null\s*\? terms\[0\] \?\? null\s*: terms\.find\(/);

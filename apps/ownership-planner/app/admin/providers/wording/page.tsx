@@ -10,7 +10,6 @@
 // (&product=<id>) to open its form under the table.
 
 import Control from "@/components/Control";
-import PendingButton from "@/components/PendingButton";
 import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
@@ -81,7 +80,7 @@ function WordingForm({ p }: { p: WordingProductRow }) {
             <input type="checkbox" name="active" defaultChecked={p.active} /> Active
           </label>
           <div className="ad-editor-actions ad-field--wide">
-            <PendingButton className="ad-btn ad-btn--primary" pending="Saving the wording...">Save wording</PendingButton>
+            <Control type="submit" className="ad-btn ad-btn--primary" busyText="Saving the wording...">Save wording</Control>
             <Control href={`/admin/providers/wording?provider=${p.provider_id}`} className="ad-btn ad-btn--secondary">Cancel</Control>
             <p className="ad-help">
               Write these from the provider&apos;s approved language. The planner shows a product only when every answer

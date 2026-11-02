@@ -139,7 +139,7 @@ test("voiding a contract and clearing unknown still require a sign-in", () => {
 // ─────────────────────────────────────────────────────────────────────────
 
 test("the button says Rate (once Confirm and Continue)", () => {
-  assert.match(page, />\s*Rate\s*<\/PendingButton>/);
+  assert.match(page, />\s*Rate\s*<\/Control>/);
   assert.doesNotMatch(page, /Confirm and Continue/);
   assert.doesNotMatch(page, /Verify and rate|Verify again and re-rate/);
 });

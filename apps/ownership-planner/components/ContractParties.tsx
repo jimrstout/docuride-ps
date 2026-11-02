@@ -10,7 +10,7 @@
 // contract on the deal is live, because the live contracts were registered
 // with these details. The rules: supabase/functions/_shared/contract-parties.ts.
 
-import PendingButton from "@/components/PendingButton";
+import Control from "@/components/Control";
 import { Working } from "@/components/Working";
 import { DX1_REMINDER } from "@/lib/contract-parties";
 import type { ContractParties as Parties, Party, PartyField } from "@/lib/types";
@@ -96,13 +96,13 @@ function CrmChoices({ party, sessionId, editable }: { party: Party; sessionId: s
             <Working />
             <input type="hidden" name="session_id" value={sessionId} />
             <input type="hidden" name="key" value={f.key} />
-            <PendingButton pending="Keeping...">Keep staff value</PendingButton>
+            <Control type="submit" busyText="Keeping...">Keep staff value</Control>
           </form>
           <form action={useCrmValue}>
             <Working />
             <input type="hidden" name="session_id" value={sessionId} />
             <input type="hidden" name="key" value={f.key} />
-            <PendingButton pending="Switching...">Use CRM value</PendingButton>
+            <Control type="submit" busyText="Switching...">Use CRM value</Control>
           </form>
         </div>
       ))}
@@ -132,7 +132,7 @@ function PartyPanel({ party, sessionId, editable }: { party: Party; sessionId: s
                 <Working />
                 <input type="hidden" name="session_id" value={sessionId} />
                 <input type="hidden" name="party" value={party.party} />
-                <PendingButton pending="Putting it back...">Put the CRM {lower(party.party)} back</PendingButton>
+                <Control type="submit" busyText="Putting it back...">Put the CRM {lower(party.party)} back</Control>
               </form>
             ) : null}
           </div>
@@ -148,7 +148,7 @@ function PartyPanel({ party, sessionId, editable }: { party: Party; sessionId: s
                 ))}
               </div>
               <div className="vparty-actions">
-                <PendingButton pending="Saving...">Save {lower(party.party)}</PendingButton>
+                <Control type="submit" busyText="Saving...">Save {lower(party.party)}</Control>
               </div>
             </form>
           </details>
@@ -178,7 +178,7 @@ function PartyPanel({ party, sessionId, editable }: { party: Party; sessionId: s
         </div>
         {editable ? (
           <div className="vparty-actions">
-            <PendingButton pending="Saving...">Save {lower(party.party)}</PendingButton>
+            <Control type="submit" busyText="Saving...">Save {lower(party.party)}</Control>
           </div>
         ) : null}
       </form>
@@ -196,7 +196,7 @@ function PartyPanel({ party, sessionId, editable }: { party: Party; sessionId: s
             <label className="vparty-confirm">
               <input type="checkbox" name="confirm" value="1" required /> Yes, remove the {lower(party.party)}
             </label>
-            <PendingButton pending="Removing...">Remove {lower(party.party)}</PendingButton>
+            <Control type="submit" busyText="Removing...">Remove {lower(party.party)}</Control>
           </form>
         </details>
       ) : null}

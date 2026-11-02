@@ -2,8 +2,23 @@
 
 // components/Control.tsx: the one clickable control in this app.
 //
-// Every link to a screen goes through here, so every one shows that the
-// system is working without anybody remembering to add it:
+// Every button and every link goes through here, so every one shows that the
+// system is working without anybody remembering to add it.
+//
+// ── Buttons ──────────────────────────────────────────────────────────────
+//   type="submit"  sends its form's server action. From the press until the
+//                  answer is on the screen it shows a spinner and its working
+//                  text, is disabled, and the page (or its panel) is locked
+//                  (components/Working.tsx). An error comes back as a plain
+//                  line on the page and the entries are put back.
+//   onPress        anything else. If it returns a promise (a save, a fetch),
+//                  the button is busy until that settles; if it fails, the
+//                  button comes back and says what went wrong, in plain
+//                  words. If it returns at once (a tab, a toggle), there is
+//                  nothing to wait for.
+//   A press while busy does nothing.
+//
+// ── Links ────────────────────────────────────────────────────────────────
 //   - the instant it is pressed, it shows a spinner and "Opening...", is
 //     disabled, and a bar runs across the top of the window;
 //   - it stays that way until the next page's data is drawn, not just until
@@ -20,9 +35,13 @@
 // anywhere else in the app is made without this.
 
 import Link from "next/link";
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { endNav, pathOf, startNav, useNavBusy } from "@/components/NavBusy";
+import { useWorking, Working } from "@/components/Working";
 import { OPENING } from "@/lib/nav-busy";
+import { plainError, WORKING } from "@/lib/control";
+import type { WorkingScope } from "@/lib/working";
 
 type AnchorAttrs = Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "onClick" | "target" | "rel">;
 
@@ -41,11 +60,108 @@ export interface ControlLinkProps extends AnchorAttrs {
   file?: boolean;
 }
 
+type ButtonAttrs = Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onClick" | "type" | "formAction">;
+
+export interface ControlButtonProps extends ButtonAttrs {
+  href?: undefined;
+  children: React.ReactNode;
+  /** "submit" sends its form. A plain button otherwise. */
+  type?: "submit" | "button";
+  /** What it says while it works: "Rating...". "Working..." unless said. */
+  busyText?: string;
+  /** For a submit: cover the page ("page") or lock the panel it sits in ("panel"). */
+  working?: WorkingScope;
+  /** For Submit and Void: the warning shown if the page is left while it runs. */
+  leave?: string;
+  /** A second server action in the same form, as on a plain button. */
+  formAction?: (formData: FormData) => void | Promise<void>;
+  /** What a press does. Return the promise to stay busy until it settles. */
+  onPress?: (e: React.MouseEvent<HTMLButtonElement>) => unknown;
+}
+
+export type ControlProps = ControlLinkProps | ControlButtonProps;
+
 function isOtherSite(href: string): boolean {
   return /^(https?:)?\/\//i.test(href) || /^(mailto|tel):/i.test(href);
 }
 
-export default function Control(props: ControlLinkProps) {
+export default function Control(props: ControlProps) {
+  return props.href !== undefined ? <ControlLink {...props} /> : <ControlButton {...props} />;
+}
+
+function ControlButton(props: ControlButtonProps) {
+  const {
+    children, type = "button", busyText = WORKING, working = "panel", leave, onPress,
+    className = type === "submit" ? "btn btn--quiet" : undefined, disabled, ...rest
+  } = props;
+  const status = useFormStatus();
+  const area = useWorking();
+  const self = useRef<HTMLButtonElement>(null);
+  const [pressing, setPressing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // A submit: inside a working area, busy only when this is the button that
+  // sent the form (a form can have more than one); outside one, the form's
+  // own state. A press: while its promise runs.
+  const sending = type === "submit" && (area ? area.running?.submitter === self.current && self.current !== null : status.pending);
+  const busy = sending || pressing;
+
+  const onClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (busy) {
+      e.preventDefault();
+      return;
+    }
+    if (!onPress) return;
+    setError(null);
+    const result = onPress(e);
+    if (!(result instanceof Promise)) return;
+    setPressing(true);
+    try {
+      await result;
+    } catch (err) {
+      setError(plainError(err));
+    } finally {
+      setPressing(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        {...rest}
+        ref={self}
+        type={type}
+        className={`${className ?? ""}${busy ? " is-busy" : ""}`.trim() || undefined}
+        disabled={disabled || busy}
+        aria-busy={busy || undefined}
+        onClick={onClick}
+        // What Working.tsx reads to cover the page or lock the panel.
+        data-working={type === "submit" ? working : undefined}
+        data-working-label={type === "submit" ? busyText : undefined}
+        data-working-leave={type === "submit" ? leave : undefined}
+      >
+        {/* A submit tells the page's working state when its form's action has
+            answered, without its author having to remember to. */}
+        {type === "submit" ? <Working /> : null}
+        {busy ? (
+          <>
+            <span className="btn-spinner" aria-hidden="true" />
+            {busyText}
+          </>
+        ) : (
+          children
+        )}
+      </button>
+      {error ? (
+        <span className="control-error" role="alert">
+          {error}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+function ControlLink(props: ControlLinkProps) {
   const { href, children, newTab = false, busyText = OPENING, file = false, className, ...rest } = props;
   const self = useRef<HTMLAnchorElement>(null);
   const nav = useNavBusy();
