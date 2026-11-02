@@ -16,7 +16,7 @@
 // Supabase key and makes no Supabase request, exactly as on /plan. The console
 // adds a door; it does not add a route to the data.
 
-import Link from "next/link";
+import Control from "@/components/Control";
 import LongText from "@/components/LongText";
 import RatingErrorText from "@/components/RatingErrorText";
 import RowDetailsToggle from "@/components/admin/RowDetailsToggle";
@@ -215,15 +215,15 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
       >
         {/* The deal number and the vehicle go to Details too, like Open. */}
         <td className="ad-deal">
-          <Link className="ad-rowlink" href={`/details/${row.id}`} prefetch={false}>
+          <Control className="ad-rowlink" href={`/details/${row.id}`}>
             {row.deal_number ?? "Not set"}
-          </Link>
+          </Control>
         </td>
 
         <td className="ad-vehicle">
-          <Link className="ad-rowlink ad-strong" href={`/details/${row.id}`} prefetch={false} title={vehicle(row)}>
+          <Control className="ad-rowlink ad-strong" href={`/details/${row.id}`} title={vehicle(row)}>
             {vehicle(row)}
-          </Link>
+          </Control>
           {row.stock_number ? <small>Stock {row.stock_number}</small> : null}
         </td>
 
@@ -262,9 +262,9 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
           {/* One way in: Open goes to the deal's Details, where it is rated,
               prepared and presented, one main step at a time. Nothing on this
               list opens a customer presentation, and nothing here rates. */}
-          <Link className="ad-btn ad-btn--secondary ad-btn--main" href={`/details/${row.id}`} prefetch={false}>
+          <Control className="ad-btn ad-btn--secondary ad-btn--main" href={`/details/${row.id}`}>
             Open
-          </Link>
+          </Control>
         </td>
       </tr>
       <WhyRow row={row} />

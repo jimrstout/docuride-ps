@@ -24,7 +24,7 @@
 // form under the table, so the page still works with no JavaScript and has no
 // pop-up dialogs.
 
-import Link from "next/link";
+import Control from "@/components/Control";
 import PendingButton from "@/components/PendingButton";
 import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
@@ -206,9 +206,9 @@ function RuleRow({ rule, editHref }: { rule: PricingRuleRow; editHref: string | 
       <td>{rule.active ? <Badge tone="good">Active</Badge> : <Badge>Turned off</Badge>}</td>
       <td>
         {editHref ? (
-          <Link className="ad-btn ad-btn--secondary" href={editHref} prefetch={false}>
+          <Control className="ad-btn ad-btn--secondary" href={editHref}>
             Edit
-          </Link>
+          </Control>
         ) : null}
       </td>
     </tr>
@@ -315,9 +315,9 @@ function RuleForm({
 
       <div className="ad-editor-actions">
         <PendingButton className="ad-btn ad-btn--primary" pending="Saving the rule...">{rule ? "Save" : "Add rule"}</PendingButton>
-        <Link className="ad-btn ad-btn--secondary" href={cancelHref} prefetch={false}>
+        <Control className="ad-btn ad-btn--secondary" href={cancelHref}>
           Cancel
-        </Link>
+        </Control>
         {rule ? (
           <PendingButton className="ad-btn ad-btn--secondary ad-push" pending="Deleting the rule..." formAction={deletePricingRule} formNoValidate>
             Delete
@@ -443,7 +443,7 @@ async function Pricing({ params, operatorId }: { params: Params; operatorId: str
         <Notice tone="warn">{why ?? "Pricing is unavailable right now. Try again shortly."}</Notice>
         {why ? (
           <p>
-            <Link className="ad-btn ad-btn--secondary" href="/admin/pricing" prefetch={false}>Back to All stores</Link>
+            <Control className="ad-btn ad-btn--secondary" href="/admin/pricing">Back to All stores</Control>
           </p>
         ) : null}
       </>
@@ -475,9 +475,8 @@ async function Pricing({ params, operatorId }: { params: Params; operatorId: str
 
       <div className="ad-scopes">
         <nav className="ad-seg" aria-label="Store">
-          <Link
+          <Control
             href={pageHref(null, keep)}
-            prefetch={false}
             className={here === null ? "is-here" : undefined}
             aria-current={here === null ? "page" : undefined}
           >
@@ -486,12 +485,11 @@ async function Pricing({ params, operatorId }: { params: Params; operatorId: str
             <span className="sr-only">
               {payload.all_stores_active_rules > 0 ? "Used by any store without its own rules" : "No rules yet"}
             </span>
-          </Link>
+          </Control>
           {payload.stores.map((s) => (
-            <Link
+            <Control
               key={s.id}
               href={pageHref(s.id, keep)}
-              prefetch={false}
               className={here === s.id ? "is-here" : undefined}
               aria-current={here === s.id ? "page" : undefined}
               title={s.status}
@@ -499,7 +497,7 @@ async function Pricing({ params, operatorId }: { params: Params; operatorId: str
               <span className={dotFor(s.status)} aria-hidden="true" />
               <span>{s.name}</span>
               <span className="sr-only">{s.status}</span>
-            </Link>
+            </Control>
           ))}
         </nav>
         <p className="ad-help">
@@ -542,9 +540,9 @@ async function Pricing({ params, operatorId }: { params: Params; operatorId: str
           <div className="ad-panel-head">
             <h2 id="rules-title">Rules for {payload.scope.name}</h2>
             {canEdit ? (
-              <Link className="ad-btn ad-btn--primary" href={`${pageHref(here, { ...keep, add: "1" })}#rule-form`} prefetch={false}>
+              <Control className="ad-btn ad-btn--primary" href={`${pageHref(here, { ...keep, add: "1" })}#rule-form`}>
                 Add rule
-              </Link>
+              </Control>
             ) : null}
           </div>
 
@@ -561,9 +559,9 @@ async function Pricing({ params, operatorId }: { params: Params; operatorId: str
               </p>
               {canEdit ? (
                 <div className="ad-copy">
-                  <Link className="ad-btn ad-btn--primary" href={`${pageHref(here, { ...keep, add: "1" })}#rule-form`} prefetch={false}>
+                  <Control className="ad-btn ad-btn--primary" href={`${pageHref(here, { ...keep, add: "1" })}#rule-form`}>
                     Add rule
-                  </Link>
+                  </Control>
                   {copySource ? (
                     <CopyButton from={copySource.id} to={scope} label={`Copy rules from ${copySource.name}`} />
                   ) : null}

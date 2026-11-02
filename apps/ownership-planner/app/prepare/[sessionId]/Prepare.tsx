@@ -15,7 +15,7 @@
 // package the prices are locked; returning to Prepare menu unlocks them and is
 // recorded on the deal.
 
-import Link from "next/link";
+import Control from "@/components/Control";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { planTotals } from "@/lib/money";
 import {
@@ -212,7 +212,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
               {pending ? "Saving..." : "Save"}
             </button>
           )}
-          <Link className="pm-btn pm-btn--quiet" href={`/details/${session.id}`} prefetch={false}>Details</Link>
+          <Control className="pm-btn pm-btn--quiet" href={`/details/${session.id}`}>Details</Control>
         </div>
       </header>
 

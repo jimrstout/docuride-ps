@@ -24,7 +24,7 @@
 // no approved description are listed here so staff can write one; the
 // conventional menu still shows them, under the provider's product name.
 
-import Link from "next/link";
+import Control from "@/components/Control";
 import PendingButton from "@/components/PendingButton";
 import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
@@ -105,7 +105,7 @@ function TemplateForm({ t, payload }: { t: TemplateRow | null; payload: Template
       </label>
       <div className="ad-editor-actions ad-field--wide">
         <PendingButton className="ad-btn ad-btn--primary" pending="Saving the menu...">{t ? "Save menu" : "Create menu"}</PendingButton>
-        <Link href={t ? `/admin/menus?template=${t.id}` : "/admin/menus"} prefetch={false} className="ad-btn ad-btn--secondary">Cancel</Link>
+        <Control href={t ? `/admin/menus?template=${t.id}` : "/admin/menus"} className="ad-btn ad-btn--secondary">Cancel</Control>
       </div>
     </form>
   );
@@ -176,7 +176,7 @@ function SlotForm({ t, slot, payload }: { t: TemplateRow; slot: TemplateSlotRow 
           </div>
           <div className="ad-editor-actions ad-field--wide">
             <PendingButton className="ad-btn ad-btn--primary" pending="Saving the slot...">{slot ? "Save slot" : "Add slot"}</PendingButton>
-            <Link href={`/admin/menus?template=${t.id}`} prefetch={false} className="ad-btn ad-btn--secondary">Cancel</Link>
+            <Control href={`/admin/menus?template=${t.id}`} className="ad-btn ad-btn--secondary">Cancel</Control>
           </div>
         </form>
       </div>
@@ -192,7 +192,7 @@ function ColumnsPanel({ t, editing }: { t: TemplateRow; editing: boolean }) {
       <div className="ad-panel-head">
         <h2 id="columns-title">Menu columns, left to right {is_default ? <Badge>Default layout</Badge> : null}</h2>
         {editing ? null : (
-          <Link href={`/admin/menus?template=${t.id}&columns=1`} prefetch={false} className="ad-btn ad-btn--secondary">Edit columns</Link>
+          <Control href={`/admin/menus?template=${t.id}&columns=1`} className="ad-btn ad-btn--secondary">Edit columns</Control>
         )}
       </div>
       {editing ? (
@@ -232,7 +232,7 @@ function ColumnsPanel({ t, editing }: { t: TemplateRow; editing: boolean }) {
             })}
             <div className="ad-editor-actions ad-field--wide">
               <PendingButton className="ad-btn ad-btn--primary" pending="Saving the columns...">Save columns</PendingButton>
-              <Link href={`/admin/menus?template=${t.id}`} prefetch={false} className="ad-btn ad-btn--secondary">Cancel</Link>
+              <Control href={`/admin/menus?template=${t.id}`} className="ad-btn ad-btn--secondary">Cancel</Control>
             </div>
           </form>
         </div>
@@ -311,21 +311,20 @@ function PresetsPanel({ t, payload, params }: { t: TemplateRow; payload: Templat
         <h2 id="presets-title">Presets: what each column offers</h2>
         <div className="ad-seg" role="group" aria-label="Deal type">
           {DEAL_TYPES.map((d) => (
-            <Link
+            <Control
               key={d}
               href={`/admin/menus?template=${t.id}&presets=${d}`}
-              prefetch={false}
               className={d === dealType ? "ad-btn ad-btn--primary" : "ad-btn ad-btn--secondary"}
               aria-current={d === dealType ? "page" : undefined}
             >
               {d}
-            </Link>
+            </Control>
           ))}
         </div>
         {canEdit && !editing ? (
-          <Link href={`/admin/menus?template=${t.id}&presets=${dealType}&presetedit=1`} prefetch={false} className="ad-btn ad-btn--secondary">
+          <Control href={`/admin/menus?template=${t.id}&presets=${dealType}&presetedit=1`} className="ad-btn ad-btn--secondary">
             Edit presets
-          </Link>
+          </Control>
         ) : null}
       </div>
       <div className="ad-panel-body">
@@ -424,7 +423,7 @@ function PresetsPanel({ t, payload, params }: { t: TemplateRow; payload: Templat
             ))}
             <div className="ad-editor-actions ad-field--wide">
               <PendingButton className="ad-btn ad-btn--primary" pending="Saving the presets...">Save presets</PendingButton>
-              <Link href={`/admin/menus?template=${t.id}&presets=${dealType}`} prefetch={false} className="ad-btn ad-btn--secondary">Cancel</Link>
+              <Control href={`/admin/menus?template=${t.id}&presets=${dealType}`} className="ad-btn ad-btn--secondary">Cancel</Control>
             </div>
           </form>
         </div>
@@ -501,9 +500,9 @@ function NeedsDescription({ payload }: { payload: TemplatesPayload }) {
                 <td><span className="ad-strong">{r.name}</span><small>{r.code}</small></td>
                 <td>{r.provider_name}</td>
                 <td className="num">
-                  <Link href={`/admin/providers/wording?provider=${r.provider_id}&product=${r.id}`} prefetch={false} className="ad-btn ad-btn--secondary">
+                  <Control href={`/admin/providers/wording?provider=${r.provider_id}&product=${r.id}`} className="ad-btn ad-btn--secondary">
                     Write description
-                  </Link>
+                  </Control>
                 </td>
               </tr>
             ))}
@@ -526,7 +525,7 @@ function MenuDetail({ t, payload, params }: { t: TemplateRow; payload: Templates
       <section className="ad-panel" aria-labelledby="menu-title">
         <div className="ad-panel-head">
           <h2 id="menu-title">{t.name} {t.active ? null : <Badge>Off</Badge>}</h2>
-          <Link href={`/admin/menus?template=${t.id}&edit=1`} prefetch={false} className="ad-btn ad-btn--secondary">Edit conditions</Link>
+          <Control href={`/admin/menus?template=${t.id}&edit=1`} className="ad-btn ad-btn--secondary">Edit conditions</Control>
         </div>
         <div className="ad-panel-body">
           <p>{t.conditions_line}. Priority {t.priority}.</p>
@@ -538,7 +537,7 @@ function MenuDetail({ t, payload, params }: { t: TemplateRow; payload: Templates
       <section className="ad-panel" aria-labelledby="slots-title">
         <div className="ad-panel-head">
           <h2 id="slots-title">Slots, in the order the customer sees them</h2>
-          <Link href={`/admin/menus?template=${t.id}&addslot=1`} prefetch={false} className="ad-btn ad-btn--secondary">Add a slot</Link>
+          <Control href={`/admin/menus?template=${t.id}&addslot=1`} className="ad-btn ad-btn--secondary">Add a slot</Control>
         </div>
         <div className="ad-scroll">
           <table className="ad-table">
@@ -594,7 +593,7 @@ function MenuDetail({ t, payload, params }: { t: TemplateRow; payload: Templates
                           <PendingButton className="ad-btn ad-btn--secondary" pending="Moving..." aria-label={`Move ${s.title} down`}>Down</PendingButton>
                         </form>
                       ) : null}
-                      <Link href={`/admin/menus?template=${t.id}&slot=${s.id}`} prefetch={false} className="ad-btn ad-btn--secondary">Edit</Link>
+                      <Control href={`/admin/menus?template=${t.id}&slot=${s.id}`} className="ad-btn ad-btn--secondary">Edit</Control>
                     </div>
                   </td>
                 </tr>
@@ -638,22 +637,21 @@ export default async function MenusPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <PageHead title="Menus" subtitle="Which products a deal is offered.">
-        <Link href="/admin/menus?new=1" prefetch={false} className="ad-btn ad-btn--primary">New menu</Link>
+        <Control href="/admin/menus?new=1" className="ad-btn ad-btn--primary">New menu</Control>
       </PageHead>
       {flash ? <Notice tone={flash.tone}>{flash.text}</Notice> : null}
 
       <nav className="ad-seg" aria-label="Menu">
         {payload.templates.map((t) => (
-          <Link
+          <Control
             key={t.id}
             href={`/admin/menus?template=${t.id}`}
-            prefetch={false}
             className={open?.id === t.id ? "is-here" : undefined}
             aria-current={open?.id === t.id ? "page" : undefined}
           >
             <span className={t.active ? "ad-dot ad-dot--good" : "ad-dot ad-dot--none"} aria-hidden="true" />
             <span>{t.name}</span>
-          </Link>
+          </Control>
         ))}
       </nav>
 
@@ -680,7 +678,7 @@ export default async function MenusPage({ searchParams }: { searchParams: Promis
                 {payload.templates.map((t) => (
                   <tr key={t.id}>
                     <td>
-                      <Link href={`/admin/menus?template=${t.id}`} prefetch={false} className="ad-strong">{t.name}</Link>{" "}
+                      <Control href={`/admin/menus?template=${t.id}`} className="ad-strong">{t.name}</Control>{" "}
                       {t.active ? null : <Badge>Off</Badge>}
                     </td>
                     <td>{t.conditions_line}</td>

@@ -21,7 +21,7 @@
 // knows them: engine size (which the VIN decode usually answers) and remaining
 // factory warranty months (which nothing answers).
 
-import Link from "next/link";
+import Control from "@/components/Control";
 import type { Metadata } from "next";
 import HomeLink from "@/components/HomeLink";
 import { notFound, redirect } from "next/navigation";
@@ -626,9 +626,9 @@ export default async function DetailsPage({
             <div className="console-flash console-flash--bad vdate-line" role="alert">
               <p>{dateLine}</p>
               {crmUrl ? (
-                <a className="btn btn--quiet" href={crmUrl} target="_blank" rel="noopener">
+                <Control className="btn btn--quiet" href={crmUrl}>
                   Open in CRM
-                </a>
+                </Control>
               ) : null}
               <SaleDateWatch />
             </div>
@@ -668,9 +668,9 @@ export default async function DetailsPage({
               {sheet.duplicate_vin.sessions.map((other, i) => (
                 <span key={other.id}>
                   {i > 0 ? " " : ""}
-                  <Link href={`/details/${other.id}`} prefetch={false}>
+                  <Control href={`/details/${other.id}`}>
                     Open deal {other.deal_number ?? "(no number)"}
-                  </Link>
+                  </Control>
                   {" "}({other.status})
                 </span>
               ))}
@@ -1076,9 +1076,9 @@ export default async function DetailsPage({
                                     <small>
                                       <span className="tag tag--good">Saved to Deal Jacket</span> {stamp(c.workdrive_saved_at)}
                                       {c.page_count ? `, ${c.page_count} ${c.page_count === 1 ? "page" : "pages"}` : ""}.{" "}
-                                      <a href={c.workdrive_url} target="_blank" rel="noreferrer">
+                                      <Control file href={c.workdrive_url}>
                                         Open in WorkDrive
-                                      </a>
+                                      </Control>
                                     </small>
                                   </p>
                                 ) : c.held ? (
@@ -1090,9 +1090,9 @@ export default async function DetailsPage({
                                         : "Held in DocuRide until the deal's folders exist."}
                                       {c.page_count ? ` ${c.page_count} ${c.page_count === 1 ? "page" : "pages"}.` : ""}{" "}
                                       {c.view_pdf_url ? (
-                                        <a href={c.view_pdf_url} target="_blank" rel="noreferrer">
+                                        <Control file href={c.view_pdf_url}>
                                           View PDF
-                                        </a>
+                                        </Control>
                                       ) : null}
                                     </small>
                                   </p>
@@ -1178,9 +1178,9 @@ export default async function DetailsPage({
                                       Contract {o.contract.contract_number}, recorded by {o.contract.recorded_by}{" "}
                                       {stamp(o.contract.recorded_at)}.{" "}
                                       {o.contract.document_url ? (
-                                        <a href={o.contract.document_url} target="_blank" rel="noreferrer">
+                                        <Control file href={o.contract.document_url}>
                                           Open the signed contract
-                                        </a>
+                                        </Control>
                                       ) : null}
                                     </small>
                                   </p>
@@ -1345,13 +1345,12 @@ export default async function DetailsPage({
                   </form>
                 ) : null}
                 {/* Before presenting: each column's options and prices, from the presets (docs section 25). */}
-                <Link
+                <Control
                   className={step === "prepare" ? "btn btn--go" : "btn btn--quiet"}
                   href={`/prepare/${sessionId}`}
-                  prefetch={false}
                 >
                   Prepare presentation
-                </Link>
+                </Control>
                 {step === "prepare" ? (
                   <>
                     <button type="button" className="btn btn--quiet" disabled aria-describedby="vnext-why">
@@ -1366,13 +1365,13 @@ export default async function DetailsPage({
                   <>
                     {/* The conventional menu: its own customer tab, straight
                         into the package columns (docs section 22). */}
-                    <a className="btn btn--go" href={`/menu/${sessionId}`} target="_blank" rel="noopener">
+                    <Control className="btn btn--go" href={`/menu/${sessionId}`} newTab>
                       Present menu
-                    </a>
+                    </Control>
                     {/* The Ownership Planner's storyboard, in its own customer tab. */}
-                    <a className="btn btn--go" href={`/plan/${sessionId}`} target="_blank" rel="noopener">
+                    <Control className="btn btn--go" href={`/plan/${sessionId}`} newTab>
                       Present storyboard
-                    </a>
+                    </Control>
                   </>
                 )}
               </>

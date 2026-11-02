@@ -16,7 +16,7 @@
 // Verify.
 
 import "./admin.css";
-import Link from "next/link";
+import Control from "@/components/Control";
 import HomeLink, { HOME_HREF } from "@/components/HomeLink";
 import { headers } from "next/headers";
 import { currentOperator } from "@/lib/admin-session";
@@ -61,23 +61,22 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <WorkingArea>
     <div className="ad">
       <aside className="ad-side">
-        <Link href={HOME_HREF} prefetch={false} className="ad-brand-link">
+        <Control href={HOME_HREF} className="ad-brand-link">
           <Brand />
-        </Link>
+        </Control>
         {/* A phone or a narrow tablet: the sections by name, behind a Menu button. */}
         <AdminMenu sections={ADMIN_SECTIONS} here={here?.href ?? null} />
         <nav className="ad-nav" aria-label="Admin sections">
           {ADMIN_SECTIONS.map((s) => (
-            <Link
+            <Control
               key={s.href}
               href={s.href}
-              prefetch={false}
               className={s.href === here?.href ? "ad-nav-link is-here" : "ad-nav-link"}
               aria-current={s.href === here?.href ? "page" : undefined}
             >
               <Icon name={s.icon} />
               <span className="ad-nav-label">{s.label}</span>
-            </Link>
+            </Control>
           ))}
         </nav>
         <div className="ad-side-foot">

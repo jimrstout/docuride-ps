@@ -8,7 +8,7 @@
 // Signed-in staff only; the sheet comes from fni-menu-prepare. Dealer cost is
 // shown here and never leaves the staff side.
 
-import Link from "next/link";
+import Control from "@/components/Control";
 import { currentOperator } from "@/lib/admin-session";
 import { SignIn, signInNotice } from "@/components/admin/SignIn";
 import { WorkingArea } from "@/components/Working";
@@ -27,7 +27,7 @@ function Plain({ title, body, back }: { title: string; body: string; back?: stri
     <main className="pm-plain">
       <h1>{title}</h1>
       <p>{body}</p>
-      {back ? <Link href={back} prefetch={false}>Back to Details</Link> : null}
+      {back ? <Control href={back}>Back to Details</Control> : null}
     </main>
   );
 }

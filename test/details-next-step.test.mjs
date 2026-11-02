@@ -53,8 +53,9 @@ test("2. rated, not prepared: Prepare presentation leads; the presentations wait
 
 test("3. prepared: the two presentations lead, Prepare and Rate again beside them", () => {
   const live = ratedBranch.slice(ratedBranch.lastIndexOf(") : ("));
-  assert.match(live, /<a className="btn btn--go" href=\{`\/menu\/\$\{sessionId\}`\} target="_blank" rel="noopener">\s*Present menu\s*<\/a>/);
-  assert.match(live, /<a className="btn btn--go" href=\{`\/plan\/\$\{sessionId\}`\} target="_blank" rel="noopener">\s*Present storyboard\s*<\/a>/);
+  // New tabs, through the shared control (components/Control.tsx, newTab).
+  assert.match(live, /<Control className="btn btn--go" href=\{`\/menu\/\$\{sessionId\}`\} newTab>\s*Present menu\s*<\/Control>/);
+  assert.match(live, /<Control className="btn btn--go" href=\{`\/plan\/\$\{sessionId\}`\} newTab>\s*Present storyboard\s*<\/Control>/);
 });
 
 test("Rate again is the secondary button whenever rated, and the old one under Rating is gone", () => {

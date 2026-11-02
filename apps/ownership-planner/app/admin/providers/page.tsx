@@ -13,7 +13,7 @@
 // Nothing is deleted: a provider is switched off. Edit opens one form under the
 // table (?edit=<id>), so the page works with no JavaScript.
 
-import Link from "next/link";
+import Control from "@/components/Control";
 import PendingButton from "@/components/PendingButton";
 import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
@@ -81,7 +81,7 @@ function ProviderForm({ p, stores }: { p: ProviderRow | null; stores: ProvidersP
           )}
           <div className="ad-editor-actions ad-field--wide">
             <PendingButton className="ad-btn ad-btn--primary" pending="Saving...">{p ? "Save" : "Add provider"}</PendingButton>
-            <Link href="/admin/providers" prefetch={false} className="ad-btn ad-btn--secondary">Cancel</Link>
+            <Control href="/admin/providers" className="ad-btn ad-btn--secondary">Cancel</Control>
           </div>
         </form>
 
@@ -144,7 +144,7 @@ export default async function ProvidersPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <PageHead title="Providers" subtitle="Who the menu's products come from.">
-        <Link href="/admin/providers?add=1" prefetch={false} className="ad-btn ad-btn--primary">Add a provider</Link>
+        <Control href="/admin/providers?add=1" className="ad-btn ad-btn--primary">Add a provider</Control>
       </PageHead>
       {flash ? <Notice tone={flash.tone}>{flash.text}</Notice> : null}
 
@@ -177,8 +177,8 @@ export default async function ProvidersPage({ searchParams }: { searchParams: Pr
                   </td>
                   <td>{sheetLine(p)}</td>
                   <td className="num">
-                    <Link href={`/admin/providers?edit=${p.id}`} prefetch={false} className="ad-btn ad-btn--secondary">Edit</Link>{" "}
-                    <Link href={`/admin/providers/wording?provider=${p.id}`} prefetch={false} className="ad-btn ad-btn--secondary">Product wording</Link>
+                    <Control href={`/admin/providers?edit=${p.id}`} className="ad-btn ad-btn--secondary">Edit</Control>{" "}
+                    <Control href={`/admin/providers/wording?provider=${p.id}`} className="ad-btn ad-btn--secondary">Product wording</Control>
                   </td>
                 </tr>
               ))}
