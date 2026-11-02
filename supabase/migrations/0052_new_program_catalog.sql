@@ -25,14 +25,19 @@
 --    purpose, and listed in Administration as needing a description, rather
 --    than sold off words nobody wrote.
 --
---      3_1       NEW ATV/UTV CARE PLUS 1-12             Mechanical Protection, Care Plus
---      2072_142  NEW ATV/UTV PREMIUM PLUS 1-12          Mechanical Protection, Premium Plus
---      2088_142  NEW ATV/UTV PREMIUM PLUS 13-24         Mechanical Protection, Premium Plus
---      2092_142  NEW ATV/UTV PREMIUM PLUS 25-36         Mechanical Protection, Premium Plus
+--      3_1       NEW ATV/UTV CARE PLUS 1-12             Mechanical Protection, Care Plus 1-12
+--      2072_142  NEW ATV/UTV PREMIUM PLUS 1-12          Mechanical Protection, Premium Plus 1-12
+--      2088_142  NEW ATV/UTV PREMIUM PLUS 13-24         Mechanical Protection, Premium Plus 13-24
+--      2092_142  NEW ATV/UTV PREMIUM PLUS 25-36         Mechanical Protection, Premium Plus 25-36
 --      2078_142  USED ATV/UTV PREMIUM PLUS              Mechanical Protection, Premium Plus
 --      2082_142  USED ATV/UTV PREMIUM PLUS-SVC DRIVE    Mechanical Protection, Premium Plus Service Drive
 --      18_2      POWERSPORTS GAP 150%                   GAP
 --      1029_46   ATV/UTV WEAR CARE                      Wear Care
+--
+-- The New Care Plus and Premium Plus names keep the provider's band (1-12,
+-- 13-24, 25-36): one quote offered all three Premium Plus bands, and without
+-- it Prepare would show three identical lines. What the bands mean is for the
+-- wording, written in Administration.
 --
 -- GAP and Wear Care are filed under Other: GAP is not one of the categories
 -- the catalog allows, and adding it means replacing that rule, which waits for
@@ -78,10 +83,10 @@ insert into copied values
 -- the provider's Mechanical Protection row, so they match the rest.
 create temporary table pending (new_code text, display_name text, category text, goal text, display_order int, program text) on commit drop;
 insert into pending values
-  ('3_1',      'Mechanical Protection, Care Plus',                   'Mechanical Protection', 'Keep ownership manageable', 114, 'NEW ATV/UTV CARE PLUS 1-12'),
-  ('2072_142', 'Mechanical Protection, Premium Plus',                'Mechanical Protection', 'Keep ownership manageable', 115, 'NEW ATV/UTV PREMIUM PLUS 1-12'),
-  ('2088_142', 'Mechanical Protection, Premium Plus',                'Mechanical Protection', 'Keep ownership manageable', 115, 'NEW ATV/UTV PREMIUM PLUS 13-24'),
-  ('2092_142', 'Mechanical Protection, Premium Plus',                'Mechanical Protection', 'Keep ownership manageable', 115, 'NEW ATV/UTV PREMIUM PLUS 25-36'),
+  ('3_1',      'Mechanical Protection, Care Plus 1-12',              'Mechanical Protection', 'Keep ownership manageable', 114, 'NEW ATV/UTV CARE PLUS 1-12'),
+  ('2072_142', 'Mechanical Protection, Premium Plus 1-12',           'Mechanical Protection', 'Keep ownership manageable', 115, 'NEW ATV/UTV PREMIUM PLUS 1-12'),
+  ('2088_142', 'Mechanical Protection, Premium Plus 13-24',          'Mechanical Protection', 'Keep ownership manageable', 115, 'NEW ATV/UTV PREMIUM PLUS 13-24'),
+  ('2092_142', 'Mechanical Protection, Premium Plus 25-36',          'Mechanical Protection', 'Keep ownership manageable', 115, 'NEW ATV/UTV PREMIUM PLUS 25-36'),
   ('2078_142', 'Mechanical Protection, Premium Plus',                'Mechanical Protection', 'Keep ownership manageable', 115, 'USED ATV/UTV PREMIUM PLUS'),
   ('2082_142', 'Mechanical Protection, Premium Plus Service Drive',  'Mechanical Protection', 'Keep ownership manageable', 116, 'USED ATV/UTV PREMIUM PLUS-SVC DRIVE'),
   ('18_2',     'GAP',                                                'Other',                 'Keep ownership manageable', 150, 'POWERSPORTS GAP 150%'),
