@@ -636,7 +636,11 @@ export default async function DetailsPage({
           {(sheet.service_drive_lines ?? []).map((line) => (
             <p key={line} className="console-flash console-flash--bad" role="alert">{line}</p>
           ))}
-          {sheet.chosen_term_note ? (
+          {/* Offers no menu row shows: said, never silently dropped. */}
+        {(sheet.unplaced_offers ?? []).map((line) => (
+          <p key={line} className="console-flash console-flash--bad" role="status">{line}</p>
+        ))}
+        {sheet.chosen_term_note ? (
             <p className="console-flash console-flash--bad" role="alert">{sheet.chosen_term_note}</p>
           ) : null}
 

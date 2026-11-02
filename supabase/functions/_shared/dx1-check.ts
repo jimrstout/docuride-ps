@@ -66,6 +66,8 @@
 //
 // Pure, so a Node test can hold it. Plain English, values people read, no codes.
 
+import { categoryFromWording } from "./product-category.ts";
+
 export const SLOTS = [
   { key: "Warranty", label: "Warranty" },
   { key: "GAP", label: "GAP" },
@@ -283,14 +285,6 @@ const PLAIN: Record<string, string> = {
   "Appearance": "Appearance",
 };
 
-/** Words in a product's own wording that name it, for one with no category. */
-const BY_WORDING: [RegExp, string][] = [
-  [/\bcare\b/i, "Care Coverage"],
-  [/\bbatt(?:ery)?\b/i, "Battery Protection"],
-  [/\btire\b|\bwheel\b|\bt\s*&\s*w\b/i, "Tire and Wheel"],
-  [/\btheft\b/i, "Theft"],
-  [/\bmaint(?:enance)?\b/i, "Maintenance"],
-];
 
 /**
  * The product's plain name, the way staff see it on the menu: "Battery
@@ -300,8 +294,10 @@ export function productName(c: Contract): string {
   if (isGap(c)) return "GAP";
   const plain = c.category ? PLAIN[c.category] : undefined;
   if (plain) return plain;
-  const wording = `${c.product_name} ${c.plan ?? ""}`;
-  return BY_WORDING.find(([re]) => re.test(wording))?.[1] ?? "Product";
+  // No category: what the provider's own name for it says (_shared/product-category.ts),
+  // so a Priority Maintenance plan is never just "Product".
+  const said = categoryFromWording(`${c.product_name} ${c.plan ?? ""}`);
+  return (said ? PLAIN[said] : undefined) ?? "Product";
 }
 
 /** What a contract is called in a line: "Tire and Wheel (contract TWO-1)". */

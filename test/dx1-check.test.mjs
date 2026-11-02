@@ -250,7 +250,7 @@ test("product names are the menu's plain names, never the provider's title", () 
   assert.equal(productName(contract({ category: "Theft" })), "Theft");
   assert.equal(productName(contract({ category: "Other", product_name: "SAMPLE GAP WAIVER", plan: null })), "GAP");
   // No category: read from the product's own wording.
-  assert.equal(productName(contract({ category: null, product_name: "USED SAMPLE CARE", plan: null })), "Care Coverage");
+  assert.equal(productName(contract({ category: null, product_name: "USED SAMPLE CARE", plan: null })), "Mechanical Protection");
   assert.equal(productName(contract({ category: null, product_name: "SAMPLE BATTERY PLUS", plan: null })), "Battery Protection");
   assert.equal(productName(contract({ category: "Other", product_name: "SAMPLE WIDGET", plan: null })), "Product");
 });
