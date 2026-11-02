@@ -34,6 +34,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { staffGate } from "../_shared/staff-gate.ts";
 import {
   ALLOWED_PLACEHOLDERS,
   TEMPLATE_KEYS,
@@ -158,6 +159,9 @@ serve(async (req: Request) => {
   const url = new URL(req.url);
 
   if (!authorized(req, url)) return json(401, { error: "Unauthorized" });
+  // The staff sign-in: a platform admin, since this spans every tenant (_shared/staff-gate.ts).
+  const refused = await staffGate(req, null);
+  if (refused) return refused;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

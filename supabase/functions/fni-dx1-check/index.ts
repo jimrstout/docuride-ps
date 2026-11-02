@@ -34,6 +34,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { staffGate } from "../_shared/staff-gate.ts";
 import { getRecord } from "../_shared/zoho.ts";
 import { programName } from "../_shared/program-names.ts";
 import {
@@ -170,6 +171,14 @@ serve(async (req: Request) => {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
     return reply(200, FAILED);
+  }
+
+  // Details asks by session_id, and that is staff data: the staff sign-in,
+  // covering the deal's tenant and store (_shared/staff-gate.ts). The CRM's
+  // Generate gate asks by zoho_deal_id with the webhook secret, as before.
+  if (typeof body.session_id === "string" && body.session_id.trim() !== "") {
+    const refused = await staffGate(req, body.session_id.trim());
+    if (refused) return refused;
   }
 
   // The gate is waiting: never longer than the budget, never anything but the JSON.

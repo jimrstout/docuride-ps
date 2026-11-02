@@ -26,6 +26,7 @@ import { serviceDriveLines } from "../_shared/service-drive.ts";
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { staffGate } from "../_shared/staff-gate.ts";
 import { offerRowsFor, tecAssuredAccount, tecAssuredProviderName } from "../_shared/provider-rows.ts";
 import { hostOf, QA_HOST } from "../_shared/contract-guard.ts";
 import { currentRows, familiesFromRows, ratingSummary, type RatingRow } from "../_shared/rating-summary.ts";
@@ -1447,6 +1448,9 @@ serve(async (req: Request) => {
       if (!sessionId || !UUID_RE.test(sessionId)) {
         return json(400, { error: "A well-formed session_id is required" });
       }
+      // The staff sign-in, covering this deal's tenant and store (_shared/staff-gate.ts).
+      const refused = await staffGate(req, sessionId);
+      if (refused) return refused;
       const loaded = await loadSession(supabase, sessionId);
       if (!loaded) return json(404, { error: "Session not found" });
       // The sale date fresh from the CRM, whatever zoho-sync last saw. A CRM
@@ -1469,6 +1473,9 @@ serve(async (req: Request) => {
     if (typeof sessionId !== "string" || !UUID_RE.test(sessionId)) {
       return json(400, { error: "A well-formed session_id is required" });
     }
+    // The staff sign-in, covering this deal's tenant and store (_shared/staff-gate.ts).
+    const refused = await staffGate(req, sessionId);
+    if (refused) return refused;
 
     const s = await loadSession(supabase, sessionId);
     if (!s) return json(404, { error: "Session not found" });

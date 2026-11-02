@@ -18,6 +18,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { staffGate } from "../_shared/staff-gate.ts";
 import { documentPathFor, OEM_BUCKET, parseRecord, parseVoid } from "../_shared/oem-contracts.ts";
 import { agreementId, contractsFor, oemContractList, oemSelections } from "../_shared/oem-contract-rows.ts";
 import { reopenIfAllVoided } from "../_shared/session-reopen.ts";
@@ -146,6 +147,9 @@ serve(async (req: Request) => {
     if (req.method === "GET") {
       const sessionId = new URL(req.url).searchParams.get("session_id") ?? "";
       if (!UUID_RE.test(sessionId)) return json(400, { error: "Which deal is missing." });
+      // The staff sign-in, covering this deal's tenant and store (_shared/staff-gate.ts).
+      const refused = await staffGate(req, sessionId);
+      if (refused) return refused;
       return await list(supabase, sessionId);
     }
     if (req.method !== "POST") return json(405, { error: "GET or POST only" });
@@ -158,6 +162,9 @@ serve(async (req: Request) => {
     }
     const sessionId = text(body.session_id);
     if (!UUID_RE.test(sessionId)) return json(400, { error: "Which deal is missing." });
+    // The staff sign-in, covering this deal's tenant and store (_shared/staff-gate.ts).
+    const refused = await staffGate(req, sessionId);
+    if (refused) return refused;
     const { data: session } = await supabase.schema("fni").from("sessions").select("id").eq("id", sessionId).maybeSingle();
     if (!session) return json(404, { error: "That deal no longer exists." });
 

@@ -55,6 +55,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { staffGate } from "../_shared/staff-gate.ts";
 import { tecAssuredProviderId } from "../_shared/provider-rows.ts";
 import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
 import { rateSession, recordOutcome, type ProviderOutcome } from "../_shared/rate-session.ts";
@@ -199,6 +200,9 @@ serve(async (req: Request) => {
 
   const { session_id, overrides } = body;
   if (!session_id) return json(400, { error: "session_id is required" });
+  // The staff sign-in, covering this deal's tenant and store (_shared/staff-gate.ts).
+  const refused = await staffGate(req, session_id);
+  if (refused) return refused;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

@@ -47,6 +47,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument } from "npm:pdf-lib@1.17.1";
 import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { staffGate } from "../_shared/staff-gate.ts";
 import { contractCallRefusal } from "../_shared/contract-guard.ts";
 import { assignPositions, buyerNameFor, otherSignatureTypes, prefixProblem, signatureData } from "../_shared/contract-documents.ts";
 import { documentBaseName, storageFileName } from "../_shared/document-names.ts";
@@ -109,6 +110,9 @@ serve(async (req: Request) => {
 
   const { session_id, agreement_id, contract_number } = body;
   if (!session_id) return json(400, { error: "session_id is required" });
+  // The staff sign-in, covering this deal's tenant and store (_shared/staff-gate.ts).
+  const refused = await staffGate(req, session_id);
+  if (refused) return refused;
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 

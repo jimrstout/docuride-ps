@@ -38,6 +38,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { staffGate } from "../_shared/staff-gate.ts";
 import { SIGNATURE_MAP_LIMIT, appendSignatureMap } from "../_shared/signature-map.ts";
 import { getRecord } from "../_shared/zoho.ts";
 import { fileUploadValue, updateRecordFields, uploadFile } from "../_shared/zoho-files.ts";
@@ -97,6 +98,9 @@ serve(async (req: Request) => {
   if (!sessionId || !UUID_RE.test(sessionId)) {
     return json(400, { error: "A well-formed session_id is required" });
   }
+  // The staff sign-in, covering this deal's tenant and store (_shared/staff-gate.ts).
+  const refused = await staffGate(req, sessionId);
+  if (refused) return refused;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,

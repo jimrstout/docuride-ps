@@ -45,6 +45,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { staffGate } from "../_shared/staff-gate.ts";
 import { describeContract, type ContractRef } from "../_shared/duplicates.ts";
 import { isRecorded } from "../_shared/oem-contracts.ts";
 import { contractCallRefusal } from "../_shared/contract-guard.ts";
@@ -131,6 +132,9 @@ serve(async (req: Request) => {
   const staffEmail = (body.staff_email ?? "").trim();
 
   if (!session_id) return json(400, { error: "session_id is required" });
+  // The staff sign-in, covering this deal's tenant and store (_shared/staff-gate.ts).
+  const refused = await staffGate(req, session_id);
+  if (refused) return refused;
   if (!staffEmail) {
     return json(400, {
       error: "staff_email is required. Voiding a contract is recorded against a person.",
