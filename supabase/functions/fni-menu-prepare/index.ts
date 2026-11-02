@@ -37,6 +37,7 @@ import { serviceDriveLines } from "../_shared/service-drive.ts";
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { presentedSecret } from "../_shared/presented-secret.ts";
 import { staffGate } from "../_shared/staff-gate.ts";
 import { loadSheet } from "../_shared/menu-prepare-rows.ts";
 import { checkPreparation, optionFor, type Preparation } from "../_shared/menu-prepare.ts";
@@ -102,7 +103,7 @@ async function isManager(supabase: SupabaseClient, id: unknown): Promise<boolean
 
 serve(async (req: Request) => {
   const url = new URL(req.url);
-  const presented = req.headers.get("x-webhook-secret") ?? url.searchParams.get("secret");
+  const presented = presentedSecret(req);
   if (!secretsMatch(presented, Deno.env.get("FNI_WEBHOOK_SECRET"))) return json(401, { error: "Unauthorized" });
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 

@@ -34,6 +34,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { presentedSecret } from "../_shared/presented-secret.ts";
 import { staffGate } from "../_shared/staff-gate.ts";
 import { getRecord } from "../_shared/zoho.ts";
 import { categoryFromWording } from "../_shared/product-category.ts";
@@ -163,7 +164,7 @@ async function check(body: Record<string, unknown>): Promise<CheckResult> {
 serve(async (req: Request) => {
   if (req.method !== "POST") return reply(405, { error: "POST only" });
   const url = new URL(req.url);
-  const presented = req.headers.get("x-webhook-secret") ?? url.searchParams.get("secret");
+  const presented = presentedSecret(req);
   const configured = Deno.env.get("FNI_WEBHOOK_SECRET");
   if (!secretsMatch(presented, configured)) {
     console.warn("fni-dx1-check auth failed", { configuredLength: configured?.length ?? 0, presentedLength: presented?.length ?? 0 });

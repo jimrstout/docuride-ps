@@ -54,6 +54,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient, ProviderHttpError } from "../_shared/tecassured.ts";
 import { PROVIDER_ANSWER_EVENT, personalValues, providerAnswer } from "../_shared/provider-answer.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { presentedSecret } from "../_shared/presented-secret.ts";
 import { staffGate } from "../_shared/staff-gate.ts";
 import { offerRowsFor, tecAssuredProviderName, tecAssuredRow } from "../_shared/provider-rows.ts";
 import {
@@ -126,7 +127,7 @@ serve(async (req: Request) => {
   const url = new URL(req.url);
 
   const presented =
-    url.searchParams.get("secret") ?? req.headers.get("x-webhook-secret");
+    presentedSecret(req);
   if (!secretsMatch(presented, Deno.env.get("FNI_WEBHOOK_SECRET"))) {
     return json(401, { error: "Unauthorized" });
   }

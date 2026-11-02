@@ -38,6 +38,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { presentedSecret } from "../_shared/presented-secret.ts";
 import { staffGate } from "../_shared/staff-gate.ts";
 import { SIGNATURE_MAP_LIMIT, appendSignatureMap } from "../_shared/signature-map.ts";
 import { categoryFromWording } from "../_shared/product-category.ts";
@@ -83,7 +84,7 @@ serve(async (req: Request) => {
 
   const url = new URL(req.url);
   const presented =
-    req.headers.get("x-webhook-secret") ?? url.searchParams.get("secret");
+    presentedSecret(req);
   if (!secretsMatch(presented, Deno.env.get("FNI_WEBHOOK_SECRET"))) {
     return json(401, { error: "Unauthorized" });
   }
