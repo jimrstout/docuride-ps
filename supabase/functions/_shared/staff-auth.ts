@@ -166,3 +166,18 @@ export async function decideStaff(input: {
     ? { ok: true, staff, profile }
     : { ok: false, status: 403, error: NOT_YOUR_STORE };
 }
+
+/**
+ * Two letters for the signed-in person, from their email: "jim.stout@x" is
+ * JS, "jim@x" is JI. The same rule as the Next side's initialsFor
+ * (apps/ownership-planner/lib/admin-sections.ts), so a session event reads
+ * the same whichever side wrote it. test/staff-credit.test.mjs holds the two
+ * together.
+ */
+export function staffInitials(email: string): string {
+  const local = email.split("@")[0] ?? "";
+  const parts = local.split(/[._\-+]+/).filter((p) => /[a-z0-9]/i.test(p));
+  const letters =
+    parts.length >= 2 ? parts[0][0] + parts[1][0] : (parts[0] ?? "").replace(/[^a-z0-9]/gi, "").slice(0, 2);
+  return (letters || "?").toUpperCase();
+}

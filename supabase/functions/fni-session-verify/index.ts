@@ -26,7 +26,17 @@ import { serviceDriveLines } from "../_shared/service-drive.ts";
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
-import { staffGate } from "../_shared/staff-gate.ts";
+import { staffCheck, staffGate } from "../_shared/staff-gate.ts";
+import { staffInitials } from "../_shared/staff-auth.ts";
+import {
+  EDITS_DISCARDED_EVENT,
+  MENU_LEVELS_EVENT,
+  PARTIES_CHANGED_EVENT,
+  recordStaffEvent,
+  REFRESHED_EVENT,
+  SHEET_SAVED_EVENT,
+  VERIFIED_EVENT,
+} from "../_shared/staff-events.ts";
 import { offerRowsFor, tecAssuredAccount, tecAssuredProviderName } from "../_shared/provider-rows.ts";
 import { hostOf, QA_HOST } from "../_shared/contract-guard.ts";
 import { currentRows, familiesFromRows, ratingSummary, type RatingRow } from "../_shared/rating-summary.ts";
@@ -1483,47 +1493,53 @@ serve(async (req: Request) => {
       return json(400, { error: "A well-formed session_id is required" });
     }
     // The staff sign-in, covering this deal's tenant and store (_shared/staff-gate.ts).
-    const refused = await staffGate(req, sessionId);
-    if (refused) return refused;
+    // It is also who did this: every change below is credited to the
+    // signed-in person's initials, never to a name typed on the page.
+    const checked = await staffCheck(req, sessionId);
+    if ("response" in checked) return checked.response;
+    const who = staffInitials(checked.staff.email);
 
     const s = await loadSession(supabase, sessionId);
     if (!s) return json(404, { error: "Session not found" });
 
     const action = String(body.action ?? "");
 
+    /** The action's answer, with a session event crediting who did it when it worked. */
+    const credited = async (res: Response, event: string, detail: Record<string, unknown> | null = null) => {
+      if (res.ok) await recordStaffEvent(supabase, sessionId, event, who, detail);
+      return res;
+    };
+
     if (action === "save") {
       const entries = body.entries;
       if (!entries || typeof entries !== "object" || Array.isArray(entries)) {
         return json(400, { error: "entries must be an object" });
       }
-      // An edit with nobody's name on it is not a record of anything, and these
-      // edits can now move a price. Same rule as verify.
-      const who = typeof body.edited_by === "string" ? body.edited_by.trim() : "";
-      if (who === "") {
-        return json(400, { error: "edited_by is required: an edit names a person." });
-      }
-      return await save(supabase, s, entries as Record<string, unknown>, who);
+      // These edits can move a price, so each carries the person's initials.
+      return await credited(
+        await save(supabase, s, entries as Record<string, unknown>, who),
+        SHEET_SAVED_EVENT,
+        { fields: Object.keys(entries as Record<string, unknown>) },
+      );
     }
 
-      if (action === "refresh") return await refresh(supabase, s);
+    if (action === "refresh") return await credited(await refresh(supabase, s), REFRESHED_EVENT);
     if (action === "planned_sale_date" || action === "sale_date_keep_staff" || action === "sale_date_use_crm") {
       return json(410, { error: SALE_DATE_IN_CRM });
     }
     if (action.startsWith("party_")) {
-      const who = typeof body.edited_by === "string" ? body.edited_by.trim() : "";
-      if (who === "") return json(400, { error: "edited_by is required: an edit names a person." });
-      return await partyAction(supabase, s, action, body, who);
+      return await credited(await partyAction(supabase, s, action, body, who), PARTIES_CHANGED_EVENT, {
+        action,
+        party: typeof body.party === "string" ? body.party : null,
+        key: typeof body.key === "string" ? body.key : null,
+      });
     }
-    if (action === "discard_edits") return await discardEdits(supabase, s);
-    if (action === "menu_levels") return await setMenuLevels(supabase, s, body.levels);
+    if (action === "discard_edits") return await credited(await discardEdits(supabase, s), EDITS_DISCARDED_EVENT);
+    if (action === "menu_levels") return await credited(await setMenuLevels(supabase, s, body.levels), MENU_LEVELS_EVENT);
 
     if (action === "verify") {
-      const who = typeof body.verified_by === "string" ? body.verified_by.trim() : "";
-      if (who === "") {
-        // A verification with nobody's name on it is not a verification.
-        return json(400, { error: "verified_by is required: a verification names a person." });
-      }
-      return await verify(supabase, s, who);
+      // The verification names the signed-in person: "Verified by JS" on Details.
+      return await credited(await verify(supabase, s, who), VERIFIED_EVENT);
     }
 
     return json(400, {
