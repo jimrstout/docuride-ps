@@ -24,6 +24,7 @@
 
 "use client";
 
+import Control from "@/components/Control";
 import { money } from "@/lib/money";
 import DecisionControl from "./DecisionControl";
 import ProductConfigurator from "./ProductConfigurator";
@@ -202,14 +203,9 @@ export default function ProductScreen({
           )}
           {durationLine && <span className="ps-price-term">{durationLine}</span>}
           {copy.full_terms_url && (
-            <a
-              className="ps-full"
-              href={copy.full_terms_url}
-              target="_blank"
-              rel="noreferrer noopener"
-            >
+            <Control className="ps-full" href={copy.full_terms_url} file>
               Read the complete contract
-            </a>
+            </Control>
           )}
         </div>
 

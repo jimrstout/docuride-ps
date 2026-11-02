@@ -18,17 +18,17 @@ const cell = (marker) => row.slice(row.indexOf(marker), row.indexOf("</td>", row
 
 test("Open lands on that session's Details, and it is the only button", () => {
   const actions = cell('<td className="ad-row-actions">');
-  assert.match(actions, /<Link className="ad-btn ad-btn--secondary ad-btn--main" href=\{`\/details\/\$\{row\.id\}`\} prefetch=\{false\}>\s*Open\s*<\/Link>/);
-  assert.equal((actions.match(/<Link|<a\s|<button|<form|<PendingButton/g) ?? []).length, 1, "one way in");
+  assert.match(actions, /<Control className="ad-btn ad-btn--secondary ad-btn--main" href=\{`\/details\/\$\{row\.id\}`\}>\s*Open\s*<\/Control>/);
+  assert.equal((actions.match(/<Control|<Link|<a\s|<button|<form|<PendingButton/g) ?? []).length, 1, "one way in");
   assert.doesNotMatch(actions, />\s*Details\s*</, "the separate Details button is gone");
 });
 
 test("the deal number lands on that session's Details", () => {
-  assert.match(cell('<td className="ad-deal">'), /<Link className="ad-rowlink" href=\{`\/details\/\$\{row\.id\}`\} prefetch=\{false\}>\s*\{row\.deal_number \?\? "Not set"\}\s*<\/Link>/);
+  assert.match(cell('<td className="ad-deal">'), /<Control className="ad-rowlink" href=\{`\/details\/\$\{row\.id\}`\}>\s*\{row\.deal_number \?\? "Not set"\}\s*<\/Control>/);
 });
 
 test("the vehicle lands on that session's Details", () => {
-  assert.match(cell('<td className="ad-vehicle">'), /<Link className="ad-rowlink ad-strong" href=\{`\/details\/\$\{row\.id\}`\} prefetch=\{false\} title=\{vehicle\(row\)\}>\s*\{vehicle\(row\)\}\s*<\/Link>/);
+  assert.match(cell('<td className="ad-vehicle">'), /<Control className="ad-rowlink ad-strong" href=\{`\/details\/\$\{row\.id\}`\} title=\{vehicle\(row\)\}>\s*\{vehicle\(row\)\}\s*<\/Control>/);
 });
 
 test("nothing on the list opens a customer presentation, rates, or opens a new tab", () => {

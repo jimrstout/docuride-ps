@@ -197,7 +197,7 @@ test("the endpoint: secret, managers outside the range, locked once chosen, even
   assert.match(page, /const operator = await currentOperator\(\);\s*if \(!operator\) \{\s*return \(\s*<WorkingArea>\s*<SignIn/);
   const details = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
   // Renamed Prepare presentation on Details (2026-11-02); the address is unchanged.
-  assert.match(details, /href=\{`\/prepare\/\$\{sessionId\}`\}\s*prefetch=\{false\}\s*>\s*Prepare presentation\s*<\/Link>/);
+  assert.match(details, /href=\{`\/prepare\/\$\{sessionId\}`\}\s*>\s*Prepare presentation\s*<\/Control>/);
   // No scrolling, and tabs on a phone, as the menu.
   const css = read("apps/ownership-planner/app/prepare/[sessionId]/prepare.css");
   assert.match(css, /\.pm \{[^}]*height: 100dvh;\s*overflow: hidden;/);

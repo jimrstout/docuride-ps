@@ -9,7 +9,7 @@
 // Choose a provider (?provider=<id>) to see its products; choose a product
 // (&product=<id>) to open its form under the table.
 
-import Link from "next/link";
+import Control from "@/components/Control";
 import PendingButton from "@/components/PendingButton";
 import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
@@ -82,7 +82,7 @@ function WordingForm({ p }: { p: WordingProductRow }) {
           </label>
           <div className="ad-editor-actions ad-field--wide">
             <PendingButton className="ad-btn ad-btn--primary" pending="Saving the wording...">Save wording</PendingButton>
-            <Link href={`/admin/providers/wording?provider=${p.provider_id}`} prefetch={false} className="ad-btn ad-btn--secondary">Cancel</Link>
+            <Control href={`/admin/providers/wording?provider=${p.provider_id}`} className="ad-btn ad-btn--secondary">Cancel</Control>
             <p className="ad-help">
               Write these from the provider&apos;s approved language. The planner shows a product only when every answer
               that is not optional is written, it says whether it transfers, it links to the full terms, and it is active.
@@ -123,7 +123,7 @@ export default async function WordingPage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageHead title="Product wording" subtitle={subtitle}>
-        <Link href="/admin/providers" prefetch={false} className="ad-btn ad-btn--secondary">Back to providers</Link>
+        <Control href="/admin/providers" className="ad-btn ad-btn--secondary">Back to providers</Control>
       </PageHead>
       {params.saved !== undefined ? <Notice tone="good">Saved. The planner uses it on the next deal it opens.</Notice> : null}
       {typeof params.refused === "string" ? <Notice tone="warn">{params.refused}</Notice> : null}
@@ -133,15 +133,14 @@ export default async function WordingPage({ searchParams }: { searchParams: Prom
 
       <nav className="ad-seg" aria-label="Provider">
         {providers.map((p) => (
-          <Link
+          <Control
             key={p.id}
             href={`/admin/providers/wording?provider=${p.id}`}
-            prefetch={false}
             className={chosen?.id === p.id ? "is-here" : undefined}
             aria-current={chosen?.id === p.id ? "page" : undefined}
           >
             <span>{p.name}</span>
-          </Link>
+          </Control>
         ))}
       </nav>
 
@@ -183,13 +182,12 @@ export default async function WordingPage({ searchParams }: { searchParams: Prom
                     )}
                   </td>
                   <td>
-                    <Link
+                    <Control
                       href={`/admin/providers/wording?provider=${p.provider_id}&product=${p.id}`}
-                      prefetch={false}
                       className="ad-btn ad-btn--secondary"
                     >
                       Write wording
-                    </Link>
+                    </Control>
                   </td>
                 </tr>
               ))}

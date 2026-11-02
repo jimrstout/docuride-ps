@@ -8,7 +8,7 @@
 // Choose a provider (?provider=<id>) to see its sheets; open a sheet to review
 // and publish it.
 
-import Link from "next/link";
+import Control from "@/components/Control";
 import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
 import type { PriceSheetRow, ProvidersPayload } from "@/lib/types";
@@ -59,16 +59,15 @@ export default async function PriceSheetsPage({ searchParams }: { searchParams: 
         <>
           <nav className="ad-seg" aria-label="Provider">
             {providers.map((p) => (
-              <Link
+              <Control
                 key={p.id}
                 href={`/admin/price-sheets?provider=${p.id}`}
-                prefetch={false}
                 className={chosen?.id === p.id ? "is-here" : undefined}
                 aria-current={chosen?.id === p.id ? "page" : undefined}
               >
                 <span className={p.sheets.some((s) => s.status === "Published") ? "ad-dot ad-dot--good" : "ad-dot ad-dot--none"} aria-hidden="true" />
                 <span>{p.name}</span>
-              </Link>
+              </Control>
             ))}
           </nav>
 
@@ -92,7 +91,7 @@ export default async function PriceSheetsPage({ searchParams }: { searchParams: 
                   {sheets.map((s) => (
                     <tr key={s.id}>
                       <td>
-                        <Link href={`/admin/price-sheets/${s.id}`} prefetch={false} className="ad-strong">{s.name}</Link>
+                        <Control href={`/admin/price-sheets/${s.id}`} className="ad-strong">{s.name}</Control>
                         <small>{s.file_name}</small>
                       </td>
                       <td>{dateLine(s)}</td>

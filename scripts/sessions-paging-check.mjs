@@ -57,6 +57,7 @@ const app = spawn("npx", ["next", "start", "-p", String(APP_PORT)], {
   cwd: APP,
   env: { ...process.env, FNI_WEBHOOK_SECRET: SECRET, SUPABASE_URL: `http://127.0.0.1:${EDGE_PORT}`, NEXT_TELEMETRY_DISABLED: "1" },
   stdio: "ignore",
+  detached: true,
 });
 for (let i = 0; i < 60; i++) {
   try { await fetch(`http://localhost:${APP_PORT}/`); break; } catch { await new Promise((r) => setTimeout(r, 500)); }
@@ -128,7 +129,7 @@ for (const n of [6, 60]) {
 }
 
 await browser.close();
-app.kill();
+try { process.kill(-app.pid, "SIGTERM"); } catch { /* already gone */ }
 edge.close();
 console.log(failed === 0 ? "All checks passed." : `${failed} check(s) failed.`);
 process.exit(failed === 0 ? 0 : 1);

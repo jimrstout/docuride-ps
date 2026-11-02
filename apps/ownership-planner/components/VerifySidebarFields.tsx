@@ -1,5 +1,6 @@
 "use client";
 
+import Control from "@/components/Control";
 import { useEffect, useRef } from "react";
 
 type SidebarField = { key: string; label: string; group: string; value: string | null };
@@ -26,7 +27,7 @@ export function VerifySidebarFields({ fields }: { fields: SidebarField[] }) {
       {fields.map((field) => (
         <div className="vattention-item" key={field.key}>
           <div className="vattention-item-head">
-            <a href={`#field-${field.key}`} title="Jump to this field in the deal sheet">{field.label}</a>
+            <Control href={`#field-${field.key}`} title="Jump to this field in the deal sheet">{field.label}</Control>
             <small>{field.group === "Money" ? "Financial" : field.group}</small>
           </div>
           <input

@@ -10,7 +10,7 @@
 // No JavaScript: ?edit=<rate id> opens the correction form, ?show=flagged
 // narrows the table.
 
-import Link from "next/link";
+import Control from "@/components/Control";
 import PendingButton from "@/components/PendingButton";
 import { Working } from "@/components/Working";
 import { notFound } from "next/navigation";
@@ -95,7 +95,7 @@ function RateForm({ sheetId, r }: { sheetId: string; r: PriceSheetRateRow }) {
           {field("suggested_retail", "Suggested retail ($)", numText(r.suggested_retail))}
           <div className="ad-editor-actions ad-field--wide">
             <PendingButton className="ad-btn ad-btn--primary" pending="Saving the correction...">Save correction</PendingButton>
-            <Link href={`/admin/price-sheets/${sheetId}`} prefetch={false} className="ad-btn ad-btn--secondary">Cancel</Link>
+            <Control href={`/admin/price-sheets/${sheetId}`} className="ad-btn ad-btn--secondary">Cancel</Control>
           </div>
         </form>
       </div>
@@ -147,9 +147,9 @@ export default async function SheetPage({
   return (
     <>
       <PageHead title={sheet.name} subtitle={`${dateLine(sheet)}. ${sheet.file_name}, uploaded by ${sheet.uploaded_by}.`}>
-        <Link href={`/admin/price-sheets?provider=${sheet.provider_id}`} prefetch={false} className="ad-btn ad-btn--secondary">
+        <Control href={`/admin/price-sheets?provider=${sheet.provider_id}`} className="ad-btn ad-btn--secondary">
           All of this provider&apos;s sheets
-        </Link>
+        </Control>
       </PageHead>
       {flash ? <Notice tone={flash.tone}>{flash.text}</Notice> : null}
 
@@ -207,7 +207,7 @@ export default async function SheetPage({
             <p className="ad-help">
               {flagged} {flagged === 1 ? "rate is" : "rates are"} flagged. Correct {flagged === 1 ? "it" : "them"}, or leave{" "}
               {flagged === 1 ? "it" : "them"} out, before publishing.{" "}
-              <Link href={`/admin/price-sheets/${sheet.id}?show=flagged`} prefetch={false}>Show only flagged rates</Link>
+              <Control href={`/admin/price-sheets/${sheet.id}?show=flagged`}>Show only flagged rates</Control>
             </p>
           ) : null}
         </div>
@@ -219,7 +219,7 @@ export default async function SheetPage({
         <div className="ad-panel-head">
           <h2 id="rates-title">{rates.length} {rates.length === 1 ? "rate" : "rates"} read</h2>
           {one(params.show) === "flagged" ? (
-            <Link href={`/admin/price-sheets/${sheet.id}`} prefetch={false} className="ad-btn ad-btn--secondary">Show all</Link>
+            <Control href={`/admin/price-sheets/${sheet.id}`} className="ad-btn ad-btn--secondary">Show all</Control>
           ) : null}
         </div>
         <div className="ad-scroll">
@@ -254,7 +254,7 @@ export default async function SheetPage({
                   {draft ? (
                     <td>
                       <div className="ad-actions">
-                        <Link href={`/admin/price-sheets/${sheet.id}?edit=${r.id}`} prefetch={false} className="ad-btn ad-btn--secondary">Correct</Link>
+                        <Control href={`/admin/price-sheets/${sheet.id}?edit=${r.id}`} className="ad-btn ad-btn--secondary">Correct</Control>
                         {r.left_out ? (
                           <form action={includeRate}>
                             <Working />

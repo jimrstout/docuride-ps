@@ -81,8 +81,8 @@ test("the acknowledgment names the staff member who presented, on both paths", (
 test("both buttons: verified, rated and current; a live contract does not block them", () => {
   const page = read(PAGE);
   assert.match(page, /const presentable = verified && sheet\.rating\.state === "Rated" && !sheet\.rating\.out_of_date;/);
-  assert.match(page, /href=\{`\/plan\/\$\{sessionId\}`\}\s*target="_blank"\s*rel="noopener"/);
-  assert.match(page, /href=\{`\/menu\/\$\{sessionId\}`\}\s*target="_blank"\s*rel="noopener"\s*>\s*Present menu\s*</);
+  assert.match(page, /href=\{`\/plan\/\$\{sessionId\}`\} newTab>/);
+  assert.match(page, /href=\{`\/menu\/\$\{sessionId\}`\} newTab>\s*Present menu\s*</);
   assert.doesNotMatch(page.slice(page.indexOf("const presentable =")).split("\n")[0], /contract/);
 });
 

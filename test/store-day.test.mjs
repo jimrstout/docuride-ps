@@ -138,7 +138,8 @@ test("Details: one date line with Open in CRM, no date controls of its own, and 
   assert.doesNotMatch(page, /setPlannedSaleDate|clearPlannedSaleDate|vplanned|planned_sale_date|sale_date_choice|keepStaffSaleDate|useCrmSaleDate/);
   // The one date line, with the CRM record in a new tab and the watcher.
   assert.match(page, /const dateLine = sheet\.day\?\.date_line \?\? \(sheet\.day && !sheet\.day\.sale_date \? NO_SALE_DATE_LINE : null\);/);
-  assert.match(page, /<a className="btn btn--quiet" href=\{crmUrl\} target="_blank" rel="noopener">\s*Open in CRM\s*<\/a>/);
+  // Another site: the shared control opens it in a new tab (components/Control.tsx).
+  assert.match(page, /<Control className="btn btn--quiet" href=\{crmUrl\}>\s*Open in CRM\s*<\/Control>/);
   assert.match(page, /<SaleDateWatch \/>\s*<\/div>\s*\) : null\}/);
   // With the notices, under the status line and above the panels.
   assert.ok(page.indexOf('<dl className="vstate">') < page.indexOf("{dateLine ? ("));

@@ -20,12 +20,15 @@ test("every link to a /plan/ page opens a new tab with rel=noopener", () => {
   let found = 0;
   for (const f of [...files(join(root, "app")), ...files(join(root, "components"))]) {
     const s = readFileSync(f, "utf8");
-    for (const m of s.matchAll(/<(a|Link)\b[^>]*?href=\{`\/plan\/[^>]*>/gs)) {
+    // Every link goes through the shared control now; a new tab is its newTab.
+    for (const m of s.matchAll(/<(a|Link|Control)\b[^>]*?href=\{`\/plan\/[^>]*>/gs)) {
       found++;
-      assert.match(m[0], /target="_blank"/, `${f}: ${m[0]}`);
-      assert.match(m[0], /rel="noopener"/, `${f}: ${m[0]}`);
+      assert.match(m[0], /^<Control\b[^>]*\bnewTab\b/, `${f}: ${m[0]}`);
     }
   }
+  // And the shared control opens a new tab with no handle back.
+  const control = readFileSync(join(root, "components/Control.tsx"), "utf8");
+  assert.match(control, /target="_blank" rel=\{external \? "noopener noreferrer" : "noopener"\}/);
   // Only the deal page opens the presentations now; the sessions list goes to
   // Details (test/sessions-one-way-in.test.mjs).
   assert.ok(found >= 1, `expected the deal page, found ${found}`);

@@ -174,7 +174,7 @@ test("a failed rate still returns to Verify with a flash, not an error page", ()
 
 test("Present storyboard (once Open presentation) opens the plan in a new tab, with no handle back", () => {
   // A new tab, so this page stays where it was (navigation fixes, 2026-10-27).
-  assert.match(page, /<a className="btn btn--go" href=\{`\/plan\/\$\{sessionId\}`\} target="_blank" rel="noopener">\s*Present storyboard\s*<\/a>/);
+  assert.match(page, /<Control className="btn btn--go" href=\{`\/plan\/\$\{sessionId\}`\} newTab>\s*Present storyboard\s*<\/Control>/);
   assert.doesNotMatch(page, /Open presentation/);
   // Live only once verified, rated, current and prepared (2026-11-02), and the
   // planner still opens at step 1.

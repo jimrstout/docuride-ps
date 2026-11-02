@@ -9,7 +9,7 @@
 // choice, by Escape, or by pressing the button. Hidden on wider screens,
 // where the sidebar lists the sections itself.
 
-import Link from "next/link";
+import Control from "@/components/Control";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import type { AdminSection } from "@/lib/admin-sections";
@@ -19,7 +19,8 @@ export default function AdminMenu({ sections, here }: { sections: readonly Admin
   const [open, setOpen] = useState(false);
   const path = usePathname();
 
-  // A choice has been made: the panel goes.
+  // A choice has been made and its page is up: the panel goes. It stays open
+  // meanwhile, with the chosen section showing "Opening...".
   useEffect(() => setOpen(false), [path]);
 
   useEffect(() => {
@@ -44,17 +45,15 @@ export default function AdminMenu({ sections, here }: { sections: readonly Admin
       {open ? (
         <nav id="ad-menu-panel" className="ad-menu-panel" aria-label="Admin sections">
           {sections.map((s) => (
-            <Link
+            <Control
               key={s.href}
               href={s.href}
-              prefetch={false}
               className={s.href === here ? "ad-menu-link is-here" : "ad-menu-link"}
               aria-current={s.href === here ? "page" : undefined}
-              onClick={() => setOpen(false)}
             >
               <Icon name={s.icon} />
               <span>{s.label}</span>
-            </Link>
+            </Control>
           ))}
         </nav>
       ) : null}
