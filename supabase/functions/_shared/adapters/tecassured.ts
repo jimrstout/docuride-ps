@@ -18,6 +18,7 @@ import {
   type RequiredProperty,
 } from "../rate-properties.ts";
 import { buildRateRequest, type RateSource } from "../rate-request.ts";
+import { formCodesFromQuote, type FormCodes } from "../coded-values.ts";
 import type { OfferProvider } from "../normalized-offer.ts";
 import { tecAssuredOffers } from "./tecassured-offers.ts";
 import type { ProviderAdapter, RateResult } from "./types.ts";
@@ -47,12 +48,17 @@ export function tecAssuredAdapter(
   };
 
   let cachedRequired: RequiredProperty[] | null = null;
+  // The provider's codes as its form last stated them for this vehicle type
+  // (migration 0051). Null until a quote has been seen: the documented codes.
+  let formCodes: FormCodes | null = null;
 
   /** Cached overnight by fni-refresh-rate-properties; live when cold. */
   async function required(): Promise<RequiredProperty[]> {
     if (cachedRequired) return cachedRequired;
     if (!vtype) return [];
     const cached = await readRateProperties(supabase, store.account.id, vtype);
+    const seen = cached?.form_codes;
+    formCodes = seen && typeof seen === "object" && !Array.isArray(seen) ? (seen as FormCodes) : null;
     cachedRequired =
       cached && cached.status === "Cached"
         ? parseRequiredProperties(cached.properties).properties
@@ -109,11 +115,15 @@ export function tecAssuredAdapter(
       const built = buildRateRequest(props, rateSource as unknown as RateSource, {
         dealerCode: store.dealerCode,
         vtype,
+        formCodes,
       });
       detail.unsupplied = built.missing.map((m) => m.name);
       // A deal date that will not do stops the rate here, before anything is
       // sent: no date is ever made up to fill the gap (_shared/deal-dates.ts).
       if (built.dateProblem) return { state: "Failed", reason: built.dateProblem };
+      // A value the provider's form has no code for stops the rate here, rather
+      // than going out as a word the provider ignores (_shared/coded-values.ts).
+      if (built.codeProblem) return { state: "Failed", reason: built.codeProblem };
       const request = built.request;
       // A call that never answers still says what it asked, so a failed
       // re-rate can show it was about the same deal as the offers kept
@@ -160,6 +170,20 @@ export function tecAssuredAdapter(
                     .map((m) => m.name)
                     .join(", ")} on the session (vehicle_properties) and rate again.`),
           };
+        }
+      }
+
+      // Keep the codes this quote's form states, for the next rating of this
+      // vehicle type. Best effort: a rating never fails for want of it.
+      const stated = formCodesFromQuote(response);
+      if (stated) {
+        try {
+          await supabase.schema("fni").from("store_rate_properties")
+            .update({ form_codes: stated, form_codes_at: new Date().toISOString() })
+            .eq("store_provider_account_id", store.account.id)
+            .eq("vtype", vtype);
+        } catch {
+          // The documented codes, or the last ones kept, serve until next time.
         }
       }
 

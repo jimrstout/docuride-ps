@@ -165,10 +165,13 @@ Two things worth knowing about the QA response:
 
 - **Every product came back labelled USED** (`USED PLATINUM UTV`,
   `USED ATV/UTV CARE`, …) even though the request said `purchaseType: "New"`,
-  `vehicleStatus: "New"` and `new.used: "New"`. The quote does not echo back
-  enough to say why. Most likely the shared QA Dealer ID simply has only used
-  programs loaded. Worth confirming against the production Dealer ID before
-  anyone reads product names as a condition check.
+  `vehicleStatus: "New"` and `new.used: "New"`. **Solved 2026-11-02:** the
+  provider wants its codes, not the words. The quote's form
+  (`quote.vehicles[0].form.properties`) lists them: new.used N/U,
+  finance.type N/F/B/L, fuel.type G/E/D. Probes on deal 15063
+  (`fni.rate_probes`) with new.used `N` returned the New programs; with
+  finance.type `F` they also returned GAP, which `Loan` never did. Every coded
+  field is now sent as its code (`_shared/coded-values.ts`).
 - **There is no `error` key on success.** The refusal check has to look for the
   key, not for a non-200 — see "Errors come back as HTTP 200" above.
 

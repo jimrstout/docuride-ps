@@ -227,7 +227,8 @@ test("the TecAssured rate request carries the same term and rate as the screen",
   assert.deepEqual(missing, [], "nothing TecAssured asked for is unanswered");
   assert.equal(request.financeTerm, "60");
   assert.equal(request.financeApr, "6.99");
-  assert.equal(request.financeType, "Loan");
+  // Loan, sent as the provider's code F (_shared/coded-values.ts).
+  assert.equal(request.financeType, "F");
 
   const prop = (n) => request.properties.find((p) => p.name === n)?.value;
   assert.equal(prop("finance.term"), "60", "both halves of the request agree");

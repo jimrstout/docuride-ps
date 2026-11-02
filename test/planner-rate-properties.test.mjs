@@ -330,10 +330,11 @@ test("a capitalised stored Warranty still reaches remainingMWM", () => {
 
 test("purchaseType and vehicleStatus are both sent from the one value", () => {
   // Section 6.2 calls vehicleStatus a duplicate of purchaseType and marks both Required.
+  // Sent as the provider's code, N or U (_shared/coded-values.ts).
   const r = (c) => buildRateRequest(parseRequiredProperties(UTV).properties, full({ condition: c }), opts).request;
-  assert.equal(r("New").purchaseType, "New");
-  assert.equal(r("New").vehicleStatus, "New");
-  assert.equal(r("Used").vehicleStatus, "Used");
+  assert.equal(r("New").purchaseType, "N");
+  assert.equal(r("New").vehicleStatus, "N");
+  assert.equal(r("Used").vehicleStatus, "U");
 });
 
 test("an optional field with no value is omitted, not sent empty", () => {
@@ -378,8 +379,9 @@ test("both halves of a cash request carry the same zeros", () => {
 
   assert.deepEqual(missing, []);
 
-  // The documented camelCase half.
-  assert.equal(request.financeType, "None");
+  // The documented camelCase half. Cash is None, sent as its code N
+  // (_shared/coded-values.ts).
+  assert.equal(request.financeType, "N");
   assert.equal(request.financeAmount, "0");
   assert.equal(request.financeApr, "0");
   assert.equal(request.financeTerm, "0");
@@ -387,7 +389,7 @@ test("both halves of a cash request carry the same zeros", () => {
   // The form-schema half, from the same resolution, so the provider cannot be
   // told two different stories about whether the deal is financed.
   const byName = Object.fromEntries(request.properties.map((p) => [p.name, p.value]));
-  assert.equal(byName["finance.type"], "None");
+  assert.equal(byName["finance.type"], "N");
   assert.equal(byName["finance.amount"], "0");
   assert.equal(byName["finance.apr"], "0");
   assert.equal(byName["finance.term"], "0");
