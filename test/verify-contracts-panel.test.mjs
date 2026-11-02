@@ -17,8 +17,9 @@ test("the customer's saved choices become the selections the quote is matched on
       { provider_product_id: "", rate_unique_id: "x", selected_options: [], customer_price: 1, retail_price: 1 },
     ]),
     [
-      { product_unique: "16_3", rate_unique: "1898-5", option_uniques: ["opt-1"], retail_price: 1499 },
-      { product_unique: "23_4", rate_unique: "175731", option_uniques: [], retail_price: 399.5 },
+      // The chosen term rides along for the Submit guard; none saved here.
+      { product_unique: "16_3", rate_unique: "1898-5", option_uniques: ["opt-1"], retail_price: 1499, term_months: null },
+      { product_unique: "23_4", rate_unique: "175731", option_uniques: [], retail_price: 399.5, term_months: null },
     ]
   );
   const submit = src("../supabase/functions/fni-contract-submit/index.ts");

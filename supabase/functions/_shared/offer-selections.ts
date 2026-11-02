@@ -26,6 +26,8 @@ export interface ProductSelection {
   rate_unique: string;
   option_uniques?: string[];
   retail_price: number;
+  /** The term the customer chose, as saved. The Submit guard holds the outgoing rate to it. */
+  term_months?: number | null;
 }
 
 /** What the quote says about a selected rate, gathered while flagging it. */
