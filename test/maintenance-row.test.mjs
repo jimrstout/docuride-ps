@@ -140,3 +140,21 @@ test("Details shows the note", () => {
   const page = readFileSync(new URL("../apps/ownership-planner/app/details/[sessionId]/page.tsx", import.meta.url), "utf8");
   assert.match(page, /\(sheet\.unplaced_offers \?\? \[\]\)\.map\(\(line\) => \(/);
 });
+
+test("Prepare presentation files an uncatalogued plan under its own row, never Other", async () => {
+  // Before migration 0048 the catalog had no row for 15063's ATV codes, and
+  // Prepare called them "Other". The provider's type now decides.
+  const { buildSheet } = await import("../supabase/functions/_shared/menu-prepare.ts");
+  const families = familiesFromRows([ratingRow(OFFERED_15063)]);
+  const sheet = buildSheet({
+    families, catalog: [], rules: [], columns: [{ name: "Best", preset_categories: ["Maintenance"], starting_level: "Highest" }],
+    presets: [], prepared: null, prices: {}, surcharges: [], purchased: new Set(), purchased_prices: {},
+  });
+  assert.ok(sheet.categories.includes("Maintenance"));
+  assert.ok(!sheet.categories.includes("Other"));
+  assert.deepEqual(sheet.plans.Maintenance.map((p) => p.product_code).sort(), ["64_7", "69_7", "75_7", "81_7"]);
+  for (const p of sheet.plans["Mechanical Protection"]) assert.doesNotMatch(p.plan_name, /SVC DRIVE/);
+  // The acknowledgment matches a removed row the same way.
+  const ack = readFileSync(new URL("../supabase/functions/fni-acknowledgment/index.ts", import.meta.url), "utf8");
+  assert.match(ack, /catOf\.get\(`\$\{d\.provider_id as string\}:\$\{code\}`\) \|\| categoryFromWording\(d\.product_name\) \|\| ""/);
+});

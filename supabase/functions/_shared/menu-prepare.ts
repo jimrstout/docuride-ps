@@ -24,6 +24,7 @@ import { resolveRule, type PricingRule } from "./planner-pricing.ts";
 import type { MenuColumn } from "./menu-columns.ts";
 import { countGroups, plainLabel } from "./surcharge-display.ts";
 import { isServiceDriveName, serviceDrivePresetNote } from "./service-drive.ts";
+import { categoryOf } from "./product-category.ts";
 import {
   CATEGORIES,
   checkPrice,
@@ -228,7 +229,11 @@ export function buildSheet(input: SheetInput): PrepareSheet {
     for (const t of f.tiers) {
       const provider = t.provider_id ?? f.provider_id ?? "";
       const cat = catalogFor(provider, t.product_code);
-      const category = cat && (CATEGORIES as readonly string[]).includes(cat.category) ? cat.category : "Other";
+      // The catalog's category, else the provider's product type, else the
+      // name (_shared/product-category.ts): a plan the catalog does not list
+      // yet still lands in its own row, never "Other".
+      const known = (c: string | null | undefined) => (c && (CATEGORIES as readonly string[]).includes(c) ? c : null);
+      const category = known(categoryOf({ catalog: known(cat?.category), ptype: f.family_code, name: t.product_name })) ?? "Other";
       const options: SheetOption[] = t.rates
         .filter((r) => r.dealer_cost !== null && r.dealer_cost !== undefined)
         .map((r) => {
