@@ -17,20 +17,17 @@
 // adds a door; it does not add a route to the data.
 
 import Link from "next/link";
-import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
 import RatingErrorText from "@/components/RatingErrorText";
 import RowDetailsToggle from "@/components/admin/RowDetailsToggle";
 import { hasMoreDetail, ratingErrorHeadline, ratingFailures } from "@/lib/rating-error";
 import { storeTime } from "@/lib/store-time";
-import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge } from "@/lib/edge";
 import type { ConsoleListPayload, ConsoleSessionRow, PricingPayload } from "@/lib/types";
 import { SIGN_IN_NOTICES } from "@/components/admin/SignIn";
 import { Badge, Notice, PageHead, type Tone } from "@/components/admin/Parts";
 import { SessionFilters, type FilterOption } from "@/components/admin/SessionFilters";
-import { rateSession } from "@/app/console-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -168,7 +165,9 @@ function Rating({ row, now }: { row: ConsoleSessionRow; now: number }) {
           fault, open under the row on request (lib/rating-error.ts). */}
       {r.state === "Failed" ? (
         <>
-          <small className="ad-why">{ratingErrorHeadline(failures) ?? "Rating failed."}</small>
+          <small className="ad-why ad-clip ad-clip--why" title={ratingErrorHeadline(failures) ?? undefined}>
+            {ratingErrorHeadline(failures) ?? "Rating failed."}
+          </small>
           {failures.some(hasMoreDetail) ? <RowDetailsToggle target={whyRowId(row)} /> : null}
         </>
       ) : r.detail ? (
@@ -213,14 +212,23 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
         data-rating={ratingState}
         data-search={searchText(row)}
       >
-        <td className="ad-deal">{row.deal_number ?? "Not set"}</td>
+        {/* The deal number and the vehicle go to Details too, like Open. */}
+        <td className="ad-deal">
+          <Link className="ad-rowlink" href={`/details/${row.id}`} prefetch={false}>
+            {row.deal_number ?? "Not set"}
+          </Link>
+        </td>
 
         <td className="ad-vehicle">
-          <span className="ad-strong">{vehicle(row)}</span>
+          <Link className="ad-rowlink ad-strong" href={`/details/${row.id}`} prefetch={false} title={vehicle(row)}>
+            {vehicle(row)}
+          </Link>
           {row.stock_number ? <small>Stock {row.stock_number}</small> : null}
         </td>
 
-        <td data-label="Store">{row.store_name ?? "Not set"}</td>
+        <td data-label="Store">
+          <span className="ad-clip ad-clip--store" title={row.store_name ?? undefined}>{row.store_name ?? "Not set"}</span>
+        </td>
 
         <td data-label="Status">
           <Badge tone={statusTone(row.status)}>{row.status ?? "Not set"}</Badge>
@@ -231,12 +239,12 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
           <Rating row={row} now={now} />
         </td>
 
-        <td data-label="Created" style={{ whiteSpace: "nowrap" }}>
+        <td data-label="Created">
           {day(row.created_at)}
           <small>{clock(row.created_at)}</small>
         </td>
 
-        <td data-label="Expires" style={{ whiteSpace: "nowrap" }}>
+        <td data-label="Expires">
           {row.expired ? (
             <Badge tone="warn">Expired</Badge>
           ) : (
@@ -250,33 +258,12 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
         </td>
 
         <td className="ad-row-actions">
-          <div className="ad-actions" data-working-panel="">
-            {/* The customer's menu opens in a new tab, so this list stays where
-                it was and one person can work several deals at once. */}
-            <a
-              className="ad-btn ad-btn--secondary ad-btn--main"
-              href={`/plan/${row.id}`}
-              target="_blank"
-              rel="noopener"
-            >
-              Open
-            </a>
-            {/* Details is where rating starts now, so it is the button that is
-                always here. Rate on its own is for re-asking after a failure on a
-                deal that is already verified. */}
-            <Link className="ad-btn ad-btn--secondary" href={`/details/${row.id}`} prefetch={false}>
-              Details
-            </Link>
-            {row.rating?.state === "Failed" ? (
-              <form action={rateSession}>
-                <Working />
-                <input type="hidden" name="session_id" value={row.id} />
-                <PendingButton className="ad-btn ad-btn--secondary" working="page" pending="Rating...">
-                  Rate
-                </PendingButton>
-              </form>
-            ) : null}
-          </div>
+          {/* One way in: Open goes to the deal's Details, where it is rated,
+              prepared and presented, one main step at a time. Nothing on this
+              list opens a customer presentation, and nothing here rates. */}
+          <Link className="ad-btn ad-btn--secondary ad-btn--main" href={`/details/${row.id}`} prefetch={false}>
+            Open
+          </Link>
         </td>
       </tr>
       <WhyRow row={row} />
@@ -385,9 +372,9 @@ async function SessionList({ notice }: { notice: string | null }) {
           The list shows the {rows.length === 1 ? "most recent session" : `${rows.length} most recent sessions`},
           newest first. Times are UTC. Extending adds 24 hours from now, which
           reopens a session that has already lapsed. Rating says whether the
-          customer has a menu, and why not when they do not. Details is where you
-          check what a rate would be built from; nothing is rated until somebody
-          has.
+          customer has a menu, and why not when they do not. Open, the deal
+          number and the vehicle all go to the deal&apos;s Details, where it is
+          rated, then prepared, then presented.
         </p>
       </details>
     </>

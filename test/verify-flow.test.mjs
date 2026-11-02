@@ -117,7 +117,7 @@ test("the verify screen is protected the same way the presentation is", () => {
 test("the session browser and settings still require a sign-in", () => {
   // They list twenty-five deals of buyer names, addresses and phone numbers.
   // That is a different exposure from one deal to whoever holds its link.
-  for (const name of ["saveSettings", "rateSession"]) {
+  for (const name of ["saveSettings"]) {
     assert.match(actionBody(name), /currentOperator/, `${name} must still need a sign-in`);
   }
 });

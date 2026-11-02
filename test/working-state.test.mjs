@@ -110,10 +110,9 @@ test("the whole-deal actions cover the page, Submit and Void warn before leaving
   // Every staff page is inside a working area.
   assert.match(page, /<WorkingArea>/);
   assert.match(src("app/admin/layout.tsx"), /<WorkingArea>\s*<div className="ad">/);
-  // The admin Renew for Today locks its own row's actions; Rate covers the page.
   const sessions = src("app/admin/sessions/page.tsx");
-  assert.match(sessions, /<div className="ad-actions" data-working-panel="">/);
-  assert.match(sessions, /working="page" pending="Rating\.\.\."/);
+  // The list has no busy actions any more: one Open link per row, to Details.
+  assert.doesNotMatch(sessions, /<PendingButton/);
 });
 
 test("the area blocks other sends, locks, warns, announces and keeps entries", () => {
