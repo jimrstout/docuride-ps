@@ -28,7 +28,6 @@ import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { currentOperator } from "@/lib/admin-session";
 import { SignIn, signInNotice } from "@/components/admin/SignIn";
-import { currentChecker } from "@/lib/checker";
 import { edge, EdgeError, isSessionId } from "@/lib/edge";
 import type { FieldGroup, VerifyField, VerifySheet, Dx1Check as Dx1CheckResult } from "@/lib/types";
 import { VerifySidebarFields } from "@/components/VerifySidebarFields";
@@ -50,7 +49,6 @@ import {
   discardEdits,
   refreshFromCrm,
   saveVerifyFields,
-  setCheckerName,
   verifyAndRate,
   voidContract,
   voidOemContract,
@@ -66,6 +64,7 @@ import ProviderAnswer from "@/components/ProviderAnswer";
 import Dx1Check from "@/components/Dx1Check";
 import SaleDateWatch from "@/components/SaleDateWatch";
 import { crmRecordUrl, NO_SALE_DATE_LINE, SUBMIT_HELD_FOR_DATE } from "@/lib/crm-link";
+import { initialsFor } from "@/lib/admin-sections";
 import { sentenceStart, testServerName, vendorName } from "@/lib/vendor";
 import PendingButton from "@/components/PendingButton";
 import LongText from "@/components/LongText";
@@ -346,9 +345,6 @@ export default async function DetailsPage({
     );
   }
 
-  // `checker` is a name for the record, not a permission: see lib/checker.ts.
-  const checker = await currentChecker();
-
   if (!isSessionId(sessionId)) notFound();
 
   let sheet: VerifySheet;
@@ -488,26 +484,8 @@ export default async function DetailsPage({
           </nav>
         </div>
         <div className="console-who">
-          {/* Who is checking this deal. One box, once per device, remembered in a
-              cookie. It is a name on a record and not a sign-in: the endpoint
-              refuses a verification with nobody's name on it, so the name has to
-              come from somewhere, and with no accounts it comes from here. */}
-          <form action={setCheckerName} className="vwho">
-            <Working />
-            <label htmlFor="checker_name">Checked by</label>
-            <input
-              id="checker_name"
-              type="text"
-              name="checker_name"
-              defaultValue={checker}
-              placeholder="Your name"
-              autoComplete="name"
-              aria-label="Your name, recorded on the verification"
-            />
-            <PendingButton pending="Saving your name...">
-              {checker ? "Change" : "Save"}
-            </PendingButton>
-          </form>
+          {/* Who is signed in: everything done here is credited to them. */}
+          <span className="vh-me" title={operator.email}>{initialsFor(operator.email)}</span>
           <form action={refreshFromCrm}>
             <Working />
             <input type="hidden" name="session_id" value={sheet.session.id} />
@@ -1337,9 +1315,6 @@ export default async function DetailsPage({
                 Each presentation opens in its own tab. This screen stays open for changes.
               </p>
             )}
-            {step === "rate" && checker === "" ? (
-              <p className="vfield-note">Put your name in the Checked by box at the top before rating.</p>
-            ) : null}
           </div>
 
           <div className="vnext-do">
@@ -1349,14 +1324,11 @@ export default async function DetailsPage({
               <form action={verifyAndRate} className="vgate">
                 <Working />
                 <input type="hidden" name="session_id" value={sheet.session.id} />
-                {/* The name travels with the button, so typing it and rating in
-                    one motion works. The action writes it back to the cookie. */}
-                <input type="hidden" name="checker_name" value={checker} />
                 <PendingButton
                   className="btn btn--go"
                   working="page"
                   pending="Rating..."
-                  disabled={!sheet.ready || checker === ""}
+                  disabled={!sheet.ready}
                 >
                   Rate
                 </PendingButton>

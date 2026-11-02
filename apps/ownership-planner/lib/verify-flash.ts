@@ -17,7 +17,7 @@
 // nobody meets yesterday's message.
 //
 // No Next imports here, so the encoding and the wording can be tested directly.
-// The same split as console-cookie.ts and checker-name.ts.
+// The same split as console-cookie.ts.
 
 export const VERIFY_FLASH_COOKIE = "docuride_verify_flash";
 
@@ -189,17 +189,6 @@ export function flashMessage(
       return { tone: "ok", text: "Kept the staff value." };
     case "partycrm":
       return { tone: "ok", text: `Now using the CRM value. ${DX1_REMINDER}` };
-    case "needname":
-      return {
-        tone: "bad",
-        text:
-          "Put your name in the Checked by box at the top first. It goes on the " +
-          "record of what was verified, so it cannot be left blank.",
-      };
-    case "who":
-      return { tone: "ok", text: "Saved. This device will remember it." };
-    case "whocleared":
-      return { tone: "ok", text: "Name cleared." };
     case "discarded":
       return {
         tone: "ok",

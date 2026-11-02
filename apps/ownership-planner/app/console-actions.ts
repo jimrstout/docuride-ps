@@ -17,12 +17,6 @@ import {
   currentOperator,
   mintConsoleCookie,
 } from "@/lib/admin-session";
-import {
-  CHECKER_COOKIE,
-  CHECKER_COOKIE_OPTIONS,
-  checkerFor,
-  cleanCheckerName,
-} from "@/lib/checker";
 import { ratingInputsFrom } from "@/lib/verify-fields";
 import { ADMIN_HOME, initialsFor, safeStaffPath, withNotice } from "@/lib/admin-sections";
 
@@ -262,33 +256,19 @@ export async function copyPricingRules(formData: FormData): Promise<void> {
 // and a Confirm button that is enabled or is not. Confirm and Continue is the
 // exception: it leaves for the presentation, which is the whole point of it.
 //
-// ── No sign-in here (2026-09-27) ─────────────────────────────────────────
-// These used to re-check the console operator and bounce to the sign-in page.
-// They no longer do. The CRM button opens this screen directly and the thing
-// that protects it is the same thing that protects the presentation: holding an
-// unguessable session link.
-//
-// What did NOT move: the session browser and the settings screen still require
-// a sign-in. They list twenty-five deals' worth of buyer names, addresses and
-// phone numbers across the whole store, which is a different exposure from one
-// deal to whoever was sent that deal's link.
-//
-// Voiding a contract and clearing Submit Status Unknown also still require a
-// sign-in, and they are further down this file. They reach TecAssured and undo
-// real paperwork, and they are not part of the flow being simplified.
+// ── Signed in, and credited to whoever is (2026-11-02) ───────────────────
+// Details is signed in (the page shows the sign-in form otherwise), and the
+// Edge Functions check the sign-in themselves. fni-session-verify credits the
+// signed-in person's initials on every action it records, from the sign-in,
+// not from anything posted. The Checked by box that used to supply a name is
+// gone; the initials sent below are for the older function versions' sake
+// and say the same thing.
 
-/** Remember who is at this desk. Attribution, not authorisation: see lib/checker.ts. */
-export async function setCheckerName(formData: FormData): Promise<void> {
-  const sessionId = String(formData.get("session_id") ?? "");
-  const name = cleanCheckerName(formData.get("checker_name"));
-
-  const jar = await cookies();
-  if (name === "") jar.delete(CHECKER_COOKIE);
-  else jar.set(CHECKER_COOKIE, name, CHECKER_COOKIE_OPTIONS);
-
-  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
-  revalidatePath(`/details/${sessionId}`);
-  return backToVerify(sessionId, name === "" ? "whocleared" : "who");
+/** The signed-in person's initials, or back to Details (which shows the sign-in form). */
+async function signedInInitials(sessionId: string): Promise<string> {
+  const operator = await currentOperator();
+  if (!operator) redirect(`/details/${sessionId}`);
+  return initialsFor(operator.email);
 }
 
 /**
@@ -353,20 +333,15 @@ async function verifyAction(
  * original value back.
  */
 export async function saveVerifyFields(formData: FormData): Promise<void> {
-  const who = await checkerFor(formData);
   const sessionId = String(formData.get("session_id") ?? "");
-  if (who === "") {
-    // The endpoint refuses an unnamed edit, and it is right to. Said here so the
-    // person gets the sentence they need rather than the endpoint's.
-    if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
-    return backToVerify(sessionId, "needname");
-  }
+  if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
+  const who = await signedInInitials(sessionId);
 
   // Only the known rating inputs. A Server Action form also carries React's own
   // hidden $ACTION_ID field, and forwarding it made the endpoint refuse the
   // whole save with "These fields cannot be edited here: $ACTION_ID_...". See
-  // lib/verify-fields.ts. session_id is the address and checker_name is who is
-  // typing; neither is a value on the deal, and neither is in the list.
+  // lib/verify-fields.ts. session_id is the address, not a value on the deal,
+  // and it is not in the list.
   const entries = ratingInputsFrom(formData.entries());
 
   await verifyAction(
@@ -439,9 +414,7 @@ async function partyAction(
 ): Promise<void> {
   const sessionId = String(formData.get("session_id") ?? "");
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
-  const operator = await currentOperator();
-  if (!operator) return backToVerify(sessionId, "refused", "Sign in to change who goes on the contracts.");
-  const who = (await checkerFor(formData)) || operator.email;
+  const who = await signedInInitials(sessionId);
   await verifyAction(formData, (session_id) => ({ ...body(session_id), edited_by: who }), onOk);
 }
 
@@ -500,20 +473,14 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
   const sessionId = String(formData.get("session_id") ?? "");
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
-  const who = await checkerFor(formData);
-  if (who === "") return backToVerify(sessionId, "needname");
-
-  // Typing the name and pressing Confirm in one go should not make the person
-  // type it again on the next deal.
-  const jar = await cookies();
-  jar.set(CHECKER_COOKIE, who, CHECKER_COOKIE_OPTIONS);
+  const who = await signedInInitials(sessionId);
 
   try {
     await edge.verifyAction<unknown>({
       session_id: sessionId,
       action: "verify",
-      // Whoever said they were checking it. The gate refuses an unnamed
-      // verification, because a verification with nobody's name on it is not one.
+      // The signed-in person. fni-session-verify takes it from the sign-in
+      // itself; this says the same for an older version of the function.
       verified_by: who,
     });
   } catch (err) {
@@ -724,7 +691,7 @@ export async function submitContracts(formData: FormData): Promise<void> {
       // Ticked when contract details were changed on Details: the person
       // confirms DX1 matches. The Edge Function refuses without it then.
       ...(formData.get("dx1_confirmed") === "1"
-        ? { dx1_confirmed: true, confirmed_by: (await checkerFor(formData)) || operator.email }
+        ? { dx1_confirmed: true, confirmed_by: initialsFor(operator.email) }
         : {}),
     });
     const numbers = (done.contracts ?? []).map((c) => c.contract_number ?? "no number").join(", ");

@@ -33,7 +33,8 @@ test("the sessions list button reads Details", () => {
 });
 
 test("the verification step keeps its own wording", () => {
-  assert.match(page, /Checked by/);
+  // Checked by is gone: the signed-in person is recorded (2026-11-02).
+  assert.doesNotMatch(page, /Checked by/);
   // The button is Rate now (2026-11-02), and Rate again once rated.
   assert.match(page, />\s*Rate\s*<\/PendingButton>/);
   assert.doesNotMatch(page, /Confirm and Continue/);
