@@ -104,6 +104,12 @@ test("the workflow never passes --no-verify-jwt", () => {
   assert.match(WORKFLOW, /verify_jwt comes from/);
 });
 
+test("the deploy confirms itself, so a CLI that asks first still deploys", () => {
+  // Newer Supabase CLIs ask before a production deploy and, with no terminal,
+  // refuse and change nothing. Run 91 failed that way for every function.
+  assert.match(INSTRUCTIONS, /supabase functions deploy "\$slug" --project-ref "\$PROJECT_REF" --yes/);
+});
+
 test("the workflow runs the tests before it deploys", () => {
   const testStep = INSTRUCTIONS.indexOf("npm test");
   const deployStep = INSTRUCTIONS.indexOf("supabase functions deploy");
