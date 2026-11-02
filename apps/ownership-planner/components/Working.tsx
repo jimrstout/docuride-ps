@@ -30,7 +30,10 @@
 import { createContext, useContext, useEffect, useRef, useSyncExternalStore } from "react";
 import { useFormStatus } from "react-dom";
 import {
+  caughtUp,
   jobFor,
+  RENDER_STAMP_ATTR,
+  RENDER_WAIT_MS,
   restoreFields,
   snapshotFields,
   STILL_WORKING,
@@ -53,6 +56,10 @@ interface Running extends WorkingJob {
   resultsBefore: Set<string>;
   /** Set by resend(): the form's own work is done and its one real send may go. */
   resendAllowed: boolean;
+  /** The page's render marker when the action started, or null if it has none. */
+  renderBefore: string | null;
+  /** Already waiting for the new render: a second "the form ended" changes nothing. */
+  waiting?: boolean;
 }
 
 interface Result {
@@ -85,6 +92,11 @@ function subscribe(l: () => void) {
   return () => {
     listeners.delete(l);
   };
+}
+
+/** The page's render marker (components/RenderStamp), or null if it has none. */
+function renderStamp(): string | null {
+  return document.querySelector<HTMLElement>(`[${RENDER_STAMP_ATTR}]`)?.getAttribute(RENDER_STAMP_ATTR) ?? null;
 }
 
 /** The ids of the result lines (flash notices) on the page right now. */
@@ -122,6 +134,7 @@ function begin(job: WorkingJob, form: HTMLFormElement, submitter: HTMLElement | 
     kept: snapshotFields(Array.from(form.elements) as unknown as ControlLike[]),
     resultsBefore: resultIds(),
     resendAllowed: false,
+    renderBefore: renderStamp(),
   };
   for (const t of timers) clearTimeout(t);
   timers = [
@@ -144,9 +157,53 @@ const RESULT_WATCH_MS = 15_000;
 function finish() {
   const r = state.running;
   if (!r) return;
+  watcher?.disconnect();
+
+  // ── A page with a render marker: wait for the new render ──────────────
+  // The action has answered, but its answer is not on the screen until the
+  // page it redirected to has been drawn, which can take seconds more (Details
+  // reads the CRM and the DX1 check as it renders). Ending at the answer, or
+  // when the page went quiet, dropped the spinner while the old figures were
+  // still showing, and invited a second press. So the job, its spinner, its
+  // overlay and its disabled buttons stay until a new marker is on the page.
+  // "Still working" and the stuck message keep their timers meanwhile.
+  if (r.renderBefore !== null) {
+    if (r.waiting) return;
+    r.waiting = true;
+    let done = false;
+    const settle = () => {
+      if (done || !caughtUp(r.renderBefore, renderStamp())) return;
+      done = true;
+      obs.disconnect();
+      if (watcher === obs) watcher = null;
+      clearTimeout(giveUp);
+      for (const t of timers) clearTimeout(t);
+      timers = [];
+      const res = newResult(r.resultsBefore);
+      if (res && res.tone === "bad" && r.kept.length > 0) {
+        const form = (r.form.id ? (document.getElementById(r.form.id) as HTMLFormElement | null) : null) ??
+          (document.forms[r.formIndex] as HTMLFormElement | undefined) ?? null;
+        if (form) restoreFields(Array.from(form.elements) as unknown as (ControlLike & Element)[], r.kept);
+      }
+      if (state.running === r) {
+        set({ running: null, slow: false, stuck: false, result: res ?? state.result, announce: res ? res.text : "Done." });
+      }
+    };
+    const obs = new MutationObserver(settle);
+    watcher = obs;
+    obs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: [RENDER_STAMP_ATTR] });
+    // Never wait for ever: after this long, end, and the stuck message has
+    // already offered a reload.
+    const giveUp = setTimeout(() => {
+      r.renderBefore = null;
+      settle();
+    }, RENDER_WAIT_MS);
+    requestAnimationFrame(settle);
+    return;
+  }
+
   for (const t of timers) clearTimeout(t);
   timers = [];
-  watcher?.disconnect();
 
   let ended = false;
   let found = false;

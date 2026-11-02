@@ -116,3 +116,26 @@ export function restoreFields<C extends ControlLike>(controls: C[], kept: FieldV
   }
   return changed;
 }
+
+// ── Has the answer reached the screen? ───────────────────────────────────
+//
+// A page that can say so carries one hidden marker, <RenderStamp />, whose
+// value is new on every server render. The busy state remembers the value
+// when the action starts and ends only once a different one is on the page:
+// the new data is drawn, not merely sent. A page without the marker ends the
+// way it always did, when the page has settled.
+
+/** The attribute the marker carries. */
+export const RENDER_STAMP_ATTR = "data-working-render";
+
+/** How long to wait for the new render before giving up and ending anyway. */
+export const RENDER_WAIT_MS = 90_000;
+
+/**
+ * True once the screen shows a render other than the one the action started
+ * on. `before` null means the page has no marker, so there is nothing to wait
+ * for. A marker that has gone (an error page drew instead) has also moved on.
+ */
+export function caughtUp(before: string | null, now: string | null): boolean {
+  return before === null || now !== before;
+}
