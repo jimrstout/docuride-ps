@@ -629,6 +629,8 @@ export interface TemplateSlotRow {
   category: string | null;
   mode: "Best Match" | "Side by Side";
   product_ids: string[];
+  /** The coverage term this row starts at when no preset sets one. Null: the default rule. */
+  preferred_term_months?: number | null;
 }
 
 export interface TemplateRow {

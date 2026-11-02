@@ -15,7 +15,7 @@ import { resolvedSlotsFor } from "./menu-template-rows.ts";
 import { slotFamilies } from "./menu-templates.ts";
 import type { NormalizedFamily } from "./normalized-offer.ts";
 import type { PricingRule } from "./planner-pricing.ts";
-import { priceFamilies } from "./plan-prices.ts";
+import { priceFamilies, sessionPaymentBasis } from "./plan-prices.ts";
 import { columnsFor, isLevel } from "./menu-columns.ts";
 import { presetDealType, type Preset } from "./menu-presets.ts";
 import { PURCHASED_STATES } from "./purchased.ts";
@@ -43,7 +43,7 @@ export async function loadSheet(supabase: SupabaseClient, s: Record<string, unkn
   }
 
   const financed = presetDealType(s.finance_type) === "Financed";
-  const [{ data: ruleRows }, { data: catalogRows }, { data: columnRows }, { data: presetRows }, { data: priceRows }, { data: agreements }, { data: termRows }] =
+  const [{ data: ruleRows }, { data: catalogRows }, { data: columnRows }, { data: presetRows }, { data: priceRows }, { data: agreements }, { data: termRows }, { data: slotRows }] =
     await Promise.all([
       supabase.schema("fni").from("pricing_rules").select("*")
         .eq("tenant_id", s.tenant_id as string).or(`store_id.eq.${s.store_id},store_id.is.null`).eq("active", true),
@@ -59,6 +59,9 @@ export async function loadSheet(supabase: SupabaseClient, s: Record<string, unkn
       supabase.schema("fni").from("agreements").select("id").eq("session_id", sessionId),
       templateId && financed
         ? supabase.schema("fni").from("menu_preset_terms").select("column_position, slot, term_months, rate_percent").eq("template_id", templateId)
+        : Promise.resolve({ data: [] }),
+      templateId
+        ? supabase.schema("fni").from("menu_template_slots").select("position, category, preferred_term_months").eq("template_id", templateId)
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -115,6 +118,15 @@ export async function loadSheet(supabase: SupabaseClient, s: Record<string, unkn
     }
   }
 
+  // The default coverage term (_shared/menu-presets.ts): each row's preferred
+  // term (the first row of a category that sets one), else the longest within
+  // the finance term, the longest on a cash deal.
+  const preferredTerms: Record<string, number> = {};
+  for (const r of ((slotRows ?? []) as { position: number; category: string | null; preferred_term_months: number | null }[])
+    .slice().sort((a, b) => a.position - b.position)) {
+    if (r.category && r.preferred_term_months && !(r.category in preferredTerms)) preferredTerms[r.category] = r.preferred_term_months;
+  }
+
   const input: SheetInput = {
     families: priced,
     catalog: (catalogRows ?? []) as never,
@@ -128,6 +140,8 @@ export async function loadSheet(supabase: SupabaseClient, s: Record<string, unkn
     purchased_prices: purchasedPrices,
     terms,
     removed: (s.menu_removed ?? {}) as Record<string, string[]>,
+    term_basis: { financed, months: financed ? sessionPaymentBasis(s).termMonths : null },
+    preferred_terms: preferredTerms,
   };
   return { input, sheet: buildSheet(input), out_of_date: outOfDate };
 }

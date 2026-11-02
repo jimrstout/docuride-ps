@@ -102,7 +102,7 @@ export async function readTemplates(supabase: SupabaseClient, tenantId: string, 
     ? await supabase
         .schema("fni")
         .from("menu_template_slots")
-        .select("id, template_id, position, title, category, mode, product_ids")
+        .select("id, template_id, position, title, category, mode, product_ids, preferred_term_months")
         .in("template_id", ids)
         .order("position")
     : { data: [] };

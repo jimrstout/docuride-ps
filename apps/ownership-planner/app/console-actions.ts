@@ -1029,6 +1029,7 @@ export async function saveSlot(fd: FormData): Promise<void> {
       title: field(fd, "title"),
       category: field(fd, "category"),
       mode: field(fd, "mode"),
+      preferred_term_months: field(fd, "preferred_term_months"),
       product_ids: slotProducts(fd),
       updated_by: by,
     }), "saved");

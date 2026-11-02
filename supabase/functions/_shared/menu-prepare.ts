@@ -35,6 +35,7 @@ import {
   type Band,
   type Preset,
   type PresetPlan,
+  type TermBasis,
 } from "./menu-presets.ts";
 
 const cents = (n: number | null | undefined) => (n === null || n === undefined ? null : Math.round(Number(n) * 100));
@@ -151,6 +152,10 @@ export interface SheetInput {
   /** Extra terms per column, already resolved (deal's, else presets'); none on a cash deal. */
   terms?: Record<string, { months: number; rate: number }[]>;
   removed?: Record<string, string[]>;
+  /** The deal's finance term, for the default coverage term (_shared/menu-presets.ts). */
+  term_basis?: TermBasis | null;
+  /** Each menu row's preferred coverage term in months, by category (migration 0049). */
+  preferred_terms?: Record<string, number>;
 }
 
 function surchargesOf(rate: RateVariant, chosen: Set<string>): { cost: number; codes: string[] } {
@@ -323,17 +328,18 @@ export function buildSheet(input: SheetInput): PrepareSheet {
       const ratedByPrice = usable.filter((p) => p.rates.length > 0)
         .sort((a, b) => Math.min(...a.rates.map((r) => r.price ?? Infinity)) - Math.min(...b.rates.map((r) => r.price ?? Infinity)));
       const level = ratedByPrice[levelIndex(col.starting_level, ratedByPrice.length)] ?? null;
+      const term = { preferred: input.preferred_terms?.[category] ?? null, basis: input.term_basis ?? null };
       if (!preset) {
         // No preset: the column's own rule, as before (migration 0042).
         if (!(col.preset_categories as string[]).includes(category) || !level) {
           cells[pos][category] = { key: null, note: null };
         } else {
-          const r = resolvePreset({ column_position: i + 1, category, provider_id: null, plan_name: null, term_months: null, term_miles: null, deductible: null, disappearing_deductible: null }, usable, level);
+          const r = resolvePreset({ column_position: i + 1, category, provider_id: null, plan_name: null, term_months: null, term_miles: null, deductible: null, disappearing_deductible: null }, usable, level, term);
           cells[pos][category] = { key: r.rate?.key ?? null, note: r.note };
         }
         continue;
       }
-      const r = resolvePreset(preset, usable, level);
+      const r = resolvePreset(preset, usable, level, term);
       // A preset naming a service drive plan: that plan is never offered, so
       // the fallback above picked the closest point-of-sale plan. The saved
       // preset is left for a manager to fix in Administration > Menus.

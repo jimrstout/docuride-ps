@@ -134,6 +134,8 @@ export interface SlotFields {
   category: string | null;
   mode: string;
   product_ids: string[];
+  /** The coverage term this row starts at when no preset sets one (migration 0049). Null: the default rule. */
+  preferred_term_months: number | null;
 }
 
 /**
@@ -155,8 +157,11 @@ export function parseSlot(
   if (!(SLOT_MODES as readonly string[]).includes(mode)) errors.push("Show must be Best Match or Side by Side.");
   const productIds = listOf(body.product_ids);
   if (productIds.some((id) => !knownProducts.includes(id))) errors.push("One of those products is not in the catalog.");
+  const termText = text(body.preferred_term_months);
+  const term = termText === "" ? null : Number(termText);
+  if (term !== null && (!Number.isInteger(term) || term < 1 || term > 240)) errors.push("The preferred term is not a number of months.");
   if (errors.length > 0) return { errors };
-  return { fields: { title, category: category === "" ? null : category, mode, product_ids: productIds } };
+  return { fields: { title, category: category === "" ? null : category, mode, product_ids: productIds, preferred_term_months: term } };
 }
 
 /** A plain-English line for a template's conditions, for the list. */
