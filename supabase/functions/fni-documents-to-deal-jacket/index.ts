@@ -35,6 +35,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { staffGate } from "../_shared/staff-gate.ts";
 import { dcDealFolders } from "../_shared/dc-deal-folders.ts";
 import { fileHeldDocuments } from "../_shared/deal-jacket-file.ts";
 import { MISSING_FOLDER_MESSAGE, parseMoveRequest, resolveFolders } from "../_shared/deal-jacket-request.ts";
@@ -61,6 +62,14 @@ serve(async (req: Request) => {
   const parsed = parseMoveRequest(body);
   if ("error" in parsed) return json(400, { error: parsed.error });
   const request = parsed.request;
+
+  // Details asks by session_id: the staff sign-in, covering the deal's tenant
+  // and store (_shared/staff-gate.ts). The CRM asks by record_id or
+  // deal_number with the webhook secret, as before.
+  if (request.session_id) {
+    const refused = await staffGate(req, request.session_id);
+    if (refused) return refused;
+  }
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 

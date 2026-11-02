@@ -17,6 +17,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { staffGate } from "../_shared/staff-gate.ts";
 import { KEY_SECRET, MISSING_KEY_MESSAGE } from "../_shared/anthropic-price-sheet.ts";
 import { parseSheet } from "../_shared/price-sheet-parse.ts";
 
@@ -35,6 +36,9 @@ serve(async (req: Request) => {
   if (!secretsMatch(req.headers.get("x-webhook-secret"), Deno.env.get("FNI_WEBHOOK_SECRET"))) {
     return json(401, { error: "Unauthorized" });
   }
+  // The staff sign-in: a platform admin, since this spans every tenant (_shared/staff-gate.ts).
+  const refused = await staffGate(req, null);
+  if (refused) return refused;
   if (req.method !== "POST") return json(405, { error: "POST only" });
 
   let body: Record<string, unknown>;

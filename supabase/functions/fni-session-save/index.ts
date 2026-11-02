@@ -56,6 +56,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { staffGate } from "../_shared/staff-gate.ts";
 import { SESSION_MODES, isSessionMode } from "../_shared/session-mode.ts";
 import { currentRows, familiesFromRows, type RatingRow } from "../_shared/rating-summary.ts";
 import { offerRowsFor, tecAssuredProviderId } from "../_shared/provider-rows.ts";
@@ -278,6 +279,9 @@ serve(async (req: Request) => {
   if (!sessionId || !UUID_RE.test(sessionId)) {
     return json(400, { error: "A well-formed session_id is required" });
   }
+  // The staff sign-in, covering this deal's tenant and store (_shared/staff-gate.ts).
+  const refused = await staffGate(req, sessionId);
+  if (refused) return refused;
 
   if (body.mode !== undefined && !isSessionMode(body.mode)) {
     return json(400, { error: `mode must be one of ${SESSION_MODES.join(", ")}` });

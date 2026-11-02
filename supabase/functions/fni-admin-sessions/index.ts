@@ -28,6 +28,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { staffGate } from "../_shared/staff-gate.ts";
 import { currentRows, ratingSummary, type RatingFailure, type RatingRow } from "../_shared/rating-summary.ts";
 
 /** The columns the console renders. Explicit, so a new PII column on the table
@@ -208,6 +209,9 @@ serve(async (req: Request) => {
   const url = new URL(req.url);
 
   if (!authorized(req, url)) return json(401, { error: "Unauthorized" });
+  // The staff sign-in: a platform admin, since this spans every tenant (_shared/staff-gate.ts).
+  const refused = await staffGate(req, null);
+  if (refused) return refused;
 
   try {
     if (req.method === "GET") return await list(url);

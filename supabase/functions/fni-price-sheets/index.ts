@@ -26,6 +26,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { staffGate } from "../_shared/staff-gate.ts";
 import { BUCKET, fileTypeFor, parseRateEdit, parseUpload, safeFileName } from "../_shared/price-sheet-admin.ts";
 import { checkRates, datesOverlap, publishRefusal, type CheckedRate } from "../_shared/price-sheet-checks.ts";
 import { newCatalogRows, type SheetProduct } from "../_shared/oem-contracts.ts";
@@ -261,6 +262,9 @@ serve(async (req: Request) => {
   if (!secretsMatch(req.headers.get("x-webhook-secret"), Deno.env.get("FNI_WEBHOOK_SECRET"))) {
     return json(401, { error: "Unauthorized" });
   }
+  // The staff sign-in: a platform admin, since this spans every tenant (_shared/staff-gate.ts).
+  const refused = await staffGate(req, null);
+  if (refused) return refused;
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   try {

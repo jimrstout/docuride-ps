@@ -37,6 +37,7 @@ import { serviceDriveLines } from "../_shared/service-drive.ts";
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { staffGate } from "../_shared/staff-gate.ts";
 import { loadSheet } from "../_shared/menu-prepare-rows.ts";
 import { checkPreparation, optionFor, type Preparation } from "../_shared/menu-prepare.ts";
 import { sessionCap, sessionPaymentBasis } from "../_shared/plan-prices.ts";
@@ -109,6 +110,9 @@ serve(async (req: Request) => {
     if (req.method === "GET") {
       const id = url.searchParams.get("session_id") ?? "";
       if (!UUID.test(id)) return json(400, { error: "A well-formed session_id is required" });
+      // The staff sign-in, covering this deal's tenant and store (_shared/staff-gate.ts).
+      const refused = await staffGate(req, id);
+      if (refused) return refused;
       const s = await session(supabase, id);
       if (!s) return json(404, { error: "Session not found" });
       return await reply(supabase, s);
@@ -123,6 +127,9 @@ serve(async (req: Request) => {
     }
     const id = typeof body.session_id === "string" ? body.session_id : "";
     if (!UUID.test(id)) return json(400, { error: "A well-formed session_id is required" });
+    // The staff sign-in, covering this deal's tenant and store (_shared/staff-gate.ts).
+    const refused = await staffGate(req, id);
+    if (refused) return refused;
     const s = await session(supabase, id);
     if (!s) return json(404, { error: "Session not found" });
     const who = renewedBy(body.set_by);
