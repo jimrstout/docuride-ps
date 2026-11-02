@@ -48,9 +48,7 @@ test("the Actions column is narrow, and the list fits a laptop screen", () => {
   const block = css.slice(css.indexOf("/* ── Sessions on one screen"));
   assert.match(block, /#ad-sessions th:nth-child\(8\) \{ width: 88px; \}/);
   assert.match(block, /#ad-sessions \{ table-layout: fixed; \}/);
-  // The page is the window; only the table scrolls, inside its panel, when
-  // there are more sessions than fit, with its header pinned.
+  // The page is the window; more sessions than fit are paged, not scrolled
+  // (test/sessions-paging.test.mjs).
   assert.match(block, /\.ad:has\(#ad-sessions\) \{ height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; \}/);
-  assert.match(block, /\.ad:has\(#ad-sessions\) \.ad-scroll:has\(#ad-sessions\) \{ flex: 1 1 auto; min-height: 0; overflow: auto; \}/);
-  assert.match(block, /#ad-sessions thead th \{ position: sticky; top: 0; z-index: 1; \}/);
 });

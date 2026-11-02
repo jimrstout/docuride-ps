@@ -3,12 +3,14 @@
 // components/admin/SessionFilters.tsx: search and filters for the session list.
 //
 // Client-side, over the rows the page already loaded. Each row carries what it
-// is filtered on as data attributes, and this hides the rows that do not
-// match. Nothing is fetched and nothing is sent anywhere. Without JavaScript
-// the controls do nothing and every row stays visible, which is the list as
-// it was.
+// is filtered on as data attributes, and this marks each row as matching or
+// not (data-match) and says so (FILTERED_EVENT). SessionPager then shows the
+// matching rows a page at a time, starting again at page 1. Nothing is
+// fetched and nothing is sent anywhere. Without JavaScript the controls do
+// nothing and every row stays visible, which is the list as it was.
 
 import { useEffect, useState } from "react";
+import { FILTERED_EVENT } from "./SessionPager";
 
 export interface FilterOption {
   value: string;
@@ -17,13 +19,11 @@ export interface FilterOption {
 
 export function SessionFilters({
   tableId,
-  countId,
   stores,
   statuses,
   ratings,
 }: {
   tableId: string;
-  countId: string;
   stores: FilterOption[];
   statuses: FilterOption[];
   ratings: FilterOption[];
@@ -33,10 +33,12 @@ export function SessionFilters({
   const [status, setStatus] = useState("");
   const [rating, setRating] = useState("");
 
+  // Filters first, then paging: mark the rows, and the pager shows the
+  // matching ones from page 1.
+  const [first, setFirst] = useState(true);
   useEffect(() => {
     const rows = document.querySelectorAll<HTMLTableRowElement>(`#${tableId} tbody tr[data-row]`);
     const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    let shown = 0;
     rows.forEach((tr) => {
       const d = tr.dataset;
       const ok =
@@ -44,22 +46,14 @@ export function SessionFilters({
         (status === "" || d.status === status) &&
         (rating === "" || d.rating === rating) &&
         words.every((w) => (d.search ?? "").includes(w));
-      tr.hidden = !ok;
-      if (ok) shown += 1;
+      tr.dataset.match = ok ? "1" : "0";
     });
-    // One line in place of the rows when the filters leave none.
-    document
-      .querySelectorAll<HTMLTableRowElement>(`#${tableId} tbody tr[data-none]`)
-      .forEach((tr) => (tr.hidden = shown !== 0 || rows.length === 0));
-    const count = document.getElementById(countId);
-    if (count) {
-      const total = rows.length;
-      count.textContent =
-        shown === total
-          ? `${total} ${total === 1 ? "session" : "sessions"}`
-          : `${shown} of ${total} sessions`;
-    }
-  }, [q, store, status, rating, tableId, countId]);
+    // The pager lays out the first page on its own; after that, every change
+    // of filter sends it back to page 1.
+    if (first) setFirst(false);
+    else window.dispatchEvent(new Event(FILTERED_EVENT));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, store, status, rating, tableId]);
 
   return (
     <div className="ad-toolbar" role="search">
