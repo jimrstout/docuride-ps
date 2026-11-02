@@ -26,5 +26,7 @@ test("every link to a /plan/ page opens a new tab with rel=noopener", () => {
       assert.match(m[0], /rel="noopener"/, `${f}: ${m[0]}`);
     }
   }
-  assert.ok(found >= 2, `expected the sessions list and the deal page, found ${found}`);
+  // Only the deal page opens the presentations now; the sessions list goes to
+  // Details (test/sessions-one-way-in.test.mjs).
+  assert.ok(found >= 1, `expected the deal page, found ${found}`);
 });

@@ -126,7 +126,8 @@ test("the old pages keep no copy of their own", () => {
   assert.match(sessions, /edge\.adminSessions<ConsoleListPayload>\(LIMIT\)/);
   // Renew for Today is retired (migration 0044): sessions run through their CRM sale date.
   assert.doesNotMatch(sessions, /renewSession|Renew for Today|renewable/);
-  assert.match(sessions, /rateSession/);
+  // Rating starts on Details now: the list's own Rate is gone (test/sessions-one-way-in.test.mjs).
+  assert.doesNotMatch(sessions, /rateSession/);
   const wording = src("app/admin/wording/page.tsx");
   assert.match(wording, /<form action=\{saveSettings\} className="ad-form">/);
   assert.doesNotMatch(src("app/page.tsx"), /edge\.|currentOperator/);

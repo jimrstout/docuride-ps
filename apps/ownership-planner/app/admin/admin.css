@@ -429,3 +429,55 @@
 @media (max-width: 900px) { .ad .ad-preset-row { grid-template-columns: 1fr 1fr; } }
 .ad .ad-preset-terms { grid-template-columns: minmax(9rem, 1.2fr) minmax(8rem, 1fr) repeat(2, minmax(16rem, 2fr)); }
 .ad .ad-term-pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2, 8px); }
+
+/* ── Sessions on one screen ──────────────────────────────────────────────
+   Every row has one way in, Open, and the deal number and vehicle are links
+   to the same place: the deal's Details. The Actions column is only as wide
+   as Open. On a laptop the page is exactly the window: the heading and the
+   filters stay put, and when the list holds more sessions than fit, the
+   table scrolls inside its panel with its header pinned, never the page. A
+   phone keeps the ordinary scrolling page and its card layout. */
+.ad-rowlink { color: inherit; text-decoration: none; }
+.ad-rowlink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.ad-rowlink:focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; border-radius: 2px; }
+#ad-sessions td.ad-row-actions { white-space: nowrap; }
+
+@media (min-width: 900px) {
+  /* One line each, the whole text in the tooltip: two-line rows. */
+  /* Fixed columns: the table is never wider than its panel, and long text
+     is clipped inside its own column, the whole of it in the tooltip. */
+  #ad-sessions { table-layout: fixed; }
+  #ad-sessions th:nth-child(1) { width: 6%; }
+  #ad-sessions th:nth-child(2) { width: 25%; }
+  #ad-sessions th:nth-child(3) { width: 16%; }
+  #ad-sessions th:nth-child(4) { width: 8%; }
+  #ad-sessions th:nth-child(5) { width: 14%; }
+  #ad-sessions th:nth-child(6) { width: 10%; }
+  #ad-sessions th:nth-child(7) { width: 13%; }
+  #ad-sessions th:nth-child(8) { width: 88px; }
+  #ad-sessions tr[data-row] > td { overflow: hidden; }
+  #ad-sessions td.ad-vehicle .ad-rowlink,
+  #ad-sessions .ad-clip,
+  #ad-sessions tr[data-row] td small { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* The expiry wraps rather than lose its date. */
+  #ad-sessions tr[data-row] td[data-label="Expires"] small { white-space: normal; }
+  #ad-sessions td { padding: 10px 14px; }
+  #ad-sessions th { padding: 9px 14px; }
+  #ad-sessions tr.ad-why-row > td { padding: 0 14px 10px; }
+  #ad-sessions td small { margin-top: 2px; }
+}
+
+@media (min-width: 900px) and (min-height: 600px) {
+  .ad:has(#ad-sessions) { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+  .ad:has(#ad-sessions) .ad-body { height: 100%; display: flex; flex-direction: column; }
+  .ad:has(#ad-sessions) .ad-top { flex: none; }
+  .ad:has(#ad-sessions) .ad-main {
+    flex: 1 1 auto; min-height: 0; width: 100%;
+    display: flex; flex-direction: column; gap: 14px; padding: 22px 32px 18px;
+  }
+  .ad:has(#ad-sessions) .ad-main > * { flex: none; }
+  .ad:has(#ad-sessions) .ad-panel:has(#ad-sessions) { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .ad:has(#ad-sessions) .ad-panel:has(#ad-sessions) > * { flex: none; }
+  .ad:has(#ad-sessions) .ad-scroll:has(#ad-sessions) { flex: 1 1 auto; min-height: 0; overflow: auto; }
+  #ad-sessions thead th { position: sticky; top: 0; z-index: 1; }
+}

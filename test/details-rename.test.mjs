@@ -27,9 +27,10 @@ test("the tab, the breadcrumb and the heading say Details and the deal number", 
   assert.match(page, /<h1 className="sr-only">Deal \{sheet\.session\.deal_number \?\? "\(no number\)"\} details<\/h1>/);
 });
 
-test("the sessions list button reads Details", () => {
+test("the sessions list's one button reads Open and goes to Details", () => {
+  // One way in since 2026-11-02 (test/sessions-one-way-in.test.mjs).
   const s = src("app/admin/sessions/page.tsx");
-  assert.match(s, /href=\{`\/details\/\$\{row\.id\}`\} prefetch=\{false\}>\s*Details\s*<\/Link>/);
+  assert.match(s, /href=\{`\/details\/\$\{row\.id\}`\} prefetch=\{false\}>\s*Open\s*<\/Link>/);
 });
 
 test("the verification step keeps its own wording", () => {
