@@ -63,6 +63,10 @@ verify_jwt = false
 [functions.fni-rate-vehicle]
 verify_jwt = false
 
+# Started only by the database, with a one-time token (migration 0050).
+[functions.fni-rate-probe]
+verify_jwt = false
+
 [functions.fni-contract-submit]
 verify_jwt = false
 
