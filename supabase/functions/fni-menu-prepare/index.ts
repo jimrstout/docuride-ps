@@ -53,7 +53,7 @@ export const BELOW_BAND_EVENT = "Price below the band allowed by a manager on Pr
 export const UNLOCKED_EVENT = "Returned to Prepare menu after the customer chose a package";
 export const RESET_EVENT = "Menu reset to the prepared state";
 export const LOCKED =
-  "The customer chose a package, so its prices are locked. Return to Prepare menu to change them; that is recorded on the deal.";
+  "The customer chose a package, so its prices are locked. Return to Prepare presentation to change them; that is recorded on the deal.";
 export const NEEDS_MANAGER = "A price outside the staff range needs a manager to sign in and give a reason.";
 
 function json(status: number, body: unknown): Response {
@@ -247,6 +247,6 @@ serve(async (req: Request) => {
     return await reply(supabase, (await session(supabase, id))!, 200, { saved: true });
   } catch (err) {
     console.error("fni-menu-prepare error", { kind: err instanceof Error ? err.name : "error" });
-    return json(500, { error: "Prepare menu is unavailable right now. Try again shortly." });
+    return json(500, { error: "Prepare presentation is unavailable right now. Try again shortly." });
   }
 });

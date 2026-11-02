@@ -11,7 +11,7 @@
 
 export const RATING_OUT_OF_DATE =
   "The rating is out of date because something it was rated on has changed, such as the sale date. " +
-  "Press Confirm and Continue on Details to rate the deal again before submitting.";
+  "Press Rate on Details to rate the deal again before submitting.";
 
 /**
  * On a test session on the QA server an out-of-date rating does not block

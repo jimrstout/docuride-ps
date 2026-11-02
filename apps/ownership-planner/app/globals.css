@@ -1333,6 +1333,119 @@ button { cursor: pointer; }
   .vgate-warn-table td::before { content: attr(data-label) ": "; color: var(--muted); }
 }
 
+/* ── Details on one screen ───────────────────────────────────────────────
+   The status along the top, the next step along the bottom, and between them
+   one panel at a time (components/DetailsTabs). On a laptop nothing scrolls:
+   the page is exactly the window. A panel with more in it than fits (a deal
+   with many contracts) scrolls inside itself rather than pushing the next
+   step off the screen. A phone, or a window shorter than a laptop's, keeps
+   the ordinary scrolling page. */
+
+.vtabs { display: grid; gap: 0; min-width: 0; }
+.vtabs-list {
+  display: flex; flex-wrap: wrap; gap: var(--s1);
+  border-bottom: var(--bw) solid var(--line);
+}
+.vtabs-tab {
+  appearance: none; border: 0; background: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: var(--s2);
+  padding: var(--s2) var(--s3); margin-bottom: -1px;
+  font: inherit; font-size: var(--fs-xs); font-weight: 600; color: var(--ink-soft);
+  border-bottom: 2px solid transparent;
+}
+.vtabs-tab:hover { color: var(--ink); }
+.vtabs-tab.is-here { color: var(--nav); border-bottom-color: var(--copper); }
+.vtabs-tab:focus-visible { outline: 2px solid var(--copper); outline-offset: -2px; }
+.vtabs-badge {
+  font-size: var(--fs-label); font-weight: 600; padding: 1px var(--s2); border-radius: 999px;
+  background: var(--warn-bg); color: var(--warn-fg);
+}
+.vtabs-panel { min-width: 0; padding-top: var(--s3); }
+.vtabs-panel[hidden] { display: none; }
+.vtabs-panel > .vparties { margin-top: 0; }
+.vtabs-panel > .vmenu-levels { margin-top: var(--s3); }
+.vtab-sheet { display: grid; gap: var(--s2); min-width: 0; }
+
+.valerts { display: grid; gap: var(--s2); min-width: 0; }
+.valerts:empty { display: none; }
+.vstate-test dd small { font-weight: 600; color: var(--plain-fg); }
+.vgate-warn > summary { cursor: pointer; margin: 0; }
+.vgate-warn[open] > summary { margin-bottom: var(--s3); }
+
+/* The next step: what it does on the left, the buttons on the right. */
+.vnext {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: var(--s2) var(--s4); padding: var(--s3) var(--s4);
+  background: var(--panel); border: var(--bw) solid var(--line);
+  border-radius: var(--r-md); box-shadow: var(--shadow-panel);
+}
+.vnext-say { flex: 1 1 22rem; display: grid; gap: 2px; min-width: 0; }
+.vnext-say .vgate-was { padding: 0; border: 0; }
+.vnext-say .vgate-say { font-size: var(--fs-xs); }
+.vnext-say .vfield-note { margin: 0; }
+.vnext-do { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); }
+.vnext-do form { margin: 0; }
+.vnext .vgate { all: unset; display: contents; }
+.vh .vnext .btn { min-height: 2.5rem; padding: var(--s2) var(--s4); font-size: var(--fs-xs); }
+.vh .vnext .btn--go { font-size: var(--fs-base); }
+.vnext .btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.vnext-why { flex: 1 1 100%; margin: 0; text-align: right; font-size: var(--fs-xs); color: var(--ink-soft); }
+
+@media (min-width: 900px) and (min-height: 600px) {
+  .vh--fit { height: 100vh; height: 100dvh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .vh--fit .vh-top { position: static; flex: none; min-height: 52px; padding: var(--s1) 24px; }
+  .vh--fit .console--verify {
+    flex: 1 1 auto; min-height: 0; width: 100%; max-width: 1600px;
+    display: flex; flex-direction: column; gap: var(--s2); padding: var(--s2) 24px var(--s3);
+  }
+  .vh--fit .vstate { flex: none; gap: var(--s1) var(--s5); }
+  /* The notices take what they need, up to a third of the window, and
+     scroll inside that if there are many at once. */
+  .vh--fit .valerts { flex: none; max-height: 33vh; overflow: auto; }
+  .vh--fit .vtabs { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .vh--fit .vtabs-list { flex: none; }
+  .vh--fit .vtabs-panel { flex: 1 1 auto; min-height: 0; overflow: auto; padding-top: var(--s2); }
+  .vh--fit .vnext { flex: none; flex-wrap: nowrap; padding: var(--s2) var(--s4); }
+  .vh--fit .vnext-say { flex: 1 1 auto; }
+  .vh--fit .vnext-do { flex: none; max-width: 70%; }
+
+  /* The sheet: four columns, the vehicle across two of them with its fields
+     side by side, so every field is on the screen at once. */
+  .vh--fit .vworkspace { grid-template-columns: minmax(0, 1fr); }
+  .vh--fit .vworkspace:has(.vattention) { grid-template-columns: 14rem minmax(0, 1fr); align-items: start; }
+  .vh--fit .vattention { position: static; grid-row: auto; }
+  .vh--fit .vsheet {
+    grid-column: auto; grid-row: auto;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-areas: "deal vehicle vehicle money" "customer vehicle vehicle money";
+    align-items: start; gap: var(--s2);
+  }
+  .vh--fit .vgroup--deal     { grid-area: deal; }
+  .vh--fit .vgroup--vehicle  { grid-area: vehicle; }
+  .vh--fit .vgroup--money    { grid-area: money; }
+  .vh--fit .vgroup--customer { grid-area: customer; }
+  .vh--fit .vgroup--vehicle .vgroup-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vh--fit .vgroup--vehicle .vfield--vtype { grid-column: 1 / -1; border-bottom: var(--bw) solid var(--line); }
+  .vh--fit .vgroup--vehicle .vfield:nth-last-child(2) { border-bottom: 0; }
+  .vh--fit .vgroup-head { padding: var(--s1) var(--s3); }
+  .vh--fit .console--verify .vgroup .vfield {
+    min-height: 2.25rem; padding: 3px var(--s3);
+    grid-template-columns: minmax(5.5rem, 44%) minmax(0, 1fr); column-gap: var(--s2);
+  }
+  .vh--fit .vfield-label { font-size: 0.78rem; }
+  .vh--fit .vfield--vtype { padding: var(--s2) var(--s3); }
+  .vh--fit .vtype { padding: var(--s1) var(--s2) var(--s2); }
+  .vh--fit .vtype legend { font-size: var(--fs-xs); }
+  .vh--fit .vtype-choices { gap: var(--s1); }
+  .vh--fit .vtype-choice { padding: 1px var(--s2); font-size: var(--fs-xs); }
+  .vh--fit .vtype-line { margin-top: var(--s1); }
+  .vh--fit input[type="text"], .vh--fit input[type="tel"], .vh--fit input[type="email"], .vh--fit select { min-height: 1.9rem; }
+  .vh--fit .vtools { grid-column: 1 / -1; grid-row: auto; }
+  .vh--fit .vh-details { flex: 0 1 auto; }
+  .vh--fit .vparties-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .vh--fit .vparties .vfield { min-height: 2.25rem; padding: 3px var(--s3); }
+}
+
 /* TecAssured's program name next to our product name. Staff screens only:
    it tells twins apart (UTV, On-Road and Off-Road MC versions). */
 .prog-label {

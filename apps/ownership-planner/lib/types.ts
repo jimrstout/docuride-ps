@@ -501,6 +501,8 @@ export interface VerifySheet {
   /** The conventional menu's columns for this deal, with each one's coverage level. */
   menu_columns?: { position: number; name: string; template_level: string; level: string }[];
   menu_template?: { name: string } | null;
+  /** Prepare presentation saved for this deal: when, and who. Null until then. */
+  prepared?: { at: string; by: string | null } | null;
   /** Menu slots hidden from the customer on this deal, with why, for staff. */
   hidden_slots?: { title: string; note: string | null }[];
   /** The customer's OEM selections, whose contracts staff record here. */

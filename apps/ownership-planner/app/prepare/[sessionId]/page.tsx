@@ -1,4 +1,5 @@
-// app/prepare/[sessionId]/page.tsx: Prepare menu, on the staff side.
+// app/prepare/[sessionId]/page.tsx: Prepare presentation (once Prepare menu),
+// on the staff side. The address is still /prepare/<session id>.
 //
 // Reached from Details before presenting (docs/multi-provider.md section 25).
 // Columns across, categories down: each cell starts from the preset, with its
@@ -17,6 +18,9 @@ import Prepare from "./Prepare";
 import "./prepare.css";
 
 export const dynamic = "force-dynamic";
+
+/** The screen's name in the tab. No deal number: that would show signed out too. */
+export const metadata = { title: "Prepare presentation" };
 
 function Plain({ title, body, back }: { title: string; body: string; back?: string }) {
   return (
@@ -57,13 +61,13 @@ export default async function PreparePage({
   } catch (err) {
     if (err instanceof EdgeError && err.status === 404) return <Plain title="We couldn't find this deal" body="Open it again from Details." />;
     console.error("prepare menu load failed:", { session: sessionId });
-    return <Plain title="Prepare menu is unavailable right now" body="Try again in a moment." back={`/details/${sessionId}`} />;
+    return <Plain title="Prepare presentation is unavailable right now" body="Try again in a moment." back={`/details/${sessionId}`} />;
   }
   if (payload.out_of_date || payload.sheet.categories.length === 0) {
     return (
       <Plain
         title="There is nothing to prepare yet"
-        body="The deal needs a current rating first. Press Confirm and Continue on Details, then come back."
+        body="The deal needs a current rating first. Press Rate on Details, then come back."
         back={`/details/${sessionId}`}
       />
     );

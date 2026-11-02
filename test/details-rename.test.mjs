@@ -34,7 +34,9 @@ test("the sessions list button reads Details", () => {
 
 test("the verification step keeps its own wording", () => {
   assert.match(page, /Checked by/);
-  assert.match(page, /Confirm and Continue/);
+  // The button is Rate now (2026-11-02), and Rate again once rated.
+  assert.match(page, />\s*Rate\s*<\/PendingButton>/);
+  assert.doesNotMatch(page, /Confirm and Continue/);
   assert.match(src("lib/verify-flash.ts"), /Verified and rated\./);
 });
 

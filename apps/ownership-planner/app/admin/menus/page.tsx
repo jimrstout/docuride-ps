@@ -330,7 +330,7 @@ function PresetsPanel({ t, payload, params }: { t: TemplateRow; payload: Templat
       </div>
       <div className="ad-panel-body">
         <p className="ad-help">
-          Each deal starts from these on Prepare menu, and staff can change them there. When a vehicle does not rate
+          Each deal starts from these on Prepare presentation, and staff can change them there. When a vehicle does not rate
           for a preset, the closest term is used, then the next lower plan. If nothing at or below it rated, the cell is
           left empty with a note.
           {canEdit ? null : " Only a manager can change presets."}

@@ -186,7 +186,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
     >
       <header className="pm-head">
         <div>
-          <p className="pm-eyebrow">Prepare menu{session.deal_number ? `, deal ${session.deal_number}` : ""}</p>
+          <p className="pm-eyebrow">Prepare presentation{session.deal_number ? `, deal ${session.deal_number}` : ""}</p>
           <h1>{session.vehicle || "This deal"}</h1>
           <p className="pm-basis">
             {locked
@@ -206,7 +206,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
             Surcharges{state.surcharges.length > 0 ? ` (${state.surcharges.length})` : ""}
           </button>
           {locked ? (
-            <button type="button" className="pm-btn pm-btn--go" onClick={unlock} disabled={pending}>Return to Prepare menu</button>
+            <button type="button" className="pm-btn pm-btn--go" onClick={unlock} disabled={pending}>Return to Prepare presentation</button>
           ) : (
             <button type="button" className="pm-btn pm-btn--go" onClick={onSave} disabled={pending || blocked}>
               {pending ? "Saving..." : "Save"}

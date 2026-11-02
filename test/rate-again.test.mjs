@@ -146,7 +146,8 @@ test("a rating error is shown with Show details and Copy error, and nothing is k
 
 test("a double tap rates once: the busy button sends one request", () => {
   const page = read(PAGE);
-  assert.match(page, /<form action=\{rateAgain\} className="vrate-again" data-working-panel="">\s*<Working \/>\s*<input type="hidden" name="session_id" value=\{sheet\.session\.id\} \/>\s*<PendingButton pending="Rating again\.\.\.">Rate again<\/PendingButton>/);
+  // In the next-step bar now, as the secondary button once rated (2026-11-02).
+  assert.match(page, /<form action=\{rateAgain\} className="vrate-again">\s*<Working \/>\s*<input type="hidden" name="session_id" value=\{sheet\.session\.id\} \/>\s*<PendingButton working="page" pending="Rating again\.\.\.">Rate again<\/PendingButton>/);
   const button = read("apps/ownership-planner/components/PendingButton.tsx");
   assert.match(button, /disabled=\{disabled \|\| busy\}/);
 });

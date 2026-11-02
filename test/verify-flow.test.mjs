@@ -140,8 +140,9 @@ test("voiding a contract and clearing unknown still require a sign-in", () => {
 // 3. Confirm and Continue
 // ─────────────────────────────────────────────────────────────────────────
 
-test("the button says Confirm and Continue", () => {
-  assert.match(page, /Confirm and Continue/);
+test("the button says Rate (once Confirm and Continue)", () => {
+  assert.match(page, />\s*Rate\s*<\/PendingButton>/);
+  assert.doesNotMatch(page, /Confirm and Continue/);
   assert.doesNotMatch(page, /Verify and rate|Verify again and re-rate/);
 });
 
@@ -173,17 +174,14 @@ test("a failed rate still returns to Verify with a flash, not an error page", ()
   assert.match(flash, /Verified and rated\. Open the presentation when you are ready/);
 });
 
-test("Open presentation opens the plan in a new tab, with no handle back", () => {
-  const link = between(page, "<a\n", "</a>");
-  assert.match(link, /href=\{`\/plan\/\$\{sessionId\}`\}/);
+test("Present storyboard (once Open presentation) opens the plan in a new tab, with no handle back", () => {
   // A new tab, so this page stays where it was (navigation fixes, 2026-10-27).
-  assert.match(link, /target="_blank"/);
-  assert.match(link, /rel="noopener"/);
-  assert.match(link, /Open presentation/);
-  // Shown only once verified, rated and current (2026-10-30), and the planner
-  // still opens at step 1.
+  assert.match(page, /<a className="btn btn--go" href=\{`\/plan\/\$\{sessionId\}`\} target="_blank" rel="noopener">\s*Present storyboard\s*<\/a>/);
+  assert.doesNotMatch(page, /Open presentation/);
+  // Live only once verified, rated, current and prepared (2026-11-02), and the
+  // planner still opens at step 1.
   assert.match(page, /presentable = verified && sheet\.rating\.state === "Rated" && !sheet\.rating\.out_of_date/);
-  assert.match(page, /\{presentable \? \(\s*<div className="vgate-open">/);
+  assert.match(page, /const step = nextStep\(presentable, !!sheet\.prepared\);/);
   const planner = src("../apps/ownership-planner/app/plan/[sessionId]/Planner.tsx");
   assert.match(planner, /const \[at, setAt\] = useState\(0\)/);
 });
@@ -259,5 +257,5 @@ test("a name is trimmed, de-newlined and capped before it is recorded", () => {
 
 test("a previously verified session says who verified it and when", () => {
   assert.match(page, /Verified by <b>\{sheet\.verification\.verified_by/);
-  assert.match(page, /The values below are what\s*\n?\s*was verified/);
+  assert.match(page, /\{stamp\(sheet\.verification\.verified_at\)\}\./);
 });

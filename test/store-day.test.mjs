@@ -140,7 +140,9 @@ test("Details: one date line with Open in CRM, no date controls of its own, and 
   assert.match(page, /const dateLine = sheet\.day\?\.date_line \?\? \(sheet\.day && !sheet\.day\.sale_date \? NO_SALE_DATE_LINE : null\);/);
   assert.match(page, /<a className="btn btn--quiet" href=\{crmUrl\} target="_blank" rel="noopener">\s*Open in CRM\s*<\/a>/);
   assert.match(page, /<SaleDateWatch \/>\s*<\/div>\s*\) : null\}/);
-  assert.ok(page.indexOf("{dateLine ? (") < page.indexOf('<dl className="vstate">'));
+  // With the notices, under the status line and above the panels.
+  assert.ok(page.indexOf('<dl className="vstate">') < page.indexOf("{dateLine ? ("));
+  assert.ok(page.indexOf("{dateLine ? (") < page.indexOf("<DetailsTabs"));
   // Live contracts dated otherwise, named in the Contracts panel.
   assert.match(page, /\{sheet\.day!\.contract_date_lines!\.map\(\(l\) => <li key=\{l\}>\{l\}<\/li>\)\}/);
   // Submit says once that it waits for the date, rather than the date again.
