@@ -498,6 +498,16 @@ export class TecAssuredClient {
     });
   }
 
+  /**
+   * The makes this dealer can rate, each with its vehicle type (section 10 of
+   * the API documentation, POST /ps/makes). The spellings are the provider's,
+   * and they differ by vehicle type ("Sea Doo" for PWC, "SeaDoo" for BOAT).
+   * Empty when the dealer code does not support it.
+   */
+  async getMakes(dealerCode?: string): Promise<unknown> {
+    return await this.apiCall("POST", "/ps/makes", { dealerCode: this.dealer(dealerCode) });
+  }
+
   /** The rate request carries its own dealerCode; callers build it from `dealerCode`. */
   async rateVehicle(rateRequest: Record<string, unknown>): Promise<unknown> {
     return await this.apiCall("POST", "/rate", rateRequest);
