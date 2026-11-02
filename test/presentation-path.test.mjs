@@ -91,7 +91,7 @@ test("a manager sets each column's coverage level for this deal on Details", () 
   assert.match(page, /\{presentable && \(sheet\.menu_columns\?\.length \?\? 0\) > 0 \? \(\s*<form action=\{saveMenuLevels\}/);
   assert.match(page, /<select name=\{`level_\$\{c\.position\}`\} defaultValue=\{c\.level\}>/);
   const verify = read("supabase/functions/fni-session-verify/index.ts");
-  assert.match(verify, /if \(action === "menu_levels"\) return await setMenuLevels\(supabase, s, body\.levels\);/);
+  assert.match(verify, /if \(action === "menu_levels"\) return await credited\(await setMenuLevels\(supabase, s, body\.levels\), MENU_LEVELS_EVENT\);/);
   // Only levels that differ from the template's are kept.
   assert.match(verify, /if \(v !== c\.template_level\) levels\[String\(c\.position\)\] = v;/);
   // The menu reads them.

@@ -426,8 +426,10 @@ test("the edits live in their own column, not over the CRM's", () => {
   assert.match(migration, /jsonb_typeof\(staff_edits\) = 'object'/);
 });
 
-test("an edit is refused without a name on it", () => {
-  assert.match(verifyFn, /edited_by is required: an edit names a person\./);
+test("an edit always has a name on it: the signed-in person's initials", () => {
+  // Taken from the staff sign-in the function checked, never from the page
+  // (test/staff-credit.test.mjs), so there is no unnamed edit to refuse.
+  assert.match(verifyFn, /const who = staffInitials\(checked\.staff\.email\);/);
   // The edit itself is built in save-edits.ts, with the same name on it.
   assert.match(verifyFn, /editFor\(target, stored, baseByKey\.get\(key\), edits\[key\], editedBy, now\)/);
   assert.match(saveEditsFn, /edited_by: editedBy/);
