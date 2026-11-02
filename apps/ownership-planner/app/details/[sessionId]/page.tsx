@@ -27,6 +27,7 @@ import HomeLink from "@/components/HomeLink";
 import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { currentOperator } from "@/lib/admin-session";
+import { SignIn, signInNotice } from "@/components/admin/SignIn";
 import { currentChecker } from "@/lib/checker";
 import { edge, EdgeError, isSessionId } from "@/lib/edge";
 import type { FieldGroup, VerifyField, VerifySheet, Dx1Check as Dx1CheckResult } from "@/lib/types";
@@ -288,6 +289,8 @@ export async function generateMetadata({
   params: Promise<{ sessionId: string }>;
 }): Promise<Metadata> {
   const { sessionId } = await params;
+  // Signed out, the tab names no deal: the number is deal data too.
+  if (!(await currentOperator())) return { title: "Sign in" };
   if (!isSessionId(sessionId)) return { title: "Details" };
   try {
     const sheet = await edge.verifySheet<VerifySheet>(sessionId);
@@ -300,19 +303,34 @@ export async function generateMetadata({
 
 export default async function DetailsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ sessionId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  // No sign-in. The CRM button opens this screen directly and what protects it
-  // is holding the session link, the same as the presentation.
-  //
-  // `checker` is a name for the record, not a permission: see lib/checker.ts.
-  // `operator` is still read, but only to decide whether to offer Void, which
-  // reaches TecAssured and undoes real paperwork.
-  const checker = await currentChecker();
-  const operator = await currentOperator();
-
   const { sessionId } = await params;
+
+  // ── Signed-in staff only ───────────────────────────────────────────────
+  // The CRM button opens this screen directly. With nobody signed in on this
+  // browser, the sign-in form stands in its place, before anything about the
+  // deal is read: no number, no buyer, no field. Signing in returns to this
+  // same deal's Details. The Edge Functions refuse the read on their own as
+  // well (supabase/functions/_shared/staff-gate.ts); this is the screen half.
+  const operator = await currentOperator();
+  if (!operator) {
+    return (
+      <WorkingArea>
+        <SignIn
+          notice={signInNotice(await searchParams)}
+          next={isSessionId(sessionId) ? `/details/${sessionId}` : "/admin/sessions"}
+        />
+      </WorkingArea>
+    );
+  }
+
+  // `checker` is a name for the record, not a permission: see lib/checker.ts.
+  const checker = await currentChecker();
+
   if (!isSessionId(sessionId)) notFound();
 
   let sheet: VerifySheet;
@@ -337,12 +355,10 @@ export default async function DetailsPage({
   // the CRM against the live contracts (fni-dx1-check). Refreshed on every
   // load, for signed-in staff. The function answers within 4.5 seconds and
   // never fails loudly; nothing here blocks the page.
-  const dx1Promise: Promise<Dx1CheckResult | null> = operator
-    ? edge.dx1Check<Dx1CheckResult>(sessionId).catch((err) => {
-        console.error(`dx1 check failed for ${sessionId}:`, err instanceof EdgeError ? err.status : "error");
-        return null;
-      })
-    : Promise.resolve(null);
+  const dx1Promise: Promise<Dx1CheckResult | null> = edge.dx1Check<Dx1CheckResult>(sessionId).catch((err) => {
+    console.error(`dx1 check failed for ${sessionId}:`, err instanceof EdgeError ? err.status : "error");
+    return null;
+  });
 
   // ── The automatic VIN decode ─────────────────────────────────────────────
   // Once per session, the first time Verify opens: a VIN, never decoded, never
@@ -438,7 +454,7 @@ export default async function DetailsPage({
     <WorkingArea>
     <div className="vh">
       {/* The house top bar, without the admin sidebar: Details is opened from
-          the CRM and is not part of the signed-in admin area. */}
+          the CRM, so it keeps its own bar, behind the same sign-in. */}
       <header className="vh-top">
         <div className="vh-crumb">
           <h1 className="sr-only">Deal {sheet.session.deal_number ?? "(no number)"} details</h1>
@@ -602,7 +618,7 @@ export default async function DetailsPage({
                   </ul>
                 </div>
               ) : null}
-              {rateAgainAvailable({ signedIn: !!operator, submitState: sheet.submit_state }) ? (
+              {rateAgainAvailable({ signedIn: true, submitState: sheet.submit_state }) ? (
                 // The rating staff run, any time, with the deal's current
                 // inputs (fni-rate-vehicle, rate_again). Never submits.
                 <form action={rateAgain} className="vrate-again" data-working-panel="">
@@ -705,7 +721,6 @@ export default async function DetailsPage({
                 lead={`${sentenceStart(vendor)}'s answer, with its status and request ID, to quote when you check with them.`}
               />
             ) : null}
-            {operator ? (
             <form action={clearSubmitUnknown}>
               <Working />
               <input type="hidden" name="session_id" value={sheet.session.id} />
@@ -718,13 +733,6 @@ export default async function DetailsPage({
                 I have checked with {vendor}
               </PendingButton>
             </form>
-            ) : (
-              <p className="vfield-note">
-                Clearing this needs a sign-in, because it is a statement that
-                somebody checked with {vendor}.{" "}
-                <Link href="/admin/sessions" prefetch={false}>Sign in</Link> to clear it.
-              </p>
-            )}
           </section>
         ) : null}
 
@@ -762,17 +770,13 @@ export default async function DetailsPage({
                       </td>
                       <td className="cell-do">
                         <div className="cell-do-inner">
-                          {/* Void is the one thing on this screen that still needs
-                              a sign-in. It calls TecAssured and cancels real
-                              paperwork, which is not something a session link
-                              should authorise. The contract is still listed either
-                              way, because knowing it exists is what stops somebody
-                              trying to submit it again. */}
+                          {/* Void calls the provider and cancels real paperwork,
+                              so it asks for a reason and a tick. */}
                           {c.status === "Recorded" ? (
                             <small>An OEM contract. Void it under OEM contracts below.</small>
                           ) : !c.contract_number ? (
                             <small>No number to void by. Ask {vendor}.</small>
-                          ) : operator ? (
+                          ) : (
                             <form action={voidContract} className="oem-record">
                               <Working />
                               <input type="hidden" name="session_id" value={sheet.session.id} />
@@ -790,10 +794,6 @@ export default async function DetailsPage({
                               </label>
                               <PendingButton working="page" pending="Voiding..." leave={VOID_LEAVE}>Void</PendingButton>
                             </form>
-                          ) : (
-                            <Link className="btn btn--quiet" href="/admin/sessions" prefetch={false}>
-                              Sign in to void
-                            </Link>
                           )}
                         </div>
                       </td>
@@ -840,7 +840,7 @@ export default async function DetailsPage({
               <p className="console-note">A submit is running for this deal. Reload in a moment to see what came back.</p>
             ) : sheet.submit_state === "Submit Status Unknown" ? (
               <p className="console-note">Submitting is paused until the Submit Status Unknown notice above is cleared.</p>
-            ) : operator ? (
+            ) : (
               // Submit opens a confirmation first, and only Confirm Submit
               // sends (components/SubmitConfirm.tsx). Its figures are the
               // ones the submit sends, from the same rows.
@@ -859,10 +859,6 @@ export default async function DetailsPage({
                   (sheet.contracts_panel.confirmation ? null : "The confirmation could not be loaded. Reload the page to submit.")
                 }
               />
-            ) : (
-              <Link className="btn btn--quiet" href="/admin/sessions" prefetch={false}>
-                Sign in to submit
-              </Link>
             )}
 
             {/* The last submit that did not simply succeed: what the provider said.
@@ -918,7 +914,7 @@ export default async function DetailsPage({
                           {c.void_reason ? `: ${c.void_reason}` : "."}
                         </small>
                       </p>
-                    ) : operator && c.contract_number ? (
+                    ) : c.contract_number ? (
                       <div className="vcontracts-actions">
                         <form action={getContractDocument}>
                           <Working />
@@ -948,7 +944,7 @@ export default async function DetailsPage({
               </ul>
             ) : null}
 
-            {operator && sheet.contracts_panel.waiting_count > 0 ? (
+            {sheet.contracts_panel.waiting_count > 0 ? (
               <form action={moveDocumentsToDealJacket} className="vcontracts-move">
                 <Working />
                 <input type="hidden" name="session_id" value={sheet.session.id} />
@@ -998,8 +994,7 @@ export default async function DetailsPage({
                           ) : null}
                         </small>
                       </p>
-                      {operator ? (
-                        <form action={voidOemContract} className="oem-record">
+                      <form action={voidOemContract} className="oem-record">
                           <Working />
                           <input type="hidden" name="session_id" value={sheet.session.id} />
                           <input type="hidden" name="contract_number" value={o.contract.contract_number} />
@@ -1009,14 +1004,9 @@ export default async function DetailsPage({
                           </label>
                           <PendingButton working="page" pending="Voiding the record...">Void record</PendingButton>
                         </form>
-                      ) : null}
                     </>
-                  ) : operator ? (
-                    <OemContractRecord sessionId={sheet.session.id} selectedProductId={o.selected_product_id} />
                   ) : (
-                    <Link className="btn btn--quiet" href="/admin/sessions" prefetch={false}>
-                      Sign in to record
-                    </Link>
+                    <OemContractRecord sessionId={sheet.session.id} selectedProductId={o.selected_product_id} />
                   )}
                   {o.voided.map((v) => (
                     <p key={`${v.contract_number}-${v.voided_at}`}>
@@ -1147,18 +1137,9 @@ export default async function DetailsPage({
         </div>
 
         {/* ── Who goes on the contracts ──────────────────────────────────── */}
-        {/* Names, addresses and phone numbers, so a signed-in operator only.
-            Anyone else holding the link sees that the panels exist. */}
+        {/* Names, addresses and phone numbers. This whole screen is signed in. */}
         {sheet.contract_parties ? (
-          operator ? (
-            <ContractParties parties={sheet.contract_parties} sessionId={sheet.session.id} />
-          ) : (
-            <section className="vparties" aria-label="Who goes on the contracts">
-              <p className="vparties-intro">
-                Sign in to see and correct who goes on the contracts: the buyer, co-buyer and lienholder.
-              </p>
-            </section>
-          )
+          <ContractParties parties={sheet.contract_parties} sessionId={sheet.session.id} />
         ) : null}
 
         {/* ── The gate ───────────────────────────────────────────────────── */}
@@ -1309,7 +1290,7 @@ export default async function DetailsPage({
             Before presenting, a manager can start any column at a different
             level of each product (Lowest, Middle or Highest) on this deal.
             The template's level is the default (docs section 22). */}
-        {presentable && operator && (sheet.menu_columns?.length ?? 0) > 0 ? (
+        {presentable && (sheet.menu_columns?.length ?? 0) > 0 ? (
           <form action={saveMenuLevels} className="vmenu-levels" data-working-panel="">
             <Working />
             <input type="hidden" name="session_id" value={sessionId} />

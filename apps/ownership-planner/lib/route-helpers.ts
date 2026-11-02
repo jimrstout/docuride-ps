@@ -2,6 +2,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { EdgeError, isSessionId } from "./edge";
+import { currentOperator } from "./admin-session";
 
 export function noStore(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -10,8 +11,20 @@ export function noStore(body: unknown, status = 200) {
   });
 }
 
-/** Validate the session ID before anything reaches an Edge Function. */
-export function requireSessionId(id: string | undefined) {
+/**
+ * A staff sign-in on this browser, and a well-formed session ID, before
+ * anything reaches an Edge Function.
+ *
+ * The planner and the menu are opened by staff, in a customer tab on the
+ * staff member's own browser, and these routes serve them. With nobody signed
+ * in here they answer 401 with no data. The Edge Functions refuse the same
+ * request on their own as well (_shared/staff-gate.ts); this is the half that
+ * does not make the call at all.
+ */
+export async function requireSessionId(id: string | undefined) {
+  if (!(await currentOperator())) {
+    return { ok: false as const, response: noStore({ error: "Not signed in" }, 401) };
+  }
   if (!isSessionId(id)) {
     return { ok: false as const, response: noStore({ error: "Invalid session" }, 400) };
   }

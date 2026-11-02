@@ -67,7 +67,8 @@ test("/admin/* shows the sign-in form when signed out, and returns to the page",
   assert.match(src("components/admin/SignIn.tsx"), /<input type="hidden" name="next" value=\{next\} \/>/);
   assert.match(src("components/admin/SignIn.tsx"), /<form className="ad-panel" action=\{signIn\}>/);
   // signIn sends them back to it.
-  assert.match(actions, /const next = safeAdminPath\(formData\.get\("next"\)\);/);
+  // safeStaffPath: an admin page, or one deal's Details or Prepare (test/staff-sign-in.test.mjs).
+  assert.match(actions, /const next = safeStaffPath\(formData\.get\("next"\)\);/);
   assert.match(actions, /CONSOLE_COOKIE_OPTIONS\s*\);\s*redirect\(next\);/);
   // Each page reads the same cached answer before fetching anything.
   for (const page of ["app/admin/sessions/page.tsx", "app/admin/wording/page.tsx"]) {

@@ -24,7 +24,7 @@ import {
   cleanCheckerName,
 } from "@/lib/checker";
 import { ratingInputsFrom } from "@/lib/verify-fields";
-import { ADMIN_HOME, initialsFor, safeAdminPath, withNotice } from "@/lib/admin-sections";
+import { ADMIN_HOME, initialsFor, safeStaffPath, withNotice } from "@/lib/admin-sections";
 
 // The admin area's pages, as the actions below send people back to them.
 const SESSIONS = ADMIN_HOME;
@@ -43,9 +43,10 @@ const UUID_RE =
 export async function signIn(formData: FormData): Promise<void> {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
-  // The admin page they asked for, so signing in returns them to it. Only a
-  // path under /admin is accepted; anything else lands on Sessions.
-  const next = safeAdminPath(formData.get("next"));
+  // The staff screen they asked for, so signing in returns them to it: an
+  // admin page, or one deal's Details or Prepare presentation. Anything else
+  // lands on Sessions (lib/admin-sections.ts, safeStaffPath).
+  const next = safeStaffPath(formData.get("next"));
 
   if (!email || !password) redirect(withNotice(next, "denied"));
 

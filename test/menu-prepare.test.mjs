@@ -194,7 +194,7 @@ test("the endpoint: secret, managers outside the range, locked once chosen, even
   assert.match(actions, /const operator = await currentOperator\(\);\s*if \(!operator\) return \{ ok: false, error: "Sign in to prepare the menu\." \};/);
   assert.match(actions, /await edge\.adminAuth<\{ user_id: string; email: string \}>\(manager\.email\.trim\(\), manager\.password\)/);
   const page = read("apps/ownership-planner/app/prepare/[sessionId]/page.tsx");
-  assert.match(page, /const operator = await currentOperator\(\);\s*if \(!operator\) return/);
+  assert.match(page, /const operator = await currentOperator\(\);\s*if \(!operator\) \{\s*return \(\s*<WorkingArea>\s*<SignIn/);
   const details = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
   assert.match(details, /href=\{`\/prepare\/\$\{sessionId\}`\} prefetch=\{false\}>\s*Prepare menu\s*<\/Link>/);
   // No scrolling, and tabs on a phone, as the menu.

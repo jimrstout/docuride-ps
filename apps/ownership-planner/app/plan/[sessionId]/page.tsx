@@ -5,6 +5,8 @@
 // planner. The browser never learns the secret and never touches Supabase.
 
 import { edge, EdgeError, isSessionId } from "@/lib/edge";
+import { currentOperator } from "@/lib/admin-session";
+import { CUSTOMER_TAB_SIGNED_OUT } from "@/lib/staff-gate-copy";
 import type { SessionPayload } from "@/lib/types";
 import { ratingErrorHeadline, ratingFailures } from "@/lib/rating-error";
 import Planner from "./Planner";
@@ -18,6 +20,14 @@ export default async function PlanPage({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
+
+  // Opened by signed-in staff, in their own browser: this tab inherits that
+  // sign-in. With none, no deal is read and nothing here names one, and there
+  // is no sign-in form and no link to a staff screen: a customer holding the
+  // link is simply told the dealership opens it (lib/staff-gate-copy.ts).
+  if (!(await currentOperator())) {
+    return <Gate title={CUSTOMER_TAB_SIGNED_OUT.title} body={CUSTOMER_TAB_SIGNED_OUT.body} />;
+  }
 
   // Refuse anything that is not a well-formed UUID before it reaches an Edge
   // Function. Indistinguishable from "not found", deliberately.

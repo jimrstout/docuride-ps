@@ -111,10 +111,14 @@ export const CONSOLE_COOKIE_OPTIONS = {
   // The console is only ever served over https; a cookie that would also go out
   // over http is a cookie that can be stripped off the wire.
   secure: true,
-  // The cookie authorizes a write -- extending an expiry -- so a cross-site POST
-  // must not carry it. Strict also means arriving from a link in an email shows
-  // the sign-in form once, which is the right trade for an internal tool.
-  sameSite: "strict" as const,
+  // Lax, not Strict. The CRM button opens Details from crm.zoho.com, a
+  // cross-site top-level link. Under Strict that arrival carried no cookie, so
+  // a signed-in person was asked to sign in again on every launch. Lax sends
+  // the cookie on a top-level GET from another site and on nothing else: no
+  // cross-site POST, no cross-site image, frame or fetch. Every write here is
+  // a POST (a Server Action, which Next also checks against the Origin), so a
+  // cross-site form still reaches nothing signed in.
+  sameSite: "lax" as const,
   path: "/",
   maxAge: CONSOLE_TTL_SECONDS,
 };

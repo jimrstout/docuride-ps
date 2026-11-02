@@ -43,6 +43,24 @@ export function safeAdminPath(next: unknown): string {
   return path === "/admin" || path === "/admin/" ? ADMIN_HOME : path;
 }
 
+const UUID_PATH = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+const DEAL_SCREEN = new RegExp(`^/(details|prepare)/${UUID_PATH}$`);
+
+/**
+ * Where signing in sends someone: the staff screen they asked for. An admin
+ * page, or one deal's Details or Prepare presentation, exactly as asked, so a
+ * sign-in on Details returns to that deal's Details. Anything else, including
+ * the customer's /plan and /menu tabs, which never show a sign-in form, lands
+ * on Sessions.
+ */
+export function safeStaffPath(next: unknown): string {
+  if (typeof next === "string") {
+    const path = next.split(/[?#]/)[0];
+    if (DEAL_SCREEN.test(path)) return path;
+  }
+  return safeAdminPath(next);
+}
+
 /** The section a path belongs to, for highlighting it in the menu. */
 export function sectionFor(path: string): AdminSection | null {
   return ADMIN_SECTIONS.find((s) => path === s.href || path.startsWith(`${s.href}/`)) ?? null;

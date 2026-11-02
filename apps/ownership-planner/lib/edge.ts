@@ -15,6 +15,28 @@
 // tested and where the service-role key lives.
 
 import "server-only";
+import { cookies } from "next/headers";
+import { CONSOLE_COOKIE } from "./console-cookie";
+
+/** Where the staff sign-in travels to the Edge Functions (_shared/staff-auth.ts). */
+const STAFF_HEADER = "x-staff-session";
+
+/**
+ * The staff sign-in cookie of the request being served, forwarded as it is.
+ *
+ * The Edge Functions check it themselves: its signature, and that the person's
+ * profile covers the deal's tenant and store. So a page that forgets to check
+ * the sign-in still cannot show a deal, and a deal link on its own opens
+ * nothing. Read per call, never cached. Outside a request there is no cookie,
+ * and the function refuses, which is the right answer.
+ */
+async function staffSession(): Promise<string | null> {
+  try {
+    return (await cookies()).get(CONSOLE_COOKIE)?.value ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export class EdgeError extends Error {
   constructor(
@@ -79,10 +101,12 @@ async function call<T>(
     url.searchParams.set(k, v);
   }
 
+  const staff = await staffSession();
   const res = await fetch(url, {
     method: init.method,
     headers: {
       "x-webhook-secret": secret(),
+      ...(staff ? { [STAFF_HEADER]: staff } : {}),
       ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
     },
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
