@@ -219,6 +219,8 @@ const ADMIN_FUNCTIONS = ["fni-admin-sessions", "fni-admin-settings", "fni-price-
 const NOT_STAFF = [
   "fni-session-start", "fni-documents-generated", "fni-admin-auth", "fni-health-check",
   "fni-refresh-rate-properties", "fni-refresh-vehicle-types", "zoho-sync", "zoho-backfill", "rr-report",
+  // Started only by the database, with a one-time token (migration 0050).
+  "fni-rate-probe",
 ];
 /** One path each: by session_id for Details (gated), by CRM record for the CRM. */
 const DUAL = ["fni-dx1-check", "fni-documents-to-deal-jacket"];
