@@ -400,8 +400,8 @@ test("a missing or damaged cookie shows nothing rather than throwing", () => {
 
 test("every code an action can set has wording", () => {
   for (const code of [
-    "refused", "saved", "decoded", "refreshed", "needname",
-    "who", "whocleared", "discarded", "voided", "cleared",
+    "refused", "saved", "decoded", "refreshed",
+    "discarded", "voided", "cleared",
   ]) {
     assert.ok(flashMessage({ code, detail: "C-1" }), `no wording for ${code}`);
   }

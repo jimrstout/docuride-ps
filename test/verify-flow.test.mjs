@@ -13,7 +13,6 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 
 const require_fs = () => ({ readdirSync, statSync });
-import { cleanCheckerName } from "../apps/ownership-planner/lib/checker-name.ts";
 
 const src = (f) => readFileSync(new URL(f, import.meta.url), "utf8");
 
@@ -42,7 +41,6 @@ const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
 const actions = src("../apps/ownership-planner/app/console-actions.ts");
 const planPage = src("../apps/ownership-planner/app/plan/[sessionId]/page.tsx");
 const sessionStart = src("../supabase/functions/fni-session-start/index.ts");
-const checker = src("../apps/ownership-planner/lib/checker.ts");
 
 // ─────────────────────────────────────────────────────────────────────────
 // 1. The CRM button opens Verify, every time
@@ -95,14 +93,14 @@ test("the verify page does not bounce a visitor to the sign-in", () => {
   assert.doesNotMatch(page, /if \(!operator\) redirect\("\/"\)/);
 });
 
-test("the five verify actions no longer require an operator", () => {
-  // verifyAction is the shared path for save, decode, refresh and discard.
-  const shared = between(actions, "async function verifyAction(", "\n}\n");
-  assert.doesNotMatch(shared, /currentOperator/);
-
-  for (const name of ["saveVerifyFields", "verifyAndRate", "setCheckerName"]) {
-    assert.doesNotMatch(actionBody(name), /currentOperator/, `${name} must not need a sign-in`);
+test("the verify actions that record a name take it from the sign-in (2026-11-02)", () => {
+  // Details is signed in, and the Edge Functions check the sign-in on every
+  // call (test/staff-sign-in-functions.test.mjs). The actions that put a name
+  // on the record take it from the signed-in person.
+  for (const name of ["saveVerifyFields", "verifyAndRate"]) {
+    assert.match(actionBody(name), /await signedInInitials\(sessionId\)/, name);
   }
+  assert.doesNotMatch(actions, /export async function setCheckerName/);
 });
 
 test("the verify screen is protected the same way the presentation is", () => {
@@ -225,34 +223,24 @@ test("the planner still rates itself only once verified", () => {
 // Whose name goes on it
 // ─────────────────────────────────────────────────────────────────────────
 
-test("a name is required before anything is recorded", () => {
+test("no name to type: the signed-in person is recorded, and nothing waits on a name", () => {
+  // The Checked by box and its Change button are gone (2026-11-02).
+  assert.doesNotMatch(page, /Checked by|checker_name|setCheckerName|currentChecker/);
+  assert.doesNotMatch(actions, /checkerFor|CHECKER_COOKIE|needname|setCheckerName/);
+  // Rate is disabled only for a sheet that cannot be rated, never for a name.
+  assert.match(page, /disabled=\{!sheet\.ready\}/);
+  // The signed-in person's initials, from the sign-in.
+  assert.match(actions, /async function signedInInitials\(sessionId: string\): Promise<string> \{\s*const operator = await currentOperator\(\);\s*if \(!operator\) redirect\(`\/details\/\$\{sessionId\}`\);\s*return initialsFor\(operator\.email\);/);
   for (const name of ["saveVerifyFields", "verifyAndRate"]) {
-    assert.match(actionBody(name), /needname/, `${name} must refuse an unnamed action`);
+    assert.match(actionBody(name), /const who = await signedInInitials\(sessionId\);/, name);
   }
-  // And the button is dead until there is one, so it is not a surprise.
-  assert.match(page, /disabled=\{!sheet\.ready \|\| checker === ""\}/);
-});
-
-test("the name is what reaches verified_by and edited_by", () => {
   assert.match(actions, /verified_by: who/);
   assert.match(actions, /edited_by: who/);
-  assert.doesNotMatch(actions, /verified_by: operator\.email|edited_by: operator\.email/);
+  assert.match(actions, /confirmed_by: initialsFor\(operator\.email\)/);
 });
 
-test("the name cookie is never mistaken for a permission", () => {
-  // It is unsigned and anybody can set it. The file has to say so, and nothing
-  // may branch on it for access.
-  assert.match(checker, /NOT security|not security/);
-  assert.doesNotMatch(page, /checker && operator|if \(checker\) redirect/);
-});
-
-test("a name is trimmed, de-newlined and capped before it is recorded", () => {
-  assert.equal(cleanCheckerName("  Jim Stout \n"), "Jim Stout");
-  assert.equal(cleanCheckerName("Jim\r\nStout"), "Jim Stout");
-  assert.equal(cleanCheckerName("x".repeat(200)).length, 80);
-  for (const junk of [null, undefined, 42, {}, []]) {
-    assert.equal(cleanCheckerName(junk), "");
-  }
+test("the header shows who is signed in instead", () => {
+  assert.match(page, /<span className="vh-me" title=\{operator\.email\}>\{initialsFor\(operator\.email\)\}<\/span>/);
 });
 
 test("a previously verified session says who verified it and when", () => {
