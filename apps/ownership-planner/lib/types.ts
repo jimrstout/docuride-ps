@@ -505,6 +505,8 @@ export interface VerifySheet {
   prepared?: { at: string; by: string | null } | null;
   /** Offers no menu row shows, one plain line per kind: "2 Maintenance plans were offered but no menu row uses them." */
   unplaced_offers?: string[];
+  /** What rating again took off the menu, prices not applied, and the provider's words about products it did not rate. */
+  rating_notices?: string[];
   /** Menu slots hidden from the customer on this deal, with why, for staff. */
   hidden_slots?: { title: string; note: string | null }[];
   /** The customer's OEM selections, whose contracts staff record here. */

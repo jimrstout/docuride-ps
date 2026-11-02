@@ -39,6 +39,11 @@ export interface SheetOption {
   option_costs: Record<string, number>;
   /** The codes of the surcharges it always carries. Absent from a server before 2026-10-31. */
   mandatory_codes?: string[];
+  /**
+   * Cents: a price set on an earlier rating that does not fit this one, so it
+   * is not applied and the rating's price is used (_shared/stale-offers.ts).
+   */
+  not_applied_price?: number | null;
 }
 
 export interface SheetPlan {
@@ -73,6 +78,8 @@ export interface PrepareSheet {
   terms?: Record<string, { months: number; rate: number }[]>;
   /** Products the customer removed from each column before choosing. */
   removed?: Record<string, string[]>;
+  /** What rating again took off the menu, and prices it no longer applies, in plain English. */
+  notices?: string[];
 }
 
 export interface PreparePayload {
@@ -212,7 +219,10 @@ export function cellFigures(o: SheetOption, state: PrepareState): CellFigures {
   const extra = surchargesOf(o, state);
   const typed = priceOf(o, state);
   const price = appliedPrice(o, state);
-  const notApplied = typed !== null && typed !== price;
+  // A price from an earlier rating that does not fit this one shows as not
+  // applied until staff type a new one.
+  const stale = state.prices[o.key] === undefined ? o.not_applied_price ?? null : null;
+  const notApplied = (typed !== null && typed !== price) || stale !== null;
   return {
     dealer_cost: o.dealer_cost + extra,
     price: price === null ? null : price + extra,
@@ -220,7 +230,7 @@ export function cellFigures(o: SheetOption, state: PrepareState): CellFigures {
     above_band: typed !== null && typed > o.band.top,
     below_band: typed !== null && typed < o.band.floor && typed >= o.dealer_cost,
     below_cost: typed !== null && typed < o.dealer_cost,
-    entered: notApplied ? typed : null,
+    entered: notApplied ? (stale ?? typed) : null,
     not_applied: notApplied,
   };
 }

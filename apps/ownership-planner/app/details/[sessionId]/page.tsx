@@ -637,6 +637,9 @@ export default async function DetailsPage({
             <p key={line} className="console-flash console-flash--bad" role="alert">{line}</p>
           ))}
           {/* Offers no menu row shows: said, never silently dropped. */}
+        {(sheet.rating_notices ?? []).map((line) => (
+          <p key={`rn-${line}`} className="console-flash console-flash--bad" role="alert">{line}</p>
+        ))}
         {(sheet.unplaced_offers ?? []).map((line) => (
           <p key={line} className="console-flash console-flash--bad" role="status">{line}</p>
         ))}

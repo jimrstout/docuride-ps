@@ -231,6 +231,10 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
         {(data.service_drive_lines ?? []).map((line) => (
           <p key={line} className="pm-note pm-note--bad" role="alert">{line}</p>
         ))}
+        {/* What rating again took off the menu, and prices it no longer applies. */}
+        {(sheet.notices ?? []).map((line) => (
+          <p key={`rn-${line}`} className="pm-note pm-note--bad" role="alert">{line}</p>
+        ))}
         {message ? <p className={message.tone === "ok" ? "pm-note" : "pm-note pm-note--bad"} role="status">{message.text}</p> : null}
         {skipped.map((line) => <p key={line} className="pm-note" role="status">{line}</p>)}
         {problems.length > 0 ? (

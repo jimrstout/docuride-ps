@@ -129,7 +129,8 @@ test("the browser's figure is never the price: the save prices on the server", (
   assert.match(save, /const server = included \? serverPrice\(d\) : null;/);
   assert.match(save, /const price = server \?\? browser;/);
   assert.match(save, /retail_price: included \? price : null,\s*customer_price: included \? price : null,/);
-  assert.match(save, /return applyDealPrices\(priceFamilies\(familiesFromRows\(offers\), \(ruleRows \?\? \[\]\) as unknown as PricingRule\[\]\), prices\);/);
+  // Deal prices only while they fit the current rating (_shared/stale-offers.ts).
+  assert.match(save, /return applyDealPrices\(priceFamilies\(familiesFromRows\(offers\), rules\), prices, rules\);/);
   // Prices lock when the customer chooses a package.
   assert.match(save, /if \(chosen\) \{\s*patch\.menu_prices_locked_at = new Date\(\)\.toISOString\(\);/);
   // The term is checked before anything is written.
@@ -152,7 +153,7 @@ test("Submit's guard: before anything is sent, with an event, the maximum only o
 
 test("Present menu starts from the prepared menu, or the presets as they stand", () => {
   const get = read("supabase/functions/fni-session-get/index.ts");
-  assert.match(get, /if \(prepared\) applyDealPrices\(pricedFamilies, prepared\.input\.prices\);/);
+  assert.match(get, /if \(prepared\) applyDealPrices\(pricedFamilies, prepared\.input\.prices, prepared\.input\.rules\);/);
   assert.match(get, /menu_prepared: menuPrepared,/);
   const m = read("apps/ownership-planner/app/menu/[sessionId]/Menu.tsx");
   assert.match(m, /const baseline = useMemo\(\(\) => preparedCells\(rows, columns, initial\.menu_prepared\), \[rows, columns, initial\.menu_prepared\]\);/);

@@ -25,6 +25,7 @@ import type { MenuColumn } from "./menu-columns.ts";
 import { countGroups, plainLabel } from "./surcharge-display.ts";
 import { isServiceDriveName, serviceDrivePresetNote } from "./service-drive.ts";
 import { categoryOf } from "./product-category.ts";
+import { dealPriceFits, priceNotAppliedNotice, removedNotices, type StaleCell } from "./stale-offers.ts";
 import {
   CATEGORIES,
   checkPrice,
@@ -78,6 +79,11 @@ export interface SheetOption {
   below_band: boolean;
   approved_by: string | null;
   reason: string | null;
+  /**
+   * Cents: a price staff set that does not fit the current rating, so it is
+   * not applied and the rating's price is used. Null when there is none.
+   */
+  not_applied_price: number | null;
   /** The codes of the surcharges that apply to it on this deal. */
   surcharge_codes: string[];
   /** Cents: what it always carries (mandatory options), and each surcharge it offers, by code. */
@@ -123,6 +129,11 @@ export interface PrepareSheet {
   terms: Record<string, { months: number; rate: number }[]>;
   /** Products the customer removed from each column before choosing, by category. */
   removed: Record<string, string[]>;
+  /**
+   * What rating again took away, in plain English (_shared/stale-offers.ts):
+   * prepared choices no longer offered, and prices that no longer fit.
+   */
+  notices: string[];
 }
 
 /** One choice in the Surcharges dialog: a surcharge, or a count picker ("Additional batteries"). */
@@ -230,6 +241,7 @@ export function buildSheet(input: SheetInput): PrepareSheet {
     input.catalog.find((c) => c.provider_id === provider && c.product_code === code) ?? null;
 
   const plans: Record<string, SheetPlan[]> = {};
+  const notices: string[] = [];
   for (const f of input.families) {
     for (const t of f.tiers) {
       const provider = t.provider_id ?? f.provider_id ?? "";
@@ -247,7 +259,13 @@ export function buildSheet(input: SheetInput): PrepareSheet {
           const rulePrice = cents(r.retail_price ?? null);
           const rule = resolveRule(input.rules, t.product_code, Number(r.dealer_cost), provider);
           const band = priceBand(Number(r.dealer_cost), r.retail_price ?? null, rule as never);
-          const deal = input.prices[key];
+          const stored = input.prices[key];
+          // A price staff set on an earlier rating applies only while it still
+          // fits this one (_shared/stale-offers.ts).
+          const deal = stored && dealPriceFits(stored, Number(r.dealer_cost), band) ? stored : undefined;
+          if (stored && !deal) {
+            notices.push(priceNotAppliedNotice(`${cat?.display_name ?? t.product_name}, ${optionLabel(r)}`, Math.round(Number(stored.retail_price) * 100), rulePrice));
+          }
           const s = surchargesOf(r, chosen);
           const optionCosts: Record<string, number> = {};
           let mandatory = 0;
@@ -276,6 +294,7 @@ export function buildSheet(input: SheetInput): PrepareSheet {
             below_band: deal?.below_band ?? false,
             approved_by: deal?.approved_by ?? null,
             reason: deal?.reason ?? null,
+            not_applied_price: stored && !deal ? Math.round(Number(stored.retail_price) * 100) : null,
             surcharge_codes: s.codes,
             mandatory_cost: mandatory,
             option_costs: optionCosts,
@@ -310,9 +329,16 @@ export function buildSheet(input: SheetInput): PrepareSheet {
 
   const columns = input.columns.map((c, i) => ({ position: i + 1, name: c.name }));
   const cells: Record<string, Record<string, SheetCell>> = {};
+  const stale: StaleCell[] = [];
+  const offeredKeys = new Set(Object.values(plans).flat().flatMap((p) => p.options.map((o) => o.key)));
   for (const [i, col] of input.columns.entries()) {
     const pos = String(i + 1);
     cells[pos] = {};
+    // A prepared choice the current rating no longer offers comes off the
+    // menu, even when its whole row has gone (_shared/stale-offers.ts).
+    for (const [category, key] of Object.entries(input.prepared?.[pos] ?? {})) {
+      if (key !== null && key !== undefined && !offeredKeys.has(key)) stale.push({ column: col.name, category, key });
+    }
     for (const category of categories) {
       const saved = input.prepared?.[pos];
       if (saved && category in saved) {
@@ -356,11 +382,17 @@ export function buildSheet(input: SheetInput): PrepareSheet {
     }
   }
 
+  const nameFor = (providerId: string, code: string) =>
+    input.catalog.find((c) => c.provider_id === providerId && c.product_code === code)?.display_name ?? null;
+  const stillOffered = (providerId: string, code: string) =>
+    Object.values(plans).flat().some((p) => p.provider_id === providerId && p.product_code === code);
+
   return {
     columns,
     categories,
     plans,
     cells,
+    notices: [...removedNotices(stale, nameFor, stillOffered), ...notices],
     purchased: purchasedRows,
     terms: Object.fromEntries(columns.map((c) => [String(c.position), (input.terms?.[String(c.position)] ?? []).slice(0, 2)])),
     removed: Object.fromEntries(columns.map((c) => [String(c.position), input.removed?.[String(c.position)] ?? []])),
@@ -460,12 +492,24 @@ export function checkPreparation(sheet: PrepareSheet, p: Preparation): Preparati
  * chosen option is the one the customer pays (fni-session-get,
  * fni-session-save). Prices in dollars, as the families hold them.
  */
-export function applyDealPrices(families: NormalizedFamily[], prices: Record<string, DealPrice>): NormalizedFamily[] {
+export function applyDealPrices(
+  families: NormalizedFamily[],
+  prices: Record<string, DealPrice>,
+  rules: PricingRule[] | null = null,
+): NormalizedFamily[] {
   for (const f of families) for (const t of f.tiers) {
     const provider = t.provider_id ?? f.provider_id ?? "";
     for (const r of t.rates) {
       const deal = prices[optionKey(provider, t.product_code, r)];
-      if (deal) r.retail_price = deal.retail_price;
+      if (!deal) continue;
+      // Only while it still fits the current rating: never a price from an
+      // earlier one (_shared/stale-offers.ts). Without the rules, as before.
+      if (rules !== null && r.dealer_cost !== null && r.dealer_cost !== undefined) {
+        const rule = resolveRule(rules, t.product_code, Number(r.dealer_cost), provider);
+        const band = priceBand(Number(r.dealer_cost), r.retail_price ?? null, rule as never);
+        if (!dealPriceFits(deal, Number(r.dealer_cost), band)) continue;
+      }
+      r.retail_price = deal.retail_price;
     }
   }
   return families;

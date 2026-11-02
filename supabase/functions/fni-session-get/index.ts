@@ -257,7 +257,8 @@ serve(async (req: Request) => {
     // each column from the prepared cells, or from the presets as they stand
     // when nothing was prepared, with the deal's surcharges.
     const prepared = superseded ? null : await loadSheet(supabase, s as Record<string, unknown>);
-    if (prepared) applyDealPrices(pricedFamilies, prepared.input.prices);
+    // Deal prices only while they fit the current rating (_shared/stale-offers.ts).
+    if (prepared) applyDealPrices(pricedFamilies, prepared.input.prices, prepared.input.rules);
     const menuPrepared = prepared && prepared.sheet.categories.length > 0 ? preparedForMenu(prepared.sheet) : null;
 
     // Catalog copy is keyed on the product code, which is the tier.
