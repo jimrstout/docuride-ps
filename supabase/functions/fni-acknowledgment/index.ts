@@ -40,6 +40,7 @@ import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import { secretsMatch } from "../_shared/supabase.ts";
 import { staffGate } from "../_shared/staff-gate.ts";
 import { SIGNATURE_MAP_LIMIT, appendSignatureMap } from "../_shared/signature-map.ts";
+import { categoryFromWording } from "../_shared/product-category.ts";
 import { getRecord } from "../_shared/zoho.ts";
 import { fileUploadValue, updateRecordFields, uploadFile } from "../_shared/zoho-files.ts";
 import {
@@ -144,7 +145,8 @@ serve(async (req: Request) => {
     const decisions: AckDecision[] = ((rows ?? []) as Record<string, unknown>[]).map((d) => {
       const code = d.provider_product_id as string;
       const c = copy.get(`${d.provider_id as string}:${code}`);
-      const removed = choice?.name && removedCats.has(catOf.get(`${d.provider_id as string}:${code}`) ?? "");
+      const category = catOf.get(`${d.provider_id as string}:${code}`) || categoryFromWording(d.product_name) || "";
+      const removed = choice?.name && removedCats.has(category);
       return {
         removed_from: removed && d.disposition !== "Included" ? choice!.name! : null,
         product_code: code,
