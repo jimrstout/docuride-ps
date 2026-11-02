@@ -257,8 +257,9 @@ test("product names are the menu's plain names, never the provider's title", () 
 
 test("Details shows the latest check, refreshed on load, for signed-in staff only", () => {
   const page = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
-  assert.match(page, /const dx1Promise: Promise<Dx1CheckResult \| null> = operator\s*\? edge\.dx1Check<Dx1CheckResult>\(sessionId\)\.catch\(/);
-  assert.match(page, /: Promise\.resolve\(null\);/);
+  // The page is signed in before it gets here (test/staff-sign-in.test.mjs).
+  assert.match(page, /const dx1Promise: Promise<Dx1CheckResult \| null> = edge\.dx1Check<Dx1CheckResult>\(sessionId\)\.catch\(/);
+  assert.ok(page.indexOf("if (!operator) {") < page.indexOf("edge.dx1Check<"));
   assert.match(page, /<h2 id="vcontracts-title">Contracts<\/h2>\s*<Dx1Check result=\{dx1\} \/>/);
   const edge = read("apps/ownership-planner/lib/edge.ts");
   assert.match(edge, /call<T>\("fni-dx1-check", \{ method: "POST", body: \{ session_id: sessionId \} \}\)/);

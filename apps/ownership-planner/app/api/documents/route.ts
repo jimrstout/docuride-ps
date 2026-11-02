@@ -13,7 +13,7 @@ export async function POST(req: Request) {
     return noStore({ error: "Invalid JSON body" }, 400);
   }
 
-  const check = requireSessionId(body.session_id as string | undefined);
+  const check = await requireSessionId(body.session_id as string | undefined);
   if (!check.ok) return check.response;
 
   try {

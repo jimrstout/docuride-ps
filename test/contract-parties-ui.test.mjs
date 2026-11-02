@@ -28,9 +28,11 @@ test("after a save the reminder to change DX1 is shown", () => {
 });
 
 test("the panels show to a signed-in operator only", () => {
+  // The whole of Details is signed in now (test/staff-sign-in.test.mjs), so
+  // the panels simply show, and the line asking to sign in is gone.
   const page = src("app/details/[sessionId]/page.tsx");
-  assert.match(page, /operator \? \(\s*<ContractParties parties=\{sheet\.contract_parties\} sessionId=\{sheet\.session\.id\} \/>/);
-  assert.match(page, /Sign in to see and correct who goes on the contracts/);
+  assert.match(page, /\{sheet\.contract_parties \? \(\s*<ContractParties parties=\{sheet\.contract_parties\} sessionId=\{sheet\.session\.id\} \/>/);
+  assert.doesNotMatch(page, /Sign in to see and correct who goes on the contracts/);
   const actions = src("app/console-actions.ts");
   assert.match(actions, /if \(!operator\) return backToVerify\(sessionId, "refused", "Sign in to change who goes on the contracts\."\);/);
 });

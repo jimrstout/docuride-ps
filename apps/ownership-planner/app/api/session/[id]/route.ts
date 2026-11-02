@@ -9,7 +9,7 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
-  const check = requireSessionId(id);
+  const check = await requireSessionId(id);
   if (!check.ok) return check.response;
 
   try {

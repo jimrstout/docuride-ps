@@ -9,6 +9,8 @@
 
 import Link from "next/link";
 import { currentOperator } from "@/lib/admin-session";
+import { SignIn, signInNotice } from "@/components/admin/SignIn";
+import { WorkingArea } from "@/components/Working";
 import { edge, EdgeError, isSessionId } from "@/lib/edge";
 import type { PreparePayload } from "@/lib/prepare-model";
 import Prepare from "./Prepare";
@@ -26,10 +28,27 @@ function Plain({ title, body, back }: { title: string; body: string; back?: stri
   );
 }
 
-export default async function PreparePage({ params }: { params: Promise<{ sessionId: string }> }) {
+export default async function PreparePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ sessionId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { sessionId } = await params;
+  // Signed out: the sign-in form in place, before anything about the deal is
+  // read, and back to this same deal's screen afterwards.
   const operator = await currentOperator();
-  if (!operator) return <Plain title="Sign in to prepare the menu" body="Prepare menu is for dealership staff. Sign in from Administration, then open it from Details." />;
+  if (!operator) {
+    return (
+      <WorkingArea>
+        <SignIn
+          notice={signInNotice(await searchParams)}
+          next={isSessionId(sessionId) ? `/prepare/${sessionId}` : "/admin/sessions"}
+        />
+      </WorkingArea>
+    );
+  }
   if (!isSessionId(sessionId)) return <Plain title="We couldn't find this deal" body="This link doesn't look right. Open it again from Details." />;
 
   let payload: PreparePayload;

@@ -1,9 +1,16 @@
-// components/admin/SignIn.tsx: the one sign-in form for the admin area.
+// components/admin/SignIn.tsx: the one staff sign-in form.
 //
-// Shown by the admin layout to anyone not signed in, on whichever admin page
-// they asked for. `next` carries that page through signIn, which sends them
-// back to it, so a bookmark to /admin/wording still lands on Wording.
+// Shown in place of any staff screen to anyone not signed in: every admin
+// page (by the admin layout), Details and Prepare presentation. `next` carries
+// that page through signIn, which sends them back to it, so a CRM launch onto
+// one deal's Details lands back on that deal's Details after signing in.
+//
+// It carries nothing about the page it stands in for: no deal number, no
+// buyer, no field. The customer's tabs never show it: see lib/staff-gate-copy.ts.
 
+// The admin look, which this form wears wherever it is shown. Its rules all
+// sit under .ad, so importing it on Details changes nothing else there.
+import "@/app/admin/admin.css";
 import { signIn } from "@/app/console-actions";
 import PendingButton from "@/components/PendingButton";
 import { Working } from "@/components/Working";
@@ -16,6 +23,12 @@ export const SIGN_IN_NOTICES: Record<string, string> = {
   broken: "Sign-in is unavailable right now. Try again shortly.",
   bad: "That wasn't a valid session.",
 };
+
+/** The notice signIn redirected back with (?denied=1 and the rest), from a page's query. */
+export function signInNotice(query: Record<string, string | string[] | undefined> | undefined): string | null {
+  const key = Object.keys(SIGN_IN_NOTICES).find((k) => query && k in query);
+  return key ? SIGN_IN_NOTICES[key] : null;
+}
 
 export function SignIn({ notice, next }: { notice: string | null; next: string }) {
   // The admin shell without the section links: nobody signed in has anywhere

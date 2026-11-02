@@ -43,7 +43,8 @@ test("offered when signed in, not when signed out", () => {
   assert.equal(rateAgainAvailable({ signedIn: true, submitState: "Idle" }), true);
   assert.equal(rateAgainAvailable({ signedIn: false, submitState: "Idle" }), false);
   // Whatever the rating says, and whatever contracts are live: neither is an input.
-  assert.match(read(PAGE), /rateAgainAvailable\(\{ signedIn: !!operator, submitState: sheet\.submit_state \}\) \? \(/);
+  // Details is signed in before it renders anything (test/staff-sign-in.test.mjs).
+  assert.match(read(PAGE), /rateAgainAvailable\(\{ signedIn: true, submitState: sheet\.submit_state \}\) \? \(/);
   // The action needs a signed-in person too.
   const actions = read("apps/ownership-planner/app/console-actions.ts");
   const action = actions.slice(actions.indexOf("export async function rateAgain("));

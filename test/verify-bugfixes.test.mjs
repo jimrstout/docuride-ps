@@ -430,12 +430,16 @@ test("no verify action puts a message in the URL", () => {
   }
 });
 
-test("the verify page no longer reads searchParams", () => {
+test("the verify page reads the query string only for the sign-in notice", () => {
   const page = readFileSync(
     new URL("../apps/ownership-planner/app/details/[sessionId]/page.tsx", import.meta.url),
     "utf8"
   );
-  assert.ok(!page.includes("searchParams"), "the page still reads the query string");
+  // ?denied=1 and the rest, from the sign-in form, signed out only. Action
+  // messages still travel in the flash cookie, never the URL.
+  const reads = [...page.matchAll(/await searchParams/g)];
+  assert.equal(reads.length, 1);
+  assert.match(page, /notice=\{signInNotice\(await searchParams\)\}/);
   assert.ok(page.includes("VERIFY_FLASH_COOKIE"), "the page does not read the flash cookie");
 });
 

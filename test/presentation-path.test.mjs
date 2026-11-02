@@ -88,7 +88,7 @@ test("both buttons: verified, rated and current; a live contract does not block 
 
 test("a manager sets each column's coverage level for this deal on Details", () => {
   const page = read(PAGE);
-  assert.match(page, /\{presentable && operator && \(sheet\.menu_columns\?\.length \?\? 0\) > 0 \? \(\s*<form action=\{saveMenuLevels\}/);
+  assert.match(page, /\{presentable && \(sheet\.menu_columns\?\.length \?\? 0\) > 0 \? \(\s*<form action=\{saveMenuLevels\}/);
   assert.match(page, /<select name=\{`level_\$\{c\.position\}`\} defaultValue=\{c\.level\}>/);
   const verify = read("supabase/functions/fni-session-verify/index.ts");
   assert.match(verify, /if \(action === "menu_levels"\) return await setMenuLevels\(supabase, s, body\.levels\);/);

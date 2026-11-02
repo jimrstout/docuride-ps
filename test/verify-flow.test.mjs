@@ -130,8 +130,10 @@ test("voiding a contract and clearing unknown still require a sign-in", () => {
   for (const name of ["voidContract", "clearSubmitUnknown"]) {
     assert.match(actionBody(name), /currentOperator/, `${name} must still need a sign-in`);
   }
-  // And the screen offers a sign-in rather than a dead button.
-  assert.match(page, /Sign in to void/);
+  // And the screen itself is signed in, so there is no dead button to offer
+  // a sign-in from (test/staff-sign-in.test.mjs).
+  assert.match(page, /if \(!operator\) \{\s*return \(\s*<WorkingArea>\s*<SignIn/);
+  assert.doesNotMatch(page, /Sign in to void/);
 });
 
 // ─────────────────────────────────────────────────────────────────────────

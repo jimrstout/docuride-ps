@@ -10,7 +10,7 @@ export async function POST(
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
-  const check = requireSessionId(id);
+  const check = await requireSessionId(id);
   if (!check.ok) return check.response;
 
   let body: Record<string, unknown>;
