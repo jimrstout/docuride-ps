@@ -94,7 +94,7 @@ test("the whole-deal actions cover the page, Submit and Void warn before leaving
   const page = src("app/details/[sessionId]/page.tsx");
   for (const label of [
     "Refreshing from CRM...", "Voiding...", "Moving documents to the Deal Jacket...",
-    "Confirming and rating...", "Decoding the VIN...", "Reloading from CRM...",
+    "Rating...", "Rating again...", "Decoding the VIN...", "Reloading from CRM...",
   ]) {
     assert.match(page, new RegExp(`working="page"[^>]*pending="${label.replace(/\./g, "\\.")}"`), label);
   }

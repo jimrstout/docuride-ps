@@ -73,6 +73,7 @@ test("invalid edits keep their error treatment", () => {
 });
 
 test("the CRM warning panel and the decode line are unchanged", () => {
-  assert.match(page, /<div className="vgate-warn" role="alert">\s*<p className="vgate-warn-say">\{sheet\.crm_warning\}<\/p>/);
+  // With the notices now, its table folded behind its sentence (2026-11-02).
+  assert.match(page, /<details className="vgate-warn" role="alert">\s*<summary className="vgate-warn-say">\{sheet\.crm_warning\}<\/summary>/);
   assert.match(page, /The automatic VIN decode did not answer\. Press Decode the VIN to try again\./);
 });

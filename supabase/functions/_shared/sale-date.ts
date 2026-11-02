@@ -125,7 +125,7 @@ export const STALE_TEST_NOTE = "The rating is out of date. This is a test sessio
 
 export const RATING_OUT_OF_DATE =
   "The rating is out of date because something it was rated on has changed, such as the sale date. " +
-  "Press Confirm and Continue on Details to rate the deal again before submitting.";
+  "Press Rate on Details to rate the deal again before submitting.";
 
 /**
  * Why the rated offer cannot be submitted, or null.
@@ -148,7 +148,7 @@ export function staleRatingProblem(
   if (rated !== null && saleDateMoveNeedsRerate(rated, saleDate)) {
     return (
       `The deal was rated with a sale date of ${dayLabel(rated)}, and its sale date is now ${dayLabel(saleDate)}, ` +
-      `in another month. Rates can change from one month to the next, so press Confirm and Continue on Details ` +
+      `in another month. Rates can change from one month to the next, so press Rate on Details ` +
       `to rate the deal again before submitting.`
     );
   }
