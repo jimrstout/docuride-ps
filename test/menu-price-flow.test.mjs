@@ -50,9 +50,13 @@ const COLUMNS = [
 const K24 = optionKey(P, "CARE-1", rate("c24", 24, 300));
 
 /** The whole path for one deal: what Present menu shows, what the save writes, what Submit sends. */
+// A 24-month loan: with no preset term, the default (the longest offered
+// within the finance term) is the 24-month option.
+const LOAN_24 = { financed: true, months: 24 };
+
 function flow({ prices = {}, surcharges = [], column = 0, prepared = null, tamper = null }) {
   const sheet = buildSheet({ families: priceFamilies(familiesNow(), RULES), catalog: CATALOG, rules: RULES, columns: COLUMNS, presets: [],
-    prepared, prices, surcharges, purchased: new Set(), purchased_prices: {} });
+    prepared, prices, surcharges, purchased: new Set(), purchased_prices: {}, term_basis: LOAN_24 });
   // fni-session-get: the deal's prices on the offers, and the prepared cells.
   const offers = applyDealPrices(priceFamilies(familiesNow(), RULES), prices);
   const rows = menu.buildRows(offers.map((f) => ({ ...f, tiers: f.tiers.map((t) => ({ ...t, available: true })) })), [{ provider_id: P, product_code: "CARE-1", category: "Mechanical Protection", display_name: "Sample Care", is_presentable: true }], [], []);
@@ -156,7 +160,7 @@ test("Present menu starts from the prepared menu, or the presets as they stand",
   const sheet = flow({}).sheet;
   const prepared = preparedForMenu(sheet);
   assert.equal(prepared.cells["1"]["Mechanical Protection"].product_code, "CARE-1");
-  // No preset term: the column's level picks the plan, and the shortest term starts it.
+  // No preset term: the column's level picks the plan, and the longest term within the 24-month loan starts it.
   assert.equal(optionFor(sheet, sheet.cells["1"]["Mechanical Protection"].key).option.rate_unique_id, "c24");
 });
 

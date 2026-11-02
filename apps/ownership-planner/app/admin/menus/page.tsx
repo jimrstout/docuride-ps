@@ -141,6 +141,13 @@ function SlotForm({ t, slot, payload }: { t: TemplateRow; slot: TemplateSlotRow 
               {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
+          <label className="ad-field">
+            <span>Preferred term</span>
+            <select name="preferred_term_months" defaultValue={slot?.preferred_term_months ? String(slot.preferred_term_months) : ""}>
+              <option value="">Longest within the finance term (longest on cash)</option>
+              {PRESET_TERMS.map((m) => <option key={m} value={m}>{termLabel(m)}, or the closest</option>)}
+            </select>
+          </label>
           <div className="ad-field--wide">
             <p className="ad-help">
               Number the products in this slot in the order they are preferred. Leave a product blank to keep it out.
@@ -556,7 +563,11 @@ function MenuDetail({ t, payload, params }: { t: TemplateRow; payload: Templates
               {t.slots.map((s, i) => (
                 <tr key={s.id}>
                   <td className="num">{i + 1}</td>
-                  <td><span className="ad-strong">{s.title}</span>{s.category ? <small>{s.category}</small> : null}</td>
+                  <td>
+                    <span className="ad-strong">{s.title}</span>
+                    {s.category ? <small>{s.category}</small> : null}
+                    {s.preferred_term_months ? <small>Starts at {termLabel(s.preferred_term_months)}</small> : null}
+                  </td>
                   <td>{s.mode}</td>
                   <td>
                     {s.product_ids.length === 0 ? "None, so it is not shown" : (

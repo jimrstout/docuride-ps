@@ -68,7 +68,7 @@ test("menus: conditions are checked and read back in plain English", () => {
 
 test("slots: products from the catalog, in order; Best Match or Side by Side", () => {
   const s = parseSlot({ title: "Mechanical Protection", mode: "Best Match", category: "Mechanical Protection", product_ids: [P1] }, [P1]);
-  assert.deepEqual(s.fields, { title: "Mechanical Protection", category: "Mechanical Protection", mode: "Best Match", product_ids: [P1] });
+  assert.deepEqual(s.fields, { title: "Mechanical Protection", category: "Mechanical Protection", mode: "Best Match", product_ids: [P1], preferred_term_months: null });
   assert.deepEqual(parseSlot({ title: "X", mode: "Whatever", product_ids: ["nope"] }, [P1]).errors, [
     "Show must be Best Match or Side by Side.",
     "One of those products is not in the catalog.",

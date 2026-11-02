@@ -19,6 +19,16 @@
 // With no preferred plan the column's starting level decides (migration 0042),
 // and the term, mileage and deductible preferences still pick its rate.
 //
+// ── The term, when no preset sets one ────────────────────────────────────
+//   1. the menu row's preferred term (Administration > Menus, migration
+//      0049), or the closest offered to it
+//   2. else the longest offered term that does not run past the finance term
+//   3. on a cash deal, or when the finance term cannot be read, the longest
+//      offered; when every offered term runs past the finance term, the
+//      shortest
+// Staff can still change it on Prepare presentation. Whatever term is chosen,
+// that option's own price is what goes on the selection.
+//
 // ── Prices ────────────────────────────────────────────────────────────────
 // A deal's price belongs to the product option, not the cell: the product,
 // term, miles, deductible and whether it disappears (optionKey). The same
@@ -122,6 +132,29 @@ export function optionKey(providerId: string, productCode: string, r: PresetRate
   ].join("|");
 }
 
+// ── The default term ──────────────────────────────────────────────────────
+
+/** The deal's finance term, for the default coverage term. */
+export interface TermBasis {
+  financed: boolean;
+  /** The finance term in months, or null when it cannot be read. */
+  months: number | null;
+}
+
+/**
+ * The term a cell starts at when no preset sets one: the longest offered that
+ * does not run past the finance term; the longest offered on a cash deal.
+ * Null when nothing offered has a term.
+ */
+export function defaultTermMonths(offered: (number | null | undefined)[], basis: TermBasis | null | undefined): number | null {
+  const terms = [...new Set(offered.filter((m): m is number => typeof m === "number" && m > 0))].sort((a, b) => a - b);
+  if (terms.length === 0) return null;
+  const longest = terms[terms.length - 1];
+  if (!basis || !basis.financed || basis.months === null || basis.months <= 0) return longest;
+  const within = terms.filter((m) => m <= basis.months!);
+  return within.length > 0 ? within[within.length - 1] : terms[0];
+}
+
 // ── Fallbacks ─────────────────────────────────────────────────────────────
 
 function closestRate<R extends PresetRate>(rates: R[], p: Preset): R | null {
@@ -156,7 +189,8 @@ function exactly(r: PresetRate, p: Preset): boolean {
 export function resolvePreset<R extends PresetRate>(
   preset: Preset,
   plans: PresetPlan<R>[],
-  levelPlan: PresetPlan<R> | null = null
+  levelPlan: PresetPlan<R> | null = null,
+  term: { preferred?: number | null; basis?: TermBasis | null } = {}
 ): Resolved<R> {
   const rated = plans.filter((p) => p.rates.length > 0).sort((a, b) => a.display_order - b.display_order);
   if (rated.length === 0) return { plan: null, rate: null, note: NOT_OFFERED };
@@ -179,7 +213,9 @@ export function resolvePreset<R extends PresetRate>(
     }
   }
 
-  const rate = closestRate(plan.rates, preset);
+  // No term in the preset: the row's preferred term, else the default rule.
+  const target = preset.term_months ?? term.preferred ?? defaultTermMonths(plan.rates.map((r) => r.term_months), term.basis);
+  const rate = closestRate(plan.rates, { ...preset, term_months: target });
   if (!rate) return { plan: null, rate: null, note: NOT_OFFERED };
   const rateNote = exactly(rate, preset) ? null : `The preset is not offered on this vehicle, so the closest is used: ${optionLabel(rate)}.`;
   return { plan, rate, note: planNote ?? rateNote };
