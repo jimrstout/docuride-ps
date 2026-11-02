@@ -85,6 +85,7 @@ import VehicleTypeChoice from "@/components/VehicleTypeChoice";
 import { money } from "@/lib/money";
 import OemContractRecord from "@/components/OemContractRecord";
 import DetailsTabs from "@/components/DetailsTabs";
+import RenderStamp from "@/components/RenderStamp";
 import { nextStep, PREPARE_FIRST, RATE_SAY } from "@/lib/next-step";
 import ProgramLabel from "@/components/admin/ProgramLabel";
 
@@ -472,6 +473,9 @@ export default async function DetailsPage({
   return (
     <WorkingArea>
     <div className="vh vh--fit">
+      {/* New on every render: the busy state ends only once this changes, so
+          the spinner stays up until the answer is on the screen. */}
+      <RenderStamp />
       <header className="vh-top">
         <div className="vh-crumb">
           <h1 className="sr-only">Deal {sheet.session.deal_number ?? "(no number)"} details</h1>
