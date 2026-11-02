@@ -14,6 +14,7 @@ export interface SavedSelection {
   selected_options: unknown;
   customer_price: number | string | null;
   retail_price: number | string | null;
+  term_months?: number | null;
 }
 
 export function savedSelections(rows: SavedSelection[]): ProductSelection[] {
@@ -25,6 +26,8 @@ export function savedSelections(rows: SavedSelection[]): ProductSelection[] {
       option_uniques: Array.isArray(r.selected_options) ? r.selected_options.map(String) : [],
       // The price the customer agreed to, to the cent.
       retail_price: Number(r.customer_price ?? r.retail_price ?? 0),
+      // And the term they chose, which the Submit guard holds the contract to.
+      term_months: r.term_months === null || r.term_months === undefined ? null : Number(r.term_months),
     }));
 }
 

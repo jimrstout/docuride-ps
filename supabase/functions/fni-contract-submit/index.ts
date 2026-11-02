@@ -727,18 +727,21 @@ serve(async (req: Request) => {
     };
     if (Object.keys(lienholder).length > 0) submitPayload.lienholder = lienholder;
 
-    // ── Step 5b: Exactly the customer's price, to the cent ─────────────
-    // Every product's outgoing price against the selection's customer price,
-    // which the save worked out on the server (_shared/price-guard.ts). A test
-    // session on the QA server goes at the provider's maximum by design, and
-    // is held to that. A penny's difference stops the submit here, before
-    // anything is sent, with the product and both prices in plain English.
+    // ── Step 5b: Exactly what the customer chose, to the cent ──────────
+    // Every outgoing product against the saved selection (_shared/price-guard.ts):
+    // the same product, the term the customer chose, and the customer's price,
+    // which the save worked out on the server. Nothing unselected goes out. A
+    // test session on the QA server goes at the provider's maximum by design,
+    // and is held to that price. Any difference stops the submit here, before
+    // anything is sent, naming the product and both values in plain English.
     const problems = priceProblems(
       submitQuote,
       toSubmit.map((r) => ({
         rate_unique: r.rateUniqueId,
         product_name: r.productName,
         price: policy === "Test at maximum" ? r.selection.retail_price : (customerPrice.get(r.rateUniqueId) ?? r.selection.retail_price),
+        product_unique: r.selection.product_unique,
+        term_months: r.selection.term_months ?? null,
       }))
     );
     if (problems.length > 0) {
