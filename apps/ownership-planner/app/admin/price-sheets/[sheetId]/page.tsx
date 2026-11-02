@@ -33,7 +33,7 @@ type Params = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : "");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const CATEGORIES = ["Mechanical Protection", "Maintenance", "Tire and Wheel", "Theft", "Battery", "Appearance", "Other"];
+const CATEGORIES = ["Mechanical Protection", "Maintenance", "Tire and Wheel", "Theft", "Battery", "GAP", "Wear Care", "Appearance", "Other"];
 
 function notice(params: Params): { tone: "good" | "warn"; text: string } | null {
   if (params.uploaded !== undefined) return { tone: "good", text: "Uploaded. Claude is reading it now; this page shows the rates when it is done." };

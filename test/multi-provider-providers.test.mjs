@@ -92,8 +92,9 @@ test("the eleven TecAssured products get the specified categories", () => {
     assert.match(sql, new RegExp(`when '${code}'\\s+then '${category}'`), code);
     assert.ok(isCategory(category));
   }
+  // GAP and Wear Care added by migration 0054.
   assert.deepEqual([...CATEGORIES], [
-    "Mechanical Protection", "Maintenance", "Tire and Wheel", "Theft", "Battery", "Appearance", "Other",
+    "Mechanical Protection", "Maintenance", "Tire and Wheel", "Theft", "Battery", "GAP", "Wear Care", "Appearance", "Other",
   ]);
   assert.match(sql, /product_catalog_category_known check \(category in \(\s*'Mechanical Protection', 'Maintenance', 'Tire and Wheel', 'Theft', 'Battery', 'Appearance', 'Other'\s*\)\)/);
 });

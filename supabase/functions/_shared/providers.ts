@@ -30,6 +30,8 @@ export const CATEGORIES = [
   "Tire and Wheel",
   "Theft",
   "Battery",
+  "GAP",
+  "Wear Care",
   "Appearance",
   "Other",
 ] as const;
