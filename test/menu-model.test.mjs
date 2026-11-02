@@ -177,7 +177,8 @@ test("the menu opens straight into the columns, with none of the planner's scree
   for (const s of [page, menu]) assert.doesNotMatch(s, /—/);
   const css = read("apps/ownership-planner/app/menu/[sessionId]/menu.css");
   assert.match(css, /height: 100dvh;\s*overflow: hidden;/);
-  assert.match(css, /grid-template-rows: auto repeat\(var\(--mn-rows\), minmax\(0, 1fr\)\) auto;/);
+  // Rows as tall as their content, under a 1280px cap (item 7, 2 Nov testing).
+  assert.match(css, /grid-template-rows: auto repeat\(var\(--mn-rows\), auto\) auto;/);
 });
 
 test("a cell's caption is the level's own word, or the term for a one-level product", async () => {

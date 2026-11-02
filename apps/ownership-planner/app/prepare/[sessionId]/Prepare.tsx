@@ -264,14 +264,14 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
         </div>
         {sheet.categories.map((category) => (
           <div key={category} className="pm-row">
-            <div className="pm-label">{category}</div>
+            <div className="pm-label" title={category}>{category}</div>
             {sheet.columns.map((c) => {
               const pos = String(c.position);
               const bought = sheet.purchased.filter((p) => p.category === category);
               if (bought.length > 0) {
                 return (
                   <div key={pos} data-col={pos} className="pm-cell pm-cell--locked">
-                    <span className="pm-plan">{bought.map((b) => b.plan_name).join(", ")}</span>
+                    <span className="pm-plan" title={bought.map((b) => b.plan_name).join(", ")}>{bought.map((b) => b.plan_name).join(", ")}</span>
                     <span className="pm-sub">Purchased, locked</span>
                     <span className="pm-price">{dollars(bought.reduce((n, b) => n + b.price, 0))}</span>
                   </div>
@@ -282,7 +282,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
               if (!found) {
                 return (
                   <Control key={pos} data-col={pos} className="pm-cell pm-cell--off" onPress={() => open(pos, category)} disabled={locked}>
-                    <span className="pm-sub">{note ?? "Not included"}</span>
+                    <span className="pm-sub" title={note ?? "Not included"}>{note ?? "Not included"}</span>
                   </Control>
                 );
               }
@@ -296,8 +296,8 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
                   disabled={locked}
                   title={note ?? undefined}
                 >
-                  <span className="pm-plan">{found.plan.plan_name}</span>
-                  <span className="pm-sub">{found.option.label}</span>
+                  <span className="pm-plan" title={found.plan.plan_name}>{found.plan.plan_name}</span>
+                  <span className="pm-sub" title={found.option.label}>{found.option.label}</span>
                   {f.not_applied ? (
                     <>
                       <span className="pm-price pm-price--entered">{dollars(f.entered)}</span>
