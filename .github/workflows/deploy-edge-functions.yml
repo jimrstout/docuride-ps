@@ -172,7 +172,13 @@ jobs:
               # No --no-verify-jwt flag anywhere. verify_jwt comes from
               # supabase/config.toml, which names every function precisely so
               # that the CLI's default of true cannot be applied by omission.
-              if supabase functions deploy "$slug" --project-ref "$PROJECT_REF"; then
+              #
+              # --yes: newer CLIs ask "Deploy 1 Function?" before a production
+              # deploy and, with no terminal to ask, refuse and change nothing.
+              # Run 91 (the merge of #108) failed that way for all 17 functions.
+              # This run is the confirmation: it only starts on a push to main
+              # or by hand, and it names each function it deploys.
+              if supabase functions deploy "$slug" --project-ref "$PROJECT_REF" --yes; then
                 echo "$slug deployed"
               else
                 echo "::error::$slug failed to deploy"
