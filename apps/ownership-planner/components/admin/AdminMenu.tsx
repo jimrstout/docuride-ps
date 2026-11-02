@@ -32,16 +32,15 @@ export default function AdminMenu({ sections, here }: { sections: readonly Admin
 
   return (
     <div className="ad-menu">
-      <button
-        type="button"
+      <Control
         className="ad-menu-button"
         aria-expanded={open}
         aria-controls="ad-menu-panel"
-        onClick={() => setOpen((o) => !o)}
+        onPress={() => setOpen((o) => !o)}
       >
         <span className="ad-menu-bars" aria-hidden="true" />
         Menu
-      </button>
+      </Control>
       {open ? (
         <nav id="ad-menu-panel" className="ad-menu-panel" aria-label="Admin sections">
           {sections.map((s) => (

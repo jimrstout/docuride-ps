@@ -20,7 +20,9 @@ const fn = (name) => readFileSync(new URL(`../supabase/functions/${name}/index.t
 test("caught up only once a different render is on the screen", () => {
   assert.equal(caughtUp("a", "a"), false, "the answer has not been drawn yet");
   assert.equal(caughtUp("a", "b"), true, "the new render is on the screen");
-  assert.equal(caughtUp("a", null), true, "the page was replaced (an error page): nothing more to wait for");
+  // A marker that has merely gone is not the answer: Next can show an empty
+  // page between the old page and the new one (seen with slowed answers).
+  assert.equal(caughtUp("a", null), false, "the old page has gone but the new one is not drawn yet");
   assert.equal(caughtUp(null, null), true, "a page with no marker ends as it always did");
   assert.equal(RENDER_STAMP_ATTR, "data-working-render");
   assert.ok(RENDER_WAIT_MS >= 60_000, "never ends early for a slow rate");
@@ -30,7 +32,9 @@ test("Details carries the marker, new on every render, made on the server", () =
   const stamp = app("components/RenderStamp.tsx");
   assert.doesNotMatch(stamp, /"use client"/);
   assert.match(stamp, /randomUUID\(\)/);
-  assert.match(app("app/details/[sessionId]/page.tsx"), /<div className="vh vh--fit">[\s\S]{0,300}<RenderStamp \/>/);
+  // Last in the page, so it changes only once everything above it is drawn.
+  const page = app("app/details/[sessionId]/page.tsx");
+  assert.match(page, /<\/main>\s*\{\/\*[\s\S]*?\*\/\}\s*<RenderStamp \/>\s*<\/div>\s*<\/WorkingArea>/);
 });
 
 test("the busy state waits for the marker, and keeps its slow and stuck messages meanwhile", () => {
@@ -45,13 +49,29 @@ test("the busy state waits for the marker, and keeps its slow and stuck messages
   assert.ok(finish.indexOf("if (r.renderBefore !== null) {") < finish.indexOf("for (const t of timers) clearTimeout(t);"));
   // Remembered when the action starts, and a second "the form ended" changes nothing.
   assert.match(w, /renderBefore: renderStamp\(\),/);
-  assert.match(wait, /if \(r\.waiting\) return;\s*r\.waiting = true;/);
+  // finish() ends once however many markers call it (r.finishing).
+  assert.match(w, /if \(!r \|\| r\.finishing\) return;\s*r\.finishing = true;/);
+  assert.match(wait, /r\.waiting = true;/);
 });
 
 test("the double-submit guards are unchanged: on the page and on the server", () => {
   const w = app("components/Working.tsx");
   assert.match(w, /if \(state\.running\) \{[\s\S]*?e\.preventDefault\(\);\s*e\.stopImmediatePropagation\(\);/);
-  assert.match(app("components/PendingButton.tsx"), /disabled=\{disabled \|\| busy\}/);
+  assert.match(app("components/Control.tsx"), /disabled=\{disabled \|\| busy\}/);
   assert.match(fn("fni-contract-submit"), /submit_state/);
   assert.match(fn("fni-contract-void"), /claim/i);
+});
+
+test("Details' actions refresh the page in place, so it never goes blank", () => {
+  // A redirect to the page already showing made Next draw an empty window
+  // until the new page's data arrived, seconds with the overlay gone.
+  const actions = readFileSync(new URL("../apps/ownership-planner/app/console-actions.ts", import.meta.url), "utf8");
+  const back = actions.slice(actions.indexOf("async function backToVerify("), actions.indexOf("\n}\n", actions.indexOf("async function backToVerify(")));
+  assert.match(back, /\): Promise<void> \{/);
+  assert.match(back, /revalidatePath\(`\/details\/\$\{sessionId\}`\);/);
+  assert.doesNotMatch(back, /redirect\(/);
+  // And a link into Details shows a busy screen, never a blank one, while it loads.
+  const loading = readFileSync(new URL("../apps/ownership-planner/app/details/[sessionId]/loading.tsx", import.meta.url), "utf8");
+  assert.match(loading, /data-page-loading=""/);
+  assert.match(loading, /Loading the deal\.\.\./);
 });

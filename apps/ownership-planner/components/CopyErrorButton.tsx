@@ -7,6 +7,7 @@
 // cannot be written (an older browser, a page not served over https), the
 // text is selected instead so it can be copied by hand.
 
+import Control from "@/components/Control";
 import { useEffect, useRef, useState } from "react";
 
 export default function CopyErrorButton({ text, className }: { text: string; className?: string }) {
@@ -37,9 +38,9 @@ export default function CopyErrorButton({ text, className }: { text: string; cla
 
   return (
     <span className="copy-error">
-      <button type="button" className={className ?? "copy-error-btn"} onClick={copy}>
+      <Control className={className ?? "copy-error-btn"} onPress={copy} busyText="Copying...">
         Copy error
-      </button>
+      </Control>
       <span className="copy-error-said" role="status" aria-live="polite">
         {said}
       </span>

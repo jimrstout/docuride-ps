@@ -96,7 +96,7 @@ test("a valid typed price applies at once; Save stays blocked while any invalid 
   assert.equal(model.saveBlocked(sheet, { ...both, prices: { [K]: 50000, [bat.key]: 9000 } }), false);
 
   const view = read("apps/ownership-planner/app/prepare/[sessionId]/Prepare.tsx");
-  assert.match(view, /onClick=\{onSave\} disabled=\{pending \|\| blocked\}/);
+  assert.match(view, /onPress=\{onSave\} disabled=\{pending \|\| blocked\}/);
   assert.match(view, /const onSave = \(\) => \{\s*if \(blocked\) return;/);
   assert.match(view, /\{problems\.map\(\(p\) => <p key=\{p\.key\} className="pm-problem">\{p\.text\}<\/p>\)\}/);
   assert.match(view, /<span className="pm-profit pm-not-applied">Not applied<\/span>/);

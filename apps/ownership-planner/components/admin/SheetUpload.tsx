@@ -8,6 +8,7 @@
 // through it. Once the file is there, the form submits as an ordinary form and
 // the server records the sheet and starts reading it.
 
+import Control from "@/components/Control";
 import { useRef, useState } from "react";
 import { useWorking, Working } from "@/components/Working";
 import { createPriceSheet, priceSheetUploadUrl } from "@/app/console-actions";
@@ -96,10 +97,16 @@ export default function SheetUpload({
       </label>
       {problem ? <p className="ad-badge ad-badge--warn ad-field--wide" role="alert">{problem}</p> : null}
       <div className="ad-editor-actions ad-field--wide">
-        <button type="submit" className="ad-btn ad-btn--primary" disabled={state !== "idle"} aria-busy={state !== "idle" || undefined}>
-          {state !== "idle" ? <span className="btn-spinner" aria-hidden="true" /> : null}
-          {state === "uploading" ? "Uploading…" : state === "saving" ? "Saving…" : "Upload and read"}
-        </button>
+        {/* Busy from the press until the sheet is saved and read: the upload
+            starts the page's working state from this button, and the save that
+            follows ends it (components/Control.tsx). */}
+        <Control
+          type="submit"
+          className="ad-btn ad-btn--primary"
+          busyText={state === "saving" ? "Saving..." : "Uploading..."}
+        >
+          Upload and read
+        </Control>
         <p className="ad-help">
           Claude reads the sheet into rates for you to review. Nothing is offered until a person publishes it.
         </p>

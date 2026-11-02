@@ -15,6 +15,7 @@
 
 "use client";
 
+import Control from "@/components/Control";
 import type { OfferRate } from "@/lib/types";
 
 /**
@@ -82,17 +83,16 @@ export default function RateChooser({
             const target = rateFor(m, chosenDeductible);
             const on = chosen?.term_months === m;
             return (
-              <button
+              <Control
                 key={String(m)}
-                type="button"
                 role="radio"
                 aria-checked={on}
                 className={`chip ${on ? "is-on" : ""}`}
                 disabled={!target}
-                onClick={() => target && onChoose(target.rate_unique_id)}
+                onPress={() => target && onChoose(target.rate_unique_id)}
               >
                 {monthsLabel(m)}
-              </button>
+              </Control>
             );
           })}
         </div>
@@ -108,17 +108,16 @@ export default function RateChooser({
               );
               const on = chosenDeductible === d;
               return (
-                <button
+                <Control
                   key={d}
-                  type="button"
                   role="radio"
                   aria-checked={on}
                   className={`chip ${on ? "is-on" : ""}`}
                   disabled={!target}
-                  onClick={() => target && onChoose(target.rate_unique_id)}
+                  onPress={() => target && onChoose(target.rate_unique_id)}
                 >
                   {d}
-                </button>
+                </Control>
               );
             })}
           </div>

@@ -35,7 +35,7 @@ test("the three steps, from the rating and the prepared record", () => {
 test("1. not rated: Rate is the one button, and there is nothing to present", () => {
   assert.match(rateBranch, /\{step === "rate" \? \(/);
   assert.match(rateBranch, /<form action=\{verifyAndRate\} className="vgate">/);
-  assert.match(rateBranch, /className="btn btn--go"[\s\S]*?>\s*Rate\s*<\/PendingButton>/);
+  assert.match(rateBranch, /className="btn btn--go"[\s\S]*?>\s*Rate\s*<\/Control>/);
   for (const hidden of ["Present menu", "Present storyboard", "Prepare presentation", "/plan/", "/menu/", "/prepare/"]) {
     assert.ok(!rateBranch.includes(hidden), `${hidden} is not offered before a rating`);
   }
@@ -44,8 +44,8 @@ test("1. not rated: Rate is the one button, and there is nothing to present", ()
 test("2. rated, not prepared: Prepare presentation leads; the presentations wait, saying why", () => {
   assert.match(ratedBranch, /className=\{step === "prepare" \? "btn btn--go" : "btn btn--quiet"\}\s*href=\{`\/prepare\/\$\{sessionId\}`\}/);
   const waiting = ratedBranch.slice(ratedBranch.indexOf('{step === "prepare" ? ('), ratedBranch.indexOf(") : (", ratedBranch.indexOf('{step === "prepare" ? (')));
-  assert.match(waiting, /<button type="button" className="btn btn--quiet" disabled aria-describedby="vnext-why">\s*Present menu\s*<\/button>/);
-  assert.match(waiting, /<button type="button" className="btn btn--quiet" disabled aria-describedby="vnext-why">\s*Present storyboard\s*<\/button>/);
+  assert.match(waiting, /<Control className="btn btn--quiet" disabled aria-describedby="vnext-why">\s*Present menu\s*<\/Control>/);
+  assert.match(waiting, /<Control className="btn btn--quiet" disabled aria-describedby="vnext-why">\s*Present storyboard\s*<\/Control>/);
   assert.match(waiting, /<p id="vnext-why" className="vnext-why">\{PREPARE_FIRST\}<\/p>/);
   assert.equal(PREPARE_FIRST, "Prepare the presentation first.");
   assert.doesNotMatch(waiting, /href=/, "nothing to open while waiting");
@@ -118,5 +118,5 @@ test("one panel at a time, each kept in the page so its forms still work", () =>
   // The deal sheet form and the Save changes button that sends it are in the same panel.
   const sheetTab = page.slice(page.indexOf('id: "sheet"'), page.indexOf('id: "parties"'));
   assert.match(sheetTab, /id="vsheet"/);
-  assert.match(sheetTab, /<PendingButton form="vsheet"/);
+  assert.match(sheetTab, /<Control type="submit" form="vsheet"/);
 });

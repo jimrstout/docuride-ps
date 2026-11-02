@@ -14,6 +14,7 @@
 
 "use client";
 
+import Control from "@/components/Control";
 import { money } from "@/lib/money";
 
 export default function TierChooser({
@@ -34,19 +35,18 @@ export default function TierChooser({
         {tiers.map((t) => {
           const on = chosen === t.product_code;
           return (
-            <button
+            <Control
               key={t.product_code}
-              type="button"
               role="radio"
               aria-checked={on}
               className={`tier ${on ? "is-on" : ""}`}
-              onClick={() => onChoose(t.product_code)}
+              onPress={() => onChoose(t.product_code)}
             >
               <span className="tier-name">{t.label}</span>
               {t.fromPrice !== null ? (
                 <span className="tier-price">{money(t.fromPrice)}</span>
               ) : null}
-            </button>
+            </Control>
           );
         })}
       </div>

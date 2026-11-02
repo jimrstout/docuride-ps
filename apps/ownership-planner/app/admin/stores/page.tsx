@@ -9,7 +9,7 @@
 // Only the time zone is edited. A store's name and address come from the CRM.
 
 import { currentOperator } from "@/lib/admin-session";
-import PendingButton from "@/components/PendingButton";
+import Control from "@/components/Control";
 import { Working } from "@/components/Working";
 import { edge } from "@/lib/edge";
 import { dayLabel } from "@/lib/store-time";
@@ -88,7 +88,7 @@ export default async function StoresPage({ searchParams }: { searchParams: Promi
                           <option key={z.zone} value={z.zone}>{z.label}</option>
                         ))}
                       </select>
-                      <PendingButton className="ad-btn ad-btn--secondary" pending="Saving...">Save</PendingButton>
+                      <Control type="submit" className="ad-btn ad-btn--secondary" busyText="Saving...">Save</Control>
                     </form>
                   </td>
                   <td className="ad-today" style={{ whiteSpace: "nowrap" }}>{dayLabel(s.today)}</td>

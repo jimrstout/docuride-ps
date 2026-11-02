@@ -23,10 +23,10 @@ test("a panel whose own button is busy locks without a second label", () => {
   assert.match(css, /\.is-working::after \{\s*content: attr\(data-working-text\);/);
 });
 
-test("PendingButton shows one spinner and its working label, and is disabled while busy", () => {
-  const b = src("components/PendingButton.tsx");
+test("the shared control shows one spinner and its working label, and is disabled while busy", () => {
+  const b = src("components/Control.tsx");
   assert.match(b, /disabled=\{disabled \|\| busy\}/);
-  assert.match(b, /<span className="btn-spinner" aria-hidden="true" \/>\s*\{pending\}/);
+  assert.match(b, /<span className="btn-spinner" aria-hidden="true" \/>\s*\{busyText\}/);
 });
 
 test("a second tap on a running form is stopped before anything is sent", () => {

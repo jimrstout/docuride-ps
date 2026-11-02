@@ -15,6 +15,7 @@
 // browser tab only. After an action, the server can point at the panel its
 // answer belongs to (a buyer saved: that panel), and does so once per answer.
 
+import Control from "@/components/Control";
 import { useEffect, useState } from "react";
 
 export interface DetailsTab {
@@ -81,16 +82,15 @@ export default function DetailsTabs({
     <div className="vtabs">
       <div className="vtabs-list" role="tablist" aria-label="Deal panels">
         {tabs.map((t) => (
-          <button
+          <Control
             key={t.id}
-            type="button"
             role="tab"
             id={`vtab-${t.id}`}
             aria-selected={t.id === shown}
             aria-controls={`vpanel-${t.id}`}
             tabIndex={t.id === shown ? 0 : -1}
             className={t.id === shown ? "vtabs-tab is-here" : "vtabs-tab"}
-            onClick={() => choose(t.id)}
+            onPress={() => choose(t.id)}
             onKeyDown={(e) => {
               if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
               const i = tabs.findIndex((x) => x.id === t.id);
@@ -101,7 +101,7 @@ export default function DetailsTabs({
           >
             {t.label}
             {t.badge ? <span className="vtabs-badge">{t.badge}</span> : null}
-          </button>
+          </Control>
         ))}
       </div>
       {tabs.map((t) => (

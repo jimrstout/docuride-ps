@@ -30,6 +30,7 @@
 //   purchased, included, at the price it was sold for, and cannot be changed.
 //   Everything not yet submitted stays selectable (lib/purchased.ts).
 
+import Control from "@/components/Control";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Dispatch, SetStateAction } from "react";
@@ -727,17 +728,16 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
               const reached = i <= furthestProduct;
               return (
                 <li key={p.family_code} className={here ? "is-here" : ""}>
-                  <button
-                    type="button"
+                  <Control
                     disabled={!reached}
                     aria-current={here ? "true" : undefined}
-                    onClick={() => goTo(firstScreenOfStep(1) + i)}
+                    onPress={() => goTo(firstScreenOfStep(1) + i)}
                   >
                     <span className="railnav-name">{tierOf(p).copy.display_name}</span>
                     <span className="railnav-state">
                       {d === "Included" ? "Included" : d ? "Managing" : here ? "Deciding" : "Not yet"}
                     </span>
-                  </button>
+                  </Control>
                 </li>
               );
             })}
@@ -1035,9 +1035,9 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
             <PlanSummary lines={planLines} />
             {presentable.length > 0 && (
               <p className="panel-foot">
-                <button type="button" className="linkish" onClick={() => goTo(1)}>
+                <Control className="linkish" onPress={() => goTo(1)}>
                   Change these decisions
-                </button>
+                </Control>
               </p>
             )}
           </div>
@@ -1112,9 +1112,9 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
                 is needed from you on this screen.
               </p>
               <p className="panel-foot panel-foot--plain">
-                <button type="button" className="linkish" onClick={() => goTo(3)}>
+                <Control className="linkish" onPress={() => goTo(3)}>
                   Review your plan again
-                </button>
+                </Control>
               </p>
             </div>
           </CompletionState>

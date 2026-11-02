@@ -88,13 +88,14 @@ test("the modal shows the deal, buyer, sale date, each product and the total", a
 test("Submit contracts opens the modal and sends nothing; only Confirm Submit sends", () => {
   const m = read(MODAL);
   // The opener is a plain button: it shows the modal and submits nothing.
-  assert.match(m, /<button type="button" className="btn" onClick=\{show\} disabled=\{!!blocked\} aria-haspopup="dialog">\s*Submit contracts\s*<\/button>/);
+  assert.match(m, /<Control className="btn" onPress=\{show\} disabled=\{!!blocked\} aria-haspopup="dialog">\s*Submit contracts\s*<\/Control>/);
   assert.match(m, /const show = \(\) => \{\s*setTicked\(false\);\s*dialog\.current\?\.showModal\(\);\s*setOpen\(true\);\s*\};/);
   // The one control that sends the form is Confirm Submit, and only while the modal is open.
   // The other is the spent-rate refresh, which sends to refreshSpentRates, never to submitContracts.
-  assert.equal((m.match(/<PendingButton/g) ?? []).length, 2);
-  assert.match(m, /<PendingButton\s+className="btn"\s+working="page"\s+pending="Refreshing the rating\.\.\."\s+formAction=\{refreshSpentRates\}/);
-  assert.doesNotMatch(m, /type="submit"|requestSubmit|\.submit\(\)/);
+  assert.equal((m.match(/<Control type="submit"/g) ?? []).length, 2);
+  assert.match(m, /<Control type="submit"\s+className="btn"\s+working="page"\s+busyText="Refreshing the rating\.\.\."\s+formAction=\{refreshSpentRates\}/);
+  // Nothing else sends it: no raw button, no script submit.
+  assert.doesNotMatch(m, /<button\b|requestSubmit|\.submit\(\)/);
   assert.match(m, /disabled=\{!open \|\| !!blocked \|\| !!held \|\| \(needsDx1 && !ticked\)\}\s*>\s*Confirm Submit\s*</);
   assert.match(m, /<form action=\{submitContracts\} ref=\{form\} className="vsubmit">\s*<Working \/>/);
   const page = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
@@ -104,7 +105,7 @@ test("Submit contracts opens the modal and sends nothing; only Confirm Submit se
 
 test("Cancel closes the modal and sends nothing", () => {
   const m = read(MODAL);
-  assert.match(m, /<button type="button" className="btn btn--quiet" onClick=\{cancel\} disabled=\{busy\}>\s*Cancel\s*<\/button>/);
+  assert.match(m, /<Control className="btn btn--quiet" onPress=\{cancel\} disabled=\{busy\}>\s*Cancel\s*<\/Control>/);
   assert.match(m, /const cancel = \(\) => \{\s*if \(!busy\) dialog\.current\?\.close\(\);\s*\};/);
   // Escape is a cancel too, refused only while a submit is running.
   assert.match(m, /onCancel=\{\(e\) => \{[\s\S]*?if \(busy\) e\.preventDefault\(\);\s*\}\}/);
@@ -133,8 +134,8 @@ test("a double tap on Confirm Submit sends once", () => {
   const m = read(MODAL);
   // The page's busy button (PR 45): one spinner, one label, disabled while busy,
   // and the working area stops a second send of the running form.
-  assert.match(m, /<PendingButton\s+className="btn btn--go"\s+working="page"\s+pending="Submitting contracts\.\.\."\s+leave=\{SUBMIT_LEAVE\}/);
-  const b = read("apps/ownership-planner/components/PendingButton.tsx");
+  assert.match(m, /<Control type="submit"\s+className="btn btn--go"\s+working="page"\s+busyText="Submitting contracts\.\.\."\s+leave=\{SUBMIT_LEAVE\}/);
+  const b = read("apps/ownership-planner/components/Control.tsx");
   assert.match(b, /disabled=\{disabled \|\| busy\}/);
   const w = read("apps/ownership-planner/components/Working.tsx");
   assert.match(w, /if \(state\.running\) \{[\s\S]*?e\.preventDefault\(\);\s*e\.stopImmediatePropagation\(\);/);

@@ -73,8 +73,8 @@ test("Previous and Next only when there is more than one page", () => {
   const pager = app("components/admin/SessionPager.tsx");
   assert.match(pager, /const paged = view\.pages > 1;/);
   assert.match(pager, /\{paged \? \(\s*<span className="ad-pager" role="group" aria-label="Pages">/);
-  assert.match(pager, />\s*Previous\s*<\/button>/);
-  assert.match(pager, />\s*Next\s*<\/button>/);
+  assert.match(pager, />\s*Previous\s*<\/Control>/);
+  assert.match(pager, />\s*Next\s*<\/Control>/);
   // The footer is the same height either way, so showing them never changes what fits.
   assert.match(app("app/admin/admin.css"), /\.ad-panel:has\(#ad-sessions\) \.ad-panel-foot \{ min-height: 50px;/);
 });

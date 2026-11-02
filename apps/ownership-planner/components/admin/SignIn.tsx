@@ -12,7 +12,7 @@
 // sit under .ad, so importing it on Details changes nothing else there.
 import "@/app/admin/admin.css";
 import { signIn } from "@/app/console-actions";
-import PendingButton from "@/components/PendingButton";
+import Control from "@/components/Control";
 import { Working } from "@/components/Working";
 import { Brand, Notice } from "@/components/admin/Parts";
 
@@ -66,9 +66,9 @@ export function SignIn({ notice, next }: { notice: string | null; next: string }
                   <input type="password" name="password" autoComplete="current-password" required />
                 </label>
 
-                <PendingButton className="ad-btn ad-btn--primary" pending="Signing in...">
+                <Control type="submit" className="ad-btn ad-btn--primary" busyText="Signing in...">
                   Sign in
-                </PendingButton>
+                </Control>
               </div>
             </form>
           </div>

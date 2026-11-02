@@ -11,7 +11,6 @@
 // narrows the table.
 
 import Control from "@/components/Control";
-import PendingButton from "@/components/PendingButton";
 import { Working } from "@/components/Working";
 import { notFound } from "next/navigation";
 import { currentOperator } from "@/lib/admin-session";
@@ -94,7 +93,7 @@ function RateForm({ sheetId, r }: { sheetId: string; r: PriceSheetRateRow }) {
           {field("dealer_cost", "Dealer cost ($)", numText(r.dealer_cost))}
           {field("suggested_retail", "Suggested retail ($)", numText(r.suggested_retail))}
           <div className="ad-editor-actions ad-field--wide">
-            <PendingButton className="ad-btn ad-btn--primary" pending="Saving the correction...">Save correction</PendingButton>
+            <Control type="submit" className="ad-btn ad-btn--primary" busyText="Saving the correction...">Save correction</Control>
             <Control href={`/admin/price-sheets/${sheetId}`} className="ad-btn ad-btn--secondary">Cancel</Control>
           </div>
         </form>
@@ -177,21 +176,21 @@ export default async function SheetPage({
               <form action={parsePriceSheet}>
                 <Working />
                 <input type="hidden" name="sheet_id" value={sheet.id} />
-                <PendingButton className="ad-btn ad-btn--primary" working="page" pending="Reading the price sheet with Claude...">Read with Claude</PendingButton>
+                <Control type="submit" className="ad-btn ad-btn--primary" working="page" busyText="Reading the price sheet with Claude...">Read with Claude</Control>
               </form>
             ) : null}
             {draft && sheet.parse_status === "Parsed" ? (
               <form action={publishSheet}>
                 <Working />
                 <input type="hidden" name="sheet_id" value={sheet.id} />
-                <PendingButton
+                <Control type="submit"
                   className="ad-btn ad-btn--primary"
                   working="page"
-                  pending="Publishing the price sheet..."
+                  busyText="Publishing the price sheet..."
                   disabled={flagged > 0 || counted.length === 0}
                 >
                   Publish {counted.length} {counted.length === 1 ? "rate" : "rates"}
-                </PendingButton>
+                </Control>
               </form>
             ) : null}
             {sheet.status !== "Retired" ? (
@@ -199,7 +198,7 @@ export default async function SheetPage({
                 <Working />
                 <input type="hidden" name="sheet_id" value={sheet.id} />
                 <input name="reason" placeholder="Why it is being retired" aria-label="Why it is being retired" required />
-                <PendingButton className="ad-btn ad-btn--secondary" working="page" pending="Retiring the price sheet...">Retire</PendingButton>
+                <Control type="submit" className="ad-btn ad-btn--secondary" working="page" busyText="Retiring the price sheet...">Retire</Control>
               </form>
             ) : null}
           </div>
@@ -260,7 +259,7 @@ export default async function SheetPage({
                             <Working />
                             <input type="hidden" name="sheet_id" value={sheet.id} />
                             <input type="hidden" name="rate_id" value={r.id} />
-                            <PendingButton className="ad-btn ad-btn--secondary" pending="Saving...">Include</PendingButton>
+                            <Control type="submit" className="ad-btn ad-btn--secondary" busyText="Saving...">Include</Control>
                           </form>
                         ) : (
                           <form action={leaveOutRate} className="ad-row">
@@ -268,7 +267,7 @@ export default async function SheetPage({
                             <input type="hidden" name="sheet_id" value={sheet.id} />
                             <input type="hidden" name="rate_id" value={r.id} />
                             <input name="reason" placeholder="Why" aria-label={`Why ${r.product_name} is left out`} required />
-                            <PendingButton className="ad-btn ad-btn--secondary" pending="Saving...">Leave out</PendingButton>
+                            <Control type="submit" className="ad-btn ad-btn--secondary" busyText="Saving...">Leave out</Control>
                           </form>
                         )}
                       </div>

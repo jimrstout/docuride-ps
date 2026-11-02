@@ -25,7 +25,6 @@
 // conventional menu still shows them, under the provider's product name.
 
 import Control from "@/components/Control";
-import PendingButton from "@/components/PendingButton";
 import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
@@ -104,7 +103,7 @@ function TemplateForm({ t, payload }: { t: TemplateRow | null; payload: Template
         <input type="checkbox" name="active" defaultChecked={t?.active ?? true} /> Active
       </label>
       <div className="ad-editor-actions ad-field--wide">
-        <PendingButton className="ad-btn ad-btn--primary" pending="Saving the menu...">{t ? "Save menu" : "Create menu"}</PendingButton>
+        <Control type="submit" className="ad-btn ad-btn--primary" busyText="Saving the menu...">{t ? "Save menu" : "Create menu"}</Control>
         <Control href={t ? `/admin/menus?template=${t.id}` : "/admin/menus"} className="ad-btn ad-btn--secondary">Cancel</Control>
       </div>
     </form>
@@ -175,7 +174,7 @@ function SlotForm({ t, slot, payload }: { t: TemplateRow; slot: TemplateSlotRow 
             </div>
           </div>
           <div className="ad-editor-actions ad-field--wide">
-            <PendingButton className="ad-btn ad-btn--primary" pending="Saving the slot...">{slot ? "Save slot" : "Add slot"}</PendingButton>
+            <Control type="submit" className="ad-btn ad-btn--primary" busyText="Saving the slot...">{slot ? "Save slot" : "Add slot"}</Control>
             <Control href={`/admin/menus?template=${t.id}`} className="ad-btn ad-btn--secondary">Cancel</Control>
           </div>
         </form>
@@ -231,7 +230,7 @@ function ColumnsPanel({ t, editing }: { t: TemplateRow; editing: boolean }) {
               );
             })}
             <div className="ad-editor-actions ad-field--wide">
-              <PendingButton className="ad-btn ad-btn--primary" pending="Saving the columns...">Save columns</PendingButton>
+              <Control type="submit" className="ad-btn ad-btn--primary" busyText="Saving the columns...">Save columns</Control>
               <Control href={`/admin/menus?template=${t.id}`} className="ad-btn ad-btn--secondary">Cancel</Control>
             </div>
           </form>
@@ -422,7 +421,7 @@ function PresetsPanel({ t, payload, params }: { t: TemplateRow; payload: Templat
               </fieldset>
             ))}
             <div className="ad-editor-actions ad-field--wide">
-              <PendingButton className="ad-btn ad-btn--primary" pending="Saving the presets...">Save presets</PendingButton>
+              <Control type="submit" className="ad-btn ad-btn--primary" busyText="Saving the presets...">Save presets</Control>
               <Control href={`/admin/menus?template=${t.id}&presets=${dealType}`} className="ad-btn ad-btn--secondary">Cancel</Control>
             </div>
           </form>
@@ -581,7 +580,7 @@ function MenuDetail({ t, payload, params }: { t: TemplateRow; payload: Templates
                           <input type="hidden" name="template_id" value={t.id} />
                           <input type="hidden" name="slot_id" value={s.id} />
                           <input type="hidden" name="direction" value="up" />
-                          <PendingButton className="ad-btn ad-btn--secondary" pending="Moving..." aria-label={`Move ${s.title} up`}>Up</PendingButton>
+                          <Control type="submit" className="ad-btn ad-btn--secondary" busyText="Moving..." aria-label={`Move ${s.title} up`}>Up</Control>
                         </form>
                       ) : null}
                       {i < t.slots.length - 1 ? (
@@ -590,7 +589,7 @@ function MenuDetail({ t, payload, params }: { t: TemplateRow; payload: Templates
                           <input type="hidden" name="template_id" value={t.id} />
                           <input type="hidden" name="slot_id" value={s.id} />
                           <input type="hidden" name="direction" value="down" />
-                          <PendingButton className="ad-btn ad-btn--secondary" pending="Moving..." aria-label={`Move ${s.title} down`}>Down</PendingButton>
+                          <Control type="submit" className="ad-btn ad-btn--secondary" busyText="Moving..." aria-label={`Move ${s.title} down`}>Down</Control>
                         </form>
                       ) : null}
                       <Control href={`/admin/menus?template=${t.id}&slot=${s.id}`} className="ad-btn ad-btn--secondary">Edit</Control>

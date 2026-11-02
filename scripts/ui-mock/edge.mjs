@@ -71,6 +71,42 @@ export function sessions(n) {
   }));
 }
 
+/** What the customer's tabs read (fni-session-get): one made-up product, two terms. */
+function customerSession(id) {
+  const rate = (months, price) => ({
+    rate_unique_id: `mock-${months}`, term_months: months, term_miles: null, deductible: 0, deductible_code: null,
+    disappearing_deductible: false, dealer_cost: price - 400, provider_markup: 0, offered_price: price, options: [],
+    retail_price: price, pricing_rule_id: null, unpriced_reason: null, raw: {},
+  });
+  return {
+    session: {
+      id, status: "In Progress", mode: "Staff-Presented", mode_label: "Staff-presented", store_id: "s0", deal_id: null,
+      deal_number: "99901", buyer_type: "Individual", buyer_display_name: "Pat Example", cobuyer_type: null, cobuyer_display_name: null,
+      vehicle: { year: 2026, make: "Mockmake", model: "Trail 1000 XT", submodel: null, vin: "1ABCD23EFGH456789", condition: "New",
+        tecassured_code: "UTV", in_service_date: "2026-11-02", mileage_or_hours: 3, stock_number: "ST-1234" },
+      financials: { sale_price: 21499, amount_financed: 23410.55, amortized_principal: 23410.55, interest_rate: 7.99, apr: 7.99, rate_used: 7.99,
+        rate_source: "apr", rate_label: "APR", term_months: 60, contract_payment: 474.55, finance_type: "Finance", lienholder_name: "Example Credit Union",
+        payment_basis: "tila", has_payment: true, max_amount_financed: null, agreed_down_payment: 1000 },
+      discovery: null, expires_at: "2026-11-03T04:59:59Z",
+    },
+    offer: { rated_at: "2026-11-02T13:00:05Z", product_count: 1, families: [{
+      family_code: "MECH", provider_id: "p0", provider_name: "Mock Provider",
+      tiers: [{ product_code: "MP", product_name: "Mechanical Protection", product_type: "VSA", rates: [rate(24, 1295), rate(36, 1595)], raw: {}, provider_id: "p0", provider_name: "Mock Provider" }],
+    }] },
+    offer_status: { state: "Rated", detail: null, attempted_at: "2026-11-02T13:00:05Z" },
+    verification: { state: "Verified", verified_at: "2026-11-02T13:00:00Z" },
+    catalog: [{ provider_id: "p0", category: "Mechanical", product_code: "MP", display_name: "Mechanical Protection", goal: "Repairs paid for",
+      what_it_accomplishes: "Pays for covered repairs.", what_it_covers: "The engine and drivetrain.", coverage_duration: null, what_it_excludes: null,
+      deductible_note: null, how_to_use: null, transferable: true, transfer_note: null, future_value_note: null, full_terms_url: null,
+      relevance_tags: [], display_order: 1, store_id: null, is_presentable: true }],
+    dealer_group_name: "Mock Dealer Group", copy: {},
+    catalog_coverage: { offered: 1, matched: 1, copy_pending: [], unmatched: [] },
+    selections: [], purchased: [],
+    menu_columns: [{ name: "Gold", preset_categories: ["Mechanical"], starting_level: "Middle" }],
+    menu_prepared: null, photos: [], photos_cached_at: "2026-11-02T13:00:00Z",
+  };
+}
+
 export function startMockEdge({ port, delayMs = 0, rows = 6 } = {}) {
   const state = { delayMs, rows, calls: {} };
   const server = http.createServer(async (req, res) => {
@@ -92,6 +128,9 @@ export function startMockEdge({ port, delayMs = 0, rows = 6 } = {}) {
     if (fn === "fni-session-verify" && req.method === "GET") return json(200, sheet(u.searchParams.get("session_id")));
     if (fn === "fni-session-verify") return json(200, { ok: true });
     if (fn === "fni-dx1-check") return json(200, { status: "Nothing to check", blocking: [], warnings: [] });
+    if (fn === "fni-session-get") return json(200, customerSession(u.searchParams.get("session_id")));
+    if (fn === "fni-session-save") return json(200, { ok: true });
+    if (fn === "fni-acknowledgment") return json(200, { ok: true, pdf_base64: null });
     if (fn === "fni-rate-vehicle") return json(200, { product_count: 11, outcome: "unchanged", lines: [] });
     return json(404, { error: "Not served by the mock." });
   });

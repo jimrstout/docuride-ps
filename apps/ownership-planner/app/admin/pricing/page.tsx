@@ -25,7 +25,6 @@
 // pop-up dialogs.
 
 import Control from "@/components/Control";
-import PendingButton from "@/components/PendingButton";
 import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
@@ -314,14 +313,14 @@ function RuleForm({
       </p>
 
       <div className="ad-editor-actions">
-        <PendingButton className="ad-btn ad-btn--primary" pending="Saving the rule...">{rule ? "Save" : "Add rule"}</PendingButton>
+        <Control type="submit" className="ad-btn ad-btn--primary" busyText="Saving the rule...">{rule ? "Save" : "Add rule"}</Control>
         <Control className="ad-btn ad-btn--secondary" href={cancelHref}>
           Cancel
         </Control>
         {rule ? (
-          <PendingButton className="ad-btn ad-btn--secondary ad-push" pending="Deleting the rule..." formAction={deletePricingRule} formNoValidate>
+          <Control type="submit" className="ad-btn ad-btn--secondary ad-push" busyText="Deleting the rule..." formAction={deletePricingRule} formNoValidate>
             Delete
-          </PendingButton>
+          </Control>
         ) : null}
       </div>
     </form>
@@ -335,9 +334,9 @@ function CopyButton({ from, to, label, primary }: { from: string; to: string; la
       <Working />
       <input type="hidden" name="scope" value={from} />
       <input type="hidden" name="to_scope" value={to} />
-      <PendingButton className={primary ? "ad-btn ad-btn--primary" : "ad-btn ad-btn--secondary"} working="page" pending="Copying the rules...">
+      <Control type="submit" className={primary ? "ad-btn ad-btn--primary" : "ad-btn ad-btn--secondary"} working="page" busyText="Copying the rules...">
         {label}
-      </PendingButton>
+      </Control>
     </form>
   );
 }
@@ -399,7 +398,7 @@ function Preview({ payload, here, cost }: { payload: PricingPayload; here: strin
             <span>Try a dealer cost</span>
             <span className="ad-row">
               <input name="cost" inputMode="decimal" defaultValue={cost} placeholder="For example 750" />
-              <button type="submit" className="ad-btn ad-btn--secondary">Show</button>
+              <Control type="submit" className="ad-btn ad-btn--secondary" busyText="Showing...">Show</Control>
             </span>
           </label>
           {cost && !payload.preview.typed ? (
@@ -628,7 +627,7 @@ async function Pricing({ params, operatorId }: { params: Params; operatorId: str
                     ))}
                   </select>
                 </label>
-                <PendingButton className="ad-btn ad-btn--secondary" working="page" pending="Copying the rules...">Copy</PendingButton>
+                <Control type="submit" className="ad-btn ad-btn--secondary" working="page" busyText="Copying the rules...">Copy</Control>
               </form>
             ) : null}
           </footer>

@@ -37,7 +37,7 @@ test("the verification step keeps its own wording", () => {
   // Checked by is gone: the signed-in person is recorded (2026-11-02).
   assert.doesNotMatch(page, /Checked by/);
   // The button is Rate now (2026-11-02), and Rate again once rated.
-  assert.match(page, />\s*Rate\s*<\/PendingButton>/);
+  assert.match(page, />\s*Rate\s*<\/Control>/);
   assert.doesNotMatch(page, /Confirm and Continue/);
   assert.match(src("lib/verify-flash.ts"), /Verified and rated\./);
 });

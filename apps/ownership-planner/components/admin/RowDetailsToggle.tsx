@@ -6,6 +6,7 @@
 // width of the table, rather than inside the narrow Rating column. The row is
 // rendered hidden on the server; this only shows and hides it.
 
+import Control from "@/components/Control";
 import { useState } from "react";
 
 export default function RowDetailsToggle({ target }: { target: string }) {
@@ -19,8 +20,8 @@ export default function RowDetailsToggle({ target }: { target: string }) {
   }
 
   return (
-    <button type="button" className="ad-linkbtn" aria-expanded={open} aria-controls={target} onClick={toggle}>
+    <Control className="ad-linkbtn" aria-expanded={open} aria-controls={target} onPress={toggle}>
       {open ? "Hide details" : "Show details"}
-    </button>
+    </Control>
   );
 }

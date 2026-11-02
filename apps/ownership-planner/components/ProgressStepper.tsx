@@ -8,6 +8,8 @@
 
 "use client";
 
+import Control from "@/components/Control";
+
 export interface Step {
   /** 1-based number the customer sees. */
   n: number;
@@ -39,14 +41,13 @@ export default function ProgressStepper({
           return (
             <li key={s.label} className={`step step--${state}`}>
               {reachable ? (
-                <button
-                  type="button"
-                  onClick={() => onGo(i)}
+                <Control
+                  onPress={() => onGo(i)}
                   aria-label={`Go back to ${label}`}
                 >
                   <StepNumber n={s.n} done={state === "done"} />
                   <span className="step-label">{s.label}</span>
-                </button>
+                </Control>
               ) : (
                 <span
                   {...(state === "current" ? { "aria-current": "step" } : {})}

@@ -62,7 +62,7 @@ test("no spent rate: the modal opens as now, with no re-rate", () => {
   // The modal's opener stays the plain button unless a rate is spent.
   const m = read("apps/ownership-planner/components/SubmitConfirm.tsx");
   assert.match(m, /const refreshFirst = \(confirmation\.spent\?\.length \?\? 0\) > 0 && !held;/);
-  assert.match(m, /\{refreshFirst \? \(\s*<PendingButton[\s\S]*?formAction=\{refreshSpentRates\}[\s\S]*?\) : \(\s*<button type="button" className="btn" onClick=\{show\}/);
+  assert.match(m, /\{refreshFirst \? \(\s*<Control type="submit"[\s\S]*?formAction=\{refreshSpentRates\}[\s\S]*?\) : \(\s*<Control className="btn" onPress=\{show\}/);
   // The Edge Function answers not_spent before any rating.
   const rv = read("supabase/functions/fni-rate-vehicle/index.ts");
   assert.ok(rv.indexOf('outcome: "not_spent"') < rv.indexOf("await rateSession(", rv.indexOf("async function refreshSpent(")));

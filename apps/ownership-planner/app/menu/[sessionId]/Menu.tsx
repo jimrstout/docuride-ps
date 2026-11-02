@@ -18,6 +18,7 @@
 // height between the header and the column footers. On a phone one column is
 // shown at a time, chosen from tabs that carry every column's total.
 
+import Control from "@/components/Control";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { OfferRate, SessionPayload, SurchargeOption } from "@/lib/types";
 import { num } from "@/lib/types";
@@ -263,17 +264,17 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
           <h1>{vehicleName || "Your vehicle"}</h1>
           <p className="mn-basis">{basisLine}</p>
         </div>
-        <button type="button" className="mn-btn mn-btn--quiet" disabled={phase === "saving"} onClick={() => void record(declinedCells(rows, cells[0]), "")}>
+        <Control className="mn-btn mn-btn--quiet" disabled={phase === "saving"} busyText="One moment..." onPress={() => record(declinedCells(rows, cells[0]), "")}>
           Decline everything
-        </button>
+        </Control>
       </header>
 
       {/* Phone: one column at a time, every column's total on its tab. */}
       <nav className="mn-tabs" aria-label="Packages">
         {columns.map((c, ci) => (
-          <button key={c.name} type="button" className={ci === shown ? "is-here" : undefined} aria-pressed={ci === shown} onClick={() => setShown(ci)}>
+          <Control key={c.name} className={ci === shown ? "is-here" : undefined} aria-pressed={ci === shown} onPress={() => setShown(ci)}>
             {c.name}
-          </button>
+          </Control>
         ))}
       </nav>
 
@@ -305,15 +306,14 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
                       {removable(ci, ri) ? (
                         // Part of the package as prepared: the customer can remove it and
                         // add it back. Removed, it stays in view, dimmed.
-                        <button
-                          type="button"
+                        <Control
                           className="mn-remove"
                           disabled={phase === "saving"}
-                          onClick={() => setCell(ci, ri, { checked: !cell.checked })}
+                          onPress={() => setCell(ci, ri, { checked: !cell.checked })}
                           aria-label={`${cell.checked ? "Remove" : "Add back"} ${t?.name ?? row.label} in ${c.name}`}
                         >
                           {cell.checked ? "Remove" : "Add back"}
-                        </button>
+                        </Control>
                       ) : (
                         <input
                           type="checkbox"
@@ -327,31 +327,29 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
                       {locked ? (
                         <span className="mn-cap mn-tag" title={t?.name}>{PURCHASED}</span>
                       ) : (
-                        <button
-                          type="button"
+                        <Control
                           className="mn-cap mn-link"
                           title={`Change ${t?.name ?? row.label}`}
                           disabled={phase === "saving"}
-                          onClick={() => openCell(ci, ri)}
+                          onPress={() => openCell(ci, ri)}
                         >
                           <span className="mn-phone-name">{row.label}</span>
                           {cellCaption(row, cell) || "Change"}
-                        </button>
+                        </Control>
                       )}
                       {locked ? (
                         <span className="mn-cell-price" title={`${t?.name ?? row.label}: ${PURCHASED}`}>{price === null ? UNAVAILABLE : money(price)}</span>
                       ) : (
                         // The price opens the same dialog: on narrower screens it is the only way in.
-                        <button
-                          type="button"
+                        <Control
                           className="mn-cell-price"
                           title={`${t?.name ?? row.label}${cellCaption(row, cell) ? `, ${cellCaption(row, cell)}` : ""}`}
                           aria-label={`Change ${t?.name ?? row.label} in ${c.name}, now ${price === null ? UNAVAILABLE : money(price)}`}
                           disabled={phase === "saving"}
-                          onClick={() => openCell(ci, ri)}
+                          onPress={() => openCell(ci, ri)}
                         >
                           {price === null ? UNAVAILABLE : money(price)}
-                        </button>
+                        </Control>
                       )}
                     </>
                   ) : (
@@ -392,14 +390,14 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
                 {f.totals && f.totals.additionalDown > 0 ? (
                   <small className="mn-down">Adds {money(f.totals.additionalDown)} to your money down.</small>
                 ) : null}
-                <button
-                  type="button"
+                <Control
                   className="mn-btn mn-btn--go"
                   disabled={phase === "saving"}
-                  onClick={() => void record(cells[ci], c.name, ci + 1, f.term)}
+                  busyText="One moment..."
+                  onPress={() => record(cells[ci], c.name, ci + 1, f.term)}
                 >
-                  {phase === "saving" ? "One moment..." : "Select this package"}
-                </button>
+                  Select this package
+                </Control>
               </div>
             );
           })}
@@ -442,7 +440,7 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
               {editTier.name}: <b>{(() => { const p = cellPrice(editRow, editCell); return p === null ? UNAVAILABLE : money(p); })()}</b>
             </p>
             <div className="mn-dialog-actions">
-              <button type="button" className="mn-btn mn-btn--go" onClick={() => dialog.current?.close()}>Done</button>
+              <Control className="mn-btn mn-btn--go" onPress={() => dialog.current?.close()}>Done</Control>
             </div>
           </div>
         ) : null}

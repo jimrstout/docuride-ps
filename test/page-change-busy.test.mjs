@@ -53,7 +53,9 @@ test("pressed: busy at once, Opening..., disabled, and a second press does nothi
 test("it ends when the next page is drawn, not before", () => {
   // The router commits the next page (its data, then the address) in one
   // go; the watcher ends on the frame after that commit.
-  assert.match(nav, /if \(j && !j\.newTab\) requestAnimationFrame\(\(\) => navBusy\(\) === j && endNav\(\)\);/);
+  assert.match(nav, /const finish = \(\) => requestAnimationFrame\(\(\) => navBusy\(\) === j && endNav\(\)\);/);
+  // A loading screen means the data is still on the way: wait for the page.
+  assert.match(nav, /const drawn = \(\) => !document\.querySelector\("\[data-page-loading\]"\);/);
   // A new tab ends it when that tab says its page is drawn.
   assert.match(nav, /if \(e\.data\?\.path === running\.to\) endNav\(\);/);
   assert.match(nav, /channel\.postMessage\(\{ path: window\.location\.pathname \+ window\.location\.search \}\);/);

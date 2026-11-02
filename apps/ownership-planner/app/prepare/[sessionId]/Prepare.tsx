@@ -16,7 +16,7 @@
 // recorded on the deal.
 
 import Control from "@/components/Control";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState } from "react";
 import { planTotals } from "@/lib/money";
 import {
   cellFigures,
@@ -54,7 +54,17 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
   const [applyAll, setApplyAll] = useState(false);
   const [skipped, setSkipped] = useState<string[]>([]);
   const [message, setMessage] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
-  const [pending, start] = useTransition();
+  // One action at a time: while a save, reset or return runs, the others wait.
+  // The button pressed shows its own busy state (components/Control.tsx).
+  const [pending, setPending] = useState(false);
+  const run = async (work: () => Promise<void>) => {
+    setPending(true);
+    try {
+      await work();
+    } finally {
+      setPending(false);
+    }
+  };
   const [manager, setManager] = useState({ email: "", password: "", reason: "" });
   // On a phone one column shows at a time, picked from tabs (prepare.css).
   const [tab, setTab] = useState(1);
@@ -101,7 +111,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
   const toggleSurcharge = (code: string) => setState((s) => toggleSurchargeIn(s, code));
 
   const save = (withManager: boolean) =>
-    start(async () => {
+    run(async () => {
       setMessage(null);
       const result = await savePreparedMenu(session.id, payloadOf(sheet, state, payment.financed === true), withManager ? manager : null);
       if (!result.ok) {
@@ -123,12 +133,12 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
   const onSave = () => {
     if (blocked) return;
     if (overBand.length > 0) managerDialog.current?.showModal();
-    else save(false);
+    else return save(false);
   };
 
   const removedCount = Object.values(sheet.removed ?? {}).reduce((n, list) => n + list.length, 0);
   const reset = () =>
-    start(async () => {
+    run(async () => {
       const result = await resetPreparedMenu(session.id);
       if (!result.ok) return setMessage({ tone: "bad", text: result.error });
       setData(result.payload);
@@ -137,7 +147,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
     });
 
   const unlock = () =>
-    start(async () => {
+    run(async () => {
       const result = await unlockPreparedMenu(session.id);
       if (!result.ok) return setMessage({ tone: "bad", text: result.error });
       setData(result.payload);
@@ -198,19 +208,19 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
         </div>
         <div className="pm-actions">
           {removedCount > 0 && !locked ? (
-            <button type="button" className="pm-btn" onClick={reset} disabled={pending} title="Products the customer removed come back">
+            <Control className="pm-btn" onPress={reset} disabled={pending} busyText="Resetting..." title="Products the customer removed come back">
               Reset the menu ({removedCount} removed)
-            </button>
+            </Control>
           ) : null}
-          <button type="button" className="pm-btn" onClick={() => surchargeDialog.current?.showModal()} disabled={locked || pending}>
+          <Control className="pm-btn" onPress={() => surchargeDialog.current?.showModal()} disabled={locked || pending}>
             Surcharges{state.surcharges.length > 0 ? ` (${state.surcharges.length})` : ""}
-          </button>
+          </Control>
           {locked ? (
-            <button type="button" className="pm-btn pm-btn--go" onClick={unlock} disabled={pending}>Return to Prepare presentation</button>
+            <Control className="pm-btn pm-btn--go" onPress={unlock} disabled={pending} busyText="Unlocking...">Return to Prepare presentation</Control>
           ) : (
-            <button type="button" className="pm-btn pm-btn--go" onClick={onSave} disabled={pending || blocked}>
-              {pending ? "Saving..." : "Save"}
-            </button>
+            <Control className="pm-btn pm-btn--go" onPress={onSave} disabled={pending || blocked} busyText="Saving...">
+              Save
+            </Control>
           )}
           <Control className="pm-btn pm-btn--quiet" href={`/details/${session.id}`}>Details</Control>
         </div>
@@ -237,9 +247,9 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
 
       <div className="pm-tabs" role="tablist" aria-label="Columns">
         {sheet.columns.map((c) => (
-          <button key={c.position} type="button" role="tab" aria-selected={tab === c.position} className="pm-tab" onClick={() => setTab(c.position)}>
+          <Control key={c.position} role="tab" aria-selected={tab === c.position} className="pm-tab" onPress={() => setTab(c.position)}>
             {c.name}
-          </button>
+          </Control>
         ))}
       </div>
 
@@ -267,19 +277,18 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
               const note = sheet.cells[pos]?.[category]?.note ?? null;
               if (!found) {
                 return (
-                  <button key={pos} data-col={pos} type="button" className="pm-cell pm-cell--off" onClick={() => open(pos, category)} disabled={locked}>
+                  <Control key={pos} data-col={pos} className="pm-cell pm-cell--off" onPress={() => open(pos, category)} disabled={locked}>
                     <span className="pm-sub">{note ?? "Not included"}</span>
-                  </button>
+                  </Control>
                 );
               }
               const f = cellFigures(found.option, state);
               return (
-                <button
+                <Control
                   key={pos}
                   data-col={pos}
-                  type="button"
                   className={f.above_band || f.below_band || f.below_cost ? "pm-cell pm-cell--over" : "pm-cell"}
-                  onClick={() => open(pos, category)}
+                  onPress={() => open(pos, category)}
                   disabled={locked}
                   title={note ?? undefined}
                 >
@@ -296,7 +305,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
                       <span className="pm-profit">Profit {dollars(f.profit)}</span>
                     </>
                   )}
-                </button>
+                </Control>
               );
             })}
           </div>
@@ -307,7 +316,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
             <div key={i} data-col={i + 1} className="pm-foot">
               <span className="pm-total">{dollars(f.total)}</span>
               {payment.financed && payment.has_payment && !locked ? (
-                <button type="button" className="pm-linkbtn" onClick={() => openTerms(String(sheet.columns[i].position))}>Terms</button>
+                <Control className="pm-linkbtn" onPress={() => openTerms(String(sheet.columns[i].position))}>Terms</Control>
               ) : <span />}
               <span className="pm-foot-line">Profit {dollars(f.profit)}</span>
               {f.payments.length === 0 ? <span className="pm-foot-line">Cash deal: no payments</span> : null}
@@ -381,17 +390,16 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
                     <p className="pm-help pm-surcharge-line">
                       {names.length > 0 ? `Includes surcharges: ${names.join(", ")}.` : "No surcharges."}{" "}
                       {offersSurcharges(edited.option) ? (
-                        <button
-                          type="button"
+                        <Control
                           className="pm-linkbtn"
-                          onClick={() => {
+                          onPress={() => {
                             cellDialog.current?.close();
                             surchargeDialog.current?.showModal();
                           }}
                           disabled={locked || pending}
                         >
                           Change surcharges
-                        </button>
+                        </Control>
                       ) : null}
                     </p>
                   );
@@ -417,10 +425,9 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
               <input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} /> Apply to all columns
             </label>
             <div className="pm-dialog-actions">
-              <button
-                type="button"
+              <Control
                 className="pm-btn pm-btn--go"
-                onClick={() => {
+                onPress={() => {
                   // Set on the same category in every column, as the open one now stands.
                   // Nothing is saved until Save.
                   if (applyAll && editing) {
@@ -434,7 +441,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
                 }}
               >
                 Done
-              </button>
+              </Control>
             </div>
           </div>
         ) : null}
@@ -459,8 +466,8 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
           ))}
           {termProblem ? <p className="pm-note pm-note--bad">{termProblem}</p> : null}
           <div className="pm-dialog-actions">
-            <button type="button" className="pm-btn" onClick={() => termsDialog.current?.close()}>Cancel</button>
-            <button type="button" className="pm-btn pm-btn--go" onClick={applyTerms} disabled={!!termProblem}>Done</button>
+            <Control className="pm-btn" onPress={() => termsDialog.current?.close()}>Cancel</Control>
+            <Control className="pm-btn pm-btn--go" onPress={applyTerms} disabled={!!termProblem}>Done</Control>
           </div>
         </div>
       </dialog>
@@ -502,7 +509,7 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
             ))}
           </div>
           <div className="pm-dialog-actions">
-            <button type="button" className="pm-btn pm-btn--go" onClick={() => surchargeDialog.current?.close()}>Done</button>
+            <Control className="pm-btn pm-btn--go" onPress={() => surchargeDialog.current?.close()}>Done</Control>
           </div>
         </div>
       </dialog>
@@ -531,8 +538,19 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
           </label>
           {message?.tone === "bad" ? <p className="pm-note pm-note--bad">{message.text}</p> : null}
           <div className="pm-dialog-actions">
-            <button type="button" className="pm-btn" onClick={() => managerDialog.current?.close()}>Cancel</button>
-            <button type="submit" className="pm-btn pm-btn--go" disabled={pending}>{pending ? "Saving..." : "Approve and save"}</button>
+            <Control className="pm-btn" onPress={() => managerDialog.current?.close()}>Cancel</Control>
+            <Control
+              className="pm-btn pm-btn--go"
+              disabled={pending}
+              busyText="Saving..."
+              onPress={(e) => {
+                // The fields are required: let the browser say which is empty.
+                if (!e.currentTarget.form?.reportValidity()) return;
+                return save(true);
+              }}
+            >
+              Approve and save
+            </Control>
           </div>
         </form>
       </dialog>

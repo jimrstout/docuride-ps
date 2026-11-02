@@ -7,7 +7,7 @@
 // be edited, and its buttons could be pressed again. Now:
 //
 //   - The button that started it shows a spinner and says what it is doing,
-//     and is disabled (PendingButton).
+//     and is disabled (components/Control.tsx).
 //   - A whole-deal action covers the page with an overlay saying the same
 //     thing; nothing underneath can be clicked or edited until it finishes.
 //     A smaller one locks only its panel, with a spinner in it.
@@ -27,6 +27,7 @@
 // job, the kept entries and the result line must survive that. In memory
 // only, for this tab, and gone as soon as the job ends.
 
+import Control from "@/components/Control";
 import { createContext, useContext, useEffect, useRef, useSyncExternalStore } from "react";
 import { useFormStatus } from "react-dom";
 import {
@@ -60,6 +61,8 @@ interface Running extends WorkingJob {
   renderBefore: string | null;
   /** Already waiting for the new render: a second "the form ended" changes nothing. */
   waiting?: boolean;
+  /** Already finishing: a form with two markers (its own and its button's) ends once. */
+  finishing?: boolean;
 }
 
 interface Result {
@@ -156,7 +159,8 @@ const RESULT_WATCH_MS = 15_000;
 
 function finish() {
   const r = state.running;
-  if (!r) return;
+  if (!r || r.finishing) return;
+  r.finishing = true;
   watcher?.disconnect();
 
   // ── A page with a render marker: wait for the new render ──────────────
@@ -168,7 +172,6 @@ function finish() {
   // overlay and its disabled buttons stay until a new marker is on the page.
   // "Still working" and the stuck message keep their timers meanwhile.
   if (r.renderBefore !== null) {
-    if (r.waiting) return;
     r.waiting = true;
     let done = false;
     const settle = () => {
@@ -394,9 +397,9 @@ export function WorkingArea({ children }: { children: React.ReactNode }) {
             {s.stuck ? (
               <p className="working-slow">
                 This is taking longer than it should. Reload the page to see where it got to.{" "}
-                <button type="button" className="btn btn--quiet" onClick={() => window.location.reload()}>
+                <Control className="btn btn--quiet" onPress={() => window.location.reload()}>
                   Reload
-                </button>
+                </Control>
               </p>
             ) : null}
           </div>
@@ -406,9 +409,9 @@ export function WorkingArea({ children }: { children: React.ReactNode }) {
       {result ? (
         <div className={`working-result working-result--${result.tone}`} role={result.tone === "bad" ? "alert" : "status"}>
           <p>{result.text}</p>
-          <button type="button" className="working-result-close" onClick={() => set({ result: null })}>
+          <Control className="working-result-close" onPress={() => set({ result: null })}>
             Dismiss
-          </button>
+          </Control>
         </div>
       ) : null}
 
