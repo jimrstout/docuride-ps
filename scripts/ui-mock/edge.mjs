@@ -6,6 +6,10 @@
 // the busy state; `calls` counts each function's requests.
 
 import http from "node:http";
+import { menuParts, preparePayload } from "./layout-data.mjs";
+
+/** The session the layout check opens. */
+export const LAYOUT_SESSION = "7a7a7a7a-7a7a-4a7a-8a7a-7a7a7a7a7a7a";
 
 const F = (key, label, group, value, extra = {}) => ({
   key, label, group, value, source: value === null ? "Missing" : "CRM", editable: !["deal_number", "stock_number"].includes(key),
@@ -128,6 +132,10 @@ export function startMockEdge({ port, delayMs = 0, rows = 6 } = {}) {
     if (fn === "fni-session-verify" && req.method === "GET") return json(200, sheet(u.searchParams.get("session_id")));
     if (fn === "fni-session-verify") return json(200, { ok: true });
     if (fn === "fni-dx1-check") return json(200, { status: "Nothing to check", blocking: [], warnings: [] });
+    // The layout deal: seven rows, four columns, the longest names (scripts/layout-check.mjs).
+    const sid = u.searchParams.get("session_id");
+    if (fn === "fni-menu-prepare" && req.method === "GET") return json(200, preparePayload(sid));
+    if (fn === "fni-session-get" && sid === LAYOUT_SESSION) return json(200, { ...customerSession(sid), ...menuParts(), offer: { ...customerSession(sid).offer, families: menuParts().families, product_count: 15 } });
     if (fn === "fni-session-get") return json(200, customerSession(u.searchParams.get("session_id")));
     if (fn === "fni-session-save") return json(200, { ok: true });
     if (fn === "fni-acknowledgment") return json(200, { ok: true, pdf_base64: null });

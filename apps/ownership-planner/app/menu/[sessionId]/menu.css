@@ -5,13 +5,16 @@
    app/tokens.css.
 
    No scrolling. The screen is exactly the window's height: a header, the
-   grid, and nothing else. The grid's rows share what is left between the
-   column headings and the column footers (--mn-rows), and the text scales
-   with the window's height and the number of rows, never below 18px for a
-   product's name. On a phone one column is shown at a time, picked from tabs. */
+   grid, and nothing else. The header bar runs the full width; the grid under
+   it is at most 1280px wide, centred. Each row is as tall as its tallest card
+   and no taller, every card in a row the same height, with no empty band
+   above a card's text. The row names take only the width of the longest
+   ("Mechanical Protection"): the rows share one set of columns (subgrid).
+   Long names end in "..." with the full text on hover, never below 18px for a
+   product's name. On a phone one column is shown at a time, from tabs. */
 
 .mn {
-  --mn-gap: 10px;
+  --mn-gap: 8px;
   height: 100dvh;
   overflow: hidden;
   display: grid;
@@ -25,7 +28,7 @@
 
 .mn-head {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding: 14px 24px;
+  padding: 12px 24px;
   background: var(--nav); color: var(--nav-bright);
 }
 .mn-head h1 { margin: 2px 0 0; font-size: clamp(20px, 2.6vh, 28px); font-weight: 650; color: #fff; }
@@ -36,24 +39,29 @@
 
 .mn-grid {
   min-height: 0;
+  width: 100%; max-width: 1280px; margin-inline: auto;
   display: grid;
-  grid-template-rows: auto repeat(var(--mn-rows), minmax(0, 1fr)) auto;
+  grid-template-columns: max-content repeat(var(--mn-cols), minmax(0, 1fr));
+  grid-template-rows: auto repeat(var(--mn-rows), auto) auto;
+  align-content: start;
   gap: var(--mn-gap);
-  padding: 14px 24px;
+  padding: 10px 24px;
 }
 .mn-row {
+  grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(140px, 0.8fr) repeat(var(--mn-cols), minmax(0, 1fr));
-  gap: var(--mn-gap);
+  grid-template-columns: subgrid;
   min-height: 0;
 }
 .mn-label {
   align-self: center; min-height: 0;
-  font-size: clamp(18px, calc(52vh / var(--mn-rows) / 2.6), 22px);
+  font-size: clamp(18px, 2.4vh, 22px);
   line-height: 1.2;
   font-weight: 650;
-  overflow: hidden;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  white-space: nowrap;
+  /* No wider than "Mechanical Protection": a longer name ends in "..." with
+     the full text on hover (its title). */
+  max-width: 11em; overflow: hidden; text-overflow: ellipsis;
 }
 .mn-colhead {
   text-align: center; font-size: clamp(18px, 2.4vh, 24px); font-weight: 700;
@@ -63,9 +71,9 @@
 /* One line: the checkbox, a short caption (the level, or the term) that opens
    the change dialog, and the price. The row's name is in the first column. */
 .mn-cell {
-  min-height: 0; overflow: hidden;
+  min-height: 0; min-width: 0; overflow: hidden;
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 8px;
-  padding: 0 10px;
+  padding: 8px 10px;
   background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
 }
 .mn-cell.is-on { border-color: var(--copper-edge); background: var(--copper-wash); }
@@ -139,9 +147,8 @@ button.mn-cell-price { cursor: pointer; }
 /* The level and term move into the dialog the price opens, and the price's
    title says them on hover. */
 @media (min-width: 761px) and (max-width: 1200px) and (min-height: 700px) {
-  .mn-row { grid-template-columns: minmax(120px, 0.7fr) repeat(var(--mn-cols), minmax(0, 1fr)); }
   .mn-label { font-size: 18px; }
-  .mn-cell { grid-template-columns: auto minmax(0, 1fr); padding: 0 8px; }
+  .mn-cell { grid-template-columns: auto minmax(0, 1fr); padding: 8px; }
   .mn-cap.mn-link { display: none; }
   .mn-cap.mn-tag { display: none; }
   .mn-cell-price { justify-self: end; }
@@ -167,8 +174,7 @@ button.mn-cell-price { cursor: pointer; }
   }
   .mn-tabs button.is-here { border-color: var(--copper); background: var(--copper-wash); }
   /* The heading row is hidden, so the tracks are the products and the footer. */
-  .mn-grid { padding: 8px 16px; grid-template-rows: repeat(var(--mn-rows), minmax(0, 1fr)) auto; }
-  .mn-row { grid-template-columns: minmax(0, 1fr); }
+  .mn-grid { padding: 8px 16px; grid-template-columns: minmax(0, 1fr); grid-template-rows: repeat(var(--mn-rows), minmax(0, 1fr)) auto; align-content: stretch; }
   .mn-row .mn-label { display: none; }
   .mn-row--head { display: none; }
   .mn-cell, .mn-foot { display: none; }
