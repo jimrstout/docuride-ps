@@ -19,6 +19,7 @@ import type { RequiredProperty } from "./rate-properties.ts";
 import { fuelCodeFor, resolveFuelType } from "./fuel-type.ts";
 import { resolveEngineCc } from "./engine-size.ts";
 import { dealDates } from "./deal-dates.ts";
+import { codeRequest, type FormCodes } from "./coded-values.ts";
 
 // ─── Building the request ────────────────────────────────────────────────
 
@@ -150,7 +151,7 @@ function fuelTypeCode(source: RateSource): "G" | "E" | "D" {
   return fuelCodeFor(resolveFuelType(source.vehicle_properties, source.vin_decode).value);
 }
 
-/** New or Used, which is what new.used wants. */
+/** "New" or "Used": the word, sent as the provider's code by codeRequest (_shared/coded-values.ts). */
 function newUsed(condition: string | null): string | null {
   if (!condition) return null;
   const lower = condition.toLowerCase();
@@ -294,6 +295,12 @@ export interface RateRequestOptions {
    * asked, not anything about the deal, and the only date that is ever today.
    */
   rateDate?: string;
+  /**
+   * The provider's codes as its form last stated them for this vehicle type
+   * (store_rate_properties.form_codes). Null or absent: the documented codes.
+   * See _shared/coded-values.ts.
+   */
+  formCodes?: FormCodes | null;
 }
 
 export interface BuiltRateRequest {
@@ -301,6 +308,11 @@ export interface BuiltRateRequest {
   missing: RequiredProperty[];
   /** The deal's dates will not do, in plain English. A rate must not be sent while set. */
   dateProblem: string | null;
+  /**
+   * A value with no code in the provider's form, in plain English naming the
+   * field. A rate must not be sent while set (_shared/coded-values.ts).
+   */
+  codeProblem: string | null;
 }
 
 /**
@@ -389,5 +401,12 @@ export function buildRateRequest(
 
   request.properties = built.properties;
 
-  return { request, missing: built.missing, dateProblem: dates.problem };
+  // Every coded field goes out as the provider's code: "New" as N, "Loan" as
+  // F. The words above are what PS keeps and shows; the provider ignores them
+  // (_shared/coded-values.ts).
+  const coded = codeRequest(request, opts.formCodes ?? null);
+  if ("problem" in coded) {
+    return { request, missing: built.missing, dateProblem: dates.problem, codeProblem: coded.problem };
+  }
+  return { request: coded.request, missing: built.missing, dateProblem: dates.problem, codeProblem: null };
 }

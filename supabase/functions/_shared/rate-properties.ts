@@ -49,6 +49,8 @@ export interface RatePropertyCache {
   property_names: string[];
   cached_at: string | null;
   error_message: string | null;
+  /** The provider's coded values as its form last stated them (migration 0051). */
+  form_codes?: unknown;
 }
 
 /**
