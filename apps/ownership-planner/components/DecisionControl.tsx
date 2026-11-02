@@ -16,6 +16,7 @@
 "use client";
 
 import { useRef } from "react";
+import Control from "@/components/Control";
 import type { Disposition } from "@/lib/types";
 
 const OPTIONS: { d: Disposition; label: string }[] = [
@@ -72,21 +73,20 @@ export default function DecisionControl({
       {OPTIONS.map((o, i) => {
         const on = value === o.d;
         return (
-          <button
+          <Control
             key={o.d}
             ref={(el) => { refs.current[i] = el; }}
-            type="button"
             role="radio"
             aria-checked={on}
             tabIndex={i === activeIndex ? 0 : -1}
             name={name}
             className={`decision-option ${on ? "is-chosen" : ""}`}
-            onClick={() => onChange(o.d)}
+            onPress={() => onChange(o.d)}
             onKeyDown={(e) => onKeyDown(e, i)}
           >
             <span className="decision-mark" aria-hidden="true">{on ? <span className="tick" /> : null}</span>
             {o.label}
-          </button>
+          </Control>
         );
       })}
     </div>

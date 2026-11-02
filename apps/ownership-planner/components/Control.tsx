@@ -77,6 +77,8 @@ export interface ControlButtonProps extends ButtonAttrs {
   formAction?: (formData: FormData) => void | Promise<void>;
   /** What a press does. Return the promise to stay busy until it settles. */
   onPress?: (e: React.MouseEvent<HTMLButtonElement>) => unknown;
+  /** The button element, for a caller that moves focus (a radio group). */
+  ref?: React.Ref<HTMLButtonElement>;
 }
 
 export type ControlProps = ControlLinkProps | ControlButtonProps;
@@ -92,7 +94,7 @@ export default function Control(props: ControlProps) {
 function ControlButton(props: ControlButtonProps) {
   const {
     children, type = "button", busyText = WORKING, working = "panel", leave, onPress,
-    className = type === "submit" ? "btn btn--quiet" : undefined, disabled, ...rest
+    className = type === "submit" ? "btn btn--quiet" : undefined, disabled, ref: outerRef, ...rest
   } = props;
   const status = useFormStatus();
   const area = useWorking();
@@ -129,7 +131,11 @@ function ControlButton(props: ControlButtonProps) {
     <>
       <button
         {...rest}
-        ref={self}
+        ref={(el) => {
+          self.current = el;
+          if (typeof outerRef === "function") outerRef(el);
+          else if (outerRef) (outerRef as React.RefObject<HTMLButtonElement | null>).current = el;
+        }}
         type={type}
         className={`${className ?? ""}${busy ? " is-busy" : ""}`.trim() || undefined}
         disabled={disabled || busy}
