@@ -36,6 +36,7 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { secretsMatch } from "../_shared/supabase.ts";
 import { staffGate } from "../_shared/staff-gate.ts";
 import { getRecord } from "../_shared/zoho.ts";
+import { categoryFromWording } from "../_shared/product-category.ts";
 import { programName } from "../_shared/program-names.ts";
 import {
   FAILED,
@@ -84,7 +85,10 @@ async function contractsFor(supabase: SupabaseClient, sessionId: string): Promis
 
   const toContract = (r: (typeof list)[number]): Contract => ({
     contract_number: r.contract_number ?? "with no number",
-    category: cat.get(`${r.provider_id}:${r.provider_product_id}`) ?? null,
+    // A version of a plan the catalog does not list (deal 15063's ATV Priority
+    // Maintenance) is still what its name says: "... - RIDERS ADVANTAGE PPM" is
+    // Maintenance, so it is expected in the PPM slot, not an aftermarket one.
+    category: cat.get(`${r.provider_id}:${r.provider_product_id}`) ?? categoryFromWording(r.product_name),
     product_name: r.product_name ?? "",
     plan: programName(r.product_name),
     term_months: r.term_months,

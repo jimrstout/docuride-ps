@@ -6,6 +6,8 @@
 // Pure, so a Node test can hold the matching rules and the slot rules to
 // account. The rows are read by _shared/menu-template-rows.ts.
 
+import { categoryOf, unplacedNote } from "./product-category.ts";
+import { isServiceDrivePlan } from "./service-drive.ts";
 import { makeMatches } from "./providers.ts";
 import type { NormalizedFamily, NormalizedTier } from "./normalized-offer.ts";
 
@@ -128,14 +130,36 @@ export function resolveSlots(
     }
   }
 
+  // Every offered tier a slot lists by its product code. A tier listed by one
+  // slot is that slot's, and no other slot takes it by category below.
+  const listedKeys = new Set(
+    slots.flatMap((sl) => sl.product_ids.map((id) => catalog.get(id)).filter((p): p is SlotProduct => !!p))
+      .map((p) => `${p.provider_id}:${p.product_code}`)
+  );
+
   return [...slots]
     .sort((a, b) => a.position - b.position)
     .map((slot) => {
-      const found = slot.product_ids
+      let found = slot.product_ids
         .map((id) => catalog.get(id))
         .filter((p): p is SlotProduct => !!p)
         .map((p) => offered.get(`${p.provider_id}:${p.product_code}`))
         .filter((x): x is { family: NormalizedFamily; tier: NormalizedTier } => !!x);
+      // None of the slot's listed products was offered, but a product of the
+      // slot's category was: another vehicle version of the same plan, under a
+      // code the slot does not list (deal 15063: the ATV codes of Priority
+      // Maintenance, where the slot lists the UTV ones). The provider rated
+      // this vehicle, so the version it offered is the one that can be sold.
+      // Service drive plans never come this far (rating-summary.ts,
+      // pointOfSale), and are refused here too.
+      if (found.length === 0 && slot.category) {
+        found = [...offered.entries()]
+          .filter(([key]) => !listedKeys.has(key))
+          .map(([, x]) => x)
+          .filter((x) => categoryOf({ ptype: x.family.family_code, name: x.tier.product_name }) === slot.category)
+          .filter((x) => !isServiceDrivePlan(x.tier))
+          .sort((a, b) => floorOf(b.tier) - floorOf(a.tier));
+      }
       const tiers = slot.mode === "Best Match" ? found.slice(0, 1) : found;
       return {
         slot_id: slot.id,
@@ -151,6 +175,24 @@ export function resolveSlots(
             : null,
       };
     });
+}
+
+/**
+ * Offers no slot shows, one plain line per kind, for Details: "2 Maintenance
+ * plans were offered but no menu row uses them." Never silent: an offer that
+ * fits no row is said, not dropped.
+ */
+export function unplacedOffers(resolved: ResolvedSlot[], offered: NormalizedFamily[]): string[] {
+  const shown = new Set(resolved.flatMap((s) => s.tiers.map((t) => `${t.family.provider_id ?? ""}:${t.tier.product_code}`)));
+  const counts = new Map<string, number>();
+  for (const family of offered) {
+    for (const tier of family.tiers) {
+      if (shown.has(`${family.provider_id ?? ""}:${tier.product_code}`)) continue;
+      const kind = categoryOf({ ptype: family.family_code, name: tier.product_name }) ?? family.family_code;
+      counts.set(kind, (counts.get(kind) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()].map(([kind, n]) => unplacedNote(kind, n));
 }
 
 /** The cheapest thing a tier can be sold for, for ordering tiers. */

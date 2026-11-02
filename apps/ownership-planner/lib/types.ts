@@ -503,6 +503,8 @@ export interface VerifySheet {
   menu_template?: { name: string } | null;
   /** Prepare presentation saved for this deal: when, and who. Null until then. */
   prepared?: { at: string; by: string | null } | null;
+  /** Offers no menu row shows, one plain line per kind: "2 Maintenance plans were offered but no menu row uses them." */
+  unplaced_offers?: string[];
   /** Menu slots hidden from the customer on this deal, with why, for staff. */
   hidden_slots?: { title: string; note: string | null }[];
   /** The customer's OEM selections, whose contracts staff record here. */

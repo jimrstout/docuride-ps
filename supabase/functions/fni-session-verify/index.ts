@@ -26,6 +26,7 @@ import { serviceDriveLines } from "../_shared/service-drive.ts";
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { secretsMatch } from "../_shared/supabase.ts";
+import { unplacedOffers } from "../_shared/menu-templates.ts";
 import { staffCheck, staffGate } from "../_shared/staff-gate.ts";
 import { staffInitials } from "../_shared/staff-auth.ts";
 import {
@@ -695,6 +696,9 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>, cr
       : null,
     // The template the deal matches now. Rating records it on the session.
     menu_template: menu.template ? { name: menu.template.name } : null,
+    // Offers no menu row shows, said in words rather than dropped: "2
+    // Maintenance plans were offered but no menu row uses them."
+    unplaced_offers: resolved ? unplacedOffers(resolved, familiesFromRows(rows)) : [],
     // Slots hidden from the customer on this deal, with the reason for staff.
     hidden_slots: (resolved ?? [])
       .filter((r) => r.hidden)
