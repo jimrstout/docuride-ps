@@ -15,6 +15,24 @@
 // and a guess would be a guess at somebody's price. With neither a staff value
 // nor a decode it is Missing, and a rate is refused rather than invented.
 
+// ── Above zero ──────────────────────────────────────────────────────────
+// A value of 0 is not "unknown": the provider takes it as a vehicle with no
+// engine and drops every Mechanical Protection plan without a word (probes on
+// deal 15063, 2026-11-02). So wherever the provider's form asks for engine.ccs,
+// rating needs a whole number above 0.
+
+/** Why an engine size will not do, in plain English, or null when it will. */
+export function engineSizeProblem(value: string | null | undefined): string | null {
+  if (value === null || value === undefined || String(value).trim() === "") return null;
+  const v = String(value).trim();
+  if (/^\d+$/.test(v) && Number(v) > 0) return null;
+  return ENGINE_SIZE_PROBLEM;
+}
+
+export const ENGINE_SIZE_PROBLEM =
+  "Engine size must be a whole number of cc above 0. With 0, or a size that is not a whole number, " +
+  "the provider offers no Mechanical Protection. Enter the engine size on Details.";
+
 /** Where a resolved engine size came from. The same words the sheet uses. */
 export type EngineCcSource = "Entered by Staff" | "VIN Decode";
 

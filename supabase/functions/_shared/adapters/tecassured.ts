@@ -19,6 +19,7 @@ import {
 } from "../rate-properties.ts";
 import { buildRateRequest, type RateSource } from "../rate-request.ts";
 import { formCodesFromQuote, type FormCodes } from "../coded-values.ts";
+import { engineSizeProblem, resolveEngineCc } from "../engine-size.ts";
 import type { OfferProvider } from "../normalized-offer.ts";
 import { tecAssuredOffers } from "./tecassured-offers.ts";
 import type { ProviderAdapter, RateResult } from "./types.ts";
@@ -124,6 +125,13 @@ export function tecAssuredAdapter(
       // A value the provider's form has no code for stops the rate here, rather
       // than going out as a word the provider ignores (_shared/coded-values.ts).
       if (built.codeProblem) return { state: "Failed", reason: built.codeProblem };
+      // Engine size above 0 wherever the form asks for it: with 0 the provider
+      // drops every Mechanical Protection plan without a word (_shared/engine-size.ts).
+      if (props.some((p) => p.name.toLowerCase() === "engine.ccs")) {
+        const cc = resolveEngineCc(rateSource.vehicle_properties, rateSource.vin_decode)?.value ?? null;
+        const problem = engineSizeProblem(cc);
+        if (problem) return { state: "Failed", reason: problem };
+      }
       const request = built.request;
       // A call that never answers still says what it asked, so a failed
       // re-rate can show it was about the same deal as the offers kept

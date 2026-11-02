@@ -46,7 +46,7 @@
 
 import { financeFigures, type FinanceSource } from "./finance-basis.ts";
 import { resolveFuelType } from "./fuel-type.ts";
-import { resolveEngineCc } from "./engine-size.ts";
+import { engineSizeProblem, resolveEngineCc } from "./engine-size.ts";
 import { dealDates, isNewUnit, IN_SERVICE_DATE_MISSING, SALE_DATE_MISSING } from "./deal-dates.ts";
 
 /** The sale date's note: where it comes from, and where it is changed. */
@@ -123,6 +123,11 @@ export interface VerifyField {
   differs_from_crm: boolean;
   /** An edit that could not be read as a number or a date. Blocks Verify. */
   invalid: boolean;
+  /**
+   * A value present but one the provider cannot rate on, in plain English: an
+   * engine size of 0, say (_shared/engine-size.ts). Blocks Verify and rating.
+   */
+  problem: string | null;
   /** Who made the edit and when. Null when the field was never edited. */
   edited_by: string | null;
   edited_at: string | null;
@@ -152,6 +157,8 @@ export interface VerificationSheet {
   crm_warning: string | null;
   /** An edit that could not be read. Verify is refused while any exists. */
   invalid: VerifyField[];
+  /** Values present but not ones the provider can rate on. Verify is refused while any exists. */
+  problems: VerifyField[];
   /**
    * Set when the finance company's maximum is known and the amount financed is
    * already over it, before any protection products. A warning only: it does
@@ -757,6 +764,8 @@ export function buildVerification(
       differs_from_crm:
         edit !== undefined && in_crm && !invalid && shown.value !== asSourced.value,
       invalid,
+      // Only where the provider's form asks for it: engine size above 0.
+      problem: required && spec.key === STAFF_ENTERED.engineCc ? engineSizeProblem(shown.value) : null,
       edited_by: edit?.edited_by ?? null,
       edited_at: edit?.edited_at ?? null,
     };
@@ -775,6 +784,7 @@ export function buildVerification(
   const missing = fields.filter((f) => f.missing);
   const edited = fields.filter((f) => f.original_source !== null);
   const invalid = fields.filter((f) => f.invalid);
+  const problems = fields.filter((f) => f.problem !== null);
 
   const crm_mismatches: CrmMismatch[] = fields
     .filter((f) => f.differs_from_crm)
@@ -801,12 +811,14 @@ export function buildVerification(
       requiredProperties.length > 0 &&
       missing.length === 0 &&
       unmapped_properties.length === 0 &&
-      invalid.length === 0,
+      invalid.length === 0 &&
+      problems.length === 0,
     unmapped_properties,
     edited,
     crm_mismatches,
     crm_warning: crmMismatchWarning(crm_mismatches),
     invalid,
+    problems,
     over_cap_warning: overCapWarning(editedSrc),
   };
 }
