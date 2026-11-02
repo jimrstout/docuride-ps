@@ -94,3 +94,13 @@ test("it writes nothing but its own row: never sessions, rated offers or selecti
   assert.match(code, /from\("sessions"\)\.select\("\*"\)/);
   assert.doesNotMatch(code, /freshSaleDate|writeRateProperties|rateSession|recordOutcome|submitContract|voidContract/);
 });
+
+test("a makes probe asks the provider for its makes list, QA only, kept on its own row", async () => {
+  const { isMakesProbe } = await import("../supabase/functions/_shared/rate-probe.ts");
+  assert.equal(isMakesProbe({ action: "makes" }), true);
+  assert.equal(isMakesProbe({ properties: { make: "BRP" } }), false);
+  // After the QA check, and before anything about rating.
+  assert.ok(fn.indexOf('if (environment !== "Test")') < fn.indexOf("if (makesOnly) {"));
+  assert.match(fn, /response = await store\.client\.getMakes\(store\.dealerCode\);/);
+  assert.match(read("supabase/functions/_shared/tecassured.ts"), /return await this\.apiCall\("POST", "\/ps\/makes", \{ dealerCode: this\.dealer\(dealerCode\) \}\);/);
+});

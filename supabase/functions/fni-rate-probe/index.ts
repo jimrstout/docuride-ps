@@ -36,6 +36,7 @@ import { parseRequiredProperties, readRateProperties } from "../_shared/rate-pro
 import { buildRateRequest, type RateSource } from "../_shared/rate-request.ts";
 import { codeRequest, type FormCodes } from "../_shared/coded-values.ts";
 import {
+  isMakesProbe,
   applyProbeOverrides,
   NEVER_PROBE_DEAL,
   parseProbeOverrides,
@@ -93,8 +94,11 @@ serve(async (req: Request) => {
   };
 
   try {
-    const parsed = parseProbeOverrides(probe.overrides);
-    if ("error" in parsed) return await fail(parsed.error);
+    // A probe of the provider's makes list (POST /ps/makes) rather than a
+    // rating: the same deal's store login, QA only, stored on its own row.
+    const makesOnly = isMakesProbe(probe.overrides);
+    const parsed = makesOnly ? null : parseProbeOverrides(probe.overrides);
+    if (parsed && "error" in parsed) return await fail(parsed.error);
 
     const { data: session } = await supabase.schema("fni").from("sessions").select("*").eq("id", probe.session_id).maybeSingle();
     if (!session) return await fail("That deal's session was not found.");
@@ -110,6 +114,19 @@ serve(async (req: Request) => {
     const store = await createTecAssuredClient(String(s.store_id), supabase);
     const environment = store.credentials.environment;
     if (environment !== "Test") return await fail("Probes run on the provider's QA server only, and this store's login is not the QA one.", { environment });
+
+    if (makesOnly) {
+      const request = { dealerCode: store.dealerCode };
+      let response: unknown;
+      try {
+        response = await store.client.getMakes(store.dealerCode);
+      } catch (err) {
+        return await fail(`The provider did not answer: ${err instanceof Error ? err.message : String(err)}`, { environment, request_payload: request });
+      }
+      await finish(supabase, probe.id, { status: "Done", environment, request_payload: request, response_payload: response });
+      return json(200, { status: "Done" });
+    }
+    if (!parsed || "error" in parsed) return await fail("The probe names no values to change.", { environment });
 
     // What the provider asks for: the overnight cache, else asked live. Never
     // written back, so the probe leaves the cache as it found it.

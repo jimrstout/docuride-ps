@@ -105,6 +105,11 @@ export function applyProbeOverrides(request: Record<string, unknown>, o: ProbeOv
   return out;
 }
 
+/** A probe of the provider's makes list rather than a rating: {"action": "makes"}. */
+export function isMakesProbe(raw: unknown): boolean {
+  return !!raw && typeof raw === "object" && !Array.isArray(raw) && (raw as Record<string, unknown>).action === "makes";
+}
+
 /** The deal a probe must never touch. */
 export const NEVER_PROBE_DEAL = "14957";
 
