@@ -28,6 +28,7 @@ import type { ConsoleListPayload, ConsoleSessionRow, PricingPayload } from "@/li
 import { SIGN_IN_NOTICES } from "@/components/admin/SignIn";
 import { Badge, Notice, PageHead, type Tone } from "@/components/admin/Parts";
 import { SessionFilters, type FilterOption } from "@/components/admin/SessionFilters";
+import { SessionPager } from "@/components/admin/SessionPager";
 
 export const dynamic = "force-dynamic";
 
@@ -318,7 +319,6 @@ async function SessionList({ notice }: { notice: string | null }) {
       <section className="ad-panel">
         <SessionFilters
           tableId="ad-sessions"
-          countId="ad-sessions-count"
           stores={stores}
           statuses={SESSION_STATUSES.map((s) => ({ value: s, label: s }))}
           ratings={Object.entries(RATING).map(([value, r]) => ({ value, label: r.label }))}
@@ -359,10 +359,9 @@ async function SessionList({ notice }: { notice: string | null }) {
         )}
 
         <footer className="ad-panel-foot">
-          <span id="ad-sessions-count">
-            {rows.length} {rows.length === 1 ? "session" : "sessions"}
-          </span>
-          <span>Most recent first</span>
+          {/* The count and, when there is more than one screen of sessions,
+              Previous and Next (components/admin/SessionPager.tsx). */}
+          <SessionPager tableId="ad-sessions" total={rows.length} />
         </footer>
       </section>
 

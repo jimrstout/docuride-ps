@@ -433,10 +433,10 @@
 /* ── Sessions on one screen ──────────────────────────────────────────────
    Every row has one way in, Open, and the deal number and vehicle are links
    to the same place: the deal's Details. The Actions column is only as wide
-   as Open. On a laptop the page is exactly the window: the heading and the
-   filters stay put, and when the list holds more sessions than fit, the
-   table scrolls inside its panel with its header pinned, never the page. A
-   phone keeps the ordinary scrolling page and its card layout. */
+   as Open. On a laptop the page is exactly the window and nothing scrolls:
+   when the list holds more sessions than fit, it pages, with Previous and
+   Next (components/admin/SessionPager). A phone keeps the ordinary
+   scrolling page and its card layout. */
 .ad-rowlink { color: inherit; text-decoration: none; }
 .ad-rowlink:hover { text-decoration: underline; text-underline-offset: 3px; }
 .ad-rowlink:focus-visible { outline: 2px solid var(--copper); outline-offset: 2px; border-radius: 2px; }
@@ -478,6 +478,14 @@
   .ad:has(#ad-sessions) .ad-main > * { flex: none; }
   .ad:has(#ad-sessions) .ad-panel:has(#ad-sessions) { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   .ad:has(#ad-sessions) .ad-panel:has(#ad-sessions) > * { flex: none; }
-  .ad:has(#ad-sessions) .ad-scroll:has(#ad-sessions) { flex: 1 1 auto; min-height: 0; overflow: auto; }
-  #ad-sessions thead th { position: sticky; top: 0; z-index: 1; }
+  /* Nothing scrolls, not even inside the panel: the pager shows only the
+     sessions that fit, a page at a time (components/admin/SessionPager). */
+  .ad:has(#ad-sessions) .ad-scroll:has(#ad-sessions) { flex: 1 1 auto; min-height: 0; overflow: hidden; }
 }
+
+/* The count and the pager under the list, the same height with or without
+   the buttons, so showing them never changes how many sessions fit. */
+.ad-panel:has(#ad-sessions) .ad-panel-foot { min-height: 50px; align-items: center; padding-top: 8px; padding-bottom: 8px; }
+.ad-pager { display: inline-flex; gap: 8px; }
+.ad-pager .ad-btn { min-height: 32px; padding-top: 5px; padding-bottom: 5px; }
+.ad-pager .ad-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
