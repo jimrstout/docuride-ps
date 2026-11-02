@@ -77,6 +77,7 @@ import { alignContractDates, dealDates, SALE_DATE_MISSING } from "../_shared/dea
 import { storeToday, submitDateProblem } from "../_shared/store-day.ts";
 import { freshSaleDate, type SaleDateSession } from "../_shared/crm-sale-date.ts";
 import { PRICE_GUARD_EVENT, priceProblems } from "../_shared/price-guard.ts";
+import { bandHolds, bandRefusal, ratedWarrantyMonths, warrantyBand } from "../_shared/warranty-band.ts";
 import { SERVICE_DRIVE_EVENT, isServiceDriveName, isServiceDriveQuoteProduct, serviceDriveLine } from "../_shared/service-drive.ts";
 
 /** How long Submit waits for the CRM's sale date before refusing. */
@@ -540,6 +541,19 @@ serve(async (req: Request) => {
       if (sdErr) console.error("fni-contract-submit service drive event not recorded", { session: session_id, code: sdErr.code ?? null });
       console.warn("fni-contract-submit stopped: service drive plan", { session: session_id, products: serviceDrive.length });
       return await refuse(409, { error: `Nothing was sent. ${serviceDrive.map((x) => x.line).join(" ")}`, service_drive: serviceDrive.map((x) => x.code) });
+    }
+
+    // A plan sold by remaining factory warranty goes out only in the band
+    // holding the months the deal was rated with (_shared/warranty-band.ts).
+    // The menus never offer another band; this refuses a selection that
+    // somehow holds one, before anything is sent.
+    const ratedMonths = ratedWarrantyMonths(ratedOffer.request_payload);
+    const wrongBand = resolved
+      .map((r) => ({ r, band: warrantyBand(r.productName, r.productType) }))
+      .filter((x) => x.band !== null && !bandHolds(x.band, ratedMonths))
+      .map((x) => bandRefusal(sdNames[x.r.providerProductId] ?? x.r.productName, x.band!, ratedMonths));
+    if (wrongBand.length > 0) {
+      return await refuse(409, { error: `Nothing was sent. ${wrongBand.join(" ")}` });
     }
 
     // And every one must have a dealer cost, because the row that records the

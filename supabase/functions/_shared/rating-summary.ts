@@ -13,6 +13,7 @@
 import { groupOffers, type NormalizedFamily, type NormalizedOffer } from "./normalized-offer.ts";
 import { isServiceDriveOption, isServiceDrivePlan } from "./service-drive.ts";
 import { normalizeOffer } from "./planner-offers.ts";
+import { ratedWarrantyMonths, withinWarrantyBand } from "./warranty-band.ts";
 
 /** A rated_offers row with its provider embedded. */
 export interface RatingRow {
@@ -23,6 +24,8 @@ export interface RatingRow {
   error_detail: string | null;
   out_of_date: boolean;
   response_payload: unknown;
+  /** What was sent. A TecAssured request carries the warranty months the bands are judged by. */
+  request_payload?: unknown;
   /** Why the last re-rate failed, when these offers were kept through it. */
   last_failure_detail?: string | null;
   last_failure_at?: string | null;
@@ -46,7 +49,11 @@ export function currentRows(rows: RatingRow[], ratedProviderIds: string[] | null
 export function familiesFromRow(row: RatingRow): NormalizedFamily[] {
   if (row.state !== "Rated" || row.out_of_date || row.response_payload == null) return [];
   const provider = row.provider ? { id: row.provider.id, name: row.provider.name } : null;
-  if (row.provider?.adapter === "TecAssured") return pointOfSale(normalizeOffer(row.response_payload, provider));
+  // Only the warranty band holding the months the deal was rated with
+  // (_shared/warranty-band.ts).
+  if (row.provider?.adapter === "TecAssured") {
+    return withinWarrantyBand(pointOfSale(normalizeOffer(row.response_payload, provider)), ratedWarrantyMonths(row.request_payload));
+  }
   const offers = (row.response_payload as { offers?: NormalizedOffer[] }).offers;
   return Array.isArray(offers) ? pointOfSale(groupOffers(offers)) : [];
 }
