@@ -67,12 +67,25 @@ export function tecAssuredAdapter(
    * Null when no brands are set up (the make goes out as it is). A refusal
    * when the make is not a brand yet: staff must pick or confirm it.
    */
-  async function providerMake(src: Record<string, unknown>): Promise<{ make: string | null } | { refusal: string }> {
+  /** What the make needs, read together: brands, groupings, settled spellings and the stored makes list. Only reads. */
+  async function brandReads(src: Record<string, unknown>) {
     const tenantId = String(src.tenant_id ?? "");
-    const [{ data: brandRows }, { data: groupRows }] = await Promise.all([
+    const environment = store.credentials.environment === "Live" ? "Live" : "Test";
+    const [{ data: brandRows }, { data: groupRows }, { data: settled }, makes] = await Promise.all([
       supabase.schema("fni").from("brands").select("name, aliases, active").eq("tenant_id", tenantId),
       supabase.schema("fni").from("brand_groups").select("parent_name, brand_name, vehicle_types, preferred").eq("tenant_id", tenantId),
+      supabase.schema("fni").from("brand_spellings")
+        .select("provider_id, environment, vtype, brand_name, spelling").eq("provider_id", provider.id).eq("environment", environment),
+      readMakes(environment),
     ]);
+    return { brandRows, groupRows, settled, makes, environment };
+  }
+
+  async function providerMake(
+    src: Record<string, unknown>,
+    read: Awaited<ReturnType<typeof brandReads>>
+  ): Promise<{ make: string | null } | { refusal: string }> {
+    const { brandRows, groupRows } = read;
     const brands = (brandRows ?? []) as Brand[];
     if (brands.length === 0) return { make: null };
     const edits = parseStaffEdits(src.staff_edits);
@@ -83,12 +96,18 @@ export function tecAssuredAdapter(
     if (m.status !== "brand") return { refusal: m.message };
     const brand = brandFor(m.brand, brands)!;
 
-    const environment = store.credentials.environment === "Live" ? "Live" : "Test";
+    const environment = read.environment;
     const where = { provider_id: provider.id, environment, vtype: vtype ?? "" };
-    const listed = await makesList(environment);
-    const { data: settled } = await supabase.schema("fni").from("brand_spellings")
-      .select("provider_id, environment, vtype, brand_name, spelling").eq("provider_id", provider.id).eq("environment", environment);
-    return { make: spellingFor(brand, where, (settled ?? []) as Spelling[], listed).spelling };
+    const listed = await makesList(environment, read.makes);
+    return { make: spellingFor(brand, where, (read.settled ?? []) as Spelling[], listed).spelling };
+  }
+
+  /** The stored makes list for this provider server and dealer (fni.provider_makes). */
+  async function readMakes(environment: string): Promise<(ProviderMake & { fetched_at: string })[]> {
+    const { data } = await supabase.schema("fni").from("provider_makes")
+      .select("provider_id, environment, vtype, make, fetched_at")
+      .eq("provider_id", provider.id).eq("environment", environment).eq("dealer_code", store.dealerCode);
+    return (data ?? []) as (ProviderMake & { fetched_at: string })[];
   }
 
   /**
@@ -96,14 +115,11 @@ export function tecAssuredAdapter(
    * asked for again when missing or over a week old. Best effort: rating never
    * fails for want of it, and the brand's own name is sent instead.
    */
-  async function makesList(environment: string): Promise<ProviderMake[]> {
-    const read = async () => {
-      const { data } = await supabase.schema("fni").from("provider_makes")
-        .select("provider_id, environment, vtype, make, fetched_at")
-        .eq("provider_id", provider.id).eq("environment", environment).eq("dealer_code", store.dealerCode);
-      return (data ?? []) as (ProviderMake & { fetched_at: string })[];
-    };
-    let rows = await read();
+  async function makesList(
+    environment: string,
+    stored: (ProviderMake & { fetched_at: string })[]
+  ): Promise<ProviderMake[]> {
+    let rows = stored;
     const oldest = rows.reduce((t, r) => Math.min(t, Date.parse(r.fetched_at)), Infinity);
     if (rows.length === 0 || Date.now() - oldest > MAKES_MAX_AGE_MS) {
       try {
@@ -114,7 +130,7 @@ export function tecAssuredAdapter(
             fresh.map((f) => ({ provider_id: provider.id, environment, dealer_code: store.dealerCode, vtype: f.vtype, make: f.make, fetched_at: now })),
             { onConflict: "provider_id,environment,dealer_code,vtype,make" },
           );
-          rows = await read();
+          rows = await readMakes(environment);
         }
       } catch {
         // The list as it was, or none: spellingFor falls back to the brand's name.
@@ -160,6 +176,12 @@ export function tecAssuredAdapter(
         };
       }
 
+      // The brand's inputs are read while the rate properties are: both are
+      // only reads. The make is still settled after the properties, as before,
+      // and the provider's makes list is fetched only once a brand is settled.
+      const brandRead = brandReads(rateSource);
+      brandRead.catch(() => {});
+
       let props: RequiredProperty[];
       try {
         props = await required();
@@ -189,7 +211,7 @@ export function tecAssuredAdapter(
       // (_shared/brands.ts). A make that is not a settled brand stops here,
       // with the reason staff see on Details; a brand goes out spelled the way
       // this provider server accepts it. Without brands set up, as before.
-      const branded = await providerMake(rateSource);
+      const branded = await providerMake(rateSource, await brandRead);
       timing?.mark("brand and makes list ready");
       if ("refusal" in branded) return { state: "Failed", reason: branded.refusal };
       const source = branded.make === null ? rateSource : { ...rateSource, unit_make: branded.make };

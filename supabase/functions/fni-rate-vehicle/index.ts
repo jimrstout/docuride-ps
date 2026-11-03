@@ -236,6 +236,24 @@ serve(async (req: Request) => {
     // leaves the last value read; a change is recorded, with its month rule,
     // and the session read again so the rating carries it.
     let sess = session as SessionRow;
+    // ── Read at the same time ──────────────────────────────────────────
+    // The CRM's sale date, the TecAssured provider, the deal's contracts and,
+    // for Rate again, the selections and the offer they were made from: none
+    // depends on another, so they are asked for together rather than one
+    // after another. Only reads; nothing is written until they are all in.
+    // The tenant, store and session are the same whatever the CRM says.
+    const providerRead = tecAssuredProviderId(supabase, sess.tenant_id).then((id) => {
+      providerId = id;
+      return id;
+    });
+    // A finished session rates while it has a live contract: products can be
+    // added after a contract (_shared/purchased.ts). Rating never touches a
+    // purchased product.
+    const contractsRead = purchasedFor(supabase, sess.id);
+    // Awaited below; a failure is reported there, as before.
+    providerRead.catch(() => {});
+    contractsRead.catch(() => {});
+    const before = body.rate_again === true ? rateAgainReads(supabase, sess.id) : null;
     const crmRead = await freshSaleDate(supabase, sess as unknown as SaleDateSession);
     if (crmRead.outcome === "Changed" || crmRead.outcome === "Changed meanwhile") {
       const { data: again } = await supabase.schema("fni").from("sessions").select("*").eq("id", session_id).single();
@@ -243,12 +261,7 @@ serve(async (req: Request) => {
     }
     timing.mark("sale date read from the CRM");
     timing.note("crm_sale_date", crmRead.outcome);
-    providerId = await tecAssuredProviderId(supabase, sess.tenant_id);
-
-    // A finished session rates while it has a live contract: products can be
-    // added after a contract (_shared/purchased.ts). Rating never touches a
-    // purchased product.
-    const purchased = await purchasedFor(supabase, sess.id);
+    const [, purchased] = await Promise.all([providerRead, contractsRead]);
     timing.mark("contracts read");
     if (ratingRefused(sess.status, purchased)) {
       return json(400, { error: `Session is ${sess.status} and cannot be re-rated` });
@@ -303,7 +316,7 @@ serve(async (req: Request) => {
     }
 
     if (body.rate_again === true) {
-      return await rateAgain(supabase, sess, rateSource, body.rated_by, purchased, timing);
+      return await rateAgain(supabase, sess, rateSource, body.rated_by, purchased, timing, before!);
     }
 
     if (body.refresh_spent === true) {
@@ -609,13 +622,37 @@ async function refreshSpent(
 // With selections the session's status is left alone, so the contracts panel
 // stays. With none, the status moves as any rating moves it. Every press is
 // recorded as "Rated again by <initials>", or by System, success or failure.
+/**
+ * What Rate again reads before it rates: the customer's choices that go
+ * through the API, and the quote they were made from. Started together, and
+ * alongside the CRM read, so the rating is not kept waiting for either. The
+ * quote is read before it is replaced, as before.
+ */
+function rateAgainReads(supabase: SupabaseClient, sessionId: string) {
+  const chosen = Promise.resolve(
+    supabase
+      .schema("fni")
+      .from("selected_products")
+      .select("id, provider_id, provider_product_id, product_name, rate_unique_id, selected_options, customer_price, retail_price, providers!inner(contract_method)")
+      .eq("session_id", sessionId)
+      .eq("disposition", "Included")
+      .eq("providers.contract_method", "Through API")
+  );
+  const beforeRows = offerRowsFor(supabase, sessionId);
+  // Awaited in rateAgain; a failure is reported there, as before, not here.
+  chosen.catch(() => {});
+  beforeRows.catch(() => {});
+  return { chosen, beforeRows };
+}
+
 async function rateAgain(
   supabase: SupabaseClient,
   sess: SessionRow,
   rateSource: Record<string, unknown>,
   by: unknown,
   purchased: Set<string>,
-  timing: RateTiming
+  timing: RateTiming,
+  reads: ReturnType<typeof rateAgainReads>
 ): Promise<Response> {
   const who = renewedBy(by);
   const event = ratedAgainEvent(who);
@@ -634,13 +671,7 @@ async function rateAgain(
     return json(409, { session_id: sess.id, outcome: "refused", error: "A submit is running or its outcome is not known, so the deal cannot be rated again now." });
   }
 
-  const { data: chosen, error: chosenErr } = await supabase
-    .schema("fni")
-    .from("selected_products")
-    .select("id, provider_id, provider_product_id, product_name, rate_unique_id, selected_options, customer_price, retail_price, providers!inner(contract_method)")
-    .eq("session_id", sess.id)
-    .eq("disposition", "Included")
-    .eq("providers.contract_method", "Through API");
+  const { data: chosen, error: chosenErr } = await reads.chosen;
   if (chosenErr) return json(500, { error: `The customer's choices could not be read: ${chosenErr.message}` });
   // A purchased product is never moved onto the fresh rating or marked: its
   // contract stands as written (_shared/purchased.ts).
@@ -652,7 +683,7 @@ async function rateAgain(
   timing.note("selections_compared", selections.length);
 
   // The quote the selections were made from, read before it is replaced.
-  const beforeRows = await offerRowsFor(supabase, sess.id);
+  const beforeRows = await reads.beforeRows;
   const oldFamilies = beforeRows.flatMap((r) => familiesFromRow({ ...(r as unknown as RatingRow), out_of_date: false }));
   timing.mark("earlier offer read");
 
@@ -673,33 +704,43 @@ async function rateAgain(
   }
 
   const taAnswered = ta && ta.tecassured && ta.result.state !== "Failed";
-  await supabase
-    .schema("fni")
-    .from("sessions")
-    .update({
-      // With selections, or a live contract, the status stays: the customer's choices stand.
-      ...(selections.length === 0 && purchased.size === 0 ? { status: statusAfterRating(String(sess.status), productCount, true) } : {}),
-      menu_template_id: template?.id ?? null,
-      rated_provider_ids: outcomes.map((o) => o.provider.id),
-      ...(taAnswered ? { credential_id: ta.tecassured!.credentialId, dealer_code_used: ta.tecassured!.dealer_code } : {}),
-    })
-    .eq("id", sess.id);
-  timing.mark("session updated");
+  const sessionUpdate = Promise.resolve(
+    supabase
+      .schema("fni")
+      .from("sessions")
+      .update({
+        // With selections, or a live contract, the status stays: the customer's choices stand.
+        ...(selections.length === 0 && purchased.size === 0 ? { status: statusAfterRating(String(sess.status), productCount, true) } : {}),
+        menu_template_id: template?.id ?? null,
+        rated_provider_ids: outcomes.map((o) => o.provider.id),
+        ...(taAnswered ? { credential_id: ta.tecassured!.credentialId, dealer_code_used: ta.tecassured!.dealer_code } : {}),
+      })
+      .eq("id", sess.id)
+  );
 
   if (selections.length === 0) {
+    await sessionUpdate;
+    timing.mark("session updated");
     await record({ outcome: "rated", product_count: productCount, lines: [] });
     return json(200, { session_id: sess.id, outcome: "rated", product_count: productCount, lines: [] });
   }
 
-  const { data: ruleRows } = await supabase
-    .schema("fni")
-    .from("pricing_rules")
-    .select("*")
-    .eq("tenant_id", sess.tenant_id)
-    .or(`store_id.eq.${sess.store_id},store_id.is.null`)
-    .eq("active", true);
+  // The pricing rules and the fresh offer, read while the session is updated:
+  // neither depends on that update, and the comparison needs both.
+  const [, { data: ruleRows }, freshRows] = await Promise.all([
+    sessionUpdate,
+    supabase
+      .schema("fni")
+      .from("pricing_rules")
+      .select("*")
+      .eq("tenant_id", sess.tenant_id)
+      .or(`store_id.eq.${sess.store_id},store_id.is.null`)
+      .eq("active", true),
+    offerRowsFor(supabase, sess.id),
+  ]);
+  timing.mark("session updated");
   const freshPriced = priceFamilies(
-    familiesFromRows((await offerRowsFor(supabase, sess.id)) as unknown as RatingRow[]),
+    familiesFromRows(freshRows as unknown as RatingRow[]),
     (ruleRows ?? []) as unknown as PricingRule[]
   );
   timing.mark("fresh offer read and priced");
