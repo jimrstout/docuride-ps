@@ -28,6 +28,13 @@ const PATHS: Record<AdminSection["icon"], React.ReactNode> = {
       <path d="M12 7v5l3.5 2" />
     </>
   ),
+  // A tag on a string: the brand a make names.
+  brands: (
+    <>
+      <path d="M4 4h7l9 9-7 7-9-9Z" />
+      <circle cx="8" cy="8" r="1.5" />
+    </>
+  ),
   // Lines of text.
   wording: <path d="M4 6h16M4 10.5h16M4 15h10M4 19.5h7" />,
   // Two buildings: the providers behind the products.

@@ -47,6 +47,7 @@
 import { financeFigures, type FinanceSource } from "./finance-basis.ts";
 import { resolveFuelType } from "./fuel-type.ts";
 import { engineSizeProblem, resolveEngineCc } from "./engine-size.ts";
+import { effectiveMake, type Brand, type BrandGroup } from "./brands.ts";
 import { dealDates, isNewUnit, IN_SERVICE_DATE_MISSING, SALE_DATE_MISSING } from "./deal-dates.ts";
 
 /** The sale date's note: where it comes from, and where it is changed. */
@@ -128,6 +129,15 @@ export interface VerifyField {
    * engine size of 0, say (_shared/engine-size.ts). Blocks Verify and rating.
    */
   problem: string | null;
+  /** The answers to choose from, when the field is a choice (Make: the known brands). */
+  choices?: string[] | null;
+  /**
+   * Make only: the brand was pre-selected from the vehicle type ("Check the
+   * brand"), and staff must confirm it before rating.
+   */
+  needs_confirm?: boolean;
+  /** Make only: what the CRM says, when it is not the brand shown. */
+  crm_said?: string | null;
   /** Who made the edit and when. Null when the field was never edited. */
   edited_by: string | null;
   edited_at: string | null;
@@ -265,6 +275,14 @@ export interface VerificationSource {
 
   /** Typed by staff on this screen. Keys are lowercased property names. */
   vehicle_properties: Record<string, unknown> | null;
+  /**
+   * The known brands and parent-company groupings (fni.brands,
+   * fni.brand_groups), when the caller has read them. With them, Make is a
+   * choice of brand (_shared/brands.ts); without, it reads as before.
+   */
+  make_context?: { brands: Brand[]; groups: BrandGroup[] } | null;
+  /** Staff's choice of brand, carried on the corrected deal so it is read as a choice. */
+  make_choice?: string | null;
   /** Verbatim /decode/ps response, or null if it has not been called. */
   vin_decode: Record<string, unknown> | null;
 }
@@ -390,6 +408,17 @@ function engineCc(src: VerificationSource): { value: string | null; source: Fiel
     { value: null, source: "Missing" };
 }
 
+/**
+ * The deal's brand: staff's choice when they made one, else what the CRM's
+ * make resolves to for the vehicle type. Null without the brand tables.
+ */
+function makeOf(src: VerificationSource, staffChoice: string | null | undefined) {
+  const ctx = src.make_context;
+  if (!ctx) return null;
+  const vt = resolveVehicleType(src as unknown as Record<string, unknown>).type;
+  return effectiveMake(src.unit_make, staffChoice ?? null, vt === "Other" ? null : vt, ctx.brands, ctx.groups);
+}
+
 const SPECS: Spec[] = [
   // ── Deal ───────────────────────────────────────────────────────────────
   //
@@ -454,9 +483,16 @@ const SPECS: Spec[] = [
   },
   {
     key: "unit_make", label: "Make", group: "Vehicle", provider_property: "make",
-    resolve: (s) => fromCrm(text(s.unit_make)),
+    // A known brand, matched from whatever the CRM says (_shared/brands.ts):
+    // "CAN AM" is Can-Am. A parent company or an unknown make reads as empty
+    // until staff choose, and the field's problem says why.
+    resolve: (s) => {
+      if (!s.make_context) return fromCrm(text(s.unit_make));
+      const m = makeOf(s, s.make_choice ?? null);
+      return m && m.brand !== null ? { value: m.brand, source: "CRM" as FieldSource } : { value: null, source: "Missing" as FieldSource };
+    },
     in_crm: true,
-    note: FROM_CRM,
+    note: "The brand, matched from the CRM's make. Choose another if that is wrong.",
   },
   {
     key: "unit_model", label: "Model", group: "Vehicle", provider_property: "model",
@@ -698,6 +734,8 @@ export function buildVerification(
     edits,
     editTargetFor
   ) as unknown as VerificationSource;
+  // Staff's brand is a choice, not a CRM make to resolve again.
+  if (edits.unit_make !== undefined) editedSrc.make_choice = String(edits.unit_make.value ?? "");
 
   const fields: VerifyField[] = SPECS.filter(
     (spec) => (spec.shownWhen ? spec.shownWhen(editedSrc) : true)
@@ -764,8 +802,21 @@ export function buildVerification(
       differs_from_crm:
         edit !== undefined && in_crm && !invalid && shown.value !== asSourced.value,
       invalid,
-      // Only where the provider's form asks for it: engine size above 0.
-      problem: required && spec.key === STAFF_ENTERED.engineCc ? engineSizeProblem(shown.value) : null,
+      // Only where the provider's form asks for it: engine size above 0. Make:
+      // a brand to check or to pick (_shared/brands.ts).
+      problem: required && spec.key === STAFF_ENTERED.engineCc
+        ? engineSizeProblem(shown.value)
+        : spec.key === "unit_make" ? makeOf(src, edit?.value)?.message ?? null : null,
+      ...(spec.key === "unit_make" && makeOf(src, edit?.value)
+        ? (() => {
+            const m = makeOf(src, edit?.value)!;
+            return {
+              choices: m.choices,
+              needs_confirm: m.status === "check",
+              crm_said: m.crm !== "" && m.crm !== m.brand ? m.crm : null,
+            };
+          })()
+        : {}),
       edited_by: edit?.edited_by ?? null,
       edited_at: edit?.edited_at ?? null,
     };

@@ -520,7 +520,9 @@ test("the rate request is built from the edited session", () => {
     new URL("../supabase/functions/_shared/adapters/tecassured.ts", import.meta.url),
     "utf8"
   );
-  assert.match(adapter, /buildRateRequest\(props, rateSource as unknown as RateSource/);
+  // The edited session, with only the make swapped for the provider's spelling.
+  assert.match(adapter, /const source = branded\.make === null \? rateSource : \{ \.\.\.rateSource, unit_make: branded\.make \};/);
+  assert.match(adapter, /buildRateRequest\(props, source as unknown as RateSource/);
   assert.doesNotMatch(adapter + rateFn, /buildRateRequest\([a-z]+, sess\b/);
 });
 

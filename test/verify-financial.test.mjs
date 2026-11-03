@@ -193,7 +193,9 @@ test("the form posts the maximum, and it is not in the rating input list", () =>
     max_amount_financed: "$27,000",
   });
   const fields = src("../apps/ownership-planner/lib/verify-fields.ts");
-  assert.match(fields, /export const OTHER_VERIFY_INPUT_NAMES: readonly string\[\] = \["max_amount_financed"\];/);
+  assert.match(fields, /export const OTHER_VERIFY_INPUT_NAMES: readonly string\[\] = \[\s*"max_amount_financed",/);
+  // With "Brand checked", which is not an edit either (_shared/brands.ts).
+  assert.match(fields, /"unit_make_confirmed",/);
 });
 
 // ── 4. Over the maximum ───────────────────────────────────────────────────

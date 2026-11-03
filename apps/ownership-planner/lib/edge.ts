@@ -230,6 +230,13 @@ export const edge = {
   adminSaveStore: <T>(body: Record<string, unknown>) =>
     call<T>("fni-admin-settings", { method: "POST", body: { ...body, section: "stores" } }),
 
+  /** The Brands section: brands, parent-company groupings, the provider's spellings. */
+  adminBrands: <T>() =>
+    call<T>("fni-admin-settings", { method: "GET", query: { section: "brands" } }),
+
+  adminSaveBrands: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-admin-settings", { method: "POST", body: { ...body, section: "brands" } }),
+
   /** The Providers section: every provider, its stores and its sheets. */
   adminProviders: <T>() =>
     call<T>("fni-admin-settings", { method: "GET", query: { section: "providers" } }),

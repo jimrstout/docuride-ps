@@ -64,7 +64,12 @@ export const RATING_INPUT_NAMES: readonly string[] = [
  * to re-rate. Kept out of RATING_INPUT_NAMES so that list stays equal to
  * EDIT_TARGETS on the Deno side.
  */
-export const OTHER_VERIFY_INPUT_NAMES: readonly string[] = ["max_amount_financed"];
+export const OTHER_VERIFY_INPUT_NAMES: readonly string[] = [
+  "max_amount_financed",
+  // "Brand checked": staff confirm a brand pre-selected from the vehicle type
+  // (_shared/brands.ts MAKE_CONFIRMED). Not an edit itself.
+  "unit_make_confirmed",
+];
 
 const NAMES = new Set([...RATING_INPUT_NAMES, ...OTHER_VERIFY_INPUT_NAMES]);
 

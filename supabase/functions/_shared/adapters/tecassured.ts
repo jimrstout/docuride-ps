@@ -20,6 +20,12 @@ import {
 import { buildRateRequest, type RateSource } from "../rate-request.ts";
 import { formCodesFromQuote, type FormCodes } from "../coded-values.ts";
 import { engineSizeProblem, resolveEngineCc } from "../engine-size.ts";
+import { brandFor, effectiveMake, makesFromResponse, spellingFor, type Brand, type BrandGroup, type ProviderMake, type Spelling } from "../brands.ts";
+import { parseStaffEdits } from "../staff-edits.ts";
+import { resolveVehicleType } from "../vehicle-types.ts";
+
+/** How old the provider's makes list may be before rating asks for it again. */
+const MAKES_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 import type { OfferProvider } from "../normalized-offer.ts";
 import { tecAssuredOffers } from "./tecassured-offers.ts";
 import type { ProviderAdapter, RateResult } from "./types.ts";
@@ -52,6 +58,67 @@ export function tecAssuredAdapter(
   // The provider's codes as its form last stated them for this vehicle type
   // (migration 0051). Null until a quote has been seen: the documented codes.
   let formCodes: FormCodes | null = null;
+
+  /**
+   * The make to send: the deal's brand in this provider server's spelling.
+   * Null when no brands are set up (the make goes out as it is). A refusal
+   * when the make is not a brand yet: staff must pick or confirm it.
+   */
+  async function providerMake(src: Record<string, unknown>): Promise<{ make: string | null } | { refusal: string }> {
+    const tenantId = String(src.tenant_id ?? "");
+    const [{ data: brandRows }, { data: groupRows }] = await Promise.all([
+      supabase.schema("fni").from("brands").select("name, aliases, active").eq("tenant_id", tenantId),
+      supabase.schema("fni").from("brand_groups").select("parent_name, brand_name, vehicle_types, preferred").eq("tenant_id", tenantId),
+    ]);
+    const brands = (brandRows ?? []) as Brand[];
+    if (brands.length === 0) return { make: null };
+    const edits = parseStaffEdits(src.staff_edits);
+    const choice = edits.unit_make?.value ?? null;
+    const crm = choice !== null ? edits.unit_make?.original ?? null : src.unit_make;
+    const vt = resolveVehicleType(src).type;
+    const m = effectiveMake(crm, choice, vt === "Other" ? null : vt, brands, (groupRows ?? []) as BrandGroup[]);
+    if (m.status !== "brand") return { refusal: m.message };
+    const brand = brandFor(m.brand, brands)!;
+
+    const environment = store.credentials.environment === "Live" ? "Live" : "Test";
+    const where = { provider_id: provider.id, environment, vtype: vtype ?? "" };
+    const listed = await makesList(environment);
+    const { data: settled } = await supabase.schema("fni").from("brand_spellings")
+      .select("provider_id, environment, vtype, brand_name, spelling").eq("provider_id", provider.id).eq("environment", environment);
+    return { make: spellingFor(brand, where, (settled ?? []) as Spelling[], listed).spelling };
+  }
+
+  /**
+   * The provider's makes list for this server and dealer (fni.provider_makes),
+   * asked for again when missing or over a week old. Best effort: rating never
+   * fails for want of it, and the brand's own name is sent instead.
+   */
+  async function makesList(environment: string): Promise<ProviderMake[]> {
+    const read = async () => {
+      const { data } = await supabase.schema("fni").from("provider_makes")
+        .select("provider_id, environment, vtype, make, fetched_at")
+        .eq("provider_id", provider.id).eq("environment", environment).eq("dealer_code", store.dealerCode);
+      return (data ?? []) as (ProviderMake & { fetched_at: string })[];
+    };
+    let rows = await read();
+    const oldest = rows.reduce((t, r) => Math.min(t, Date.parse(r.fetched_at)), Infinity);
+    if (rows.length === 0 || Date.now() - oldest > MAKES_MAX_AGE_MS) {
+      try {
+        const fresh = makesFromResponse(await store.client.getMakes(store.dealerCode));
+        if (fresh.length > 0) {
+          const now = new Date().toISOString();
+          await supabase.schema("fni").from("provider_makes").upsert(
+            fresh.map((f) => ({ provider_id: provider.id, environment, dealer_code: store.dealerCode, vtype: f.vtype, make: f.make, fetched_at: now })),
+            { onConflict: "provider_id,environment,dealer_code,vtype,make" },
+          );
+          rows = await read();
+        }
+      } catch {
+        // The list as it was, or none: spellingFor falls back to the brand's name.
+      }
+    }
+    return rows;
+  }
 
   /** Cached overnight by fni-refresh-rate-properties; live when cold. */
   async function required(): Promise<RequiredProperty[]> {
@@ -113,7 +180,15 @@ export function tecAssuredAdapter(
         };
       }
 
-      const built = buildRateRequest(props, rateSource as unknown as RateSource, {
+      // ── The brand, and the provider's spelling of it ─────────────────────
+      // (_shared/brands.ts). A make that is not a settled brand stops here,
+      // with the reason staff see on Details; a brand goes out spelled the way
+      // this provider server accepts it. Without brands set up, as before.
+      const branded = await providerMake(rateSource);
+      if ("refusal" in branded) return { state: "Failed", reason: branded.refusal };
+      const source = branded.make === null ? rateSource : { ...rateSource, unit_make: branded.make };
+
+      const built = buildRateRequest(props, source as unknown as RateSource, {
         dealerCode: store.dealerCode,
         vtype,
         formCodes,

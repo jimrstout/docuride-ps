@@ -252,7 +252,27 @@ function Field({ field, vendor }: { field: VerifyField; vendor: string }) {
       </label>
 
       <div className="vfield-control">
-        {field.editable && field.key === "fuel.type" ? (
+        {field.editable && field.key === "unit_make" && field.choices ? (
+          // A dropdown of known brands (_shared/brands.ts), on the brand the
+          // CRM's make matches. Blank when staff must pick. A brand picked from
+          // the vehicle type needs "Brand checked" before it is rated with.
+          <span className="vfield-make">
+            <select id={id} name={field.key} defaultValue={field.value ?? ""}>
+              {field.value === null ? <option value="">Pick the brand</option> : null}
+              {field.choices.map((choice) => (
+                <option key={choice} value={choice}>
+                  {choice}
+                </option>
+              ))}
+            </select>
+            {field.needs_confirm ? (
+              <label className="vfield-confirm">
+                <input type="checkbox" name="unit_make_confirmed" value="yes" /> Brand checked
+              </label>
+            ) : null}
+            {field.crm_said ? <small className="vfield-crm">The CRM says {`"${field.crm_said}"`}</small> : null}
+          </span>
+        ) : field.editable && field.key === "fuel.type" ? (
           // A dropdown, because only three answers exist. The Gasoline default
           // shows as Gasoline, and says Default only in the tooltip. Choosing a value
           // saves as a staff edit, and choosing what the deal already says

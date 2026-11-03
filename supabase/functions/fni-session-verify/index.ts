@@ -30,6 +30,9 @@ import { presentedSecret } from "../_shared/presented-secret.ts";
 import { unplacedOffers } from "../_shared/menu-templates.ts";
 import { loadSheet } from "../_shared/menu-prepare-rows.ts";
 import { providerMessages } from "../_shared/stale-offers.ts";
+import { MAKE_CONFIRMED, resolveMake, shortLineup, type Brand, type BrandGroup } from "../_shared/brands.ts";
+import { presetDealType } from "../_shared/menu-presets.ts";
+import { resolveVehicleType } from "../_shared/vehicle-types.ts";
 import { staffCheck, staffGate } from "../_shared/staff-gate.ts";
 import { staffInitials } from "../_shared/staff-auth.ts";
 import {
@@ -208,7 +211,20 @@ async function loadSession(
     .select(COLUMNS)
     .eq("id", sessionId)
     .maybeSingle();
-  return (data as Record<string, unknown> | null) ?? null;
+  const s = (data as Record<string, unknown> | null) ?? null;
+  if (!s) return null;
+  // The known brands and groupings, so Make is a choice of brand on every
+  // sheet built from this session (_shared/brands.ts, migration 0056).
+  return { ...s, make_context: await brandContext(supabase, s.tenant_id as string) };
+}
+
+/** The tenant's brands and parent-company groupings. Empty lists when none are set up. */
+async function brandContext(supabase: SupabaseClient, tenantId: string): Promise<{ brands: Brand[]; groups: BrandGroup[] }> {
+  const [{ data: brands }, { data: groups }] = await Promise.all([
+    supabase.schema("fni").from("brands").select("name, aliases, active").eq("tenant_id", tenantId),
+    supabase.schema("fni").from("brand_groups").select("parent_name, brand_name, vehicle_types, preferred").eq("tenant_id", tenantId),
+  ]);
+  return { brands: (brands ?? []) as Brand[], groups: (groups ?? []) as BrandGroup[] };
 }
 
 /**
@@ -659,6 +675,13 @@ async function sheetFor(supabase: SupabaseClient, s: Record<string, unknown>, cr
     for (const r of rows) {
       ratingNotices.push(...providerMessages(r.response_payload, (code, label) => names.get(code) ?? label.split(" - ")[0]));
     }
+    // The safety net: a financed rating with no Mechanical Protection or no
+    // GAP says so, never silently (_shared/brands.ts shortLineup).
+    const types = rows
+      .filter((r) => r.provider?.adapter === "TecAssured")
+      .flatMap((r) => ((r.response_payload as { quote?: { vehicles?: { products?: { ptype?: string }[] }[] } } | null)?.quote?.vehicles ?? [])
+        .flatMap((v) => (v.products ?? []).map((p) => String(p.ptype ?? ""))));
+    ratingNotices.push(...shortLineup(types, presetDealType(s.finance_type) === "Financed"));
   }
 
   const [duplicates, contracts, oemContracts, panel, providerAnswer, differences] = await Promise.all([
@@ -893,7 +916,30 @@ async function save(
   // financed, which has no other source. See ./save-edits.ts.
   const columns: Record<string, unknown> = {};
 
+  // ── Make: a brand pre-selected from the vehicle type needs confirming ──────
+  // (_shared/brands.ts). The dropdown posts the pre-selected brand on every
+  // save, so that alone is not a confirmation: "Brand checked" is, and so is
+  // picking another brand. A confirmation already made is kept.
+  const makeConfirmed = String(entries[MAKE_CONFIRMED] ?? "") !== "";
+  delete entries[MAKE_CONFIRMED];
+  const makeAsSourced = s.make_context
+    ? resolveMake(s.unit_make, (() => { const vt = resolveVehicleType(s).type; return vt === "Other" ? null : vt; })(),
+        (s.make_context as { brands: Brand[] }).brands, (s.make_context as { groups: BrandGroup[] }).groups)
+    : null;
+
   for (const [rawKey, rawValue] of Object.entries(entries)) {
+    if (rawKey === "unit_make" && makeAsSourced?.status === "check") {
+      const posted = rawValue === null || rawValue === undefined ? "" : String(rawValue).trim();
+      const existing = edits.unit_make;
+      if (posted === "") delete edits.unit_make;
+      else if (existing && existing.value === posted) { /* kept as it was */ }
+      else if (makeConfirmed || posted !== makeAsSourced.brand) {
+        edits.unit_make = {
+          value: posted, original: makeAsSourced.crm, original_source: "CRM", edited_by: editedBy, edited_at: now,
+        } as (typeof edits)[string];
+      } else delete edits.unit_make;
+      continue;
+    }
     // ── Framework plumbing is not an edit ──────────────────────────────────────
     // Next.js Server Action forms carry a hidden $ACTION_ID_<hash> field of their
     // own. The console filters to known rating inputs before it posts, so this

@@ -1178,6 +1178,11 @@ button { cursor: pointer; }
 .vfield-value { margin: 0; font-size: var(--fs-xs); font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
 .vfield-value em { color: var(--muted); font-weight: 400; }
 .vfield-control input, .vfield-control select { width: 100%; }
+/* Make: the brand dropdown, the Brand checked box and what the CRM says. */
+.vfield-make { display: grid; gap: 4px; }
+.vfield-make .vfield-confirm { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; }
+.vfield-make .vfield-confirm input { width: auto; }
+.vfield-make .vfield-crm { color: var(--ink-soft); }
 .vfield-note { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--ink-soft); line-height: 1.35; }
 
 /* Save, Decode, Discard, and the key, under the sheet. */

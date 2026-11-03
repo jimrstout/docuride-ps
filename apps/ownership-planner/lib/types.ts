@@ -263,6 +263,22 @@ export function num(v: string | number | null | undefined): number | null {
 
 // ── The internal console ──────────────────────────────────────────────────
 /** What fni-admin-settings returns for the Stores section. */
+/** What fni-admin-settings returns for Administration > Brands. */
+export interface BrandsPayload {
+  vehicle_types: string[];
+  providers: { id: string; name: string }[];
+  brands: { id: string; name: string; aliases: string[]; active: boolean; updated_at: string; updated_by: string | null }[];
+  groups: {
+    id: string; parent_name: string; brand_name: string; vehicle_types: string[]; preferred: boolean; note: string | null;
+    updated_at: string; updated_by: string | null;
+  }[];
+  spellings: {
+    id: string; provider_id: string; environment: "Test" | "Live"; vtype: string; brand_name: string; spelling: string;
+    source: string; note: string | null; checked_at: string; updated_by: string | null;
+  }[];
+  provider_makes: { provider_id: string; environment: "Test" | "Live"; dealer_code: string; vtype: string; make: string; fetched_at: string }[];
+}
+
 export interface StoresPayload {
   time_zones: { zone: string; label: string }[];
   stores: { id: string; name: string; place: string | null; time_zone: string; today: string }[];
@@ -444,6 +460,12 @@ export interface VerifyField {
   invalid: boolean;
   /** A value present but not one the provider can rate on (engine size 0). Blocks Verify and rating. */
   problem?: string | null;
+  /** The answers to choose from, when the field is a choice (Make: the known brands). */
+  choices?: string[] | null;
+  /** Make only: pre-selected from the vehicle type, so staff must tick Brand checked. */
+  needs_confirm?: boolean;
+  /** Make only: what the CRM says, when it is not the brand shown. */
+  crm_said?: string | null;
   edited_by: string | null;
   edited_at: string | null;
 }

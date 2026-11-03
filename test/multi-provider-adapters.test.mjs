@@ -126,7 +126,9 @@ test("a published sheet offers the rows that fit, and only unflagged ones", () =
 
 test("the TecAssured adapter keeps rate-vehicle's wording and request", () => {
   const adapter = src("../supabase/functions/_shared/adapters/tecassured.ts");
-  assert.match(adapter, /buildRateRequest\(props, rateSource as unknown as RateSource/);
+  // The edited session, with the make in the provider's spelling (_shared/brands.ts).
+  assert.match(adapter, /const source = branded\.make === null \? rateSource : \{ \.\.\.rateSource, unit_make: branded\.make \};/);
+  assert.match(adapter, /buildRateRequest\(props, source as unknown as RateSource/);
   assert.match(adapter, /TecAssured refused the rate request: \$\{err\.trim\(\)\}/);
   assert.match(adapter, /has no rateable products for vehicle type/);
   assert.match(adapter, /tecAssuredOffers\(response, provider\)/);

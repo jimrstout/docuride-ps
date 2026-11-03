@@ -81,13 +81,14 @@ test("slots: products from the catalog, in order; Best Match or Side by Side", (
 
 test("the admin menu lists the new sections, each page checks the operator first", () => {
   assert.deepEqual(ADMIN_SECTIONS.map((s) => s.href), [
-    "/admin/sessions", "/admin/pricing", "/admin/providers", "/admin/menus", "/admin/price-sheets", "/admin/wording", "/admin/stores",
+    "/admin/sessions", "/admin/pricing", "/admin/providers", "/admin/menus", "/admin/price-sheets", "/admin/wording", "/admin/stores", "/admin/brands",
   ]);
   for (const page of [
     "../apps/ownership-planner/app/admin/providers/page.tsx",
     "../apps/ownership-planner/app/admin/menus/page.tsx",
     "../apps/ownership-planner/app/admin/price-sheets/page.tsx",
     "../apps/ownership-planner/app/admin/price-sheets/[sheetId]/page.tsx",
+    "../apps/ownership-planner/app/admin/brands/page.tsx",
   ]) {
     const body = src(page);
     assert.match(body, /const operator = await currentOperator\(\);\s*if \(!operator\) return null;/, page);
