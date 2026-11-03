@@ -26,3 +26,15 @@ test("the root project (marketing and the R&R relay) is not changed", () => {
   const root = JSON.parse(read("vercel.json"));
   assert.equal(root.regions, undefined);
 });
+
+// ── Details: the DX1 check and the deal are read side by side ─────────────
+test("Details starts the DX1 check before it reads the deal, and uses it as before", () => {
+  const file = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = file.slice(file.indexOf("export default async function DetailsPage("));
+  const check = page.indexOf("const dx1Promise: Promise<Dx1CheckResult | null> = edge.dx1Check<Dx1CheckResult>(sessionId)");
+  assert.ok(check > page.indexOf("if (!isSessionId(sessionId)) notFound();"), "never for a malformed id");
+  assert.ok(check < page.indexOf("sheet = await edge.verifySheet<VerifySheet>(sessionId);"), "started before the deal is read");
+  assert.ok(page.indexOf("const operator = await currentOperator();") < check, "only for signed-in staff");
+  assert.equal((file.match(/edge\.dx1Check</g) ?? []).length, 1);
+  assert.match(page, /const dx1 = await dx1Promise;/);
+});

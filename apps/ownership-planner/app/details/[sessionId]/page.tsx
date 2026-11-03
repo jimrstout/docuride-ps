@@ -368,6 +368,23 @@ export default async function DetailsPage({
 
   if (!isSessionId(sessionId)) notFound();
 
+  // ── The F&I check against DX1 ───────────────────────────────────────────
+  // What the CRM's Generate gate would be told: the slots the DX1 pull left in
+  // the CRM against the live contracts (fni-dx1-check). Refreshed on every
+  // load, for signed-in staff. The function answers within 4.5 seconds and
+  // never fails loudly; nothing here blocks the page.
+  //
+  // Started before the deal is read, so the two run side by side rather than
+  // one after the other (about 3 seconds saved on every load). Neither uses
+  // what the other reads or writes: the check reads the CRM's slots and the
+  // live contracts and keeps its result in sessions.dx1_check, which the sheet
+  // does not carry; the sheet may record a new CRM sale date, which the check
+  // does not read. Its answer is used further down, exactly as before.
+  const dx1Promise: Promise<Dx1CheckResult | null> = edge.dx1Check<Dx1CheckResult>(sessionId).catch((err) => {
+    console.error(`dx1 check failed for ${sessionId}:`, err instanceof EdgeError ? err.status : "error");
+    return null;
+  });
+
   let sheet: VerifySheet;
   try {
     sheet = await edge.verifySheet<VerifySheet>(sessionId);
@@ -384,16 +401,6 @@ export default async function DetailsPage({
       </div>
     );
   }
-
-  // ── The F&I check against DX1 ───────────────────────────────────────────
-  // What the CRM's Generate gate would be told: the slots the DX1 pull left in
-  // the CRM against the live contracts (fni-dx1-check). Refreshed on every
-  // load, for signed-in staff. The function answers within 4.5 seconds and
-  // never fails loudly; nothing here blocks the page.
-  const dx1Promise: Promise<Dx1CheckResult | null> = edge.dx1Check<Dx1CheckResult>(sessionId).catch((err) => {
-    console.error(`dx1 check failed for ${sessionId}:`, err instanceof EdgeError ? err.status : "error");
-    return null;
-  });
 
   // ── The automatic VIN decode ─────────────────────────────────────────────
   // Once per session, the first time Verify opens: a VIN, never decoded, never
