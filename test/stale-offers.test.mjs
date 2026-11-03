@@ -16,6 +16,7 @@ import { buildSubmitQuote } from "../supabase/functions/_shared/offer-selections
 import { priceProblems } from "../supabase/functions/_shared/price-guard.ts";
 import { joinList, providerMessages } from "../supabase/functions/_shared/stale-offers.ts";
 import * as model from "../apps/ownership-planner/lib/prepare-model.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 const P = "prov-1";
@@ -131,9 +132,9 @@ test("the provider's words about a product it did not rate show, naming it", () 
 });
 
 test("Details and Prepare presentation show the notices", () => {
-  const verify = read("supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /if \(s\.menu_prepared\) ratingNotices\.push\(\.\.\.\(await loadSheet\(supabase, s\)\)\.sheet\.notices\);/);
   assert.match(verify, /rating_notices: ratingNotices,/);
-  assert.match(read("apps/ownership-planner/app/details/[sessionId]/page.tsx"), /\(sheet\.rating_notices \?\? \[\]\)\.map\(\(line\) => \(/);
+  assert.match(detailsSource(), /\(sheet\.rating_notices \?\? \[\]\)\.map\(\(line\) => \(/);
   assert.match(read("apps/ownership-planner/app/prepare/[sessionId]/Prepare.tsx"), /\(sheet\.notices \?\? \[\]\)\.map\(\(line\) => \(/);
 });

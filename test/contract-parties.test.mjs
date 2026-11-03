@@ -17,6 +17,7 @@ import {
 } from "../supabase/functions/_shared/contract-parties.ts";
 import { applyStaffEdits, parseStaffEdits } from "../supabase/functions/_shared/staff-edits.ts";
 import { editFor } from "../supabase/functions/fni-session-verify/save-edits.ts";
+import { verifySource } from "./details-source.mjs";
 
 const src = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 
@@ -167,7 +168,7 @@ test("fni-contract-submit asks for the DX1 confirmation only when something was 
 });
 
 test("fni-session-verify locks the panels and refuses edits while a contract is live", () => {
-  const v = src("supabase/functions/fni-session-verify/index.ts");
+  const v = verifySource();
   // The lock is the live-contract list: Live or Submit Status Unknown (duplicates.ts).
   assert.match(v, /contract_parties: contractParties\(s, edits, contracts\.length > 0\),/);
   assert.match(v, /if \(\(await liveContracts\(supabase, s\.id as string\)\)\.length > 0\) \{\s*return json\(409, \{ error: LOCK_REASON \}\);/);
@@ -175,7 +176,7 @@ test("fni-session-verify locks the panels and refuses edits while a contract is 
 });
 
 test("Discard my edits keeps city, state and ZIP edits while a contract is live", () => {
-  const v = src("supabase/functions/fni-session-verify/index.ts");
+  const v = verifySource();
   assert.match(v, /const locked = \(await liveContracts\(supabase, s\.id as string\)\)\.length > 0;\s*const kept: StaffEdits = \{\};/);
   assert.match(v, /if \(crmOwned\.has\(key\) && !\(locked && isPartyKey\(key\)\)\) discarded\.push\(labelFor\(key\)\);/);
 });

@@ -16,6 +16,7 @@ import {
   ratingFailures,
 } from "../apps/ownership-planner/lib/rating-error.ts";
 import { IN_SERVICE_DATE_MISSING, SALE_DATE_MISSING } from "../supabase/functions/_shared/deal-dates.ts";
+import { detailsSource } from "./details-source.mjs";
 
 const src = (rel) => readFileSync(new URL(`../apps/ownership-planner/${rel}`, import.meta.url), "utf8");
 const RA = "Riders Advantage";
@@ -122,7 +123,7 @@ test("the session list shows the summary and opens the full text under the row",
 // ── Details ──────────────────────────────────────────────────────────────
 
 test("Details shows one banner with the summary and the full text behind Show details", () => {
-  const page = src("app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /className="console-flash console-flash--bad rating-banner"/);
   assert.match(page, /<p className="rating-banner-say">\{ratingHeadline\}<\/p>/);
   assert.match(page, /<details className="rating-banner-more">/);

@@ -6,6 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { programName, programNamesFromQuote } from "../supabase/functions/_shared/program-names.ts";
+import { verifySource } from "./details-source.mjs";
 
 const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 
@@ -47,11 +48,11 @@ test("staff screens show the label; the planner never does", () => {
   for (const f of [
     "../apps/ownership-planner/app/admin/menus/page.tsx",
     "../apps/ownership-planner/app/admin/providers/wording/page.tsx",
-    "../apps/ownership-planner/app/details/[sessionId]/page.tsx",
+    "../apps/ownership-planner/app/details/[sessionId]/DetailsBody.tsx",
   ]) assert.match(src(f), /<ProgramLabel /, f);
   assert.match(src("../supabase/functions/fni-admin-settings/templates.ts"), /program: c\.provider_program_name/);
   assert.match(src("../supabase/functions/fni-admin-settings/wording.ts"), /provider_program_name/);
-  assert.match(src("../supabase/functions/fni-session-verify/index.ts"), /program_name: programOf\(/);
+  assert.match(verifySource(), /program_name: programOf\(/);
   // The customer's planner payload never carries it.
   assert.doesNotMatch(src("../supabase/functions/fni-session-get/index.ts"), /program_name|provider_program_name/);
 });

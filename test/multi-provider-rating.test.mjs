@@ -16,6 +16,7 @@ import {
   ratingSummary,
 } from "../supabase/functions/_shared/rating-summary.ts";
 import { rateFromSheet } from "../supabase/functions/_shared/adapters/price-sheet.ts";
+import { verifySource } from "./details-source.mjs";
 
 const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 const QUOTE = JSON.parse(src("./fixtures/tecassured-rate-utv-3-306.json"));
@@ -126,7 +127,7 @@ test("the menu, the save and Verify read the latest rating's providers", () => {
   const save = src("../supabase/functions/fni-session-save/index.ts");
   assert.match(save, /familiesFromRows\(offers\)/);
   assert.match(save, /"rated_provider_ids",/);
-  const verify = src("../supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /const menu = await menuFor\(supabase, s\.tenant_id as string, deal\);/);
   assert.match(verify, /\[\.\.\.new Set\(\[\.\.\.taProperties, \.\.\.sheetInputs\.flat\(\)\]\)\]/);
   assert.match(verify, /menu_template: menu\.template \? \{ name: menu\.template\.name \} : null,/);

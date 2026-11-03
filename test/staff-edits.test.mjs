@@ -412,7 +412,7 @@ test("crmMismatchWarning says nothing when there is nothing to say", () => {
 import { readFileSync } from "node:fs";
 const src = (f) => readFileSync(new URL(f, import.meta.url), "utf8");
 
-const verifyFn = src("../supabase/functions/fni-session-verify/index.ts");
+const verifyFn = verifySource();
 const saveEditsFn = readFileSync(
   new URL("../supabase/functions/fni-session-verify/save-edits.ts", import.meta.url),
   "utf8"
@@ -581,6 +581,7 @@ test("no provenance reaches the customer's browser", () => {
 
 import { editFor, sameAsUnedited } from "../supabase/functions/fni-session-verify/save-edits.ts";
 import { castForProperty } from "../supabase/functions/_shared/staff-edits.ts";
+import { verifySource } from "./details-source.mjs";
 
 /**
  * What save() does with a posted form, minus the endpoint around it: skip a
@@ -682,8 +683,7 @@ test("choosing the fuel type the deal already resolves to creates no edit", () =
 });
 
 test("save() uses the general rule and no fuel-only special case", () => {
-  const verify = readFileSync(
-    new URL("../supabase/functions/fni-session-verify/index.ts", import.meta.url), "utf8");
+  const verify = verifySource();
   const save = verify.slice(verify.indexOf("async function save("), verify.indexOf("async function discardEdits("));
   assert.match(save, /const edit = editFor\(target, stored, baseByKey\.get\(key\), edits\[key\], editedBy, now\);\s*if \(edit === null\) \{\s*delete edits\[key\];\s*continue;\s*\}/);
   assert.doesNotMatch(save, /key === "fuel\.type"/);

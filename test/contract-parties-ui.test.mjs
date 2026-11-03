@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import * as deno from "../supabase/functions/_shared/contract-parties.ts";
 import { DX1_CONFIRMATION, DX1_REMINDER, PARTY_FIELD_NAMES, partyEntries } from "../apps/ownership-planner/lib/contract-parties.ts";
 import { flashMessage } from "../apps/ownership-planner/lib/verify-flash.ts";
+import { detailsSource } from "./details-source.mjs";
 
 const src = (rel) => readFileSync(new URL(`../apps/ownership-planner/${rel}`, import.meta.url), "utf8");
 
@@ -30,7 +31,7 @@ test("after a save the reminder to change DX1 is shown", () => {
 test("the panels show to a signed-in operator only", () => {
   // The whole of Details is signed in now (test/staff-sign-in.test.mjs), so
   // the panels simply show, and the line asking to sign in is gone.
-  const page = src("app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /\{sheet\.contract_parties \? \(\s*<ContractParties parties=\{sheet\.contract_parties\} sessionId=\{sheet\.session\.id\} \/>/);
   assert.doesNotMatch(page, /Sign in to see and correct who goes on the contracts/);
   const actions = src("app/console-actions.ts");
@@ -57,7 +58,7 @@ test("every field is editable, read-only when locked, with its history and the C
 
 test("the Submit confirmation appears only when something was edited", () => {
   // In the Submit modal now (components/SubmitConfirm.tsx, 2026-10-28).
-  const page = src("app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /changes=\{sheet\.contract_parties\?\.changes \?\? \[\]\}/);
   const modal = src("components/SubmitConfirm.tsx");
   assert.match(modal, /const needsDx1 = changes\.length > 0;/);

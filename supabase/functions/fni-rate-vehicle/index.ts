@@ -68,6 +68,7 @@ import type { PricingRule } from "../_shared/planner-pricing.ts";
 import { renewedBy } from "../_shared/sale-date.ts";
 import { freshSaleDate, type SaleDateSession } from "../_shared/crm-sale-date.ts";
 import { RateTiming } from "../_shared/rate-timing.ts";
+import { offerParts } from "../_shared/details-offer.ts";
 import {
   notPurchased,
   purchasedKeys,
@@ -665,6 +666,21 @@ async function rateAgain(
       .insert({ session_id: sess.id, event, detail: { ...detail, timing: timing.detail() }, created_by: who });
     if (error) console.error(`fni-rate-vehicle rate again event not recorded for ${sess.id}: ${error.message}`);
   };
+  // The answer carries what the rating changed on Details (_shared/details-offer.ts),
+  // built by the same function Details loads with, from the session as it now
+  // stands and after the event is written (the out-of-date list reads it). The
+  // page updates in place from it instead of reading the whole deal again.
+  // Null when it cannot be built; the page then reloads as before.
+  const answer = async (status: number, body: Record<string, unknown>) => {
+    const { data: fresh } = await supabase.schema("fni").from("sessions").select("*").eq("id", sess.id).maybeSingle();
+    const details = fresh
+      ? await offerParts(supabase, fresh as Record<string, unknown>).catch((err) => {
+          console.error(`fni-rate-vehicle details not built for ${sess.id}: ${err instanceof Error ? err.message : String(err)}`);
+          return null;
+        })
+      : null;
+    return json(status, { ...body, details });
+  };
 
   const submitState = String((sess as unknown as Record<string, unknown>).submit_state ?? "Idle");
   if (submitState !== "Idle") {
@@ -700,7 +716,7 @@ async function rateAgain(
     const reason = outcomes.map((o) => outcomeLine(o)).join(" ") || "No provider rated this deal.";
     await record({ outcome: "failed", reason });
     // The provider's words are on the rating row, shown behind Show details.
-    return json(502, { session_id: sess.id, outcome: "failed", error: `The deal could not be rated again. ${reason}`.trim() });
+    return await answer(502, { session_id: sess.id, outcome: "failed", error: `The deal could not be rated again. ${reason}`.trim() });
   }
 
   const taAnswered = ta && ta.tecassured && ta.result.state !== "Failed";
@@ -722,7 +738,7 @@ async function rateAgain(
     await sessionUpdate;
     timing.mark("session updated");
     await record({ outcome: "rated", product_count: productCount, lines: [] });
-    return json(200, { session_id: sess.id, outcome: "rated", product_count: productCount, lines: [] });
+    return await answer(200, { session_id: sess.id, outcome: "rated", product_count: productCount, lines: [] });
   }
 
   // The pricing rules and the fresh offer, read while the session is updated:
@@ -756,11 +772,11 @@ async function rateAgain(
       .eq("id", selections[i].id)
       .eq("rate_unique_id", l.from_rate);
     if (moveErr) {
-      return json(500, { session_id: sess.id, outcome: "failed", error: `The selections could not be moved onto the fresh rating: ${moveErr.message}` });
+      return await answer(500, { session_id: sess.id, outcome: "failed", error: `The selections could not be moved onto the fresh rating: ${moveErr.message}` });
     }
   }
   timing.mark("selections moved");
   const kept = lines.map(({ snapshot: _snapshot, ...l }) => l);
   await record({ outcome: unchanged ? "unchanged" : "changed", product_count: productCount, lines: kept });
-  return json(200, { session_id: sess.id, outcome: unchanged ? "unchanged" : "changed", product_count: productCount, lines: kept });
+  return await answer(200, { session_id: sess.id, outcome: unchanged ? "unchanged" : "changed", product_count: productCount, lines: kept });
 }

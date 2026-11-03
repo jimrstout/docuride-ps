@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { NAV_GIVE_UP_MS, OPENING } from "../apps/ownership-planner/lib/nav-busy.ts";
+import { detailsSource } from "./details-source.mjs";
 
 const root = new URL("../apps/ownership-planner/", import.meta.url).pathname;
 const app = (rel) => readFileSync(join(root, rel), "utf8");
@@ -67,14 +68,14 @@ test("it ends when the next page is drawn, not before", () => {
 test("documents, other sites and in-page jumps do not wait for a page that never comes", () => {
   assert.match(control, /const external = file \|\| isOtherSite\(href\);/);
   assert.match(control, /if \(external \|\| inPage\) return;/);
-  const details = app("app/details/[sessionId]/page.tsx");
+  const details = detailsSource();
   for (const doc of ["c.workdrive_url", "c.view_pdf_url", "o.contract.document_url"]) {
     assert.match(details, new RegExp(`<Control file href=\\{${doc.replace(/\./g, "\\.")}\\}>`), doc);
   }
 });
 
 test("the presentations open in a new tab and stay busy until it is drawn", () => {
-  const details = app("app/details/[sessionId]/page.tsx");
+  const details = detailsSource();
   assert.match(details, /href=\{`\/menu\/\$\{sessionId\}`\} newTab>/);
   assert.match(details, /href=\{`\/plan\/\$\{sessionId\}`\} newTab>/);
 });

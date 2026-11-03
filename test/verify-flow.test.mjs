@@ -11,6 +11,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
+import { detailsSource } from "./details-source.mjs";
 
 const require_fs = () => ({ readdirSync, statSync });
 
@@ -37,7 +38,7 @@ function actionBody(name) {
   return between(actions, `export async function ${name}(`, "\n}\n");
 }
 
-const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
+const page = detailsSource();
 const actions = src("../apps/ownership-planner/app/console-actions.ts");
 const planPage = src("../apps/ownership-planner/app/plan/[sessionId]/page.tsx");
 const sessionStart = src("../supabase/functions/fni-session-start/index.ts");

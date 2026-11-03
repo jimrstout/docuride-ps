@@ -13,6 +13,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { caughtUp, RENDER_STAMP_ATTR, RENDER_WAIT_MS } from "../apps/ownership-planner/lib/working.ts";
+import { detailsSource } from "./details-source.mjs";
 
 const app = (rel) => readFileSync(new URL(`../apps/ownership-planner/${rel}`, import.meta.url), "utf8");
 const fn = (name) => readFileSync(new URL(`../supabase/functions/${name}/index.ts`, import.meta.url), "utf8");
@@ -33,8 +34,10 @@ test("Details carries the marker, new on every render, made on the server", () =
   assert.doesNotMatch(stamp, /"use client"/);
   assert.match(stamp, /randomUUID\(\)/);
   // Last in the page, so it changes only once everything above it is drawn.
-  const page = app("app/details/[sessionId]/page.tsx");
-  assert.match(page, /<\/main>\s*\{\/\*[\s\S]*?\*\/\}\s*<RenderStamp \/>\s*<\/div>\s*<\/WorkingArea>/);
+  const page = detailsSource();
+  // Drawn by the server page and placed last in the body (DetailsBody.tsx).
+  assert.match(page, /renderStamp=\{[\s\S]*?<RenderStamp \/>\s*\}/);
+  assert.match(page, /<\/main>\s*\{\/\*[\s\S]*?\*\/\}\s*\{renderStamp\}\s*<\/div>\s*<\/WorkingArea>/);
 });
 
 test("the busy state waits for the marker, and keeps its slow and stuck messages meanwhile", () => {
@@ -48,7 +51,8 @@ test("the busy state waits for the marker, and keeps its slow and stuck messages
   // The "still working" and stuck timers are cleared only once it ends.
   assert.ok(finish.indexOf("if (r.renderBefore !== null) {") < finish.indexOf("for (const t of timers) clearTimeout(t);"));
   // Remembered when the action starts, and a second "the form ended" changes nothing.
-  assert.match(w, /renderBefore: renderStamp\(\),/);
+  // Rate again updates the page from its answer and has no render to wait for (speed part 2).
+  assert.match(w, /renderBefore: form\.dataset\.workingRedraw === "none" \? null : renderStamp\(\),/);
   // finish() ends once however many markers call it (r.finishing).
   assert.match(w, /if \(!r \|\| r\.finishing\) return;\s*r\.finishing = true;/);
   assert.match(wait, /r\.waiting = true;/);

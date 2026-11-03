@@ -17,6 +17,7 @@ import {
 import { renewedBy } from "../supabase/functions/_shared/sale-date.ts";
 import { rateAgainAvailable } from "../apps/ownership-planner/lib/rate-again.ts";
 import { flashMessage } from "../apps/ownership-planner/lib/verify-flash.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 const money = (n) => `$${n.toFixed(2)}`;
@@ -44,7 +45,7 @@ test("offered when signed in, not when signed out", () => {
   assert.equal(rateAgainAvailable({ signedIn: false, submitState: "Idle" }), false);
   // Whatever the rating says, and whatever contracts are live: neither is an input.
   // Details is signed in before it renders anything (test/staff-sign-in.test.mjs).
-  assert.match(read(PAGE), /rateAgainAvailable\(\{ signedIn: true, submitState: sheet\.submit_state \}\) \? \(/);
+  assert.match(detailsSource(), /rateAgainAvailable\(\{ signedIn: true, submitState: sheet\.submit_state \}\) \? \(/);
   // The action needs a signed-in person too.
   const actions = read("apps/ownership-planner/app/console-actions.ts");
   const action = actions.slice(actions.indexOf("export async function rateAgain("));
@@ -121,17 +122,17 @@ test("differences are listed on Details as out of date", () => {
   assert.equal(differenceText(lines[2], money), "Sample Wheel: no longer offered.");
   // Chosen again since: nothing left to list.
   assert.equal(refreshState([{ provider_product_id: "TIRE", rate_unique_id: "201" }, { provider_product_id: "WHEEL", rate_unique_id: "301" }], latest, money), null);
-  const page = read(PAGE);
+  const page = detailsSource();
   assert.match(page, /\{sheet\.rating_differences \? \([\s\S]*?<li key=\{d\}>Out of date\. \{d\}<\/li>/);
-  assert.match(read("supabase/functions/fni-session-verify/index.ts"), /return state\?\.kind === "held" \? \{ message: OUT_OF_DATE_MESSAGE, differences: state\.differences \} : null;/);
+  assert.match(verifySource(), /return state\?\.kind === "held" \? \{ message: OUT_OF_DATE_MESSAGE, differences: state\.differences \} : null;/);
   assert.doesNotMatch(OUT_OF_DATE_MESSAGE, /—|DX1/);
   // The Submit confirmation is held by the same state (spentStateFor).
-  assert.match(read("supabase/functions/fni-session-verify/index.ts"), /const state = refreshState\(selections, await latestRefreshEvent\(supabase, s\.id as string\), money\);/);
+  assert.match(verifySource(), /const state = refreshState\(selections, await latestRefreshEvent\(supabase, s\.id as string\), money\);/);
 });
 
 test("a rating error is shown with Show details and Copy error, and nothing is kept as rated", () => {
   const fn = rateAgainFn();
-  assert.match(fn, /if \(rated\.length === 0 \|\| productCount === 0\) \{[\s\S]*?await record\(\{ outcome: "failed", reason \}\);[\s\S]*?return json\(502,/);
+  assert.match(fn, /if \(rated\.length === 0 \|\| productCount === 0\) \{[\s\S]*?await record\(\{ outcome: "failed", reason \}\);[\s\S]*?return await answer\(502,/);
   // The provider's words are in the rating banner (failed now, or kept after a failed re-rate).
   assert.equal(
     flashMessage({ code: "rateagainfailed", detail: "x" }, { ratingShown: true }).text,
@@ -139,15 +140,15 @@ test("a rating error is shown with Show details and Copy error, and nothing is k
   );
   assert.equal(flashMessage({ code: "rateagainfailed", detail: "The deal could not be rated again. Sample fault." }).text,
     "The deal could not be rated again. Sample fault.");
-  assert.match(read(PAGE), /<RatingErrorText deal=\{sheet\.session\.deal_number\} failures=\{ratingFailuresShown\} \/>/);
+  assert.match(detailsSource(), /<RatingErrorText deal=\{sheet\.session\.deal_number\} failures=\{ratingFailuresShown\} \/>/);
   // Never a submit.
   assert.doesNotMatch(fn, /submitContract|fni-contract-submit/);
 });
 
 test("a double tap rates once: the busy button sends one request", () => {
-  const page = read(PAGE);
+  const page = detailsSource();
   // In the next-step bar now, as the secondary button once rated (2026-11-02).
-  assert.match(page, /<form action=\{rateAgain\} className="vrate-again">\s*<Working \/>\s*<input type="hidden" name="session_id" value=\{sheet\.session\.id\} \/>\s*<Control type="submit" working="page" busyText="Rating again\.\.\.">Rate again<\/Control>/);
+  assert.match(page, /<form action=\{rateAgainHere\} className="vrate-again" data-working-redraw="none">\s*<Working \/>\s*<input type="hidden" name="session_id" value=\{sheet\.session\.id\} \/>\s*<Control type="submit" working="page" busyText="Rating again\.\.\.">Rate again<\/Control>/);
   const button = read("apps/ownership-planner/components/Control.tsx");
   assert.match(button, /disabled=\{disabled \|\| busy\}/);
 });

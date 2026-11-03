@@ -13,6 +13,7 @@ import ts from "typescript";
 import { savedSelections, submitConfirmation, SUBMIT_ROW_COLUMNS } from "../supabase/functions/_shared/saved-selections.ts";
 import { money } from "../apps/ownership-planner/lib/money.ts";
 import { render } from "./_jsx-string.mjs";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const here = (rel) => new URL(rel, import.meta.url);
 const read = (rel) => readFileSync(here(`../${rel}`), "utf8");
@@ -61,7 +62,7 @@ test("the modal and the submit read the same rows the same way", () => {
   const submit = read("supabase/functions/fni-contract-submit/index.ts");
   assert.match(submit, /\.from\("selected_products"\)[\s\S]{0,200}?\.select\(SUBMIT_ROW_COLUMNS\)\s*\.eq\("session_id", session_id\)\s*\.eq\("disposition", "Included"\);/);
   assert.match(submit, /body\.selections = savedSelections\(\(saved \?\? \[\]\) as unknown as SubmitRow\[\]\);/);
-  const verify = read("supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /\.from\("selected_products"\)\s*\.select\(SUBMIT_ROW_COLUMNS\)\s*\.eq\("session_id", s\.id as string\)\s*\.eq\("disposition", "Included"\)/);
   assert.match(verify, /\.\.\.submitConfirmation\(\(data \?\? \[\]\) as unknown as SubmitRow\[\]\),/);
   assert.match(verify, /confirmation: await submitConfirmationFor\(supabase, s, onQa\),/);
@@ -98,7 +99,7 @@ test("Submit contracts opens the modal and sends nothing; only Confirm Submit se
   assert.doesNotMatch(m, /<button\b|requestSubmit|\.submit\(\)/);
   assert.match(m, /disabled=\{!open \|\| !!blocked \|\| !!held \|\| \(needsDx1 && !ticked\)\}\s*>\s*Confirm Submit\s*</);
   assert.match(m, /<form action=\{submitContracts\} ref=\{form\} className="vsubmit">\s*<Working \/>/);
-  const page = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.doesNotMatch(page, /<form action=\{submitContracts\}/);
   assert.match(page, /<SubmitConfirm\s/);
 });

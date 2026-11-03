@@ -13,6 +13,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { safeStaffPath } from "../apps/ownership-planner/lib/admin-sections.ts";
+import { detailsSource } from "./details-source.mjs";
 
 const SESSION = "5e55e55e-5e55-4e55-8e55-5e55e55e5e55";
 const app = (rel) => readFileSync(new URL(`../apps/ownership-planner/${rel}`, import.meta.url), "utf8");
@@ -42,7 +43,7 @@ function beforeAnyEdgeCall(src, marker) {
 }
 
 test("Details, signed out: the sign-in form in place, before the deal is read, back to the same deal after", () => {
-  const p = app("app/details/[sessionId]/page.tsx");
+  const p = detailsSource();
   const gate = beforeAnyEdgeCall(p, "export default async function DetailsPage");
   assert.match(gate, /<SignIn\s/);
   assert.match(gate, /next=\{isSessionId\(sessionId\) \? `\/details\/\$\{sessionId\}` : "\/admin\/sessions"\}/);
@@ -102,7 +103,7 @@ test("the customer's tabs' own requests need the same sign-in", () => {
 });
 
 test("the line asking an already signed-in person to sign in is gone, with the other dead sign-in prompts", () => {
-  const p = app("app/details/[sessionId]/page.tsx");
+  const p = detailsSource();
   assert.doesNotMatch(p, /Sign in to see and correct who goes on the contracts/);
   assert.doesNotMatch(p, /Sign in to (void|submit|record)|to clear it\./);
 });

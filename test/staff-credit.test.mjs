@@ -18,9 +18,10 @@ import {
   SHEET_SAVED_EVENT,
   VERIFIED_EVENT,
 } from "../supabase/functions/_shared/staff-events.ts";
+import { verifySource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
-const verifyFn = read("supabase/functions/fni-session-verify/index.ts");
+const verifyFn = verifySource();
 const post = verifyFn.slice(verifyFn.indexOf('if (req.method !== "POST") return json(405'));
 
 test("the initials are the same whichever side works them out", () => {

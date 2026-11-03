@@ -15,9 +15,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { nextStep, PREPARE_FIRST, RATE_SAY } from "../apps/ownership-planner/lib/next-step.ts";
+import { detailsSource } from "./details-source.mjs";
 
 const app = (rel) => readFileSync(new URL(`../apps/ownership-planner/${rel}`, import.meta.url), "utf8");
-const page = app("app/details/[sessionId]/page.tsx");
+const page = detailsSource();
 const footer = page.slice(page.indexOf('<footer className="vnext"'), page.indexOf("</footer>"));
 /** The JSX of one step's branch in the footer's buttons. */
 const doArea = footer.slice(footer.indexOf('<div className="vnext-do">'));
@@ -59,8 +60,8 @@ test("3. prepared: the two presentations lead, Prepare and Rate again beside the
 });
 
 test("Rate again is the secondary button whenever rated, and the old one under Rating is gone", () => {
-  assert.match(ratedBranch, /rateAgainAvailable\(\{ signedIn: true, submitState: sheet\.submit_state \}\) \? \(\s*\/\/[^\n]*\n[^\n]*\n\s*<form action=\{rateAgain\} className="vrate-again">/);
-  assert.equal((page.match(/action=\{rateAgain\}/g) ?? []).length, 1);
+  assert.match(ratedBranch, /rateAgainAvailable\(\{ signedIn: true, submitState: sheet\.submit_state \}\) \? \([\s\S]{0,400}?<form action=\{rateAgainHere\} className="vrate-again" data-working-redraw="none">/);
+  assert.equal((page.match(/action=\{rateAgainHere\}/g) ?? []).length, 1);
   const status = page.slice(page.indexOf('<dl className="vstate">'), page.indexOf("</dl>"));
   assert.doesNotMatch(status, /rateAgain|Rate again/);
 });
@@ -82,7 +83,7 @@ test("the rating sentence names no provider", () => {
 
 test("the old names are gone from every screen, and the addresses stay", () => {
   const screens = [
-    "app/details/[sessionId]/page.tsx", "app/prepare/[sessionId]/page.tsx", "app/prepare/[sessionId]/Prepare.tsx",
+    "app/details/[sessionId]/page.tsx", "app/details/[sessionId]/DetailsBody.tsx", "app/prepare/[sessionId]/page.tsx", "app/prepare/[sessionId]/Prepare.tsx",
     "app/admin/menus/page.tsx", "lib/submit-check.ts",
   ];
   for (const f of screens) {

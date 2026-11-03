@@ -9,9 +9,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { detailsSource } from "./details-source.mjs";
 
 const app = (rel) => readFileSync(new URL(`../apps/ownership-planner/${rel}`, import.meta.url), "utf8");
-const page = app("app/details/[sessionId]/page.tsx");
+const page = detailsSource();
 
 test("no Checked by box or Change button on any screen", () => {
   const roots = ["app", "components", "lib"];

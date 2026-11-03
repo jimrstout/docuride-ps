@@ -12,12 +12,14 @@ import { readFileSync } from "node:fs";
 import { sentenceStart, testServerName, vendorName } from "../apps/ownership-planner/lib/vendor.ts";
 import { readSubmitResponse } from "../supabase/functions/_shared/submit-outcome.ts";
 import { submitRefusal } from "../supabase/functions/_shared/duplicates.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 
 /** Every file swept: Details, the components it draws, and the submit flow. */
 const SWEPT = [
   "apps/ownership-planner/app/details/[sessionId]/page.tsx",
+  "apps/ownership-planner/app/details/[sessionId]/DetailsBody.tsx",
   "apps/ownership-planner/components/ContractParties.tsx",
   "apps/ownership-planner/components/SubmitConfirm.tsx",
   "apps/ownership-planner/components/SubmitSummary.tsx",
@@ -71,7 +73,7 @@ function brandedText(src) {
 test("the submit button says Submit contracts, with no provider name", () => {
   const button = read("apps/ownership-planner/components/SubmitConfirm.tsx");
   assert.match(button, />\s*Submit contracts\s*</);
-  for (const f of ["apps/ownership-planner/app/details/[sessionId]/page.tsx", "apps/ownership-planner/components/SubmitConfirm.tsx"]) {
+  for (const f of ["apps/ownership-planner/app/details/[sessionId]/page.tsx", "apps/ownership-planner/app/details/[sessionId]/DetailsBody.tsx", "apps/ownership-planner/components/SubmitConfirm.tsx"]) {
     assert.doesNotMatch(read(f), /Submit contracts to/, f);
   }
 });
@@ -91,7 +93,7 @@ test("the name comes from the provider record, and reads as the provider without
   assert.equal(vendorName({ provider_name: null, contracts_panel: { provider_name: "Other Provider" } }), "Other Provider");
   assert.equal(vendorName({}), "the provider");
   assert.equal(sentenceStart("the provider"), "The provider");
-  const verify = read("supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /const providerName = await tecAssuredProviderName\(supabase, s\.tenant_id\)/);
   assert.match(verify, /provider_name: providerName,/);
   const rows = read("supabase/functions/_shared/provider-rows.ts");
@@ -105,7 +107,7 @@ test("the name comes from the provider record, and reads as the provider without
 test("the test session banner names the provider's test server from the record", () => {
   assert.equal(testServerName("Sample Provider"), "the Sample Provider test server");
   assert.equal(testServerName("the provider"), "the provider's test server");
-  const page = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /This is a test session\. Its contracts go only to \{testServerName\(vendor\)\}/);
   assert.match(page, /const vendor = vendorName\(sheet\);/);
 });
@@ -123,6 +125,6 @@ test("submit messages name whichever provider the contracts went to", () => {
 });
 
 test("a product name from the provider is shown as it comes", () => {
-  const page = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /<strong>\{c\.product_name\}<\/strong>/);
 });

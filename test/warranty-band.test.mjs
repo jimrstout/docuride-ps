@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { familiesFromRows } from "../supabase/functions/_shared/rating-summary.ts";
 import { bandHolds, bandRefusal, warrantyBand } from "../supabase/functions/_shared/warranty-band.ts";
 import { changedInputs, ratingInputs } from "../supabase/functions/_shared/verification.ts";
+import { verifySource } from "./details-source.mjs";
 
 const P = "prov-1";
 const product = (unique, ptype, label) => ({
@@ -78,6 +79,6 @@ test("changing warranty months requires Rate again", () => {
     { key: "deal_number", label: "Deal #", value: "1", provider_property: null },
   ] });
   assert.deepEqual(changedInputs(ratingInputs(sheet("12")), ratingInputs(sheet("13"))), ["warranty"]);
-  const verify = readFileSync(new URL("../supabase/functions/fni-session-verify/index.ts", import.meta.url), "utf8");
+  const verify = verifySource();
   assert.match(verify, /\.from\("rated_offers"\)\s*\.update\(\{ out_of_date: true \}\)/);
 });

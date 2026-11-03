@@ -10,6 +10,7 @@ import {
   jobFor, restoreFields, snapshotFields, STILL_WORKING, STILL_WORKING_AFTER_MS,
   SUBMIT_LEAVE, VOID_LEAVE, VEHICLE_TYPE_INTENT,
 } from "../apps/ownership-planner/lib/working.ts";
+import { detailsSource } from "./details-source.mjs";
 
 const app = new URL("../apps/ownership-planner/", import.meta.url).pathname;
 const src = (rel) => readFileSync(join(app, rel), "utf8");
@@ -92,7 +93,7 @@ test("no staff form sends with a plain button: each says what it is doing", () =
 });
 
 test("the whole-deal actions cover the page, Submit and Void warn before leaving", () => {
-  const page = src("app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   for (const label of [
     "Refreshing from CRM...", "Voiding...", "Moving documents to the Deal Jacket...",
     "Rating...", "Rating again...", "Decoding the VIN...", "Reloading from CRM...",
@@ -129,7 +130,7 @@ test("the area blocks other sends, locks, warns, announces and keeps entries", (
   // Never times out silently: after two minutes it says so and offers a reload.
   assert.match(w, /This is taking longer than it should\. Reload the page to see where it got to\./);
   // Results the page draws are what it shows.
-  assert.match(src("app/details/[sessionId]/page.tsx"), /data-working-result=\{flash\.tone\}/);
+  assert.match(detailsSource(), /data-working-result=\{flash\.tone\}/);
   assert.match(src("components/admin/Parts.tsx"), /data-working-result=\{tone === "good" \? "ok" : "bad"\}/);
 });
 

@@ -11,6 +11,7 @@ import {
   reopenIfAllVoided,
   shouldReopen,
 } from "../supabase/functions/_shared/session-reopen.ts";
+import { verifySource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 const V = { status: "Voided" };
@@ -129,7 +130,7 @@ test("both voids reopen after the contract is recorded as voided, with the perso
 });
 
 test("the contract panels unlock by the rule they already use", () => {
-  const verify = read("supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /return \(\(data \?\? \[\]\) as ContractRef\[\]\)\.filter\(occupiesSlot\);/);
   assert.match(verify, /contract_parties: contractParties\(s, edits, contracts\.length > 0\),/);
   assert.match(read("supabase/functions/_shared/session-reopen.ts"), /import \{ occupiesSlot, type ContractRef \} from "\.\/duplicates\.ts";/);

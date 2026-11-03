@@ -8,6 +8,7 @@
 // says it is live again", with nothing in between that can be out of date.
 
 import { redirect } from "next/navigation";
+import { isOfferDetails, type OfferDetails } from "@/lib/details-offer";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { edge, EdgeError } from "@/lib/edge";
@@ -557,47 +558,70 @@ function providerSays(name: string | undefined): string {
   return v.charAt(0).toUpperCase() + v.slice(1);
 }
 
+/** What Rate again answers Details with (app/details/[sessionId]/DetailsBody.tsx). */
+export interface RateAgainAnswer {
+  /** The page's one-shot message, as the flash cookie would have carried it. */
+  code: "ratedagain" | "ratedagainheld" | "rateagainfailed";
+  detail: string | null;
+  /** Everything the rating changed on Details, or null: the page is then drawn again, as before. */
+  details: OfferDetails | null;
+}
+
 /**
  * Rate again, from the Rating line on Details: the same rating staff run,
  * with the session's current inputs, any time. Each selection the fresh
  * offer matches to the cent is kept on its fresh rate; any other is marked
  * out of date and listed under Rating (fni-rate-vehicle, rate_again). Never
  * submits. A rating error stays on the page behind Show details.
+ *
+ * Answers with what the rating changed, and Details updates from it in place
+ * (lib/details-offer.ts). Nothing here asks for the page to be drawn again:
+ * no path is revalidated and no cookie is set, since either makes Next draw
+ * the whole page again, which reads the deal and runs the DX1 check again
+ * (neither depends on the rating). The planner and the sessions list are
+ * read fresh on every load (force-dynamic). Only when the answer cannot be
+ * used is the page drawn again, with the message, exactly as before.
  */
-export async function rateAgain(formData: FormData): Promise<void> {
+export async function rateAgain(formData: FormData): Promise<RateAgainAnswer> {
   const operator = await currentOperator();
   if (!operator) redirect(SESSIONS);
   const sessionId = String(formData.get("session_id") ?? "");
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
-  let done: { outcome?: string; product_count?: number; lines?: unknown[] };
+  let answer: RateAgainAnswer;
   try {
-    done = await edge.rate<typeof done>({
+    const done = await edge.rate<{ outcome?: string; product_count?: number; lines?: unknown[]; details?: unknown }>({
       session_id: sessionId,
       rate_again: true,
       // For "Rated again by": the person's initials, or System.
       rated_by: initialsFor(operator.email),
     });
+    const count = done.product_count ?? 0;
+    answer = done.outcome === "changed"
+      ? { code: "ratedagainheld", detail: null, details: null }
+      : {
+          code: "ratedagain",
+          detail:
+            `Rated again: ${count} ${count === 1 ? "product" : "products"}.` +
+            ((done.lines?.length ?? 0) > 0 ? " Every selected product still matches to the cent, so the selections are kept." : ""),
+          details: null,
+        };
+    answer.details = isOfferDetails(done.details) ? done.details : null;
   } catch (err) {
     console.error(`rate again failed for ${sessionId}:`, err);
-    revalidatePath(`/details/${sessionId}`);
-    return backToVerify(
-      sessionId,
-      "rateagainfailed",
-      err instanceof EdgeError ? err.message : "The deal could not be rated again. Try again."
-    );
+    const body = err instanceof EdgeError ? (err.body as { details?: unknown } | null) : null;
+    answer = {
+      code: "rateagainfailed",
+      detail: err instanceof EdgeError ? err.message : "The deal could not be rated again. Try again.",
+      details: isOfferDetails(body?.details) ? body!.details : null,
+    };
   }
-  revalidatePath(`/details/${sessionId}`);
-  revalidatePath(`/plan/${sessionId}`);
-  revalidatePath(SESSIONS);
-  if (done.outcome === "changed") return backToVerify(sessionId, "ratedagainheld");
-  const count = done.product_count ?? 0;
-  return backToVerify(
-    sessionId,
-    "ratedagain",
-    `Rated again: ${count} ${count === 1 ? "product" : "products"}.` +
-      ((done.lines?.length ?? 0) > 0 ? " Every selected product still matches to the cent, so the selections are kept." : "")
-  );
+  if (!answer.details) {
+    // As before: the message in the flash cookie, and the page drawn again.
+    revalidatePath(`/details/${sessionId}`);
+    await backToVerify(sessionId, answer.code, answer.detail);
+  }
+  return answer;
 }
 
 /**

@@ -6,10 +6,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { detailsSource } from "./details-source.mjs";
 
 const app = new URL("../apps/ownership-planner/", import.meta.url).pathname;
 const src = (rel) => readFileSync(join(app, rel), "utf8");
-const page = src("app/details/[sessionId]/page.tsx");
+const page = detailsSource();
 
 test("the page lives at /details/<session id>", () => {
   assert.ok(existsSync(join(app, "app/details/[sessionId]/page.tsx")));

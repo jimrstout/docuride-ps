@@ -16,6 +16,7 @@ import {
   storeToday,
   submitDateProblem,
 } from "../supabase/functions/_shared/store-day.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const src = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 
@@ -99,7 +100,7 @@ test("submit reads the CRM sale date first, and refuses one that is not today at
 });
 
 test("Details reads the CRM sale date as it loads, and says what Submit would", () => {
-  const f = src("supabase/functions/fni-session-verify/index.ts");
+  const f = verifySource();
   assert.doesNotMatch(f, /"planned_sale_date",|setPlannedSaleDate|renew_session|saleDateChoice/);
   assert.match(f, /const crmRead = await freshSaleDate\(supabase, loaded as unknown as \{ id: string \}\);/);
   assert.match(f, /day: await dayFor\(supabase, s, edited, crmRead\),/);
@@ -132,7 +133,7 @@ test("Sessions has no Renew for Today: a session runs through its CRM sale date"
 });
 
 test("Details: one date line with Open in CRM, no date controls of its own, and Submit pointing to it", async () => {
-  const page = src("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /<dt>Open until<\/dt>/);
   // Gone: the planned sale date, its Save date and Clear, and Keep staff value / Use CRM value.
   assert.doesNotMatch(page, /setPlannedSaleDate|clearPlannedSaleDate|vplanned|planned_sale_date|sale_date_choice|keepStaffSaleDate|useCrmSaleDate/);

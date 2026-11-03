@@ -16,6 +16,7 @@ import {
   staleRatingProblem,
 } from "../supabase/functions/_shared/sale-date.ts";
 import { storeToday } from "../supabase/functions/_shared/store-day.ts";
+import { verifySource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 const offer = (saleDate, out_of_date = false) => ({ out_of_date, request_payload: { saleDate } });
@@ -86,7 +87,7 @@ test("a rating out of date for another cause stays out of date after a same-mont
     assert.doesNotMatch(read(f), /out_of_date: false/, f);
   }
   // A same-month move on Details returns before the session or its offers are written.
-  const verify = read("supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   const fn = verify.slice(verify.indexOf("async function unverifyIfInputsMoved("), verify.indexOf("// ── save: any field that feeds a rate"));
   const early = fn.indexOf("return [];");
   assert.ok(early > 0 && early < fn.indexOf('.update({ out_of_date: true })'));
@@ -108,7 +109,7 @@ test("a CRM sale date picked up by refresh, relaunch or zoho-sync follows the sa
   assert.equal(onlySameMonthSaleDateMove(["odometer"], before, after), false);
   assert.equal(onlySameMonthSaleDateMove(["sale_date"], null, after), false);
 
-  const verify = read("supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /if \(onlySameMonthSaleDateMove\(changed, before, after, sheets === null \? null : priceSheetBoundaries\(sheets\)\)\) \{\s*return \[\];/);
   const start = read("supabase/functions/fni-session-start/index.ts");
   assert.match(start, /if \(onlySameMonthSaleDateMove\(changed, before, after, sheets === null \? null : priceSheetBoundaries\(sheets\)\)\) \{\s*return \[\];/);
@@ -134,7 +135,7 @@ test("a price sheet that starts or ends between the dates counts as a boundary",
 });
 
 test("the confirmation still shows the rows the submit sends, and no price is written", () => {
-  const verify = read("supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /\.select\(SUBMIT_ROW_COLUMNS\)/);
   for (const f of ["supabase/functions/_shared/sale-date.ts", "supabase/functions/_shared/crm-sale-date.ts", "supabase/functions/fni-admin-sessions/index.ts"]) {
     assert.doesNotMatch(read(f), /customer_price|retail_price|dealer_cost|selected_products/, f);

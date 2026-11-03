@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { shortText, SHORT_TEXT_CHARS } from "../apps/ownership-planner/lib/long-text.ts";
+import { detailsSource } from "./details-source.mjs";
 
 const src = (rel) => readFileSync(new URL(`../apps/ownership-planner/${rel}`, import.meta.url), "utf8");
 
@@ -55,7 +56,7 @@ test("the sessions list is cards on a small screen, with every fact and action",
 });
 
 test("Details shortens its long messages and fits a phone", () => {
-  const page = src("app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /<LongText text=\{sheet\.rating\.detail\} \/>/);
   assert.match(page, /<LongText text=\{p\.line\} \/>/);
   assert.match(page, /<LongText text=\{sheet\.not_ready_reason\} \/>/);

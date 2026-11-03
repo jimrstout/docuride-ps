@@ -45,7 +45,9 @@ test("a shared module deploys every function that bundles it", () => {
   // its own copy of the shared modules, so a function left undeployed keeps
   // running yesterday's shared code.
   const hit = affected(["supabase/functions/_shared/verification.ts"]);
-  assert.deepEqual(hit, ["fni-session-start", "fni-session-verify"]);
+  // fni-rate-vehicle too since speed part 2: it answers Rate again with the
+  // part of the sheet a rating changes (_shared/details-offer.ts).
+  assert.deepEqual(hit, ["fni-rate-vehicle", "fni-session-start", "fni-session-verify"]);
 
   const viaMoney = affected(["supabase/functions/_shared/money.ts"]);
   assert.ok(viaMoney.includes("fni-acknowledgment"));

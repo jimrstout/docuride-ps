@@ -6,6 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { savedSelections } from "../supabase/functions/_shared/saved-selections.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 
@@ -40,10 +41,10 @@ test("void needs a reason, keeps it, and renames the Deal Jacket file with VOID"
 });
 
 test("the panel shows once the planner is finished, and every button says what it is doing", () => {
-  const verify = src("../supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /const PLANNER_DONE = \["Products Selected", "Agreement Created", "Finalized"\];/);
   assert.match(verify, /contracts_panel: panel,/);
-  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   // No provider name on the button, and a confirmation first (2026-10-28).
   const modal = src("../apps/ownership-planner/components/SubmitConfirm.tsx");
   assert.match(page, /<SubmitConfirm\s/);

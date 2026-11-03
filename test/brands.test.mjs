@@ -138,6 +138,7 @@ test("the safety net fires on a short financed lineup", () => {
 
 // ── Administration > Brands, and where the pieces meet ──────────────────
 import { aliasList, parseBrand, parseGroup, parseSpelling } from "../supabase/functions/_shared/brand-admin.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 test("Administration checks what it saves, in plain sentences", () => {
   assert.deepEqual(aliasList("Yamaha Motor Corp., USA; Yamaha Motor Corporation;  ; Yamaha Motor Corp., USA"), ["Yamaha Motor Corp., USA", "Yamaha Motor Corporation"]);
@@ -165,11 +166,11 @@ test("the adapter refuses an unresolved make before calling the provider, and se
 });
 
 test("Details gets the brand context, the confirm box and the safety net", () => {
-  const fn = read("supabase/functions/fni-session-verify/index.ts");
+  const fn = verifySource();
   assert.match(fn, /make_context: await brandContext\(/);
   assert.match(fn, /MAKE_CONFIRMED/);
   assert.match(fn, /shortLineup\(/);
-  const page = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /unit_make_confirmed/);
   assert.match(page, /Pick the brand/);
   assert.match(page, /Brand checked/);

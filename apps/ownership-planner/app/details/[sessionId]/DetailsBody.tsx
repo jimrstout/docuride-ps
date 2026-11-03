@@ -1,0 +1,1358 @@
+"use client";
+
+// app/details/[sessionId]/DetailsBody.tsx: what Details shows.
+//
+// The page (page.tsx) reads the deal and the DX1 check on the server and
+// hands them here. Everything on the screen is drawn from them, as before,
+// with one difference: after Rate again the page is not drawn again from the
+// server. fni-rate-vehicle answers with everything the rating changed, built
+// by the same function Details loads with, and it is put over the sheet
+// already here (lib/details-offer.ts). So Rate again does not read the whole
+// deal again or run the DX1 check again, and the screen cannot be left
+// waiting for a page the browser never draws (Next 15.5 dropped answers that
+// took longer than about 10 seconds).
+//
+// Any other action still answers by drawing the page again, and its fresh
+// sheet replaces whatever Rate again put here.
+
+import Control from "@/components/Control";
+import HomeLink from "@/components/HomeLink";
+import { useRouter } from "next/navigation";
+import { useCallback, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
+import type { FieldGroup, VerifyField, VerifySheet, Dx1Check as Dx1CheckResult } from "@/lib/types";
+import { VerifySidebarFields } from "@/components/VerifySidebarFields";
+import { FUEL_TYPE_CHOICES } from "@/lib/verify-fields";
+import { decodeDidNotAnswer } from "@/lib/auto-decode";
+import {
+  decodeVerifyFlash,
+  flashMessage,
+  SUBMIT_OPEN_CODES,
+  type VerifyFlash,
+} from "@/lib/verify-flash";
+import {
+  clearSubmitUnknown,
+  decodeVin,
+  discardEdits,
+  refreshFromCrm,
+  saveVerifyFields,
+  verifyAndRate,
+  voidContract,
+  voidOemContract,
+  getContractDocument,
+  moveDocumentsToDealJacket,
+  rateAgain,
+  saveMenuLevels,
+} from "@/app/console-actions";
+import { rateAgainAvailable } from "@/lib/rate-again";
+import { submitCheck } from "@/lib/submit-check";
+import SubmitConfirm from "@/components/SubmitConfirm";
+import ProviderAnswer from "@/components/ProviderAnswer";
+import Dx1Check from "@/components/Dx1Check";
+import SaleDateWatch from "@/components/SaleDateWatch";
+import { crmRecordUrl, NO_SALE_DATE_LINE, SUBMIT_HELD_FOR_DATE } from "@/lib/crm-link";
+import { initialsFor } from "@/lib/admin-sections";
+import { sentenceStart, testServerName, vendorName } from "@/lib/vendor";
+import LongText from "@/components/LongText";
+import RatingErrorText from "@/components/RatingErrorText";
+import ContractParties from "@/components/ContractParties";
+import { dayLabel, storeTime } from "@/lib/store-time";
+import {
+  hasMoreDetail,
+  ratingErrorHeadline,
+  ratingErrorSummary,
+  ratingFailures,
+  type RatingFailureText,
+} from "@/lib/rating-error";
+import { Working, WorkingArea, workingDone } from "@/components/Working";
+import { VOID_LEAVE } from "@/lib/working";
+import VehicleTypeChoice from "@/components/VehicleTypeChoice";
+import { money } from "@/lib/money";
+import OemContractRecord from "@/components/OemContractRecord";
+import DetailsTabs from "@/components/DetailsTabs";
+import { nextStep, PREPARE_FIRST, RATE_SAY } from "@/lib/next-step";
+import ProgramLabel from "@/components/admin/ProgramLabel";
+import { mergeOfferDetails } from "@/lib/details-offer";
+
+const GROUPS: { group: FieldGroup; blurb: string }[] = [
+  { group: "Deal", blurb: "Which deal this is, and how it is being paid for." },
+  { group: "Vehicle", blurb: "What the machine is. This is where the gaps usually are." },
+  { group: "Money", blurb: "What it costs and how it is financed." },
+  { group: "Customer", blurb: "Where they live. Nothing else is needed to rate." },
+];
+
+/** Which fields a person may type. The Edge Function refuses the rest by name. */
+const EDITABLE_HELP: Record<string, string> = {
+  "engine.ccs": "Engine displacement in cc.",
+  warranty: "Whole months of factory coverage left on the day of sale.",
+  "fuel.type": "Gasoline, Electric or Diesel.",
+  vehicle_type: "Decides the menu and the version of each product the provider will contract.",
+  deal_type: "Cash, Finance or Lease.",
+  condition: "New or Used.",
+  sale_date: "YYYY-MM-DD.",
+  in_service_date: "YYYY-MM-DD.",
+  sale_price: "A plain number. No currency symbol needed.",
+  amount_financed: "A plain number.",
+  finance_term: "Whole months.",
+  apr: "A percentage, as a number.",
+  max_amount_financed:
+    "From the finance company's approval. Leave blank if the approval has no maximum.",
+};
+
+/**
+ * The panel an action's answer belongs to, so the person sees it land: a
+ * buyer saved shows the buyer panel, a contract voided the contracts. Null
+ * leaves the panel they were on.
+ */
+function tabForAnswer(code: string): string | null {
+  if (code.startsWith("party")) return "parties";
+  if (code === "menulevels") return "menu";
+  if (["contracts", "voided", "oem", "cleared", ...SUBMIT_OPEN_CODES].includes(code)) {
+    return "contracts";
+  }
+  if (["saved", "discarded", "decoded", "refreshed"].includes(code)) return "sheet";
+  return null;
+}
+
+/** Optional fields: empty is a fine answer, so they are never marked Missing. */
+const OPTIONAL_FIELDS = new Set(["max_amount_financed"]);
+
+/** The three that take a word rather than a number, so the keypad stays away. */
+const TEXT_FIELDS = new Set([
+  "fuel.type", "vehicle_type", "deal_type", "condition",
+  "vin", "unit_make", "unit_model", "buyer_city", "buyer_state",
+  "sale_date", "in_service_date",
+]);
+
+function stamp(iso: string | null): string {
+  if (!iso) return "never";
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "never";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC",
+  }).format(t).replace(",", "") + " UTC";
+}
+
+/**
+ * The one marker a row can still carry: Missing.
+ *
+ * Where a value came from is not the presenter's business, so no row prints its
+ * source: not CRM, VIN Decode, Default, or who entered it. It is still in the
+ * data and the verification snapshot, and in the row's tooltip for the rare
+ * person who wants it. A required field with nothing in it is the thing this
+ * screen exists to catch, so that alone is still marked.
+ */
+function MissingMarker({ field }: { field: VerifyField }) {
+  return field.source === "Missing" && !OPTIONAL_FIELDS.has(field.key)
+    ? <span className="tag tag--expired">Missing</span>
+    : null;
+}
+
+/**
+ * One rating input, as one row: label and value.
+ *
+ * ── Why a row and not a card ────────────────────────────────────────────
+ * The first version gave every field a card with its explanation printed
+ * underneath. Twenty-three cards of that height ran the sheet to three screens,
+ * and most of the extra height was the same sentence repeated ("From the CRM
+ * deal. Edit it here to correct the rate."). The job here is to scan a column
+ * for Missing, so the whole sheet now fits on one desktop screen.
+ *
+ * Nothing was thrown away. The note and the typing help sit in the row's
+ * tooltip, and come out into the open only when they are needed: on a field
+ * that is missing or that could not be read.
+ */
+function Field({ field, vendor }: { field: VerifyField; vendor: string }) {
+  const help = EDITABLE_HELP[field.key];
+  const edited = field.original_source !== null;
+  const id = `vf-${field.key}`;
+
+  // A value changed away from what the CRM deal says gets a quiet copper edge on
+  // its box, and nothing else: the details live in the warning above Confirm.
+  // A value typed into an empty field, or one the CRM does not carry, is not a
+  // change from the CRM and gets no edge.
+  const changedFromCrm =
+    field.differs_from_crm && field.original !== null && field.original_source !== "Missing";
+
+  const state =
+    field.invalid || field.problem ? "is-invalid"
+    : field.missing ? "is-missing"
+    : changedFromCrm ? "is-changed"
+    : "";
+
+  // Shown in full only when the person has something to do about this field.
+  const needsHelp = field.missing || field.invalid || Boolean(field.problem);
+
+  // ── The tooltip ────────────────────────────────────────────────────────
+  // Nothing on the row says where the value came from or who changed it. The
+  // tooltip does, for the rare person who wants to know.
+  const origin =
+    field.source === "Missing" ? null
+    : field.source === "CRM" ? (field.note ? null : "From the CRM deal.")
+    : `Source: ${field.source}.`;
+
+  const wasDetail = edited
+    ? [
+        field.invalid
+          ? "This edit could not be read, so it is not in force."
+          : field.differs_from_crm
+            ? "The CRM deal still says the old value."
+            : field.in_crm
+              ? "The CRM deal now matches."
+              : "The CRM does not carry this field.",
+        "Clear the box to go back to the original.",
+      ].join(" ")
+    : "";
+
+  const wasLine = edited
+    ? `Was ${field.original ?? "not set"} (${field.original_source}), changed by ` +
+      `${field.edited_by ?? "unknown"}, ${stamp(field.edited_at)}.`
+    : "";
+
+  const tip = [field.label, origin, field.note, help, wasLine, wasDetail]
+    .filter(Boolean)
+    .join(" ");
+
+  // The vehicle type is a choice, first in the Vehicle panel and hard to miss.
+  if (field.key === "vehicle_type" && field.editable) {
+    const editedLine = edited
+      ? `Entered by Staff: ${field.edited_by ?? "unknown"}, ${stamp(field.edited_at)}. ` +
+        `Was ${field.original ?? "not set"} (${field.original_source}).`
+      : null;
+    return (
+      <div id={`field-${field.key}`} className={`vfield vfield--vtype ${state}`}>
+        <VehicleTypeChoice value={field.value} line={editedLine ?? field.note} edited={edited} />
+      </div>
+    );
+  }
+
+  return (
+    <div id={`field-${field.key}`} className={`vfield ${state}`} title={tip}>
+      <label className="vfield-label" htmlFor={field.editable ? id : undefined}>
+        {field.label}
+        {field.required ? (
+          <abbr className="vfield-req" title={`${sentenceStart(vendor)} asks for this`}>*</abbr>
+        ) : null}
+      </label>
+
+      <div className="vfield-control">
+        {field.editable && field.key === "unit_make" && field.choices ? (
+          // A dropdown of known brands (_shared/brands.ts), on the brand the
+          // CRM's make matches. Blank when staff must pick. A brand picked from
+          // the vehicle type needs "Brand checked" before it is rated with.
+          <span className="vfield-make">
+            <select id={id} name={field.key} defaultValue={field.value ?? ""}>
+              {field.value === null ? <option value="">Pick the brand</option> : null}
+              {field.choices.map((choice) => (
+                <option key={choice} value={choice}>
+                  {choice}
+                </option>
+              ))}
+            </select>
+            {field.needs_confirm ? (
+              <label className="vfield-confirm">
+                <input type="checkbox" name="unit_make_confirmed" value="yes" /> Brand checked
+              </label>
+            ) : null}
+            {field.crm_said ? <small className="vfield-crm">The CRM says {`"${field.crm_said}"`}</small> : null}
+          </span>
+        ) : field.editable && field.key === "fuel.type" ? (
+          // A dropdown, because only three answers exist. The Gasoline default
+          // shows as Gasoline, and says Default only in the tooltip. Choosing a value
+          // saves as a staff edit, and choosing what the deal already says
+          // without an edit leaves it as it was.
+          <select id={id} name={field.key} defaultValue={field.value ?? "Gasoline"}>
+            {FUEL_TYPE_CHOICES.map((choice) => (
+              <option key={choice} value={choice}>
+                {choice}
+              </option>
+            ))}
+          </select>
+        ) : field.editable ? (
+          <input
+            id={id}
+            type="text"
+            name={field.key}
+            defaultValue={field.value ?? ""}
+            autoComplete="off"
+            inputMode={TEXT_FIELDS.has(field.key) ? "text" : "numeric"}
+            placeholder={
+              field.missing ? "Needed to rate"
+              : field.key === "max_amount_financed" ? "No maximum"
+              : ""
+            }
+            aria-invalid={field.invalid ? true : undefined}
+          />
+        ) : (
+          <p className="vfield-value">{field.value ?? <em>Not set</em>}</p>
+        )}
+      </div>
+
+      <MissingMarker field={field} />
+
+      {field.problem ? (
+        <p className="vfield-note" role="alert">{field.problem}</p>
+      ) : needsHelp && (help || field.note) ? (
+        <p className="vfield-note">{help ?? field.note}</p>
+      ) : null}
+
+    </div>
+  );
+}
+
+/** Rate again's answer, kept against the sheet it was put over. */
+interface RatedHere {
+  base: VerifySheet;
+  sheet: VerifySheet;
+  flash: VerifyFlash;
+  id: string;
+}
+
+export default function DetailsBody({
+  sheet: loaded,
+  dx1,
+  flashCookie,
+  operatorEmail,
+  sessionId,
+  renderStamp,
+}: {
+  sheet: VerifySheet;
+  dx1: Dx1CheckResult | null;
+  flashCookie: string | null;
+  operatorEmail: string;
+  sessionId: string;
+  /** The page's render marker, made on the server (components/RenderStamp). */
+  renderStamp: ReactNode;
+}) {
+  const router = useRouter();
+  const operator = { email: operatorEmail };
+  // What Rate again put here, only while the page has not been drawn again
+  // since: a fresh sheet from the server replaces it.
+  const [ratedHere, setRatedHere] = useState<RatedHere | null>(null);
+  const rated = ratedHere && ratedHere.base === loaded ? ratedHere : null;
+  const sheet = rated ? rated.sheet : loaded;
+  // The one-shot message's id: the cookie's after a page draw, Rate again's after it.
+  const answerId = rated ? rated.id : flashCookie;
+
+  // Rate again (fni-rate-vehicle): the page updates from the answer. When the
+  // answer cannot be used, the action has already asked for the page to be
+  // drawn again, as before.
+  //
+  // The same function from render to render while the sheet is the same.
+  //
+  // The job ends here, once the answer is on the page (workingDone), not when
+  // React says the form is no longer pending: that can come early (Working.tsx).
+  const rateAgainHere = useCallback(
+    async (fd: FormData) => {
+      try {
+        const answer = await rateAgain(fd);
+        if (!answer.details) {
+          router.refresh();
+          return;
+        }
+        flushSync(() =>
+          setRatedHere({
+            base: loaded,
+            sheet: mergeOfferDetails(loaded, answer.details!),
+            flash: { code: answer.code, detail: answer.detail },
+            id: `${answer.code}:${Date.now()}`,
+          })
+        );
+      } finally {
+        workingDone();
+      }
+    },
+    [loaded, router]
+  );
+
+  // ── A failed rating, in one plain line (lib/rating-error.ts) ──────────
+  // The provider's own words, often a long fault, are kept behind "Show
+  // details" in the one banner, not repeated under Rating or in the notice.
+  const providers = sheet.rating.providers ?? [];
+  const failedNow: RatingFailureText[] =
+    sheet.rating.state !== "Failed" ? []
+    : providers.some((p) => p.error)
+      ? providers.filter((p) => p.error).map((p) => ({ provider: p.name, text: p.error!, at: p.error_at ?? null }))
+      : ratingFailures({ detail: sheet.rating.detail, at: sheet.rating.rated_at });
+  const failedKept: RatingFailureText[] = providers
+    .filter((p) => p.kept_error)
+    .map((p) => ({ provider: p.name, text: p.kept_error!, at: p.kept_error_at ?? null }));
+  const ratingFailuresShown = [...failedNow, ...failedKept];
+  const ratingHeadline =
+    failedNow.length > 0 ? ratingErrorHeadline(failedNow)
+    : failedKept.length > 0
+      ? `The last re-rate failed, so the earlier offers are kept. ${ratingErrorHeadline(failedKept)}`
+      : null;
+
+  const decoded = rated ? rated.flash : decodeVerifyFlash(flashCookie);
+  // A rating notice with no banner to defer to still says why in one line.
+  const flash = flashMessage(
+    decoded && decoded.code === "notrated" && decoded.detail && ratingFailuresShown.length === 0
+      ? { ...decoded, detail: ratingErrorHeadline(ratingFailures({ detail: decoded.detail })) }
+      : decoded,
+    { ratingShown: ratingFailuresShown.length > 0 }
+  );
+
+  const verified = sheet.verification.state === "Verified";
+  // Why Submit is disabled, if it is: not the day of the sale, or a rating
+  // that is out of date (lib/submit-check.ts). Submit refuses both itself.
+  // On a test session on the QA server an out-of-date rating is a note, not
+  // a block (lib/submit-check.ts).
+  const { block: submitCheckBlock, note: submitNote } = submitCheck(sheet);
+  // The one date line (docs section 24): the CRM sale date is not today at the
+  // store, or the CRM has none. Said once, at the top; Submit points to it.
+  const dateLine = sheet.day?.date_line ?? (sheet.day && !sheet.day.sale_date ? NO_SALE_DATE_LINE : null);
+  const crmUrl = crmRecordUrl(sheet.day?.crm_record_id);
+  const submitBlocked =
+    dateLine && submitCheckBlock === sheet.day?.submit_problem ? SUBMIT_HELD_FOR_DATE : submitCheckBlock;
+  // The contract provider by its record's name ("Riders Advantage"), never
+  // written in here, so another provider reads correctly (lib/vendor.ts).
+  const vendor = vendorName(sheet);
+  // Verified, rated, and nothing a rate depends on has moved since. Only then
+  // is there a presentation to open, the planner or the menu. A live contract
+  // does not block it: products are added after a contract, and the purchased
+  // ones show locked (lib/purchased.ts).
+  const presentable = verified && sheet.rating.state === "Rated" && !sheet.rating.out_of_date;
+  // Prepare presentation saved for this deal (fni-menu-prepare, migration 0045).
+  const step = nextStep(presentable, !!sheet.prepared);
+  const byGroup = (g: FieldGroup) => sheet.fields.filter((f) => f.group === g);
+  const attention = sheet.fields.filter((f) => f.missing || f.invalid || f.problem);
+
+  // The rating's badge: Rated is good; Out of date and Failed need doing; the
+  // rest (Not Offered, Pending) are neutral.
+  const ratingTone =
+    sheet.rating.out_of_date || sheet.rating.state === "Failed" ? "tag--warn"
+    : sheet.rating.state === "Rated" ? "tag--good"
+    : "tag--quiet";
+
+  return (
+    <WorkingArea>
+    <div className="vh vh--fit">
+      <header className="vh-top">
+        <div className="vh-crumb">
+          <h1 className="sr-only">Deal {sheet.session.deal_number ?? "(no number)"} details</h1>
+          <nav aria-label="Breadcrumb">
+            <HomeLink />
+            <span className="vh-slash" aria-hidden="true">/</span>
+            Deal {sheet.session.deal_number ?? "(no number)"}
+            <span className="vh-slash" aria-hidden="true">/</span>
+            <strong>Details</strong>
+          </nav>
+        </div>
+        <div className="console-who">
+          {/* Who is signed in: everything done here is credited to them. */}
+          <span className="vh-me" title={operator.email}>{initialsFor(operator.email)}</span>
+          <form action={refreshFromCrm}>
+            <Working />
+            <input type="hidden" name="session_id" value={sheet.session.id} />
+            <Control type="submit" working="page" busyText="Refreshing from CRM...">
+              Refresh from CRM
+            </Control>
+          </form>
+        </div>
+      </header>
+
+      <main className="console console--verify">
+        {/* ── Where this session stands ── */}
+        <dl className="vstate">
+          <div>
+            <dt>Vehicle</dt>
+            <dd>
+              {sheet.session.vehicle || "Not set"}
+              {sheet.session.stock_number ? <small>Stock {sheet.session.stock_number}</small> : null}
+            </dd>
+          </div>
+          <div>
+            <dt>Deal type</dt>
+            <dd>{sheet.session.deal_type ?? "Not set"}</dd>
+          </div>
+          <div>
+            <dt>Verification</dt>
+            <dd>
+              <span className={`tag ${verified ? "tag--good" : "tag--warn"}`}>
+                {sheet.verification.state}
+              </span>
+              {verified ? (
+                <small>
+                  {sheet.verification.verified_by}, {stamp(sheet.verification.verified_at)}
+                </small>
+              ) : (
+                <small>The customer sees a neutral message until this is done.</small>
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt>Rating</dt>
+            <dd>
+              <span className={`tag ${ratingTone}`}>
+                {sheet.rating.out_of_date ? "Out of date" : sheet.rating.state}
+              </span>
+              <small>
+                {sheet.rating.state === "Rated"
+                  ? `${sheet.rating.product_count} products, ${stamp(sheet.rating.rated_at)}`
+                  : (sheet.rating.providers?.length ?? 0) > 1
+                    ? "No provider rated this deal."
+                    : sheet.rating.state === "Failed"
+                      ? ratingErrorHeadline(failedNow) ?? "Rating failed."
+                      : sheet.rating.detail ? <LongText text={sheet.rating.detail} /> : "No rate yet."}
+              </small>
+              {(sheet.rating.providers?.length ?? 0) > 1 ? (
+                <ul className="vproviders">
+                  {sheet.rating.providers!.map((p) => (
+                    <li key={p.name}>
+                      {p.error
+                        ? ratingErrorSummary(p.name, p.error)
+                        : p.kept_error
+                          ? p.line.replace(/ The last re-rate failed \(.*\), so these/s, " The last re-rate failed, so these")
+                          : <LongText text={p.line} />}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </dd>
+          </div>
+          {sheet.day ? (
+            <div>
+              <dt>Open until</dt>
+              <dd>
+                {storeTime(sheet.day.expires_at, sheet.day.time_zone) || "Not set"}
+                <small title={`The end of the sale date in the CRM. Today at this store is ${dayLabel(sheet.day.today)}.`}>
+                  Today here is {dayLabel(sheet.day.today)}.
+                </small>
+              </dd>
+            </div>
+          ) : null}
+          {sheet.menu_template ? (
+            <div>
+              <dt>Menu</dt>
+              <dd><small>{sheet.menu_template.name}</small></dd>
+            </div>
+          ) : null}
+          {/* A test session: said once, in the status line. */}
+          {sheet.session.is_test ? (
+            <div className="vstate-test">
+              <dt>Test</dt>
+              <dd>
+                <small>
+                  This is a test session. Its contracts go only to {testServerName(vendor)}, and can be
+                  voided there.
+                </small>
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+
+
+        {/* ── Anything that needs reading first: action answers, failures,
+            the sale date, duplicates, CRM differences. Above the panels, and
+            only when there is something to say. */}
+        <div className="valerts">
+          {flash ? (
+            <p
+              className={flash.tone === "ok" ? "console-flash" : "console-flash console-flash--bad"}
+              role="status"
+              data-working-result={flash.tone}
+              data-working-result-id={answerId ?? undefined}
+            >
+              {flash.text}
+            </p>
+          ) : null}
+
+          {/* ── Why the rating failed: one line, the provider's text on request ── */}
+          {ratingHeadline ? (
+            <div className="console-flash console-flash--bad rating-banner" role="alert">
+              <p className="rating-banner-say">{ratingHeadline}</p>
+              {ratingFailuresShown.some(hasMoreDetail) ? (
+                <details className="rating-banner-more">
+                  <summary>
+                    <span className="rating-banner-toggle rating-banner-toggle--show">Show details</span>
+                    <span className="rating-banner-toggle rating-banner-toggle--hide">Hide details</span>
+                  </summary>
+                  <RatingErrorText deal={sheet.session.deal_number} failures={ratingFailuresShown} />
+                </details>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* ── The sale date, when it blocks something ─────────────────────────
+              The CRM's Sale_Date is the only sale date, changed in the CRM only
+              (docs section 24). One line, with the record to open; the page then
+              checks the CRM on focus and every 30 seconds until it clears. */}
+          {dateLine ? (
+            <div className="console-flash console-flash--bad vdate-line" role="alert">
+              <p>{dateLine}</p>
+              {crmUrl ? (
+                <Control className="btn btn--quiet" href={crmUrl}>
+                  Open in CRM
+                </Control>
+              ) : null}
+              <SaleDateWatch />
+            </div>
+          ) : null}
+
+          {/* ── A payment term other than the deal's (docs section 26) ──────────
+              Extra terms on the menu are a presentation aid. PS never changes the
+              CRM's finance terms; staff update the deal in DX1 and the CRM. */}
+          {(sheet.service_drive_lines ?? []).map((line) => (
+            <p key={line} className="console-flash console-flash--bad" role="alert">{line}</p>
+          ))}
+          {/* Offers no menu row shows: said, never silently dropped. */}
+        {(sheet.rating_notices ?? []).map((line) => (
+          <p key={`rn-${line}`} className="console-flash console-flash--bad" role="alert">{line}</p>
+        ))}
+        {(sheet.unplaced_offers ?? []).map((line) => (
+          <p key={line} className="console-flash console-flash--bad" role="status">{line}</p>
+        ))}
+        {sheet.chosen_term_note ? (
+            <p className="console-flash console-flash--bad" role="alert">{sheet.chosen_term_note}</p>
+          ) : null}
+
+          {sheet.not_ready_reason ? (
+            <p className="console-flash console-flash--bad" role="alert">
+              <LongText text={sheet.not_ready_reason} />
+            </p>
+          ) : null}
+
+          {sheet.unmapped_properties.length > 0 ? (
+            <p className="console-flash console-flash--bad" role="alert">
+              {sentenceStart(vendor)} is asking for {sheet.unmapped_properties.join(", ")}, which
+              this screen has no field for. Nothing can be verified until it does.
+            </p>
+          ) : null}
+
+          {/* ── Another open deal on this machine ──────────────────────────── */}
+          {/* A warning, not a block. Two deals on one VIN is sometimes a mistake
+              and sometimes a deal being re-written after the first fell through,
+              and nothing here can tell the difference. Staff can, once they can see
+              the other deal, which is what the link is for. */}
+          {sheet.duplicate_vin ? (
+            <p className="console-flash console-flash--bad" role="alert">
+              {sheet.duplicate_vin.message}{" "}
+              {sheet.duplicate_vin.sessions.map((other, i) => (
+                <span key={other.id}>
+                  {i > 0 ? " " : ""}
+                  <Control href={`/details/${other.id}`}>
+                    Open deal {other.deal_number ?? "(no number)"}
+                  </Control>
+                  {" "}({other.status})
+                </span>
+              ))}
+            </p>
+          ) : null}
+
+          {/* ── A submit whose outcome nobody knows ─────────────────────────── */}
+          {/* Nothing clears this on a timer, because a timer would be guessing that
+              no contract was created, and that guess is how one deal ends up with
+              two of the same contract. It takes a person saying they looked. */}
+          {sheet.submit_state === "Submit Status Unknown" ? (
+            <section className="note note--panel">
+              <h2>Submit Status Unknown</h2>
+              <p>
+                A submit reached {vendor} and never came back, so we do not know
+                whether it created contracts. Nothing has been retried and nothing
+                will be. Check the deal with {vendor}. If contracts were created,
+                void the ones that should not stand, then clear this.
+              </p>
+              {sheet.submit_detail ? <p><small><LongText text={sheet.submit_detail} /></small></p> : null}
+              {/* What the provider actually said: status, request ID and body,
+                  with personal details taken out. */}
+              {sheet.provider_answer ? (
+                <ProviderAnswer
+                  deal={sheet.session.deal_number}
+                  provider={sentenceStart(vendor)}
+                  answer={sheet.provider_answer}
+                  lead={`${sentenceStart(vendor)}'s answer, with its status and request ID, to quote when you check with them.`}
+                />
+              ) : null}
+              <form action={clearSubmitUnknown}>
+                <Working />
+                <input type="hidden" name="session_id" value={sheet.session.id} />
+                <input
+                  type="text"
+                  name="note"
+                  placeholder={`What you found with ${vendor} (optional)`}
+                />
+                <Control type="submit" working="page" busyText="Clearing the notice...">
+                  I have checked with {vendor}
+                </Control>
+              </form>
+            </section>
+          ) : null}
+
+          {sheet.changed_inputs && sheet.changed_inputs.length > 0 ? (
+            <p className="console-flash console-flash--bad" role="alert">
+              CRM changed {sheet.changed_inputs.length}{" "}
+              {sheet.changed_inputs.length === 1 ? "rating input" : "rating inputs"}, so
+              this deal needs verifying again and the old rates are out of date.
+            </p>
+          ) : null}
+
+          {sheet.rating_differences ? (
+            // Rate again could not keep these: choose them again.
+            <div className="vrate-differences" role="alert">
+              <p>{sheet.rating_differences.message}</p>
+              <ul>
+                {sheet.rating_differences.differences.map((d) => (
+                  <li key={d}>Out of date. {d}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {/* ── Values that no longer match the deal ──────────────────────────
+              With the other notices, above the next step, and it does not
+              disable Rate: the person at the desk can see the machine and the
+              paperwork, so their figure is the one to rate on. Its table opens
+              from its sentence. It stays until the CRM deal is brought into
+              line and the sheet is refreshed, which is the only thing that
+              clears it. */}
+          {sheet.crm_warning ? (
+            <details className="vgate-warn" role="alert">
+              <summary className="vgate-warn-say">{sheet.crm_warning}</summary>
+              <table className="vgate-warn-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Field</th>
+                    <th scope="col">CRM deal</th>
+                    <th scope="col">This session</th>
+                    <th scope="col">Changed by</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sheet.crm_mismatches.map((m) => (
+                    <tr key={m.key}>
+                      <td data-label="Field">{m.label}</td>
+                      <td data-label="CRM deal">{m.crm_value ?? "Not set"}</td>
+                      <td data-label="This session" className="cell-strong">
+                        {m.edited_value ?? "Not set"}
+                      </td>
+                      <td data-label="Changed by">
+                        {m.edited_by}
+                        <small>{stamp(m.edited_at)}</small>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="vfield-note">
+                You can still rate. The rate will use this session's values.
+                Nothing is sent back to the CRM.
+              </p>
+            </details>
+          ) : null}
+
+        </div>
+
+        {/* ── One panel at a time (components/DetailsTabs.tsx) ─────────────
+            Details fits one laptop screen: the status above, the next step
+            below, and between them the panel chosen here. */}
+        <DetailsTabs
+          sessionId={sheet.session.id}
+          initial={sheet.contracts_panel ? "contracts" : "sheet"}
+          pointTo={decoded ? tabForAnswer(decoded.code) : null}
+          answerId={answerId}
+          tabs={[
+            {
+              id: "sheet",
+              label: "Deal sheet",
+              badge: attention.length > 0 ? `${attention.length} to complete` : null,
+              content: (
+                  <div className="vtab-sheet">
+                    {/* Put work that blocks verification ahead of the reference sheet. Each
+                        field appears in exactly one place so edits cannot conflict. */}
+                    <div className="vworkspace">
+                    {attention.length > 0 ? (
+                      <aside className="vattention" aria-labelledby="vattention-title">
+                        <p className="vattention-kicker">To complete</p>
+                        <h2 id="vattention-title">{attention.length} required {attention.length === 1 ? "field" : "fields"}</h2>
+                        <VerifySidebarFields fields={attention.map((f) => ({
+                          key: f.key, label: f.label, group: f.group, value: f.value,
+                        }))} />
+                        <div className="vattention-actions">
+                          {attention.some((f) => f.key === "engine.ccs" || f.key === "fuel.type") ? (
+                            <Control type="submit" form="vin-decode" className="btn btn--quiet" working="page" busyText="Decoding the VIN..." title="Decoding reloads this page. Save any other edits first.">Decode VIN</Control>
+                          ) : null}
+                          <Control type="submit" form="vsheet" className="btn btn--quiet" busyText="Saving changes...">Save changes</Control>
+                        </div>
+                      </aside>
+                    ) : null}
+
+                    {/* Each field keeps its permanent location in the review sheet. */}
+                    {/* Enter in a box sends this form with "Save changes" as its button;
+                        a vehicle type choice sends it as a whole-deal change
+                        (components/VehicleTypeChoice.tsx). */}
+                    <form
+                      action={saveVerifyFields}
+                      id="vsheet"
+                      className="vsheet"
+                      data-working="panel"
+                      data-working-label="Saving changes..."
+                    >
+                      <Working />
+                      <input type="hidden" name="session_id" value={sheet.session.id} />
+
+                      {GROUPS.map(({ group, blurb }) => {
+                        const fields = byGroup(group);
+                        if (fields.length === 0) return null;
+                        return (
+                          <section className={`vgroup vgroup--${group.toLowerCase()}`} key={group}>
+                            <h2 className="vgroup-head" title={blurb}>{group === "Money" ? "Financial" : group}</h2>
+                            <div className="vgroup-fields">
+                              {fields.map((f) => (
+                                <Field key={f.key} field={f} vendor={vendor} />
+                              ))}
+                            </div>
+                            {/* Over the finance company's maximum before any product is
+                                added. Said plainly, and it does not block Confirm. */}
+                            {group === "Money" && sheet.over_cap_warning ? (
+                              <p className="vgroup-warn" role="status">{sheet.over_cap_warning}</p>
+                            ) : null}
+                          </section>
+                        );
+                      })}
+                    </form>
+
+                    {/* ── The tools ──────────────────────────────────────────────────── */}
+                    {/* One row. Save belongs to the sheet form through its form attribute, so
+                        it can sit here without Decode and Discard being nested inside that
+                        form. They stay separate forms on purpose: a VIN decode is not a save
+                        and must not post half-typed values, and Discard throws work away. */}
+                    <div className="vtools">
+                      <Control type="submit" form="vsheet" busyText="Saving changes...">
+                        Save changes
+                      </Control>
+
+                      <form
+                        id="vin-decode"
+                        action={decodeVin}
+                        title={`Asks ${vendor} what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed. This page also does this once on its own, the first time it opens.`}
+                      >
+                        <Working />
+                        <input type="hidden" name="session_id" value={sheet.session.id} />
+                        <Control type="submit" working="page" busyText="Decoding the VIN...">
+                          Decode the VIN
+                        </Control>
+                      </form>
+
+                      {decodeDidNotAnswer(sheet) ? (
+                        <p className="vh-notice vh-notice--warn" role="status">
+                          The automatic VIN decode did not answer. Press Decode the VIN to try again.
+                        </p>
+                      ) : null}
+
+                      {sheet.edited.some((f) => f.in_crm) ? (
+                        <form
+                          action={discardEdits}
+                          title="Puts the CRM deal back in charge of every field it carries. Engine size, factory warranty and fuel type are kept, since the CRM does not carry them and there would be nothing to reload them from."
+                        >
+                          <Working />
+                          <input type="hidden" name="session_id" value={sheet.session.id} />
+                          <Control type="submit" working="page" busyText="Reloading from CRM...">
+                            Discard my edits and reload from CRM
+                          </Control>
+                        </form>
+                      ) : null}
+
+                      <details className="vh-details">
+                        <summary>How this sheet works</summary>
+                        <p>
+                          * {sentenceStart(vendor)} asks for this. Hover a field to see where its value comes
+                          from. Clearing a box puts the original value back. Nothing is written
+                          back to the CRM.
+                          {sheet.vin_decode_at ? ` VIN last decoded ${stamp(sheet.vin_decode_at)}.` : ""}
+                        </p>
+                      </details>
+                    </div>
+                    </div>
+                  </div>
+              ),
+            },
+            ...(sheet.contract_parties
+              ? [{
+                  id: "parties",
+                  label: "Buyer and lienholder",
+                  badge: null,
+                  content: (
+                  <>
+                    {/* ── Who goes on the contracts ──────────────────────────────────── */}
+                    {/* Names, addresses and phone numbers. This whole screen is signed in. */}
+                    {sheet.contract_parties ? (
+                      <ContractParties parties={sheet.contract_parties} sessionId={sheet.session.id} />
+                    ) : null}
+                  </>
+                  ),
+                }]
+              : []),
+            ...(sheet.contracts.length > 0 || sheet.contracts_panel || (sheet.oem_contracts?.length ?? 0) > 0
+              ? [{
+                  id: "contracts",
+                  label: "Contracts",
+                  badge: sheet.contracts.length > 0 ? String(sheet.contracts.length) : null,
+                  content: (
+                  <>
+                    {/* ── Paperwork that already stands ───────────────────────────────── */}
+                    {/* Here because this is where staff land when CRM sends a deal through a
+                        second time. A product with a live contract cannot be submitted again,
+                        and voiding is the only way to change that, so the two live together. */}
+                    {sheet.contracts.length > 0 && !sheet.contracts_panel ? (
+                      <>
+                        <p className="console-note">
+                          Contracts already submitted on this deal:{" "}
+                          {sheet.contracts
+                            .map((c) => c.contract_number ?? "number not returned")
+                            .join(", ")}
+                          . A product with a live contract cannot be submitted again. Void it
+                          first if the customer has changed their mind.
+                        </p>
+                        <div className="console-scroll">
+                          <table className="console-table">
+                            <thead>
+                              <tr>
+                                <th scope="col">Contract</th>
+                                <th scope="col">Product</th>
+                                <th scope="col">Status</th>
+                                <th scope="col" />
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sheet.contracts.map((c) => (
+                                <tr key={`${c.provider_product_id}-${c.contract_number}`}>
+                                  <td className="cell-deal">{c.contract_number ?? "Not returned"}</td>
+                                  <td className="cell-vehicle">{c.product_name ?? c.provider_product_id}</td>
+                                  <td>
+                                    <span className="tag tag--quiet">{c.status}</span>
+                                  </td>
+                                  <td className="cell-do">
+                                    <div className="cell-do-inner">
+                                      {/* Void calls the provider and cancels real paperwork,
+                                          so it asks for a reason and a tick. */}
+                                      {c.status === "Recorded" ? (
+                                        <small>An OEM contract. Void it under OEM contracts below.</small>
+                                      ) : !c.contract_number ? (
+                                        <small>No number to void by. Ask {vendor}.</small>
+                                      ) : (
+                                        <form action={voidContract} className="oem-record">
+                                          <Working />
+                                          <input type="hidden" name="session_id" value={sheet.session.id} />
+                                          <input
+                                            type="hidden"
+                                            name="contract_number"
+                                            value={c.contract_number}
+                                          />
+                                          <label>
+                                            <span>Why it is being voided</span>
+                                            <input name="void_reason" required />
+                                          </label>
+                                          <label className="vcontracts-confirm">
+                                            <input type="checkbox" name="confirm" required /> Cancel with {vendor}
+                                          </label>
+                                          <Control type="submit" working="page" busyText="Voiding..." leave={VOID_LEAVE}>Void</Control>
+                                        </form>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    ) : null}
+
+                    {/* ── Staff contracts panel ─────────────────────────────────────────── */}
+                    {/* Once the customer has finished the planner: their choices, Submit,
+                        and each contract's document and Void. While DocuRide is being
+                        tested these go to TecAssured's QA server only. */}
+                    {sheet.contracts_panel ? (
+                      <section className="vcontracts" aria-labelledby="vcontracts-title">
+                        <h2 id="vcontracts-title">Contracts</h2>
+                        <Dx1Check result={dx1} />
+                        {/* A live contract sent with a date other than the CRM sale date.
+                            Named only: nothing is changed or voided for it. */}
+                        {(sheet.day?.contract_date_lines?.length ?? 0) > 0 ? (
+                          <ul className="console-flash console-flash--bad vcontract-dates" role="alert">
+                            {sheet.day!.contract_date_lines!.map((l) => <li key={l}>{l}</li>)}
+                          </ul>
+                        ) : null}
+                        <ul className="vcontracts-chosen">
+                          {sheet.contracts_panel.selections.map((c) => (
+                            <li key={c.product_name}>
+                              <strong>{c.product_name}</strong> <ProgramLabel name={c.program_name} />
+                              <small>
+                                {[
+                                  c.term_months ? `${c.term_months} months` : null,
+                                  c.term_miles ? `${c.term_miles.toLocaleString("en-US")} miles` : null,
+                                  c.customer_price !== null ? money(Number(c.customer_price)) : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(", ")}
+                              </small>
+                            </li>
+                          ))}
+                        </ul>
+                        {sheet.submit_state === "In Progress" ? (
+                          <p className="console-note">A submit is running for this deal. Reload in a moment to see what came back.</p>
+                        ) : sheet.submit_state === "Submit Status Unknown" ? (
+                          <p className="console-note">Submitting is paused until the Submit Status Unknown notice above is cleared.</p>
+                        ) : (
+                          // Submit opens a confirmation first, and only Confirm Submit
+                          // sends (components/SubmitConfirm.tsx). Its figures are the
+                          // ones the submit sends, from the same rows.
+                          <SubmitConfirm
+                            sessionId={sheet.session.id}
+                            confirmation={sheet.contracts_panel.confirmation ?? {
+                              deal_number: sheet.session.deal_number, buyer_name: null, sale_date: null,
+                              sale_date_label: null, test_at_maximum: false, lines: [], total: 0, total_cents: 0,
+                            }}
+                            changes={sheet.contract_parties?.changes ?? []}
+                            note={submitNote}
+                            // A refresh of a spent rating has just answered: open the modal.
+                            autoOpen={!!decoded && SUBMIT_OPEN_CODES.includes(decoded.code)}
+                            blocked={
+                              submitBlocked ??
+                              (sheet.contracts_panel.confirmation ? null : "The confirmation could not be loaded. Reload the page to submit.")
+                            }
+                          />
+                        )}
+
+                        {/* The last submit that did not simply succeed: what the provider said.
+                            While the outcome is unknown it is shown in that notice instead. */}
+                        {sheet.provider_answer && sheet.submit_state !== "Submit Status Unknown" ? (
+                          <ProviderAnswer
+                            deal={sheet.session.deal_number}
+                            provider={sentenceStart(vendor)}
+                            answer={sheet.provider_answer}
+                            lead={`${sentenceStart(vendor)}'s answer to the last submit that did not go through.`}
+                          />
+                        ) : null}
+
+                        {sheet.contracts_panel.contracts.length > 0 ? (
+                          <ul className="vcontracts-list">
+                            {sheet.contracts_panel.contracts.map((c) => (
+                              <li key={`${c.contract_number}-${c.document_position}`} data-working-panel="">
+                                <p className="vcontracts-head">
+                                  <strong>{c.contract_number ?? "No number returned"}</strong> {c.product_name}{" "}
+                                  <ProgramLabel name={c.program_name} />{" "}
+                                  <span className={`tag ${c.status === "Voided" ? "tag--quiet" : "tag--good"}`}>{c.status}</span>
+                                </p>
+                                {c.workdrive_url ? (
+                                  <p>
+                                    <small>
+                                      <span className="tag tag--good">Saved to Deal Jacket</span> {stamp(c.workdrive_saved_at)}
+                                      {c.page_count ? `, ${c.page_count} ${c.page_count === 1 ? "page" : "pages"}` : ""}.{" "}
+                                      <Control file href={c.workdrive_url}>
+                                        Open in WorkDrive
+                                      </Control>
+                                    </small>
+                                  </p>
+                                ) : c.held ? (
+                                  <p>
+                                    <small>
+                                      <span className="tag tag--quiet">Waiting for Deal Jacket</span>{" "}
+                                      {c.status === "Voided"
+                                        ? "It will move with VOID in its name once the deal's folders exist."
+                                        : "Held in DocuRide until the deal's folders exist."}
+                                      {c.page_count ? ` ${c.page_count} ${c.page_count === 1 ? "page" : "pages"}.` : ""}{" "}
+                                      {c.view_pdf_url ? (
+                                        <Control file href={c.view_pdf_url}>
+                                          View PDF
+                                        </Control>
+                                      ) : null}
+                                    </small>
+                                  </p>
+                                ) : null}
+                                {c.status === "Voided" ? (
+                                  <p>
+                                    <small>
+                                      Voided by {c.voided_by} {stamp(c.voided_at)}
+                                      {c.void_reason ? `: ${c.void_reason}` : "."}
+                                    </small>
+                                  </p>
+                                ) : c.contract_number ? (
+                                  <div className="vcontracts-actions">
+                                    <form action={getContractDocument}>
+                                      <Working />
+                                      <input type="hidden" name="session_id" value={sheet.session.id} />
+                                      <input type="hidden" name="contract_number" value={c.contract_number} />
+                                      <Control type="submit" busyText="Getting the document...">
+                                        {c.workdrive_url ? "Get document again" : "Get document"}
+                                      </Control>
+                                    </form>
+                                    <form action={voidContract} className="oem-record">
+                                      <Working />
+                                      <input type="hidden" name="session_id" value={sheet.session.id} />
+                                      <input type="hidden" name="contract_number" value={c.contract_number} />
+                                      <label>
+                                        <span>Why it is being voided</span>
+                                        <input name="void_reason" required />
+                                      </label>
+                                      <label className="vcontracts-confirm">
+                                        <input type="checkbox" name="confirm" required /> Cancel this contract with {vendor}
+                                      </label>
+                                      <Control type="submit" working="page" busyText="Voiding..." leave={VOID_LEAVE}>Void</Control>
+                                    </form>
+                                  </div>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+
+                        {sheet.contracts_panel.waiting_count > 0 ? (
+                          <form action={moveDocumentsToDealJacket} className="vcontracts-move">
+                            <Working />
+                            <input type="hidden" name="session_id" value={sheet.session.id} />
+                            <Control type="submit" working="page" busyText="Moving documents to the Deal Jacket...">
+                              Move documents to Deal Jacket
+                            </Control>
+                            <small>
+                              {sheet.contracts_panel.waiting_count}{" "}
+                              {sheet.contracts_panel.waiting_count === 1 ? "document is" : "documents are"} waiting. The CRM will
+                              do this on its own once DocuRide DC makes the deal&apos;s folders; this does it now.
+                            </small>
+                          </form>
+                        ) : null}
+                      </section>
+                    ) : null}
+
+                    {/* ── OEM contracts, recorded by staff ────────────────────────────── */}
+                    {/* A Price Sheet provider has no API. Its contract is written on the
+                        OEM's own system and recorded here with the signed document. Nothing
+                        on this list calls TecAssured or any other provider. */}
+                    {(sheet.oem_contracts?.length ?? 0) > 0 ? (
+                      <section className="voem" aria-labelledby="voem-title">
+                        <h2 id="voem-title">OEM contracts</h2>
+                        <p className="console-note">
+                          Write each of these on the OEM&apos;s own system, then record the contract
+                          number and the signed contract here. DocuRide does not send them anywhere.
+                        </p>
+                        <ul className="voem-list">
+                          {sheet.oem_contracts!.map((o) => (
+                            <li key={o.selected_product_id}>
+                              <p className="voem-head">
+                                <strong>{o.product_name}</strong> <small>{o.provider_name}</small>{" "}
+                                <span className={`tag ${o.contract ? "tag--good" : "tag--quiet"}`}>
+                                  {o.contract ? "Recorded" : "Not recorded"}
+                                </span>
+                              </p>
+                              {o.contract ? (
+                                <>
+                                  <p>
+                                    <small>
+                                      Contract {o.contract.contract_number}, recorded by {o.contract.recorded_by}{" "}
+                                      {stamp(o.contract.recorded_at)}.{" "}
+                                      {o.contract.document_url ? (
+                                        <Control file href={o.contract.document_url}>
+                                          Open the signed contract
+                                        </Control>
+                                      ) : null}
+                                    </small>
+                                  </p>
+                                  <form action={voidOemContract} className="oem-record">
+                                      <Working />
+                                      <input type="hidden" name="session_id" value={sheet.session.id} />
+                                      <input type="hidden" name="contract_number" value={o.contract.contract_number} />
+                                      <label>
+                                        <span>Why it is being voided</span>
+                                        <input name="void_reason" required />
+                                      </label>
+                                      <Control type="submit" working="page" busyText="Voiding the record...">Void record</Control>
+                                    </form>
+                                </>
+                              ) : (
+                                <OemContractRecord sessionId={sheet.session.id} selectedProductId={o.selected_product_id} />
+                              )}
+                              {o.voided.map((v) => (
+                                <p key={`${v.contract_number}-${v.voided_at}`}>
+                                  <small>
+                                    Contract {v.contract_number} was voided by {v.voided_by} {stamp(v.voided_at)}: {v.void_reason}
+                                  </small>
+                                </p>
+                              ))}
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    ) : null}
+                  </>
+                  ),
+                }]
+              : []),
+            ...(sheet.menu_template || (sheet.hidden_slots?.length ?? 0) > 0 || (presentable && (sheet.menu_columns?.length ?? 0) > 0)
+              ? [{
+                  id: "menu",
+                  label: "Menu",
+                  badge: null,
+                  content: (
+                  <>
+                    {(sheet.hidden_slots?.length ?? 0) > 0 ? (
+                      <ul className="vproviders">
+                        {sheet.hidden_slots!.map((h) => (
+                          <li key={h.title}>{h.note ?? `${h.title} is not shown on this deal.`}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {/* ── The menu's coverage levels for this deal ─────────────────────
+                        Before presenting, a manager can start any column at a different
+                        level of each product (Lowest, Middle or Highest) on this deal.
+                        The template's level is the default (docs section 22). */}
+                    {presentable && (sheet.menu_columns?.length ?? 0) > 0 ? (
+                      <form action={saveMenuLevels} className="vmenu-levels" data-working-panel="">
+                        <Working />
+                        <input type="hidden" name="session_id" value={sessionId} />
+                        <p className="vmenu-levels-head">Menu coverage levels for this deal</p>
+                        <div className="vmenu-levels-cols">
+                          {sheet.menu_columns!.map((c) => (
+                            <label key={c.position} className="vmenu-level">
+                              <span>{c.name}</span>
+                              <select name={`level_${c.position}`} defaultValue={c.level}>
+                                {["Lowest", "Middle", "Highest"].map((l) => (
+                                  <option key={l} value={l}>{l}{l === c.template_level ? " (menu's own)" : ""}</option>
+                                ))}
+                              </select>
+                            </label>
+                          ))}
+                        </div>
+                        <Control type="submit" busyText="Saving the levels...">Save levels</Control>
+                      </form>
+                    ) : null}
+                  </>
+                  ),
+                }]
+              : []),
+          ]}
+        />
+
+        {/* ── The next step ───────────────────────────────────────────────
+            Exactly one main button at a time, along the bottom:
+              1. Not rated: Rate. Nothing to present yet, so no presentation
+                 buttons at all.
+              2. Rated, not prepared: Prepare presentation. Rate again beside
+                 it, and both presentations shown but disabled, saying why.
+              3. Prepared: Present menu and Present storyboard. Prepare
+                 presentation (to change it) and Rate again beside them.
+            "Rated" is verified, rated and current (presentable). "Prepared"
+            is the session's own record that Prepare was saved (sheet.prepared,
+            fni-menu-prepare, migration 0045).
+
+            The presentations are plain links into a new tab (target="_blank",
+            rel="noopener"), so this page stays where it was and one person can
+            work several deals at once. A tab opened that way has no history,
+            so the customer cannot press Back into this screen, and the
+            presentations have no link of any kind to it. */}
+        <footer className="vnext" aria-label="Next step">
+          <div className="vnext-say">
+            {verified ? (
+              <p className="vgate-was">
+                Verified by <b>{sheet.verification.verified_by ?? "unknown"}</b> on{" "}
+                {stamp(sheet.verification.verified_at)}.
+              </p>
+            ) : null}
+            {step === "rate" ? (
+              sheet.ready ? (
+                <p className="vgate-say">{RATE_SAY}</p>
+              ) : (
+                <p className="vgate-say vgate-say--blocked">
+                  {sheet.invalid.length > 0 ? (
+                    <>
+                      These changes could not be read, so they are not in force:{" "}
+                      <b>{sheet.invalid.map((f) => f.label).join(", ")}</b>. Correct them
+                      in the deal sheet, or clear the box to go back to the original.
+                    </>
+                  ) : sheet.missing.length > 0 ? (
+                    <>
+                      Still needed before this can be rated:{" "}
+                      <b>{sheet.missing.map((f) => f.label).join(", ")}</b>.
+                    </>
+                  ) : (sheet.problems ?? []).length > 0 ? (
+                    <>{(sheet.problems ?? []).map((f) => f.problem).join(" ")}</>
+                  ) : (
+                    <>This deal cannot be rated yet.</>
+                  )}
+                </p>
+              )
+            ) : step === "prepare" ? (
+              <p className="vgate-say">
+                Rated. Next, prepare the presentation: each column&apos;s options and prices.
+              </p>
+            ) : (
+              <p className="vgate-say">
+                Prepared{sheet.prepared?.by ? ` by ${sheet.prepared.by}` : ""}, {stamp(sheet.prepared?.at ?? null)}.
+                Each presentation opens in its own tab. This screen stays open for changes.
+              </p>
+            )}
+          </div>
+
+          <div className="vnext-do">
+            {step === "rate" ? (
+              // Verify, then rate (verifyAndRate). The server refuses a second
+              // press while the first is running, as before.
+              <form action={verifyAndRate} className="vgate">
+                <Working />
+                <input type="hidden" name="session_id" value={sheet.session.id} />
+                <Control type="submit"
+                  className="btn btn--go"
+                  working="page"
+                  busyText="Rating..."
+                  disabled={!sheet.ready}
+                >
+                  Rate
+                </Control>
+              </form>
+            ) : (
+              <>
+                {rateAgainAvailable({ signedIn: true, submitState: sheet.submit_state }) ? (
+                  // The rating staff run, any time, with the deal's current
+                  // inputs (fni-rate-vehicle, rate_again). Never submits.
+                  // Updates this page from the rating's answer instead of drawing
+                  // it again (lib/details-offer.ts): no wait for a new render.
+                  <form action={rateAgainHere} className="vrate-again" data-working-redraw="none">
+                    <Working />
+                    <input type="hidden" name="session_id" value={sheet.session.id} />
+                    <Control type="submit" working="page" busyText="Rating again...">Rate again</Control>
+                  </form>
+                ) : null}
+                {/* Before presenting: each column's options and prices, from the presets (docs section 25). */}
+                <Control
+                  className={step === "prepare" ? "btn btn--go" : "btn btn--quiet"}
+                  href={`/prepare/${sessionId}`}
+                >
+                  Prepare presentation
+                </Control>
+                {step === "prepare" ? (
+                  <>
+                    <Control className="btn btn--quiet" disabled aria-describedby="vnext-why">
+                      Present menu
+                    </Control>
+                    <Control className="btn btn--quiet" disabled aria-describedby="vnext-why">
+                      Present storyboard
+                    </Control>
+                    <p id="vnext-why" className="vnext-why">{PREPARE_FIRST}</p>
+                  </>
+                ) : (
+                  <>
+                    {/* The conventional menu: its own customer tab, straight
+                        into the package columns (docs section 22). */}
+                    <Control className="btn btn--go" href={`/menu/${sessionId}`} newTab>
+                      Present menu
+                    </Control>
+                    {/* The Ownership Planner's storyboard, in its own customer tab. */}
+                    <Control className="btn btn--go" href={`/plan/${sessionId}`} newTab>
+                      Present storyboard
+                    </Control>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </footer>
+      </main>
+      {/* New on every render, and last in the page: the busy state ends only
+          once this changes, and it can only change once everything above it
+          has been drawn. React can draw a page in parts; a marker at the top
+          once changed while the rest of the page was still on its way. */}
+      {renderStamp}
+    </div>
+    </WorkingArea>
+  );
+}

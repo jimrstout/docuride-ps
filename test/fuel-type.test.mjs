@@ -26,6 +26,7 @@ import {
   decodeDidNotAnswer,
   shouldAutoDecode,
 } from "../apps/ownership-planner/lib/auto-decode.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const src = (f) => readFileSync(new URL(f, import.meta.url), "utf8");
 
@@ -216,7 +217,7 @@ test("a fuel edit accepts the three words and nothing else, on both sides", () =
 });
 
 test("the save path refuses an unreadable fuel type and stores the word", () => {
-  const verify = src("../supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /castForProperty\(target, value\)/);
   // The word is what is stored, through the general "only a real change is an
   // edit" rule, which also covers choosing the value the deal already resolves
@@ -225,7 +226,7 @@ test("the save path refuses an unreadable fuel type and stores the word", () => 
 });
 
 test("the Verify page offers fuel type as a three-way dropdown", () => {
-  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /field\.key === "fuel\.type" \? \(/);
   assert.match(page, /<select id=\{id\} name=\{field\.key\} defaultValue=\{field\.value \?\? "Gasoline"\}>/);
   assert.match(page, /FUEL_TYPE_CHOICES\.map/);
@@ -255,12 +256,12 @@ test("a tried and unanswered decode is reported, a successful one is not", () =>
     vin_decode_attempted_at: "2026-09-29T12:00:00Z",
     vin_decode_at: "2026-09-29T12:00:01Z",
   })), false);
-  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /The automatic VIN decode did not answer\. Press Decode the VIN to try again\./);
 });
 
 test("the page never blocks on the decode", () => {
-  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   const block = page.slice(page.indexOf("if (shouldAutoDecode(sheet))"));
   assert.ok(block.length > 0 && page.includes("if (shouldAutoDecode(sheet))"));
 
@@ -294,7 +295,7 @@ test("the reload after the automatic decode asks for a fresh sheet", () => {
   // Next memoizes an identical GET within one render. Without a fresh read the
   // reload returns the pre-decode sheet and never reaches fni-session-verify,
   // which is what session 72384f64 showed: one GET, the decode POST, no second GET.
-  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   const block = page.slice(page.indexOf("if (shouldAutoDecode(sheet))"));
   const decodeAt = block.indexOf("edge.vinDecode");
   const reloadAt = block.indexOf("edge.verifySheet<VerifySheet>(sessionId, { fresh: true })");

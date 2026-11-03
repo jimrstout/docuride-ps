@@ -19,6 +19,7 @@ import {
 import { crmRatingFields } from "../supabase/functions/_shared/crm-fields.ts";
 import { capChange, MAX_AMOUNT_FINANCED } from "../supabase/functions/fni-session-verify/save-edits.ts";
 import { ratingInputsFrom } from "../apps/ownership-planner/lib/verify-fields.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const src = (f) => readFileSync(new URL(f, import.meta.url), "utf8");
 
@@ -62,7 +63,7 @@ test("Lender is shown first in Financial, and nothing else about it changes", ()
   assert.equal(lender.editable, false);
   assert.equal(lender.provider_property, null);
   // The Money group is headed Financial on the page.
-  assert.match(src("../apps/ownership-planner/app/details/[sessionId]/page.tsx"),
+  assert.match(detailsSource(),
     /\{group === "Money" \? "Financial" : group\}/);
 });
 
@@ -94,7 +95,7 @@ test("creation, reopen and Refresh all fill it through the shared mapping", () =
   assert.match(reopen, /\.update\(patch\)/);
 
   // Refresh from CRM writes the same patch, and the sheet reads the column.
-  const verify = src("../supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   const refresh = verify.slice(verify.indexOf("async function refresh("), verify.indexOf("async function verify("));
   assert.match(refresh, /const \{ sale_date: _sale, \.\.\.patch \} = crmRatingFields\(record as unknown as Record<string, unknown>\);/);
   assert.match(refresh, /\.update\(patch\)/);
@@ -167,7 +168,7 @@ test("negatives and non-numbers are unreadable", () => {
   for (const junk of ["-5", "-$1,000", "abc", "12abc", "27,000 approx", "$"]) {
     assert.equal(capChange(junk, null, "Jim", "x").kind, "unreadable", junk);
   }
-  const verify = src("../supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /if \(change\.kind === "unreadable"\) \{\s*unreadable\.push\(\{ key, label: labelFor\(key\), value \}\);/);
 });
 
@@ -181,7 +182,7 @@ test("saving the maximum cannot touch verification or the rates", () => {
 
   // And save() writes only staff_edits and the column: no verification state,
   // no snapshot, and no rated_offers.out_of_date.
-  const verify = src("../supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   const save = verify.slice(verify.indexOf("async function save("), verify.indexOf("async function discardEdits("));
   assert.doesNotMatch(save, /verification_state|verified_snapshot|out_of_date|rated_offers/);
   assert.match(save, /\.update\(\{ staff_edits: Object\.keys\(edits\)\.length > 0 \? edits : null, \.\.\.columns \}\)/);
@@ -216,11 +217,11 @@ test("the warning appears only when a maximum is set and already exceeded", () =
   const sheet = buildVerification(financed({ max_amount_financed: "27000" }), UTV);
   assert.match(sheet.over_cap_warning, /\$547\.64 over/);
   assert.equal(sheet.ready, true);
-  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /\{group === "Money" && sheet\.over_cap_warning \? \(\s*<p className="vgroup-warn" role="status">\{sheet\.over_cap_warning\}<\/p>/);
 });
 
 test("an empty maximum is never marked Missing", () => {
-  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /const OPTIONAL_FIELDS = new Set\(\["max_amount_financed"\]\);/);
 });

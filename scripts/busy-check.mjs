@@ -189,8 +189,10 @@ async function buttonCase(label, path, locate, { calls, done, expect = 1 }) {
 const DETAILS_REDRAWN = `const now = document.querySelector("[data-working-render]")?.getAttribute("data-working-render"); return !!now && now !== stampBefore;`;
 await buttonCase("Details: Rate", "/details/10000001-aaaa-4aaa-8aaa-aaaaaaaaaaaa", (p) => p.locator(".vnext button", { hasText: "Rate" }),
   { calls: ["POST fni-session-verify", "POST fni-rate-vehicle"], done: DETAILS_REDRAWN });
+// Rate again updates Details from its answer, without drawing the page again
+// (speed part 2): it is done when its result line is on the screen.
 await buttonCase("Details: Rate again", "/details/20000002-aaaa-4aaa-8aaa-aaaaaaaaaaaa", (p) => p.locator(".vnext button", { hasText: "Rate again" }),
-  { calls: ["POST fni-rate-vehicle"], done: DETAILS_REDRAWN });
+  { calls: ["POST fni-rate-vehicle"], done: `return /Rated again/.test(document.querySelector("[data-working-result]")?.textContent ?? "") && !document.querySelector('[aria-busy="true"]');` });
 await buttonCase("Details: Save changes", "/details/10000001-aaaa-4aaa-8aaa-aaaaaaaaaaaa", (p) => p.locator(".vtools button", { hasText: "Save changes" }),
   { calls: ["POST fni-session-verify"], done: DETAILS_REDRAWN });
 await buttonCase("Details: Refresh from CRM", "/details/10000001-aaaa-4aaa-8aaa-aaaaaaaaaaaa", (p) => p.locator(".vh-top button", { hasText: "Refresh from CRM" }),

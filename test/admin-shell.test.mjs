@@ -14,6 +14,7 @@ import {
   sectionFor,
   withNotice,
 } from "../apps/ownership-planner/lib/admin-sections.ts";
+import { detailsSource } from "./details-source.mjs";
 
 const src = (f) => readFileSync(new URL(`../apps/ownership-planner/${f}`, import.meta.url), "utf8");
 
@@ -54,7 +55,7 @@ test("every action that landed on / or /settings lands on the new page", () => {
 test("the deal page's way home is the DocuRide PS crumb", () => {
   // "/" opens the session browser; HomeLink is the one link to it
   // (test/staff-home-link.test.mjs).
-  const verify = src("app/details/[sessionId]/page.tsx");
+  const verify = detailsSource();
   assert.match(verify, /<HomeLink \/>/);
   assert.doesNotMatch(verify, /Session browser/);
 });

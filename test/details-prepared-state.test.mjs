@@ -8,6 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { verifySource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 
@@ -19,7 +20,7 @@ test("the prepared state is the one Prepare already writes", () => {
 });
 
 test("the Details sheet reads it and says it, null until Prepare has been saved", () => {
-  const fn = read("supabase/functions/fni-session-verify/index.ts");
+  const fn = verifySource();
   const columns = fn.slice(fn.indexOf("const COLUMNS = ["), fn.indexOf('].join(",");', fn.indexOf("const COLUMNS = [")));
   assert.match(columns, /"menu_prepared_at", "menu_prepared_by",/);
   assert.match(fn, /prepared: s\.menu_prepared_at\s*\? \{ at: s\.menu_prepared_at as string, by: \(s\.menu_prepared_by as string \| null\) \?\? null \}\s*: null,/);
