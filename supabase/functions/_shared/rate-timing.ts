@@ -6,8 +6,9 @@
 //
 //   steps   [{ step, ms }]: milliseconds since the request was received,
 //           in the order the steps finished
-//   facts   plain values about the run: whether the provider login was
-//           cached or fresh, the response size in bytes, the rate line count
+//   facts   plain values about the run, under their own key: provider_login
+//           (cached, fresh or failed), provider_login_retried, response_bytes,
+//           rate_lines, crm_sale_date, selections_compared
 //
 // Measuring only. Nothing here changes what a rating does. Never holds a
 // credential, a token or a buyer's details: only step names, numbers and
@@ -26,7 +27,7 @@ export interface TimingDetail {
   /** The longest gap between two marks, and the step that ended it. */
   slowest: { step: string; ms: number } | null;
   total_ms: number;
-  [fact: string]: unknown;
+  facts: Record<string, string | number | boolean | null>;
 }
 
 export class RateTiming {
@@ -63,7 +64,7 @@ export class RateTiming {
       steps: [...this.steps],
       slowest,
       total_ms: Math.round(this.now() - this.start),
-      ...this.facts,
+      facts: { ...this.facts },
     };
   }
 }

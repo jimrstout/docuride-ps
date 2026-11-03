@@ -21,8 +21,10 @@ test("marks are milliseconds since the request, and the slowest step is named", 
   assert.deepEqual(d.steps.map((s) => [s.step, s.ms]), [["request received", 0], ["session loaded", 250], ["rate response received", 5250], ["offer stored", 5400]]);
   assert.deepEqual(d.slowest, { step: "rate response received", ms: 5000 });
   assert.equal(d.total_ms, 5400);
-  assert.equal(d.provider_login, "cached");
-  assert.equal(d.rate_lines, 465);
+  // The facts sit under their own key (#146 spread them at the top level,
+  // so detail.timing.facts read as null).
+  assert.deepEqual(d.facts, { provider_login: "cached", rate_lines: 465 });
+  assert.deepEqual(Object.keys(d).sort(), ["facts", "slowest", "steps", "total_ms"]);
 });
 
 test("rate lines are counted across every product, with or without the quote envelope", () => {
