@@ -60,7 +60,9 @@ test("timing never carries a secret: only step names, numbers and short words", 
   assert.doesNotMatch(src, /password|sessionId|token|buyer/i.test("") ? /$^/ : /\.(password|sessionId|token)\b/);
   const adapter = read("supabase/functions/_shared/adapters/tecassured.ts");
   const notes = [...adapter.matchAll(/timing\.note\("([a-z_]+)"/g)].map((m) => m[1]);
-  assert.deepEqual([...new Set(notes)].sort(), ["provider_login", "provider_login_retried", "rate_lines", "response_bytes"]);
+  assert.deepEqual([...new Set(notes)].sort(), [
+    "provider_login", "provider_login_retried", "rate_lines", "response_bytes", "saved_login_age_s", "saved_login_from", "saved_login_used",
+  ]);
 });
 
 // ── Speed, part 1: the reads that do not depend on each other go together ──

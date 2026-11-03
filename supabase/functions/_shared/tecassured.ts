@@ -38,6 +38,7 @@
 // fni-contract-submit -- were brought in alongside this rewrite, so a clean
 // checkout can now deploy all of them.
 
+import { LOGIN_LIFETIME_MS, savedLoginFor, type SavedLogin } from "./saved-login.ts";
 import { tecAssuredAccount, type StoreProviderAccount } from "./provider-rows.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -218,6 +219,13 @@ export class TecAssuredClient {
   /** Called after every successful login, so a shared cache can follow along. */
   private onAuthenticated: ((client: TecAssuredClient) => void) | null;
 
+  /**
+   * The saved login this client was offered when it was built (clientFor):
+   * made by this instance, made by another one (kept on the credential row),
+   * or none, with its age in seconds. For rate timing; never the login itself.
+   */
+  savedLogin: SavedLogin = { from: "none", age_s: null, used: false };
+
   constructor(
     credentials: TecAssuredCredentials,
     supabase: SupabaseClient,
@@ -286,7 +294,7 @@ export class TecAssuredClient {
     this._sessionId = assertion.sessionId;
     // 25 minutes against TecAssured's 30, so the session is replaced before it
     // is refused rather than after.
-    this._expiresAt = new Date(Date.now() + 25 * 60 * 1000).toISOString();
+    this._expiresAt = new Date(Date.now() + LOGIN_LIFETIME_MS).toISOString();
 
     await this.supabase
       .schema("fni")
@@ -560,6 +568,8 @@ export class TecAssuredClient {
 
 const sessionsByCredential = new Map<string, { sessionId: string | null; expiresAt: string | null }>();
 
+
+
 function cacheKey(cred: TecAssuredCredentials): string {
   return `${cred.id}:${cred.updated_at}`;
 }
@@ -574,21 +584,24 @@ export function clientFor(
   dealerCode: string | null = null
 ): TecAssuredClient {
   const shared = sessionsByCredential.get(cacheKey(cred));
+  const saved = savedLoginFor(shared, cred);
 
-  // A session held in memory is at least as fresh as the row, and after a
-  // re-auth it is fresher.
-  const withShared: TecAssuredCredentials = shared
-    ? { ...cred, session_id_cached: shared.sessionId, session_expires_at: shared.expiresAt }
-    : cred;
+  // Only a login this instance made is sent (savedLoginFor). One another
+  // instance kept on the row is not: this client logs in first instead.
+  const withShared: TecAssuredCredentials = saved.from === "this instance"
+    ? { ...cred, session_id_cached: shared!.sessionId, session_expires_at: shared!.expiresAt }
+    : { ...cred, session_id_cached: null, session_expires_at: null };
 
   // Whatever session this client establishes goes back into the shared slot,
   // so the next store in the loop starts from it rather than logging in again.
-  return new TecAssuredClient(withShared, supabase, dealerCode, (c) =>
+  const client = new TecAssuredClient(withShared, supabase, dealerCode, (c) =>
     sessionsByCredential.set(cacheKey(cred), {
       sessionId: c.sessionId,
       expiresAt: c.expiresAt,
     })
   );
+  client.savedLogin = saved;
+  return client;
 }
 
 /** Forget cached sessions. Tests and a credential change; nothing else needs it. */

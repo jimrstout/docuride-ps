@@ -241,6 +241,11 @@ export function tecAssuredAdapter(
       // into the provider's. The same session the rate call would get.
       let sessionBefore: string | null = null;
       if (timing && typeof store.client.getSession === "function") {
+        // The saved login: who made it, how old it was, and whether it was sent.
+        const saved = store.client.savedLogin ?? { from: "none", age_s: null, used: false };
+        timing.note("saved_login_from", saved.from);
+        timing.note("saved_login_age_s", saved.age_s);
+        timing.note("saved_login_used", saved.used);
         try {
           const auth = await store.client.getSession();
           timing.note("provider_login", auth.fromCache ? "cached" : "fresh");
