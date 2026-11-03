@@ -33,6 +33,7 @@ import { financeFigures } from "../supabase/functions/_shared/finance-basis.ts";
 import { buildVerification } from "../supabase/functions/_shared/verification.ts";
 import { buildRateRequest } from "../supabase/functions/_shared/rate-request.ts";
 import { crmRatingFields } from "../supabase/functions/_shared/crm-fields.ts";
+import { verifySource } from "./details-source.mjs";
 
 /** A slice of a file, refusing to guess when either marker is absent. */
 function between(text, startMarker, endMarker) {
@@ -456,10 +457,7 @@ test("the endpoint skips $-prefixed keys too, not just the console", () => {
   // Defence in depth. The console filters to known rating inputs before posting,
   // so this should never fire -- but refusing a whole save over React's own
   // hidden $ACTION_ID field is bad enough to be worth blocking on both sides.
-  const verify = readFileSync(
-    new URL("../supabase/functions/fni-session-verify/index.ts", import.meta.url),
-    "utf8"
-  );
+  const verify = verifySource();
   const save = between(verify, "async function save(", "// ── discard:");
   assert.match(
     save,

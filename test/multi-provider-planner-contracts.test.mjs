@@ -23,6 +23,7 @@ import {
   splitSelections,
 } from "../supabase/functions/_shared/oem-contracts.ts";
 import { parseWording, wordingMissing } from "../supabase/functions/_shared/menu-admin.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 const QUOTE = JSON.parse(src("./fixtures/tecassured-rate-utv-3-306.json"));
@@ -203,14 +204,14 @@ test("fni-oem-contracts never calls a provider and never deletes", () => {
 });
 
 test("Verify shows hidden slots, and records OEM contracts from the browser straight to the bucket", () => {
-  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /sheet\.hidden_slots!\.map/);
   assert.match(page, /<OemContractRecord sessionId=\{sheet\.session\.id\}/);
   assert.match(page, /c\.status === "Recorded" \?/);
   const upload = src("../apps/ownership-planner/components/OemContractRecord.tsx");
   assert.match(upload, /^"use client";/);
   assert.match(upload, /fetch\(started\.signed_url, \{ method: "PUT", body/);
-  const verify = src("../supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /hidden_slots: \(resolved \?\? \[\]\)/);
   assert.match(verify, /oem_contracts: oemContracts,/);
 });

@@ -19,6 +19,7 @@ import { familiesFromRows } from "../supabase/functions/_shared/rating-summary.t
 import { resolveSlots, unplacedOffers } from "../supabase/functions/_shared/menu-templates.ts";
 import { categoryForType, categoryFromWording, categoryOf, unplacedNote } from "../supabase/functions/_shared/product-category.ts";
 import { expectedSlot, productName } from "../supabase/functions/_shared/dx1-check.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const P = "prov-ra";
 /** 15063's offered products: [code, ptype, name]. */
@@ -135,9 +136,9 @@ test("a Priority Maintenance contract is Maintenance to the DX1 check, never Pro
 });
 
 test("Details shows the note", () => {
-  const verify = readFileSync(new URL("../supabase/functions/fni-session-verify/index.ts", import.meta.url), "utf8");
+  const verify = verifySource();
   assert.match(verify, /unplaced_offers: resolved \? unplacedOffers\(resolved, familiesFromRows\(rows\)\) : \[\],/);
-  const page = readFileSync(new URL("../apps/ownership-planner/app/details/[sessionId]/page.tsx", import.meta.url), "utf8");
+  const page = detailsSource();
   assert.match(page, /\(sheet\.unplaced_offers \?\? \[\]\)\.map\(\(line\) => \(/);
 });
 

@@ -21,6 +21,7 @@ import {
   SYSTEM,
 } from "../supabase/functions/_shared/sale-date.ts";
 import * as planner from "../apps/ownership-planner/lib/submit-check.ts";
+import { verifySource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 
@@ -115,7 +116,7 @@ test("read fresh by zoho-sync, Details, rating and Submit; Submit refuses withou
   assert.ok(sync.indexOf("await recordSaleDate(head.zoho_id") > sync.indexOf('sbUpsert("deals"'));
   assert.ok(sync.indexOf("await recordSaleDate(head.zoho_id") < sync.indexOf("await markProcessed(ids);\n        synced++;"));
 
-  const verify = read("supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /const crmRead = await freshSaleDate\(supabase, loaded as unknown as \{ id: string \}\);/);
   const refresh = verify.slice(verify.indexOf("async function refresh("), verify.indexOf("async function verify("));
   assert.match(refresh, /await recordCrmSaleDate\(supabase, s as unknown as \{ id: string \}, crmSaleDate\(record as unknown as Record<string, unknown>\)\);/);

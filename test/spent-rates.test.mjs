@@ -17,6 +17,7 @@ import {
   spentSelections,
 } from "../supabase/functions/_shared/spent-rates.ts";
 import * as flash from "../apps/ownership-planner/lib/verify-flash.ts";
+import { verifySource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 const money = (n) => `$${n.toFixed(2)}`;
@@ -190,7 +191,7 @@ test("the modal says what the last refresh found, while the selections still sta
   const done = { event: REFRESHED_UNCHANGED_EVENT, created_at: "2026-10-28T16:05:00Z", detail: { lines: [{ ...lines[0], status: "unchanged" }] } };
   assert.deepEqual(refreshState([{ provider_product_id: "BATT-STD", rate_unique_id: "40001" }], done, money), { kind: "refreshed" });
   // The modal's figures stay the submit's own rows (saved-selections.ts).
-  assert.match(read("supabase/functions/fni-session-verify/index.ts"), /\.\.\.\(await spentStateFor\(supabase, s, \(data \?\? \[\]\)/);
+  assert.match(verifySource(), /\.\.\.\(await spentStateFor\(supabase, s, \(data \?\? \[\]\)/);
 });
 
 test("the Details wording is the Edge Function's, word for word", () => {

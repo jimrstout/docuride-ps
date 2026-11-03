@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { buildSheet, checkPreparation, customerCents, optionFor, surchargeChoices } from "../supabase/functions/_shared/menu-prepare.ts";
 import * as model from "../apps/ownership-planner/lib/prepare-model.ts";
 import { planTotals } from "../apps/ownership-planner/lib/money.ts";
+import { detailsSource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 const P = "prov-1";
@@ -195,7 +196,7 @@ test("the endpoint: secret, managers outside the range, locked once chosen, even
   assert.match(actions, /await edge\.adminAuth<\{ user_id: string; email: string \}>\(manager\.email\.trim\(\), manager\.password\)/);
   const page = read("apps/ownership-planner/app/prepare/[sessionId]/page.tsx");
   assert.match(page, /const operator = await currentOperator\(\);\s*if \(!operator\) \{\s*return \(\s*<WorkingArea>\s*<SignIn/);
-  const details = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const details = detailsSource();
   // Renamed Prepare presentation on Details (2026-11-02); the address is unchanged.
   assert.match(details, /href=\{`\/prepare\/\$\{sessionId\}`\}\s*>\s*Prepare presentation\s*<\/Control>/);
   // No scrolling, and tabs on a phone, as the menu.

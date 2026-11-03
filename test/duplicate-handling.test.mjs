@@ -29,13 +29,14 @@ import {
   sessionIsOpen,
   submitRefusal,
 } from "../supabase/functions/_shared/duplicates.ts";
+import { verifySource } from "./details-source.mjs";
 
 const src = (f) => readFileSync(new URL(f, import.meta.url), "utf8");
 
 const sessionStart = src("../supabase/functions/fni-session-start/index.ts");
 const contractSubmit = src("../supabase/functions/fni-contract-submit/index.ts");
 const contractVoid = src("../supabase/functions/fni-contract-void/index.ts");
-const sessionVerify = src("../supabase/functions/fni-session-verify/index.ts");
+const sessionVerify = verifySource();
 const migration = src("../supabase/migrations/0015_duplicate_handling.sql");
 
 const contract = (over = {}) => ({

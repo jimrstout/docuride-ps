@@ -7,6 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { ratingSummary } from "../supabase/functions/_shared/rating-summary.ts";
+import { verifySource } from "./details-source.mjs";
 
 const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 const RA = { id: "prov-ra", name: "Riders Advantage", kind: "Connected", adapter: "TecAssured" };
@@ -50,7 +51,7 @@ test("the session list and Details pass the exact text through", () => {
   const list = src("../supabase/functions/fni-admin-sessions/index.ts");
   assert.match(list, /last_failure_at, product_count/);
   assert.match(list, /failures: summary\.state === "Rated" \? \[\] : summary\.failures/);
-  const details = src("../supabase/functions/fni-session-verify/index.ts");
+  const details = verifySource();
   assert.match(details, /error: p\.error,/);
   assert.match(details, /kept_error: p\.kept_error,/);
 });

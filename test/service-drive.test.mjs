@@ -130,6 +130,7 @@ test("the preset pickers leave service drive plans out, and saving one is refuse
 // ── A selection already on a service drive plan ──────────────────────────
 
 import { SERVICE_DRIVE_EVENT, isServiceDriveQuoteProduct, serviceDriveLine, serviceDriveSelections } from "../supabase/functions/_shared/service-drive.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 test("a saved selection on a service drive plan is found, named as the catalog names it, and not changed", () => {
   const catalog = { "C-SD": "Mechanical Protection, Service Drive", "P-SD": "Mechanical Protection, Premium Service Drive", "C-1": "Mechanical Protection" };
@@ -171,11 +172,11 @@ test("Submit refuses a service drive plan with the same words and a session even
 });
 
 test("Details and Prepare menu show the same plain line", () => {
-  const verify = src("../supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /service_drive_lines: await serviceDriveLines\(supabase, s\.id as string\)/);
   const prep = src("../supabase/functions/fni-menu-prepare/index.ts");
   assert.match(prep, /service_drive_lines: serviceDrive,/);
-  const details = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const details = detailsSource();
   assert.match(details, /\(sheet\.service_drive_lines \?\? \[\]\)\.map\(\(line\) => \(\s*<p key=\{line\} className="console-flash console-flash--bad" role="alert">\{line\}<\/p>/);
   const screen = src("../apps/ownership-planner/app/prepare/[sessionId]/Prepare.tsx");
   assert.match(screen, /\(data\.service_drive_lines \?\? \[\]\)\.map\(\(line\) => \(\s*<p key=\{line\} className="pm-note pm-note--bad" role="alert">\{line\}<\/p>/);

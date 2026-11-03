@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { ENGINE_SIZE_PROBLEM, engineSizeProblem } from "../supabase/functions/_shared/engine-size.ts";
 import { buildVerification } from "../supabase/functions/_shared/verification.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 const DEAL = {
@@ -45,9 +46,9 @@ test("Details says why, and the sheet is not ready, when the form asks for engin
 });
 
 test("Verify refuses with the reason, Details shows it, and the rating refuses before sending", () => {
-  const verify = read("supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /: sheet\.problems\.length > 0\s*\? sheet\.problems\.map\(\(f\) => f\.problem\)\.join\(" "\)/);
-  const page = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /\{field\.problem \? \(\s*<p className="vfield-note" role="alert">\{field\.problem\}<\/p>/);
   const adapter = read("supabase/functions/_shared/adapters/tecassured.ts");
   assert.ok(adapter.indexOf("const problem = engineSizeProblem(cc);") < adapter.indexOf("store.client.rateVehicle(request)"));

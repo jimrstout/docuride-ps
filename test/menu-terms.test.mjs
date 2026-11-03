@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import * as shared from "../supabase/functions/_shared/menu-terms.ts";
 import * as app from "../apps/ownership-planner/lib/menu-terms.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 const DEAL = { months: 60, rate: 5.9 };
@@ -90,9 +91,9 @@ test("the menu: a payment line per term, the term chosen with the package, check
 });
 
 test("Details: the note when the customer chose a term other than the deal's", () => {
-  const verify = read("supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /chosen_term_note: chosenTermNote\(/);
   assert.match(verify, /"menu_choice",/);
-  const page = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, /\{sheet\.chosen_term_note \? \(\s*<p className="console-flash console-flash--bad" role="alert">\{sheet\.chosen_term_note\}<\/p>/);
 });

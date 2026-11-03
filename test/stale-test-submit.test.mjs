@@ -13,6 +13,7 @@ import ts from "typescript";
 import * as deno from "../supabase/functions/_shared/sale-date.ts";
 import { RATING_OUT_OF_DATE, STALE_TEST_NOTE, submitBlock, submitCheck } from "../apps/ownership-planner/lib/submit-check.ts";
 import { render } from "./_jsx-string.mjs";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const here = (rel) => new URL(rel, import.meta.url);
 const read = (rel) => readFileSync(here(`../${rel}`), "utf8");
@@ -59,7 +60,7 @@ test("the note's wording, in amber beside the button", () => {
   assert.equal(deno.STALE_TEST_NOTE, NOTE);
   const modal = read("apps/ownership-planner/components/SubmitConfirm.tsx");
   assert.match(modal, /\) : note \? \(\s*<p className="vsubmit-note" role="status">\{note\}<\/p>/);
-  assert.match(read("apps/ownership-planner/app/details/[sessionId]/page.tsx"), /note=\{submitNote\}/);
+  assert.match(detailsSource(), /note=\{submitNote\}/);
   const css = read("apps/ownership-planner/app/globals.css");
   assert.match(css, /\.vsubmit-note \{[^}]*background: var\(--warn-panel\); color: var\(--warn-fg\);/);
 });
@@ -84,5 +85,5 @@ test("the confirmation shows the note above the products, and its figures are un
   assert.ok(!render(Summary({ confirmation: c, changes: [], titleId: "t" })).includes(NOTE));
   // The modal passes the same note, and still reads the rows the submit sends.
   assert.match(read("apps/ownership-planner/components/SubmitConfirm.tsx"), /<SubmitSummary confirmation=\{confirmation\} changes=\{changes\} note=\{note\} titleId="vconfirm-title" \/>/);
-  assert.match(read("supabase/functions/fni-session-verify/index.ts"), /\.select\(SUBMIT_ROW_COLUMNS\)/);
+  assert.match(verifySource(), /\.select\(SUBMIT_ROW_COLUMNS\)/);
 });

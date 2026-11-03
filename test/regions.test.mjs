@@ -6,6 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { detailsSource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 
@@ -29,7 +30,7 @@ test("the root project (marketing and the R&R relay) is not changed", () => {
 
 // ── Details: the DX1 check and the deal are read side by side ─────────────
 test("Details starts the DX1 check before it reads the deal, and uses it as before", () => {
-  const file = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const file = detailsSource();
   const page = file.slice(file.indexOf("export default async function DetailsPage("));
   const check = page.indexOf("const dx1Promise: Promise<Dx1CheckResult | null> = edge.dx1Check<Dx1CheckResult>(sessionId)");
   assert.ok(check > page.indexOf("if (!isSessionId(sessionId)) notFound();"), "never for a malformed id");

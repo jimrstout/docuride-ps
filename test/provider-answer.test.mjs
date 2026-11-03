@@ -18,6 +18,7 @@ import {
   REDACTED,
   REMOVED,
 } from "../supabase/functions/_shared/provider-answer.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const here = (rel) => new URL(rel, import.meta.url);
 const read = (rel) => readFileSync(here(`../${rel}`), "utf8");
@@ -186,7 +187,7 @@ test("a long answer is cut, and says so", () => {
 });
 
 test("Details shows it behind Show details, with Copy error", () => {
-  const verify = read("supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /\.eq\("event", PROVIDER_ANSWER_EVENT\)\s*\.order\("created_at", \{ ascending: false \}\)\s*\.limit\(1\)/);
   assert.match(verify, /provider_answer: providerAnswer,/);
   const c = read("apps/ownership-planner/components/ProviderAnswer.tsx");
@@ -194,7 +195,7 @@ test("Details shows it behind Show details, with Copy error", () => {
   assert.match(c, /<RatingErrorText deal=\{deal\} failures=\{\[\{ provider, text: answer\.text, at: answer\.at \}\]\} \/>/);
   // RatingErrorText is what gives it the scrolling box and Copy error.
   assert.match(read("apps/ownership-planner/components/RatingErrorText.tsx"), /<CopyErrorButton text=\{copyErrorText\(deal, f\)\} \/>/);
-  const page = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   // In the Submit Status Unknown notice while the outcome is unknown, in the Contracts panel otherwise.
   const unknown = page.slice(page.indexOf("<h2>Submit Status Unknown</h2>"), page.indexOf("{operator ? (\n            <form action={clearSubmitUnknown}>"));
   assert.match(unknown, /\{sheet\.provider_answer \? \(\s*<ProviderAnswer/);

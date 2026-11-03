@@ -4,6 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { detailsSource } from "./details-source.mjs";
 
 const src = (rel) => readFileSync(new URL(`../apps/ownership-planner/${rel}`, import.meta.url), "utf8");
 
@@ -22,7 +23,7 @@ test("the admin area starts its breadcrumb with it, and the sidebar brand goes h
 });
 
 test("the deal page starts its breadcrumb with it", () => {
-  const p = src(existsDetails() ? "app/details/[sessionId]/page.tsx" : "app/details/[sessionId]/page.tsx");
+  const p = detailsSource();
   const crumb = p.slice(p.indexOf('<nav aria-label="Breadcrumb">'), p.indexOf("</nav>", p.indexOf('<nav aria-label="Breadcrumb">')));
   assert.ok(crumb.startsWith('<nav aria-label="Breadcrumb">'));
   assert.ok(crumb.indexOf("<HomeLink />") < crumb.indexOf("Deal {sheet.session.deal_number"));
@@ -35,5 +36,5 @@ test("the customer's menu never shows it", () => {
 });
 
 function existsDetails() {
-  try { src("app/details/[sessionId]/page.tsx"); return true; } catch { return false; }
+  try { detailsSource(); return true; } catch { return false; }
 }

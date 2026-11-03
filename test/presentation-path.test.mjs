@@ -15,6 +15,7 @@ import {
 } from "../supabase/functions/_shared/presentation.ts";
 import { modeLabel } from "../supabase/functions/_shared/session-mode.ts";
 import { initialsFor, nameFromEmail } from "../apps/ownership-planner/lib/admin-sections.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 const PAGE = "apps/ownership-planner/app/details/[sessionId]/page.tsx";
@@ -79,7 +80,7 @@ test("the acknowledgment names the staff member who presented, on both paths", (
 });
 
 test("both buttons: verified, rated and current; a live contract does not block them", () => {
-  const page = read(PAGE);
+  const page = detailsSource();
   assert.match(page, /const presentable = verified && sheet\.rating\.state === "Rated" && !sheet\.rating\.out_of_date;/);
   assert.match(page, /href=\{`\/plan\/\$\{sessionId\}`\} newTab>/);
   assert.match(page, /href=\{`\/menu\/\$\{sessionId\}`\} newTab>\s*Present menu\s*</);
@@ -87,10 +88,10 @@ test("both buttons: verified, rated and current; a live contract does not block 
 });
 
 test("a manager sets each column's coverage level for this deal on Details", () => {
-  const page = read(PAGE);
+  const page = detailsSource();
   assert.match(page, /\{presentable && \(sheet\.menu_columns\?\.length \?\? 0\) > 0 \? \(\s*<form action=\{saveMenuLevels\}/);
   assert.match(page, /<select name=\{`level_\$\{c\.position\}`\} defaultValue=\{c\.level\}>/);
-  const verify = read("supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /if \(action === "menu_levels"\) return await credited\(await setMenuLevels\(supabase, s, body\.levels\), MENU_LEVELS_EVENT\);/);
   // Only levels that differ from the template's are kept.
   assert.match(verify, /if \(v !== c\.template_level\) levels\[String\(c\.position\)\] = v;/);

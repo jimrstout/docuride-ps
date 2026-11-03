@@ -22,6 +22,7 @@ import {
   sameResult,
   termMonths,
 } from "../supabase/functions/_shared/dx1-check.ts";
+import { detailsSource } from "./details-source.mjs";
 
 const read = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8");
 
@@ -256,7 +257,7 @@ test("product names are the menu's plain names, never the provider's title", () 
 });
 
 test("Details shows the latest check, refreshed on load, for signed-in staff only", () => {
-  const page = read("apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   // The page is signed in before it gets here (test/staff-sign-in.test.mjs).
   assert.match(page, /const dx1Promise: Promise<Dx1CheckResult \| null> = edge\.dx1Check<Dx1CheckResult>\(sessionId\)\.catch\(/);
   assert.ok(page.indexOf("if (!operator) {") < page.indexOf("edge.dx1Check<"));

@@ -3,7 +3,10 @@
 // For the browser checks in scripts/ only. Made-up deals and sessions, no real
 // data, nothing reaches Supabase. Session ids starting 1 are not rated yet,
 // 2 rated and not prepared, 3 prepared. `delayMs` slows every answer, to watch
-// the busy state; `calls` counts each function's requests.
+// the busy state, and `delays` one function's ("POST fni-rate-vehicle");
+// `calls` counts each function's requests. Rate again rates the deal again in
+// the mock: the rating's time, product count and a notice move, and the
+// answer carries what changed (`details`), as fni-rate-vehicle's does.
 
 import http from "node:http";
 import { menuParts, preparePayload } from "./layout-data.mjs";
@@ -40,17 +43,23 @@ const parties = {
   ],
 };
 
+/** How many times each session has been rated again in this run. */
+const ratedAgain = new Map();
+
 function sheet(id) {
   const variant = id.startsWith("1") ? "new" : id.startsWith("2") ? "rated" : "prepared";
   const verified = variant !== "new";
+  const again = ratedAgain.get(id) ?? 0;
   return {
     session: { id, deal_number: "99901", stock_number: "ST-1234", status: "Open", is_test: true, vehicle: "2026 Mockmake Trail 1000 XT", deal_type: "Finance", vehicle_type_code: "UTV" },
     provider_name: "Mock Provider",
     verification: { state: verified ? "Verified" : "Needs Verification", verified_at: verified ? "2026-11-02T13:00:00Z" : null, verified_by: verified ? "JS" : null },
     rating: verified
-      ? { state: "Rated", product_count: 11, out_of_date: false, rated_at: "2026-11-02T13:00:05Z", detail: null, providers: [{ name: "Mock Provider", state: "Rated", line: "Mock Provider: Rated, 11 products." }] }
+      ? { state: "Rated", product_count: 11 + again, out_of_date: false, rated_at: again ? `2026-11-02T14:0${again}:00Z` : "2026-11-02T13:00:05Z", detail: null, providers: [{ name: "Mock Provider", state: "Rated", line: `Mock Provider: Rated, ${11 + again} products.` }] }
       : { state: "Pending", product_count: 0, out_of_date: false, rated_at: null, detail: null, providers: [] },
     rating_differences: null,
+    unplaced_offers: [],
+    rating_notices: again ? [`Mock notice from rating ${again + 1}.`] : [],
     menu_columns: [{ position: 1, name: "Platinum", template_level: "Highest", level: "Highest" }, { position: 2, name: "Gold", template_level: "Middle", level: "Middle" }, { position: 3, name: "Silver", template_level: "Lowest", level: "Lowest" }],
     menu_template: { name: "UTV menu" }, hidden_slots: [], oem_contracts: [], contracts_panel: null,
     prepared: variant === "prepared" ? { at: "2026-11-02T13:10:00Z", by: "JS" } : null,
@@ -111,15 +120,26 @@ function customerSession(id) {
   };
 }
 
-export function startMockEdge({ port, delayMs = 0, rows = 6 } = {}) {
-  const state = { delayMs, rows, calls: {} };
+/** What a rating changes on Details, as fni-rate-vehicle answers Rate again (_shared/details-offer.ts). */
+function offerDetails(id) {
+  const s = sheet(id);
+  return {
+    session_status: s.session.status, rating: s.rating, rating_differences: s.rating_differences, menu_columns: s.menu_columns,
+    unplaced_offers: s.unplaced_offers, rating_notices: s.rating_notices, hidden_slots: s.hidden_slots, contracts_panel: s.contracts_panel,
+  };
+}
+
+export function startMockEdge({ port, delayMs = 0, rows = 6, delays = {} } = {}) {
+  const state = { delayMs, rows, calls: {}, delays };
   const server = http.createServer(async (req, res) => {
     const u = new URL(req.url, "http://x");
     const fn = u.pathname.split("/").pop();
-    for await (const _ of req) { /* drain */ }
+    let raw = "";
+    for await (const chunk of req) raw += chunk;
     const key = `${req.method} ${fn}`;
     state.calls[key] = (state.calls[key] ?? 0) + 1;
-    if (state.delayMs) await new Promise((r) => setTimeout(r, state.delayMs));
+    const wait = state.delays[key] ?? state.delayMs;
+    if (wait) await new Promise((r) => setTimeout(r, wait));
     const json = (s, b) => { res.writeHead(s, { "content-type": "application/json" }); res.end(JSON.stringify(b)); };
     if (fn === "fni-admin-sessions") return json(200, { limit: 60, as_of: new Date().toISOString(), sessions: sessions(state.rows) });
     if (fn === "fni-admin-settings" && u.searchParams.get("section") === "stores") {
@@ -139,7 +159,15 @@ export function startMockEdge({ port, delayMs = 0, rows = 6 } = {}) {
     if (fn === "fni-session-get") return json(200, customerSession(u.searchParams.get("session_id")));
     if (fn === "fni-session-save") return json(200, { ok: true });
     if (fn === "fni-acknowledgment") return json(200, { ok: true, pdf_base64: null });
-    if (fn === "fni-rate-vehicle") return json(200, { product_count: 11, outcome: "unchanged", lines: [] });
+    if (fn === "fni-rate-vehicle") {
+      const body = raw ? JSON.parse(raw) : {};
+      if (body.rate_again === true) {
+        ratedAgain.set(body.session_id, (ratedAgain.get(body.session_id) ?? 0) + 1);
+        const d = offerDetails(body.session_id);
+        return json(200, { session_id: body.session_id, outcome: "rated", product_count: d.rating.product_count, lines: [], details: d });
+      }
+      return json(200, { product_count: 11, outcome: "unchanged", lines: [] });
+    }
     return json(404, { error: "Not served by the mock." });
   });
   return new Promise((r) => server.listen(port, () => r({ state, close: () => server.close() })));

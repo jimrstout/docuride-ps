@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { documentBaseName, routedFileName, voidedBaseName } from "../supabase/functions/_shared/document-names.ts";
 import { jacketName, VOIDED } from "../supabase/functions/_shared/deal-jacket-move.ts";
+import { detailsSource, verifySource } from "./details-source.mjs";
 
 const src = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 
@@ -29,14 +30,14 @@ test("voiding a waiting document marks its record Voided with VOID in its stored
 });
 
 test("the sheet gives a ten-minute link to a held PDF and never the storage path", () => {
-  const verify = src("../supabase/functions/fni-session-verify/index.ts");
+  const verify = verifySource();
   assert.match(verify, /\.from\(HOLD_BUCKET\)\s*\.createSignedUrl\(String\(c\.document_storage_path\), 600\)/);
   assert.match(verify, /const \{ document_storage_path: _path, [^}]*\.\.\.shown \} = c;/);
   assert.match(verify, /waiting_count: waiting/);
 });
 
 test("the panel says the status in plain English, and the move button says what it is doing", () => {
-  const page = src("../apps/ownership-planner/app/details/[sessionId]/page.tsx");
+  const page = detailsSource();
   assert.match(page, />Waiting for Deal Jacket</);
   assert.match(page, />Saved to Deal Jacket</);
   assert.match(page, /View PDF/);

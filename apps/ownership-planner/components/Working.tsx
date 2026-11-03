@@ -137,7 +137,10 @@ function begin(job: WorkingJob, form: HTMLFormElement, submitter: HTMLElement | 
     kept: snapshotFields(Array.from(form.elements) as unknown as ControlLike[]),
     resultsBefore: resultIds(),
     resendAllowed: false,
-    renderBefore: renderStamp(),
+    // A form that updates the page from its own answer rather than drawing it
+    // again (Rate again, app/details/[sessionId]/DetailsBody.tsx) has no new
+    // render to wait for: it ends once its answer is on the page.
+    renderBefore: form.dataset.workingRedraw === "none" ? null : renderStamp(),
   };
   for (const t of timers) clearTimeout(t);
   timers = [
@@ -275,6 +278,20 @@ interface WorkingApi {
   /** The form's own work is done: let its next send through, once. */
   resend: () => void;
   done: () => void;
+}
+
+/** The running job's form updates the page from its own answer (data-working-redraw="none"). */
+function answersItself(): boolean {
+  return state.running?.form.dataset.workingRedraw === "none";
+}
+
+/**
+ * For a form that updates the page from its own answer: its action has
+ * settled and the answer is on the page. Ends the job and shows the result
+ * line it left, as any other action's.
+ */
+export function workingDone(): void {
+  finish();
 }
 
 function resend() {
@@ -435,13 +452,18 @@ export function Working() {
     if (pending) sawPending.current = true;
     else if (sawPending.current) {
       sawPending.current = false;
-      finish();
+      // A form that updates the page from its own answer ends its job itself
+      // (workingDone). React can report it as not pending while its action
+      // is still running: the "Still working" line, ten seconds in, draws the
+      // page again outside the action, and that draw says not pending. Ending
+      // there took the spinner away five seconds before the answer came.
+      if (!answersItself()) finish();
     }
   }, [pending]);
 
   useEffect(
     () => () => {
-      if (sawPending.current) finish();
+      if (sawPending.current && !answersItself()) finish();
     },
     []
   );
