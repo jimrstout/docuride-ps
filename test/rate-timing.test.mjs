@@ -38,7 +38,7 @@ test("rate lines are counted across every product, with or without the quote env
 test("the Rated again event carries the timing, and the rate path marks each step", () => {
   const fn = read("supabase/functions/fni-rate-vehicle/index.ts");
   assert.match(fn, /detail: \{ \.\.\.detail, timing: timing\.detail\(\) \}/);
-  for (const step of ["request received", "staff sign-in checked", "session loaded", "sale date read from the CRM", "contracts read",
+  for (const step of ["request received", "staff sign-in checked", "session loaded", "sale date read", "contracts read",
     "selections read", "earlier offer read", "session updated", "selection comparison done", "reply ready"]) {
     assert.ok(fn.includes(`timing.mark("${step}")`), step);
   }
@@ -70,7 +70,7 @@ test("Rate again reads in parallel what does not depend on what came before", ()
   const fn = read("supabase/functions/fni-rate-vehicle/index.ts");
   // The provider, the contracts, the selections and the earlier offer are
   // started before the CRM read and awaited after it.
-  const crm = fn.indexOf("const crmRead = await freshSaleDate(");
+  const crm = fn.indexOf("const crmRead = useStored ? null : await freshSaleDate(");
   for (const started of ["const providerRead = tecAssuredProviderId(", "const contractsRead = purchasedFor(", "const before = body.rate_again === true ? rateAgainReads("]) {
     const at = fn.indexOf(started);
     assert.ok(at > 0 && at < crm, started);

@@ -123,8 +123,11 @@ test("read fresh by zoho-sync, Details, rating and Submit; Submit refuses withou
   assert.ok(refresh.indexOf("recordCrmSaleDate(") < refresh.indexOf(".update(patch)"));
 
   const rate = read("supabase/functions/fni-rate-vehicle/index.ts");
-  assert.match(rate, /const crmRead = await freshSaleDate\(supabase, sess as unknown as SaleDateSession\);/);
-  assert.ok(rate.indexOf("const crmRead = await freshSaleDate(") < rate.indexOf("const rateSource = applyStaffEdits("));
+  // Speed part 2: a rating uses the sale date zoho-sync kept on the session,
+  // and reads the CRM only when there is none (or for Submit's spent-rate refresh).
+  assert.match(rate, /const useStored = body\.refresh_spent !== true && typeof storedSale === "string" && storedSale\.trim\(\) !== "";/);
+  assert.match(rate, /const crmRead = useStored \? null : await freshSaleDate\(supabase, sess as unknown as SaleDateSession\);/);
+  assert.ok(rate.indexOf("const crmRead = useStored ? null : await freshSaleDate(") < rate.indexOf("const rateSource = applyStaffEdits("));
 
   const start = read("supabase/functions/fni-session-start/index.ts");
   assert.match(start, /const \{ sale \} = await recordCrmSaleDate\(/);
@@ -186,4 +189,23 @@ test("a sale date moved into another month makes the rating out of date, and Sub
   assert.equal(planner.RATING_OUT_OF_DATE, RATING_OUT_OF_DATE);
   assert.equal(planner.submitBlock({ day: { submit_problem: null }, rating: { out_of_date: true } }), RATING_OUT_OF_DATE);
   assert.equal(planner.submitBlock({ day: { submit_problem: "Not today." }, rating: { out_of_date: true } }), "Not today.");
+});
+
+// ── Speed part 2: a rating takes the sale date zoho-sync kept ────────────────
+// zoho-sync records every CRM edit's Sale_Date on the deal's sessions as it
+// arrives; for every PS session on 3 Nov the last webhook came within a
+// second of the deal's last CRM change, and the one sale date change on
+// record (13759, 30 Oct) was recorded by zoho-sync two seconds after it.
+test("a rating uses the kept sale date; with none it reads the CRM; Submit still reads it", () => {
+  const rate = read("supabase/functions/fni-rate-vehicle/index.ts");
+  const at = rate.indexOf("const storedSale = (sess as unknown as Record<string, unknown>).sale_date;");
+  assert.ok(at > 0);
+  assert.match(rate, /timing\.note\("crm_sale_date", crmRead \? crmRead\.outcome : "Kept on the session"\);/);
+  // Rate and Rate again only; the refresh Submit runs reads the CRM, as Submit does.
+  assert.match(rate, /body\.refresh_spent !== true/);
+  const submit = read("supabase/functions/fni-contract-submit/index.ts");
+  assert.match(submit, /const crmRead = await freshSaleDate\(supabase, session as unknown as SaleDateSession, SUBMIT_CRM_BUDGET_MS\);/);
+  // zoho-sync keeps doing what it did: every synced deal's Sale_Date onto its sessions.
+  const sync = read("supabase/functions/zoho-sync/index.ts");
+  assert.match(sync, /await recordCrmSaleDate\(supabase, s, crmSaleDate\(record\)\);/);
 });

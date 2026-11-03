@@ -238,7 +238,7 @@ serve(async (req: Request) => {
     // and the session read again so the rating carries it.
     let sess = session as SessionRow;
     // ── Read at the same time ──────────────────────────────────────────
-    // The CRM's sale date, the TecAssured provider, the deal's contracts and,
+    // The sale date, the TecAssured provider, the deal's contracts and,
     // for Rate again, the selections and the offer they were made from: none
     // depends on another, so they are asked for together rather than one
     // after another. Only reads; nothing is written until they are all in.
@@ -255,13 +255,21 @@ serve(async (req: Request) => {
     providerRead.catch(() => {});
     contractsRead.catch(() => {});
     const before = body.rate_again === true ? rateAgainReads(supabase, sess.id) : null;
-    const crmRead = await freshSaleDate(supabase, sess as unknown as SaleDateSession);
-    if (crmRead.outcome === "Changed" || crmRead.outcome === "Changed meanwhile") {
+    // ── The sale date (speed part 2) ─────────────────────────────────────
+    // zoho-sync records every CRM edit's Sale_Date on the deal's sessions as
+    // it arrives (_shared/crm-sale-date.ts), so a rating uses the date kept on
+    // the session rather than asking the CRM again. Only when the session has
+    // none is the CRM read now, as before. The refresh Submit runs for a spent
+    // rate still reads the CRM, as Submit itself does.
+    const storedSale = (sess as unknown as Record<string, unknown>).sale_date;
+    const useStored = body.refresh_spent !== true && typeof storedSale === "string" && storedSale.trim() !== "";
+    const crmRead = useStored ? null : await freshSaleDate(supabase, sess as unknown as SaleDateSession);
+    if (crmRead && (crmRead.outcome === "Changed" || crmRead.outcome === "Changed meanwhile")) {
       const { data: again } = await supabase.schema("fni").from("sessions").select("*").eq("id", session_id).single();
       if (again) sess = again as SessionRow;
     }
-    timing.mark("sale date read from the CRM");
-    timing.note("crm_sale_date", crmRead.outcome);
+    timing.mark("sale date read");
+    timing.note("crm_sale_date", crmRead ? crmRead.outcome : "Kept on the session");
     const [, purchased] = await Promise.all([providerRead, contractsRead]);
     timing.mark("contracts read");
     if (ratingRefused(sess.status, purchased)) {
