@@ -23,6 +23,7 @@ import { engineSizeProblem, resolveEngineCc } from "../engine-size.ts";
 import { brandFor, effectiveMake, makesFromResponse, spellingFor, type Brand, type BrandGroup, type ProviderMake, type Spelling } from "../brands.ts";
 import { parseStaffEdits } from "../staff-edits.ts";
 import { resolveVehicleType } from "../vehicle-types.ts";
+import { rateLineCount, responseBytes, type RateTiming } from "../rate-timing.ts";
 
 /** How old the provider's makes list may be before rating asks for it again. */
 const MAKES_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -44,7 +45,9 @@ export function tecAssuredAdapter(
   supabase: SupabaseClient,
   store: StoreClient,
   provider: OfferProvider,
-  rateSource: Record<string, unknown>
+  rateSource: Record<string, unknown>,
+  /** Step timing for "Rated again" (_shared/rate-timing.ts). Measuring only. */
+  timing?: RateTiming
 ): ProviderAdapter & { detail: TecAssuredDetail } {
   const vtype = (rateSource.vehicle_type_code as string | null) ?? null;
   const detail: TecAssuredDetail = {
@@ -172,6 +175,8 @@ export function tecAssuredAdapter(
         };
       }
 
+      timing?.mark("rate properties ready");
+
       if (props.length === 0) {
         return {
           state: "Not Offered",
@@ -185,6 +190,7 @@ export function tecAssuredAdapter(
       // with the reason staff see on Details; a brand goes out spelled the way
       // this provider server accepts it. Without brands set up, as before.
       const branded = await providerMake(rateSource);
+      timing?.mark("brand and makes list ready");
       if ("refusal" in branded) return { state: "Failed", reason: branded.refusal };
       const source = branded.make === null ? rateSource : { ...rateSource, unit_make: branded.make };
 
@@ -208,13 +214,36 @@ export function tecAssuredAdapter(
         if (problem) return { state: "Failed", reason: problem };
       }
       const request = built.request;
+      timing?.mark("rate request built");
+      // Only while timing: the login on its own, so its time is not mixed
+      // into the provider's. The same session the rate call would get.
+      let sessionBefore: string | null = null;
+      if (timing && typeof store.client.getSession === "function") {
+        try {
+          const auth = await store.client.getSession();
+          timing.note("provider_login", auth.fromCache ? "cached" : "fresh");
+        } catch {
+          timing.note("provider_login", "failed");
+        }
+        sessionBefore = store.client.sessionId;
+        timing.mark("provider login ready");
+      }
       // A call that never answers still says what it asked, so a failed
       // re-rate can show it was about the same deal as the offers kept
       // (_shared/rerate.ts).
       let response: unknown;
       try {
+        timing?.mark("rate request sent");
         response = await store.client.rateVehicle(request);
+        if (timing) {
+          timing.mark("rate response received");
+          timing.note("response_bytes", responseBytes(response));
+          timing.note("rate_lines", rateLineCount(response));
+          // A refused session is retried after a fresh login inside the call.
+          if (sessionBefore !== null && store.client.sessionId !== sessionBefore) timing.note("provider_login_retried", true);
+        }
       } catch (err) {
+        timing?.mark("rate request failed");
         return {
           state: "Failed",
           request,
@@ -270,7 +299,10 @@ export function tecAssuredAdapter(
         }
       }
 
+      timing?.mark("form codes kept");
+
       const offers = tecAssuredOffers(response, provider);
+      timing?.mark("offers read from the response");
       return offers.length > 0
         ? { state: "Rated", offers, request, response }
         : {

@@ -68,7 +68,7 @@ test("recordOutcome keeps a Rated row and never writes Failed over it", () => {
 
 test("a timed-out TecAssured call still records what it asked", () => {
   const ad = src("../supabase/functions/_shared/adapters/tecassured.ts");
-  assert.match(ad, /response = await store\.client\.rateVehicle\(request\);\s+\} catch \(err\) \{\s+return \{\s+state: "Failed",\s+request,/);
+  assert.match(ad, /response = await store\.client\.rateVehicle\(request\);[\s\S]{0,600}?\} catch \(err\) \{\s+timing\?\.mark\("rate request failed"\);\s+return \{\s+state: "Failed",\s+request,/);
 });
 
 test("rate-vehicle answers with the kept offers and leaves the status alone", () => {

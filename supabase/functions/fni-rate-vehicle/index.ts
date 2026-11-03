@@ -67,6 +67,7 @@ import { priceFamilies } from "../_shared/plan-prices.ts";
 import type { PricingRule } from "../_shared/planner-pricing.ts";
 import { renewedBy } from "../_shared/sale-date.ts";
 import { freshSaleDate, type SaleDateSession } from "../_shared/crm-sale-date.ts";
+import { RateTiming } from "../_shared/rate-timing.ts";
 import {
   notPurchased,
   purchasedKeys,
@@ -182,6 +183,9 @@ function outcomeLine(o: ProviderOutcome): string {
 // ─── Main handler ────────────────────────────────────────────────────────
 
 serve(async (req: Request) => {
+  // Step timing, kept in the "Rated again" event (_shared/rate-timing.ts).
+  const timing = new RateTiming();
+  timing.mark("request received");
   if (req.method !== "POST") return json(405, { error: "POST only" });
 
   const url = new URL(req.url);
@@ -204,6 +208,7 @@ serve(async (req: Request) => {
   // The staff sign-in, covering this deal's tenant and store (_shared/staff-gate.ts).
   const refused = await staffGate(req, session_id);
   if (refused) return refused;
+  timing.mark("staff sign-in checked");
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -224,6 +229,7 @@ serve(async (req: Request) => {
       .single();
 
     if (sessErr || !session) return json(404, { error: `Session ${session_id} not found` });
+    timing.mark("session loaded");
 
     // The sale date fresh from the CRM before every rating, whatever zoho-sync
     // last saw (_shared/crm-sale-date.ts). A CRM that does not answer in time
@@ -235,12 +241,15 @@ serve(async (req: Request) => {
       const { data: again } = await supabase.schema("fni").from("sessions").select("*").eq("id", session_id).single();
       if (again) sess = again as SessionRow;
     }
+    timing.mark("sale date read from the CRM");
+    timing.note("crm_sale_date", crmRead.outcome);
     providerId = await tecAssuredProviderId(supabase, sess.tenant_id);
 
     // A finished session rates while it has a live contract: products can be
     // added after a contract (_shared/purchased.ts). Rating never touches a
     // purchased product.
     const purchased = await purchasedFor(supabase, sess.id);
+    timing.mark("contracts read");
     if (ratingRefused(sess.status, purchased)) {
       return json(400, { error: `Session is ${sess.status} and cannot be re-rated` });
     }
@@ -294,7 +303,7 @@ serve(async (req: Request) => {
     }
 
     if (body.rate_again === true) {
-      return await rateAgain(supabase, sess, rateSource, body.rated_by, purchased);
+      return await rateAgain(supabase, sess, rateSource, body.rated_by, purchased, timing);
     }
 
     if (body.refresh_spent === true) {
@@ -605,15 +614,18 @@ async function rateAgain(
   sess: SessionRow,
   rateSource: Record<string, unknown>,
   by: unknown,
-  purchased: Set<string>
+  purchased: Set<string>,
+  timing: RateTiming
 ): Promise<Response> {
   const who = renewedBy(by);
   const event = ratedAgainEvent(who);
   const record = async (detail: Record<string, unknown>) => {
+    // The last mark is "reply ready": the event write and the reply follow it.
+    timing.mark("reply ready");
     const { error } = await supabase
       .schema("fni")
       .from("session_events")
-      .insert({ session_id: sess.id, event, detail, created_by: who });
+      .insert({ session_id: sess.id, event, detail: { ...detail, timing: timing.detail() }, created_by: who });
     if (error) console.error(`fni-rate-vehicle rate again event not recorded for ${sess.id}: ${error.message}`);
   };
 
@@ -636,15 +648,19 @@ async function rateAgain(
     (chosen ?? []) as unknown as (SpentSelection & { id: string; provider_id: string | null; provider_product_id: string | null })[],
     purchased
   );
+  timing.mark("selections read");
+  timing.note("selections_compared", selections.length);
 
   // The quote the selections were made from, read before it is replaced.
   const beforeRows = await offerRowsFor(supabase, sess.id);
   const oldFamilies = beforeRows.flatMap((r) => familiesFromRow({ ...(r as unknown as RatingRow), out_of_date: false }));
+  timing.mark("earlier offer read");
 
   const { template, outcomes } = await rateSession(
     supabase,
     { id: sess.id, tenant_id: sess.tenant_id, store_id: sess.store_id },
-    rateSource
+    rateSource,
+    timing
   );
   const ta = outcomes.find((o) => o.tecassured);
   const rated = outcomes.filter((o) => o.result.state === "Rated");
@@ -668,6 +684,7 @@ async function rateAgain(
       ...(taAnswered ? { credential_id: ta.tecassured!.credentialId, dealer_code_used: ta.tecassured!.dealer_code } : {}),
     })
     .eq("id", sess.id);
+  timing.mark("session updated");
 
   if (selections.length === 0) {
     await record({ outcome: "rated", product_count: productCount, lines: [] });
@@ -685,8 +702,10 @@ async function rateAgain(
     familiesFromRows((await offerRowsFor(supabase, sess.id)) as unknown as RatingRow[]),
     (ruleRows ?? []) as unknown as PricingRule[]
   );
+  timing.mark("fresh offer read and priced");
 
   const { lines, unchanged } = compareRefreshed(selections, oldFamilies, freshPriced);
+  timing.mark("selection comparison done");
   for (const [i, l] of lines.entries()) {
     if (l.status !== "unchanged" || l.from_rate === l.to_rate) continue;
     const { error: moveErr } = await supabase
@@ -699,6 +718,7 @@ async function rateAgain(
       return json(500, { session_id: sess.id, outcome: "failed", error: `The selections could not be moved onto the fresh rating: ${moveErr.message}` });
     }
   }
+  timing.mark("selections moved");
   const kept = lines.map(({ snapshot: _snapshot, ...l }) => l);
   await record({ outcome: unchanged ? "unchanged" : "changed", product_count: productCount, lines: kept });
   return json(200, { session_id: sess.id, outcome: unchanged ? "unchanged" : "changed", product_count: productCount, lines: kept });
