@@ -67,6 +67,15 @@ function base(): string {
   return `${url.replace(/\/+$/, "")}/${fns.replace(/^\/+|\/+$/g, "")}`;
 }
 
+/**
+ * Where every Edge Function PS calls runs: Oregon, next to the database
+ * (Supabase project in us-west-2). Without it a function runs in the region
+ * nearest the caller, and each of its many database reads crosses the
+ * country. Sent as the x-region header (Supabase regional invocation).
+ * The PS server itself runs in Oregon too (vercel.json, pdx1).
+ */
+export const FUNCTION_REGION = "us-west-2";
+
 function secret(): string {
   const s = process.env.FNI_WEBHOOK_SECRET;
   if (!s) throw new Error("FNI_WEBHOOK_SECRET is not set");
@@ -106,6 +115,7 @@ async function call<T>(
     method: init.method,
     headers: {
       "x-webhook-secret": secret(),
+      "x-region": FUNCTION_REGION,
       ...(staff ? { [STAFF_HEADER]: staff } : {}),
       ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
     },
