@@ -915,6 +915,45 @@ export async function saveStoreTimeZone(fd: FormData): Promise<void> {
     edge.adminSaveStore({ store_id: field(fd, "store_id"), time_zone: field(fd, "time_zone"), updated_by: by }), "saved");
 }
 
+// ── Brands ──
+
+const BRANDS = "/admin/brands";
+
+/** A brand and its other spellings (aliases, separated by semicolons). */
+export async function saveBrand(fd: FormData): Promise<void> {
+  await adminWrite(BRANDS, (by) =>
+    edge.adminSaveBrands({
+      action: "save_brand", id: field(fd, "id") || undefined, name: field(fd, "name"), aliases: field(fd, "aliases"),
+      active: fd.get("active") === "on", updated_by: by,
+    }), "saved");
+}
+
+/** A brand under a parent company, for the vehicle types it covers. */
+export async function saveBrandGroup(fd: FormData): Promise<void> {
+  await adminWrite(BRANDS, (by) =>
+    edge.adminSaveBrands({
+      action: "save_group", id: field(fd, "id") || undefined, parent_name: field(fd, "parent_name"), brand_name: field(fd, "brand_name"),
+      vehicle_types: fd.getAll("vehicle_types").map(String), preferred: fd.get("preferred") === "on", note: field(fd, "note"), updated_by: by,
+    }), "saved");
+}
+
+export async function removeBrandGroup(fd: FormData): Promise<void> {
+  await adminWrite(BRANDS, (by) => edge.adminSaveBrands({ action: "remove_group", id: field(fd, "id"), updated_by: by }), "saved");
+}
+
+/** The spelling a provider server accepts for a brand on one vehicle type. */
+export async function saveBrandSpelling(fd: FormData): Promise<void> {
+  await adminWrite(BRANDS, (by) =>
+    edge.adminSaveBrands({
+      action: "save_spelling", provider_id: field(fd, "provider_id"), environment: field(fd, "environment"), vtype: field(fd, "vtype"),
+      brand_name: field(fd, "brand_name"), spelling: field(fd, "spelling"), note: field(fd, "note"), updated_by: by,
+    }), "saved");
+}
+
+export async function removeBrandSpelling(fd: FormData): Promise<void> {
+  await adminWrite(BRANDS, (by) => edge.adminSaveBrands({ action: "remove_spelling", id: field(fd, "id"), updated_by: by }), "saved");
+}
+
 // ── Providers ──
 
 export async function saveProvider(fd: FormData): Promise<void> {
