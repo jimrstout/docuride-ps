@@ -240,7 +240,7 @@ export function tecAssuredAdapter(
           timing.note("response_bytes", responseBytes(response));
           timing.note("rate_lines", rateLineCount(response));
           // A refused session is retried after a fresh login inside the call.
-          if (sessionBefore !== null && store.client.sessionId !== sessionBefore) timing.note("provider_login_retried", true);
+          timing.note("provider_login_retried", sessionBefore !== null && store.client.sessionId !== sessionBefore);
         }
       } catch (err) {
         timing?.mark("rate request failed");
