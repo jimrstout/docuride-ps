@@ -130,6 +130,10 @@ test("the admin area's functions, which span every tenant, take a platform admin
 });
 
 // ── 2. The gate as the functions run it ────────────────────────────────────
+//
+// staffGate checks the sign-in against the real clock, so the sign-ins here are
+// minted now. Minted at the fixed NOW, they expired a day later and these
+// tests started failing on their own (3 Nov).
 
 async function withFakeProject(rows, run) {
   const realFetch = globalThis.fetch;
@@ -177,7 +181,7 @@ test("each staff function, signed out: 401, and the response carries no deal dat
 test("each staff function, signed in to the wrong store: 403 with no deal data", async () => {
   const otherStore = { ...STAFF_A, store_ids: [STORE_B] };
   await withFakeProject({ ...ROWS, profiles: [otherStore] }, async () => {
-    const res = await staffGate(request(cookieFor(otherStore)), SESSION);
+    const res = await staffGate(request(cookieFor(otherStore, undefined, Date.now())), SESSION);
     assert.equal(res.status, 403);
     const text = await res.text();
     assert.deepEqual(Object.keys(JSON.parse(text)), ["error"]);
@@ -187,8 +191,8 @@ test("each staff function, signed in to the wrong store: 403 with no deal data",
 
 test("each staff function, signed in to the deal's store: passes", async () => {
   await withFakeProject(ROWS, async () => {
-    assert.equal(await staffGate(request(cookieFor(STAFF_A)), SESSION), null);
-    assert.equal(await staffGate(request(cookieFor(ADMIN)), SESSION), null);
+    assert.equal(await staffGate(request(cookieFor(STAFF_A, undefined, Date.now())), SESSION), null);
+    assert.equal(await staffGate(request(cookieFor(ADMIN, undefined, Date.now())), SESSION), null);
   });
 });
 
@@ -197,7 +201,7 @@ test("a database that cannot be read refuses rather than lets through", async ()
   globalThis.Deno = { env: { get: (k) => ({ SUPABASE_URL: "https://x", SUPABASE_SERVICE_ROLE_KEY: "k", FNI_WEBHOOK_SECRET: SECRET })[k] } };
   globalThis.fetch = async () => new Response("down", { status: 500 });
   try {
-    const res = await staffGate(request(cookieFor(STAFF_A)), SESSION);
+    const res = await staffGate(request(cookieFor(STAFF_A, undefined, Date.now())), SESSION);
     assert.equal(res.status, 503);
   } finally {
     globalThis.fetch = realFetch;
