@@ -26,6 +26,7 @@ import { chooseTemplate, type MenuTemplate } from "./menu-templates.ts";
 import { slotCatalog, templatesFor } from "./menu-template-rows.ts";
 import { groupOffers } from "./normalized-offer.ts";
 import { resolveEngineCc } from "./engine-size.ts";
+import type { RateTiming } from "./rate-timing.ts";
 
 export interface ProviderRow {
   id: string;
@@ -127,7 +128,8 @@ async function rateOne(
   provider: ProviderRow,
   storeId: string,
   rateSource: Record<string, unknown>,
-  deal: RatingDeal
+  deal: RatingDeal,
+  timing?: RateTiming
 ): Promise<ProviderOutcome> {
   const offerProvider = { id: provider.id, name: provider.name };
   try {
@@ -135,6 +137,7 @@ async function rateOne(
       let store;
       try {
         store = await createTecAssuredClient(storeId, supabase);
+        timing?.mark("provider account read");
       } catch (err) {
         return {
           provider,
@@ -142,7 +145,7 @@ async function rateOne(
           result: { state: "Failed", reason: err instanceof Error ? err.message : String(err) },
         };
       }
-      const adapter = tecAssuredAdapter(supabase, store, offerProvider, rateSource);
+      const adapter = tecAssuredAdapter(supabase, store, offerProvider, rateSource, timing);
       const result = await adapter.rate();
       return {
         provider,
@@ -281,15 +284,20 @@ export async function recordOutcome(
 export async function rateSession(
   supabase: SupabaseClient,
   session: { id: string; tenant_id: string; store_id: string },
-  rateSource: Record<string, unknown>
+  rateSource: Record<string, unknown>,
+  /** Step timing for "Rated again" (_shared/rate-timing.ts). Measuring only. */
+  timing?: RateTiming
 ): Promise<{ template: MenuTemplate | null; outcomes: ProviderOutcome[] }> {
   const deal = ratingDeal({ ...rateSource, store_id: session.store_id });
   const { template, providers } = await menuFor(supabase, session.tenant_id, deal);
+  timing?.mark("menu and providers read");
 
   const outcomes = await Promise.all(
-    providers.map((p) => rateOne(supabase, p, session.store_id, rateSource, deal))
+    providers.map((p) => rateOne(supabase, p, session.store_id, rateSource, deal, timing))
   );
+  timing?.mark("every provider answered");
   const kept = await Promise.all(outcomes.map((o) => recordOutcome(supabase, session.id, o)));
+  timing?.mark("offer stored");
   kept.forEach((k, i) => {
     if (k) outcomes[i].kept = k;
   });
@@ -298,6 +306,7 @@ export async function rateSession(
       .filter((o) => o.provider.adapter === "TecAssured" && o.result.state === "Rated")
       .map((o) => recordProgramNames(supabase, session.tenant_id, o.provider.id, o.result.response))
   );
+  timing?.mark("program names kept");
   return { template, outcomes };
 }
 
