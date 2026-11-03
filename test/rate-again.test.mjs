@@ -82,7 +82,7 @@ test("rating with live contracts: purchased products are never touched, and the 
   assert.equal(ratingRefused("Cancelled", bought), true);
   assert.equal(ratingRefused("Agreement Created", bought), false);
   const fn = read("supabase/functions/fni-rate-vehicle/index.ts");
-  assert.match(fn, /const purchased = await purchasedFor\(supabase, sess\.id\);\s*(?:timing\.mark\("contracts read"\);\s*)?if \(ratingRefused\(sess\.status, purchased\)\) \{/);
+  assert.match(fn, /const contractsRead = purchasedFor\(supabase, sess\.id\);[\s\S]*?const \[, purchased\] = await Promise\.all\(\[providerRead, contractsRead\]\);\s*timing\.mark\("contracts read"\);\s*if \(ratingRefused\(sess\.status, purchased\)\) \{/);
   assert.match(fn, /choicesStillOffered\(notPurchased\(\(chosenRows \?\? \[\]\) as ChosenRate\[\], purchased\), offeredRates, keptProviders\)/);
   assert.match(fn, /selections\.length === 0 && purchased\.size === 0 \? \{ status: statusAfterRating\(/);
 });
@@ -160,6 +160,6 @@ test("every press is recorded as Rated again by the initials, or by System", () 
   const fn = rateAgainFn();
   assert.match(fn, /const who = renewedBy\(by\);\s*const event = ratedAgainEvent\(who\);/);
   assert.match(fn, /\.insert\(\{ session_id: sess\.id, event, detail: \{ \.\.\.detail, timing: timing\.detail\(\) \}, created_by: who \}\)/);
-  assert.match(read(RATE), /return await rateAgain\(supabase, sess, rateSource, body\.rated_by, purchased, timing\);/);
+  assert.match(read(RATE), /return await rateAgain\(supabase, sess, rateSource, body\.rated_by, purchased, timing, before!\);/);
   assert.match(read("apps/ownership-planner/app/console-actions.ts"), /rate_again: true,[\s\S]*?rated_by: initialsFor\(operator\.email\),/);
 });

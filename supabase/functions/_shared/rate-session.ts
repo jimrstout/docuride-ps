@@ -17,7 +17,7 @@ import { programNamesFromQuote } from "./program-names.ts";
 import { dealDates, SALE_DATE_MISSING } from "./deal-dates.ts";
 import { keepsPrior, keptStillCurrent, keptWarning, type PriorOffer } from "./rerate.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createTecAssuredClient } from "./tecassured.ts";
+import { createTecAssuredClient, type StoreClient } from "./tecassured.ts";
 import { tecAssuredAdapter, type TecAssuredDetail } from "./adapters/tecassured.ts";
 import { rateFromSheet } from "./adapters/price-sheet.ts";
 import { publishedSheetFor } from "./price-sheet-rows.ts";
@@ -129,14 +129,16 @@ async function rateOne(
   storeId: string,
   rateSource: Record<string, unknown>,
   deal: RatingDeal,
-  timing?: RateTiming
+  timing?: RateTiming,
+  /** The store's TecAssured account, already being read (rateSession). */
+  tecStore?: Promise<StoreClient>
 ): Promise<ProviderOutcome> {
   const offerProvider = { id: provider.id, name: provider.name };
   try {
     if (provider.adapter === "TecAssured") {
       let store;
       try {
-        store = await createTecAssuredClient(storeId, supabase);
+        store = await (tecStore ?? createTecAssuredClient(storeId, supabase));
         timing?.mark("provider account read");
       } catch (err) {
         return {
@@ -289,24 +291,33 @@ export async function rateSession(
   timing?: RateTiming
 ): Promise<{ template: MenuTemplate | null; outcomes: ProviderOutcome[] }> {
   const deal = ratingDeal({ ...rateSource, store_id: session.store_id });
+  // The store's TecAssured account is read while the menu is: it depends only
+  // on the store. Only reads. Used only if the menu needs TecAssured; a store
+  // without an account is reported by rateOne exactly as before, and never
+  // otherwise.
+  const tecStore = createTecAssuredClient(session.store_id, supabase);
+  tecStore.catch(() => {});
   const { template, providers } = await menuFor(supabase, session.tenant_id, deal);
   timing?.mark("menu and providers read");
 
   const outcomes = await Promise.all(
-    providers.map((p) => rateOne(supabase, p, session.store_id, rateSource, deal, timing))
+    providers.map((p) => rateOne(supabase, p, session.store_id, rateSource, deal, timing, tecStore))
   );
   timing?.mark("every provider answered");
-  const kept = await Promise.all(outcomes.map((o) => recordOutcome(supabase, session.id, o)));
-  timing?.mark("offer stored");
+  // Each attempt is recorded while the program names are kept: one writes
+  // fni.rated_offers, the other fni.product_catalog, and neither reads the other.
+  const [kept] = await Promise.all([
+    Promise.all(outcomes.map((o) => recordOutcome(supabase, session.id, o))),
+    Promise.all(
+      outcomes
+        .filter((o) => o.provider.adapter === "TecAssured" && o.result.state === "Rated")
+        .map((o) => recordProgramNames(supabase, session.tenant_id, o.provider.id, o.result.response))
+    ),
+  ]);
+  timing?.mark("offer stored and program names kept");
   kept.forEach((k, i) => {
     if (k) outcomes[i].kept = k;
   });
-  await Promise.all(
-    outcomes
-      .filter((o) => o.provider.adapter === "TecAssured" && o.result.state === "Rated")
-      .map((o) => recordProgramNames(supabase, session.tenant_id, o.provider.id, o.result.response))
-  );
-  timing?.mark("program names kept");
   return { template, outcomes };
 }
 

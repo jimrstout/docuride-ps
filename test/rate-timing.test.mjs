@@ -43,7 +43,7 @@ test("the Rated again event carries the timing, and the rate path marks each ste
     assert.ok(fn.includes(`timing.mark("${step}")`), step);
   }
   const session = read("supabase/functions/_shared/rate-session.ts");
-  for (const step of ["menu and providers read", "provider account read", "every provider answered", "offer stored"]) {
+  for (const step of ["menu and providers read", "provider account read", "every provider answered", "offer stored and program names kept"]) {
     assert.ok(session.includes(`timing?.mark("${step}")`), step);
   }
   const adapter = read("supabase/functions/_shared/adapters/tecassured.ts");
@@ -61,4 +61,37 @@ test("timing never carries a secret: only step names, numbers and short words", 
   const adapter = read("supabase/functions/_shared/adapters/tecassured.ts");
   const notes = [...adapter.matchAll(/timing\.note\("([a-z_]+)"/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(notes)].sort(), ["provider_login", "provider_login_retried", "rate_lines", "response_bytes"]);
+});
+
+// ── Speed, part 1: the reads that do not depend on each other go together ──
+test("Rate again reads in parallel what does not depend on what came before", () => {
+  const fn = read("supabase/functions/fni-rate-vehicle/index.ts");
+  // The provider, the contracts, the selections and the earlier offer are
+  // started before the CRM read and awaited after it.
+  const crm = fn.indexOf("const crmRead = await freshSaleDate(");
+  for (const started of ["const providerRead = tecAssuredProviderId(", "const contractsRead = purchasedFor(", "const before = body.rate_again === true ? rateAgainReads("]) {
+    const at = fn.indexOf(started);
+    assert.ok(at > 0 && at < crm, started);
+  }
+  assert.ok(fn.indexOf("await Promise.all([providerRead, contractsRead])") > crm);
+  // The quote the selections were made from is still read before it is replaced.
+  const again = fn.slice(fn.indexOf("async function rateAgain("));
+  assert.ok(again.indexOf("await reads.beforeRows") < again.indexOf("await rateSession("));
+  // After the rate: the session update, the pricing rules and the fresh offer together.
+  assert.match(again, /await Promise\.all\(\[\s*sessionUpdate,[\s\S]*?from\("pricing_rules"\)[\s\S]*?offerRowsFor\(supabase, sess\.id\),\s*\]\)/);
+
+  const session = read("supabase/functions/_shared/rate-session.ts");
+  // The store's account is read while the menu is, and used only if TecAssured is rated.
+  assert.ok(session.indexOf("const tecStore = createTecAssuredClient(") < session.indexOf("await menuFor("));
+  assert.match(session, /store = await \(tecStore \?\? createTecAssuredClient\(storeId, supabase\)\);/);
+
+  const adapter = read("supabase/functions/_shared/adapters/tecassured.ts");
+  // The brand's inputs are read while the rate properties are; the make is
+  // still settled after the properties, and the makes list fetched from the
+  // provider only once a brand is settled.
+  const rate = adapter.slice(adapter.indexOf("async rate()"));
+  assert.ok(rate.indexOf("const brandRead = brandReads(rateSource);") < rate.indexOf("props = await required();"));
+  assert.ok(rate.indexOf("props = await required();") < rate.indexOf("await providerMake(rateSource, await brandRead)"));
+  const make = adapter.slice(adapter.indexOf("async function providerMake("), adapter.indexOf("async function readMakes("));
+  assert.ok(make.indexOf('if (m.status !== "brand") return { refusal: m.message };') < make.indexOf("await makesList("));
 });

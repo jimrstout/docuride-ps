@@ -541,5 +541,6 @@ test("recording any rate attempt clears out_of_date", () => {
   assert.match(fn, /if \(o\.result\.state === "Failed"\) \{/);
   assert.match(fn, /out_of_date: !current,/);
   assert.doesNotMatch(fn, /switch \(/);
-  assert.match(rate, /await Promise\.all\(outcomes\.map\(\(o\) => recordOutcome\(supabase, session\.id, o\)\)\)/);
+  // Every attempt is recorded (alongside the program names since speed part 1).
+  assert.match(rate, /Promise\.all\(outcomes\.map\(\(o\) => recordOutcome\(supabase, session\.id, o\)\)\)/);
 });
