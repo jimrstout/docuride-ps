@@ -30,7 +30,8 @@ const read = (rel) => readFileSync(here(`../${rel}`), "utf8");
 async function loadClient() {
   const src = read("supabase/functions/_shared/tecassured.ts")
     .replace('import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";', "const createClient = () => { throw new Error('not in tests'); };")
-    .replace('from "./provider-rows.ts"', `from ${JSON.stringify(here("../supabase/functions/_shared/provider-rows.ts").href)}`);
+    .replace('from "./provider-rows.ts"', `from ${JSON.stringify(here("../supabase/functions/_shared/provider-rows.ts").href)}`)
+    .replace('from "./saved-login.ts"', `from ${JSON.stringify(here("../supabase/functions/_shared/saved-login.ts").href)}`);
   // Compiled rather than stripped: the file uses constructor parameter properties.
   const js = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
   const file = join(mkdtempSync(join(tmpdir(), "tecassured-")), "tecassured.mjs");
