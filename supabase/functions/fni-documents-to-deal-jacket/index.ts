@@ -19,8 +19,8 @@
 //      Jacket yet ("Waiting for Deal Jacket", or "Voided" before it moved):
 //      builds its full name, moves any same-named file in the Deal Jacket to
 //      the WorkDrive trash, uploads the PDF from the fni-contracts bucket, and
-//      records it "Saved to Deal Jacket". A voided one lands with " VOID"
-//      before the first pipe. See _shared/deal-jacket-move.ts.
+//      records it "Saved to Deal Jacket". A voided one lands with "|VOID|"
+//      in front of its name. See _shared/deal-jacket-move.ts.
 //   4. Answers with each file name and what happened to it.
 //
 // Steps 3 and 4 are _shared/deal-jacket-file.ts, which zoho-sync also runs

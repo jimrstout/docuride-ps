@@ -8,8 +8,8 @@
 //
 //   1. Its full name is built: the stored name, plus the routing part with the
 //      Signed Documents folder id (_shared/document-names.ts). A voided
-//      document's name ends " VOID", so it lands with " VOID" before the
-//      first pipe.
+//      document lands with "|VOID|" in front of its name (one voided before
+//      5 Nov, stored with " VOID" on the end, takes the new marker instead).
 //   2. A file in the Deal Jacket with that name goes to the WorkDrive trash,
 //      as DocuRide DC replaces its own documents.
 //   3. The PDF is uploaded from the bucket. The bucket copy is kept.

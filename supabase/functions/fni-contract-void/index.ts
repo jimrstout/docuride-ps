@@ -72,9 +72,12 @@ interface VoidRequest {
 }
 
 /**
- * The voided contract's file in the Deal Jacket gets " VOID" before the first
- * pipe, so it can never be mistaken for a live contract. Renamed, never
- * deleted. Returns a sentence to add to the reply when something is off.
+ * The voided contract's file in WorkDrive gets "|VOID|" in front of its name,
+ * which is otherwise kept exactly as it was (_shared/document-names.ts), so it
+ * can never be mistaken for a live contract. Renamed by its file id, so it is
+ * marked wherever it is, the Deal Jacket or a Signed Documents folder. PS only
+ * renames it: Zoho Flow moves voided files, and nothing here moves or deletes
+ * one. Returns a sentence to add to the reply when something is off.
  */
 async function markFileVoid(
   supabase: SupabaseClient,
@@ -90,10 +93,10 @@ async function markFileVoid(
       status: (err as { status?: unknown })?.status ?? null,
       code: (err as { code?: unknown })?.code ?? null,
     });
-    return ` Its file in the Deal Jacket could not be marked VOID: ${workDriveProblem(err)} Press Void again to retry the rename.`;
+    return ` Its file in WorkDrive could not be marked VOID: ${workDriveProblem(err)} Press Void again to retry the rename.`;
   }
   await supabase.schema("fni").from("agreement_products").update({ workdrive_file_name: name }).eq("id", row.id);
-  return " Its file in the Deal Jacket is now marked VOID.";
+  return " Its file in WorkDrive is now marked VOID.";
 }
 
 function json(status: number, body: unknown): Response {
@@ -374,7 +377,7 @@ serve(async (req: Request) => {
         // The void is done: the claim goes with it.
         void_started_at: null,
         // A held document is marked too, so if it ever moves to the Deal
-        // Jacket it lands with " VOID" before the first pipe. The bucket copy
+        // Jacket it lands with "|VOID|" in front of its name. The bucket copy
         // itself is kept as it is.
         ...(row.document_storage_path
           ? {

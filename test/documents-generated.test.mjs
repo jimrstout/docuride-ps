@@ -75,8 +75,8 @@ test("a regenerate files every held document again: a filed one is not skipped",
   // Replaced by name: the one still there goes to the trash first.
   assert.deepEqual(f.log.trashed, ["wd-old-1"]);
   assert.equal(f.log.uploaded.length, 3);
-  // A voided contract keeps VOID in its name.
-  assert.match(f.log.uploaded[2], /RA-SAMPLE-3 VOID\|SignedDocuRideDC\|/);
+  // A voided contract keeps its VOID marker, in front of its name.
+  assert.match(f.log.uploaded[2], /^\|VOID\|TA03 [^|]*RA-SAMPLE-3\|SignedDocuRideDC\|/);
   // The record is the new upload.
   assert.deepEqual(f.log.recorded.map((r) => [r.id, r.workdrive_file_id, r.deal_jacket_folder_id, r.filing_started_at]), [
     ["1", "wd-new-1", "jacketSample01", null],
