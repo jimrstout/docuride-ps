@@ -57,7 +57,7 @@ test("the base name is stored now; the routing part is added when the folder id 
   assert.equal(routedFileName(base, "signed1"), "TA01 MUI #13759 Chad Baber Mechanical Protection RA123456|SignedDocuRideDC|signed1|.pdf");
   // Storage keys take no "#" or accents; the WorkDrive name keeps them.
   assert.equal(storageFileName("TA01 MUI #13759 José Núñez Theft RA9"), "TA01 MUI -13759 Jos- N--ez Theft RA9.pdf");
-  assert.equal(voidedBaseName(voidedBaseName(base)), `${base} VOID`);
+  assert.equal(voidedBaseName(voidedBaseName(base)), `|VOID|${base}`);
 });
 
 test("with folders a held document is saved to the Deal Jacket; without them it waits", async () => {
@@ -88,10 +88,10 @@ test("with folders a held document is saved to the Deal Jacket; without them it 
   assert.match(fn, /record\.document_status = WAITING;/);
 });
 
-test("a voided waiting document moves with VOID before the first pipe and stays Voided", async () => {
+test("a voided waiting document moves with |VOID| in front of its name and stays Voided", async () => {
   const { deps, log } = fakes();
   const [line] = await moveHeldDocuments([held({ document_status: VOIDED })], FOLDERS, deps);
-  assert.equal(line.file_name, "TA01 MUI #13759 Chad Baber Mechanical Protection RA123456 VOID|SignedDocuRideDC|signed1|.pdf");
+  assert.equal(line.file_name, "|VOID|TA01 MUI #13759 Chad Baber Mechanical Protection RA123456|SignedDocuRideDC|signed1|.pdf");
   assert.equal(line.outcome, "Saved to Deal Jacket, marked VOID.");
   assert.equal(log.recorded[0].document_status, VOIDED);
 });

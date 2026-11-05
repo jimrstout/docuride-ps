@@ -14,8 +14,12 @@
 // double spaces collapse, and the pipes stay. Copied rather than imported,
 // because the two apps deploy separately; a test pins the copy to the original.
 //
-// A voided contract's file keeps its place and gets " VOID" before the first
-// pipe, so it can never be mistaken for a live contract.
+// A voided contract's file keeps its place and its name, with "|VOID|" put in
+// front of it (5 Nov 2026), so it can never be mistaken for a live contract.
+// Zoho Flow recognises voided contracts by that marker at the very front: it
+// moves them out of the Deal Jacket with the rest and leaves them out of the
+// signing session. Before, " VOID" went before the first pipe; a name marked
+// that way is already voided and is never marked again or renamed.
 
 const str = (v: unknown) => (v === null || v === undefined ? "" : String(v).trim());
 
@@ -73,9 +77,22 @@ export function contractFileName(p: ContractDocumentParts): string {
   return routedFileName(documentBaseName(p), p.signed_documents_folder_id);
 }
 
-/** A voided base name: " VOID" on the end, once. */
+/** The marker a voided contract's file name starts with. */
+export const VOID_MARKER = "|VOID|";
+
+/** The old marker: " VOID" before the first pipe (or on the end of a base name). */
+const OLD_VOID = " VOID";
+
+/**
+ * A voided base name, as stored while a document waits for its Deal Jacket:
+ * "|VOID|" and the base name exactly as it was. Once only. A base name voided
+ * the old way (" VOID" on the end) has not been filed yet, so it takes the new
+ * marker in place of the old one: "|VOID|" and the name it had before.
+ */
 export function voidedBaseName(baseName: string): string {
-  return baseName.endsWith(" VOID") ? baseName : `${baseName} VOID`;
+  if (baseName.startsWith(VOID_MARKER)) return baseName;
+  const original = baseName.endsWith(OLD_VOID) ? baseName.slice(0, -OLD_VOID.length) : baseName;
+  return `${VOID_MARKER}${original}`;
 }
 
 /**
@@ -93,10 +110,20 @@ export function sameDocument(itemName: string, name: string): boolean {
   return itemName === base || itemName === `${base}.pdf`;
 }
 
-/** The voided name: " VOID" before the first pipe. Already voided stays as it is. */
+/**
+ * A filed file's voided name: "|VOID|" and its name exactly as it was. A name
+ * already voided, either way, stays as it is: the marker is never put on
+ * twice, and a file voided the old way is not renamed.
+ */
 export function voidedName(name: string): string {
+  if (isVoidedName(name)) return name;
+  return `${VOID_MARKER}${name}`;
+}
+
+/** Already marked void: "|VOID|" in front, or the old " VOID" before the first pipe. */
+export function isVoidedName(name: string): boolean {
+  if (name.startsWith(VOID_MARKER)) return true;
   const at = name.indexOf("|");
-  const head = at < 0 ? name : name.slice(0, at);
-  const tail = at < 0 ? "" : name.slice(at);
-  return head.endsWith(" VOID") ? name : `${head} VOID${tail}`;
+  const head = at < 0 ? name.replace(/\.pdf$/, "") : name.slice(0, at);
+  return head.endsWith(OLD_VOID);
 }

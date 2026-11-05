@@ -53,14 +53,14 @@ test("DocuRide DC's cleanup: \\ / : * ? \" < > become -, double spaces collapse,
   assert.ok(mine.includes('return name.replace(/[\\\\/:*?"<>]/g, "-").replace(/ {2,}/g, " ");'));
 });
 
-test("a file is the same document with or without .pdf; voiding adds VOID before the first pipe", () => {
+test("a file is the same document with or without .pdf; voiding puts |VOID| in front", () => {
   const name = contractFileName(parts);
   assert.ok(sameDocument(name, name));
   assert.ok(sameDocument(name.slice(0, -4), name));
   assert.ok(!sameDocument(voidedName(name), name));
   assert.equal(
     voidedName(name),
-    "TA01 MUI #13759 Chad Baber Mechanical Protection RA123456 VOID|SignedDocuRideDC|abc123signed|.pdf"
+    "|VOID|TA01 MUI #13759 Chad Baber Mechanical Protection RA123456|SignedDocuRideDC|abc123signed|.pdf"
   );
   assert.equal(voidedName(voidedName(name)), voidedName(name));
 });

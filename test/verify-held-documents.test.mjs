@@ -19,14 +19,14 @@ test("voiding a waiting document marks its record Voided with VOID in its stored
   assert.ok(fn.indexOf("client.voidContract(") < fn.indexOf('document_status: "Voided"'));
   assert.doesNotMatch(fn, /storage\.from|\.remove\(|\.move\(/);
 
-  // And it then lands in the Deal Jacket with VOID before the first pipe.
+  // And it then lands in the Deal Jacket with |VOID| in front of its name.
   const base = documentBaseName({ prefix: "TA", position: 2, deal_number: "13759", buyer_display_name: "A B", product_name: "Theft", contract_number: "RA2" });
   const name = jacketName(
     { id: "r", contract_number: "RA2", document_name: voidedBaseName(base), document_storage_path: "p", document_status: VOIDED, workdrive_file_id: null },
     { deal_jacket_folder_id: "j", signed_documents_folder_id: "s" }
   );
-  assert.equal(name, routedFileName(`${base} VOID`, "s"));
-  assert.equal(name, "TA02 MUI #13759 A B Theft RA2 VOID|SignedDocuRideDC|s|.pdf");
+  assert.equal(name, routedFileName(`|VOID|${base}`, "s"));
+  assert.equal(name, "|VOID|TA02 MUI #13759 A B Theft RA2|SignedDocuRideDC|s|.pdf");
 });
 
 test("the sheet gives a ten-minute link to a held PDF and never the storage path", () => {
