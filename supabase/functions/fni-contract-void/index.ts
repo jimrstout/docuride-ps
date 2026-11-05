@@ -42,6 +42,7 @@
 // the server side, which holds the secret.
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { voidAgreementIfAllVoided } from "../_shared/agreement-void.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createTecAssuredClient } from "../_shared/tecassured.ts";
 import { secretsMatch } from "../_shared/supabase.ts";
@@ -246,7 +247,7 @@ serve(async (req: Request) => {
       .schema("fni")
       .from("agreement_products")
       .select(
-        "id, provider_product_id, contract_number, product_name, status, recorded_by, workdrive_file_id, " +
+        "id, agreement_id, provider_product_id, contract_number, product_name, status, recorded_by, workdrive_file_id, " +
           "workdrive_file_name, document_name, document_storage_path"
       )
       .in("agreement_id", agreementIds)
@@ -258,6 +259,7 @@ serve(async (req: Request) => {
     // TecAssured one is the one this function voids; see below for the other.
     const found = (rows ?? []) as unknown as (ContractRef & {
       id: string;
+      agreement_id: string | null;
       recorded_by: string | null;
       workdrive_file_id: string | null;
       workdrive_file_name: string | null;
@@ -404,6 +406,10 @@ serve(async (req: Request) => {
     }
 
     const fileNote = await markFileVoid(supabase, row);
+
+    // The last product under its contract record: the record is Voided too
+    // (_shared/agreement-void.ts). Never fails the void.
+    await voidAgreementIfAllVoided(supabase, row.agreement_id);
 
     // The last live contract on the session: it is open again, Products
     // Selected, so Submit takes it (_shared/session-reopen.ts).

@@ -21,6 +21,7 @@ import { secretsMatch } from "../_shared/supabase.ts";
 import { staffGate } from "../_shared/staff-gate.ts";
 import { documentPathFor, OEM_BUCKET, parseRecord, parseVoid } from "../_shared/oem-contracts.ts";
 import { agreementId, contractsFor, oemContractList, oemSelections } from "../_shared/oem-contract-rows.ts";
+import { voidAgreementIfAllVoided } from "../_shared/agreement-void.ts";
 import { reopenIfAllVoided } from "../_shared/session-reopen.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -125,6 +126,9 @@ async function voidRecorded(supabase: SupabaseClient, sessionId: string, body: R
     .eq("id", row.id as string)
     .eq("status", "Live");
   if (error) return json(500, { error: `The contract could not be voided: ${error.message}` });
+  // The last product under its contract record: the record is Voided too
+  // (_shared/agreement-void.ts). Never fails the void.
+  await voidAgreementIfAllVoided(supabase, await agreementId(supabase, sessionId, false));
   // The last live contract on the session: it is open again (_shared/session-reopen.ts).
   const reopened = await reopenIfAllVoided(supabase, sessionId, body.staff_initials);
   return json(200, {
