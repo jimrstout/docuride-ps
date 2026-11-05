@@ -124,7 +124,8 @@ test("both voids reopen after the contract is recorded as voided, with the perso
   assert.equal((v.match(/await reopenIfAllVoided\(supabase, session_id, body\.staff_initials\)/g) ?? []).length, 2);
   assert.ok(v.indexOf('status: "Voided",\n        voided_at') < v.lastIndexOf("await reopenIfAllVoided("));
   const oem = read("supabase/functions/fni-oem-contracts/index.ts");
-  assert.match(oem, /\.eq\("status", "Live"\);\s*if \(error\) return json\(500[^\n]*\n\s*\/\/[^\n]*\n\s*const reopened = await reopenIfAllVoided\(supabase, sessionId, body\.staff_initials\);/);
+  // The contract record's own status goes first (_shared/agreement-void.ts), then the session.
+  assert.match(oem, /\.eq\("status", "Live"\);\s*if \(error\) return json\(500[^\n]*\n(?:\s*\/\/[^\n]*\n)*\s*await voidAgreementIfAllVoided\([^\n]*\n(?:\s*\/\/[^\n]*\n)*\s*const reopened = await reopenIfAllVoided\(supabase, sessionId, body\.staff_initials\);/);
   const actions = read("apps/ownership-planner/app/console-actions.ts");
   assert.equal((actions.match(/staff_initials: initialsFor\(operator\.email\),/g) ?? []).length, 2);
 });
