@@ -100,15 +100,27 @@ function text(v: unknown): string | null {
 async function theTenant(supabase: SupabaseClient): Promise<{ id: string; name: string; dealer_group_display_name: string | null }> {
   const { data, error } = await supabase
     .from("tenants")
-    .select("id, name, dealer_group_display_name")
+    .select("id, name")
     .eq("crm_sync", "zoho");
 
   if (error) throw new Error(`Failed to read tenants: ${error.message}`);
-  const rows = (data ?? []) as { id: string; name: string; dealer_group_display_name: string | null }[];
+  const rows = (data ?? []) as { id: string; name: string }[];
   if (rows.length !== 1) {
     throw new Error(`Expected exactly one tenant with crm_sync='zoho', found ${rows.length}.`);
   }
-  return rows[0];
+  // The customer-facing name is a PS setting, kept in fni.ps_settings
+  // (migration 0057), not on the shared company record.
+  const { data: settings, error: settingsError } = await supabase
+    .schema("fni")
+    .from("ps_settings")
+    .select("dealer_group_display_name")
+    .eq("tenant_id", rows[0].id)
+    .maybeSingle();
+  if (settingsError) throw new Error(`Failed to read the PS settings: ${settingsError.message}`);
+  return {
+    ...rows[0],
+    dealer_group_display_name: (settings as { dealer_group_display_name?: string | null } | null)?.dealer_group_display_name ?? null,
+  };
 }
 
 async function readSettings(supabase: SupabaseClient) {
@@ -245,7 +257,9 @@ serve(async (req: Request) => {
     // ── The dealer group's customer-facing name ───────────────────────
     // Present-but-blank clears it, which is how an operator undoes a mistake.
     // Cleared means every sentence that needs it is omitted rather than
-    // rendered with a gap, so clearing is safe.
+    // rendered with a gap, so clearing is safe. Kept in fni.ps_settings
+    // (migration 0057), stamped like the wording saved below; PS writes
+    // nothing to public.tenants.
     if ("dealer_group_display_name" in body) {
       const name = text(body.dealer_group_display_name);
       if (name !== null && name.length > 120) {
@@ -254,10 +268,14 @@ serve(async (req: Request) => {
         });
       }
 
+      const who = typeof body.updated_by === "string" && body.updated_by.trim() !== "" ? body.updated_by.trim() : "staff";
       const { error } = await supabase
-        .from("tenants")
-        .update({ dealer_group_display_name: name })
-        .eq("id", tenant.id);
+        .schema("fni")
+        .from("ps_settings")
+        .upsert(
+          { tenant_id: tenant.id, dealer_group_display_name: name, updated_at: new Date().toISOString(), updated_by: who },
+          { onConflict: "tenant_id" }
+        );
 
       if (error) return json(500, { error: `Failed to save the name: ${error.message}` });
     }

@@ -103,6 +103,7 @@ export async function saveSettings(formData: FormData): Promise<void> {
   try {
     await edge.adminSaveSettings({
       dealer_group_display_name: name,
+      updated_by: operator.email,
       ...(Object.keys(templates).length > 0 ? { templates } : {}),
     });
   } catch (err) {
