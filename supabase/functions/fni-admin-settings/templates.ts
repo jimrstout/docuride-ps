@@ -26,6 +26,7 @@
 // docs/multi-provider.md). Nothing is deleted: a template is switched off, and
 // a slot with no products is simply not shown.
 
+import { DEDUCTIBLE_CHOICES, parseDeductible, readDefaultDeductible } from "../_shared/default-deductible.ts";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { conditionsLine, parseSlot, parseTemplate } from "../_shared/menu-admin.ts";
 import { VEHICLE_TYPES } from "../_shared/vehicle-types.ts";
@@ -148,6 +149,10 @@ export async function readTemplates(supabase: SupabaseClient, tenantId: string, 
       // Whether the signed-in person may change presets: managers only.
       can_edit_presets: await isManager(supabase, operatorId),
       preset_changes: await recentChanges(supabase, tenantId, "Menu preset"),
+      // The deductible every product that offers deductibles starts at, in
+      // words (_shared/default-deductible.ts), and the choices for it.
+      default_deductible: await readDefaultDeductible(supabase, tenantId),
+      deductible_choices: DEDUCTIBLE_CHOICES,
       templates: ((templates ?? []) as Record<string, unknown>[]).map((t) => ({
         ...t,
         conditions_line: conditionsLine(t as never, storeName),
@@ -194,6 +199,28 @@ export async function writeTemplates(
     supabase.schema("fni").from("menu_templates").update({ updated_at: now, updated_by: by }).eq("id", templateId);
 
   switch (body.action) {
+    // ── The default deductible (_shared/default-deductible.ts) ────────────
+    // One setting for every menu, a manager's to change like the presets,
+    // kept on the tenant's record in words and logged as a preset change.
+    case "save_default_deductible": {
+      if (!(await isManager(supabase, body.operator_id))) return { status: 403, body: { error: MANAGERS_ONLY } };
+      const value = String(body.default_deductible ?? "").trim();
+      if (!parseDeductible(value)) {
+        return { status: 400, body: { error: `Choose one of: ${DEDUCTIBLE_CHOICES.join(", ")}.` } };
+      }
+      const before = await readDefaultDeductible(supabase, tenantId);
+      if (before === value) return { status: 200, body: { ok: true, changed: 0 } };
+      const { data: row, error: readErr } = await supabase.from("tenants").select("config").eq("id", tenantId).maybeSingle();
+      if (readErr || !row) return { status: 500, body: { error: "The setting could not be read, so nothing was saved." } };
+      const config = (row as { config?: Record<string, unknown> | null }).config ?? {};
+      await logChanges(supabase, tenantId, by, [
+        { area: "Menu preset", record_key: "Default deductible", action: "Changed", before: { default_deductible: before }, after: { default_deductible: value } },
+      ]);
+      const { error } = await supabase.from("tenants").update({ config: { ...config, default_deductible: value } }).eq("id", tenantId);
+      if (error) return { status: 500, body: { error: `The setting could not be saved: ${error.message}` } };
+      return { status: 200, body: { ok: true, changed: 1 } };
+    }
+
     case "save": {
       const parsed = parseTemplate(body, stores.map((s) => s.id));
       if ("errors" in parsed) return { status: 400, body: { error: parsed.errors.join(" ") } };

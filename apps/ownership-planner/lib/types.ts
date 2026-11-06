@@ -739,6 +739,10 @@ export interface TemplatesPayload {
   /** Managers change presets; everyone signed in sees them. */
   can_edit_presets?: boolean;
   preset_changes?: AdminChangeRow[];
+  /** The deductible every product that offers deductibles starts at, in words ("$100 disappearing"). */
+  default_deductible?: string;
+  /** The choices for it, in words. */
+  deductible_choices?: string[];
 }
 
 export interface PriceSheetRow {
