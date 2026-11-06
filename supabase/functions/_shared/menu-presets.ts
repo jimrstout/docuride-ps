@@ -19,6 +19,12 @@
 // With no preferred plan the column's starting level decides (migration 0042),
 // and the term, mileage and deductible preferences still pick its rate.
 //
+// ── The deductible, when no preset sets one ──────────────────────────────
+// A plan with deductible lines starts on the default deductible
+// (Administration > Menus, _shared/default-deductible.ts) at the term picked.
+// When that term has no such line, no other deductible is put in its place:
+// the cell is left for staff to choose, with a plain notice (choose: true).
+//
 // ── The term, when no preset sets one ────────────────────────────────────
 //   1. the menu row's preferred term (Administration > Menus, migration
 //      0049), or the closest offered to it
@@ -46,6 +52,7 @@
 // Pure, so a Node test can hold it. Words are for staff: plain English.
 
 import { isServiceDriveName } from "./service-drive.ts";
+import { DEFAULT_DEDUCTIBLE, defaultLineFor, hasDeductibleLines, noDefaultNotice } from "./default-deductible.ts";
 
 export const CATEGORIES = [
   "Mechanical Protection", "Maintenance", "Tire and Wheel", "Theft", "Battery", "GAP", "Wear Care", "Appearance", "Other",
@@ -78,6 +85,8 @@ export interface PresetRate {
   term_months: number | null;
   term_miles: number | null;
   deductible: number | null;
+  /** The provider's deductible code ("100 Dis Ded"); empty or absent when the plan offers no deductible choice. */
+  deductible_code?: string | null;
   disappearing_deductible?: boolean | null;
 }
 
@@ -95,6 +104,8 @@ export interface Resolved<R extends PresetRate = PresetRate> {
   rate: R | null;
   /** Why the cell is not exactly the preset, in plain English, or null. */
   note: string | null;
+  /** The plan has no line at the default deductible for the term: staff must choose one. */
+  choose?: boolean;
 }
 
 // ── Labels ────────────────────────────────────────────────────────────────
@@ -190,7 +201,7 @@ export function resolvePreset<R extends PresetRate>(
   preset: Preset,
   plans: PresetPlan<R>[],
   levelPlan: PresetPlan<R> | null = null,
-  term: { preferred?: number | null; basis?: TermBasis | null } = {}
+  term: { preferred?: number | null; basis?: TermBasis | null; deductible?: string | null } = {}
 ): Resolved<R> {
   const rated = plans.filter((p) => p.rates.length > 0).sort((a, b) => a.display_order - b.display_order);
   if (rated.length === 0) return { plan: null, rate: null, note: NOT_OFFERED };
@@ -215,8 +226,18 @@ export function resolvePreset<R extends PresetRate>(
 
   // No term in the preset: the row's preferred term, else the default rule.
   const target = preset.term_months ?? term.preferred ?? defaultTermMonths(plan.rates.map((r) => r.term_months), term.basis);
-  const rate = closestRate(plan.rates, { ...preset, term_months: target });
-  if (!rate) return { plan: null, rate: null, note: NOT_OFFERED };
+  const closest = closestRate(plan.rates, { ...preset, term_months: target });
+  if (!closest) return { plan: null, rate: null, note: NOT_OFFERED };
+  let rate: R = closest;
+  // No deductible in the preset: the default deductible, at the term and
+  // mileage picked, and never another in its place.
+  if (preset.deductible === null && preset.disappearing_deductible === null && hasDeductibleLines(plan.rates)) {
+    const setting = term.deductible ?? DEFAULT_DEDUCTIBLE;
+    const sameTerm = plan.rates.filter((r) => r.term_months === closest.term_months && (r.term_miles ?? 0) === (closest.term_miles ?? 0));
+    const line = defaultLineFor(sameTerm, closest.term_months, setting);
+    if (!line) return { plan, rate: null, note: noDefaultNotice(setting), choose: true };
+    rate = line;
+  }
   const rateNote = exactly(rate, preset) ? null : `The preset is not offered on this vehicle, so the closest is used: ${optionLabel(rate)}.`;
   return { plan, rate, note: planNote ?? rateNote };
 }

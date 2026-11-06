@@ -14,16 +14,19 @@
 // A cell starts checked when its family's category is one of the column's
 // presets, at the column's coverage level (Lowest, Middle or Highest of the
 // family's priced levels, cheapest first), on the planner's defaults for the
-// rest: the shortest term and smallest deductible (the tier's first rate), and
-// no optional surcharges. A mandatory surcharge is always counted. Changing a
+// rest: the shortest term, the default deductible where the product offers
+// deductibles (lib/default-deductible.ts; none at that term and the cell waits
+// for staff to choose one), and no optional surcharges. A mandatory surcharge is always counted. Changing a
 // cell changes that column only.
 //
 // "Select this package" saves the same rows the planner saves, one per tier:
 // Included for the chosen tier of each checked family in that column, Managed
 // by Customer for every other tier, so Submit works unchanged.
 //
-// No imports, so a Node test can load it. The payment is planTotals
+// Imports only lib/default-deductible.ts, which has none, so a Node test can load it. The payment is planTotals
 // (lib/money.ts), called by the screen on each column's prices.
+
+import { DEFAULT_DEDUCTIBLE, defaultLineFor, noDefaultNotice } from "./default-deductible.ts";
 
 export type Level = "Lowest" | "Middle" | "Highest";
 
@@ -45,6 +48,9 @@ export interface MenuRate {
   term_months: number | null;
   term_miles: number | null;
   deductible: number | null;
+  /** The provider's deductible code; empty or absent when the product offers no deductible choice. */
+  deductible_code?: string | null;
+  disappearing_deductible?: boolean | null;
   dealer_cost: number | null;
   retail_price: number | null;
   options: MenuOption[];
@@ -112,6 +118,12 @@ export interface Cell {
   tier: string;
   rate: string | null;
   options: string[];
+  /**
+   * The product has no line at the default deductible for its term: the
+   * notice to show, until staff choose a deductible. It cannot be priced or
+   * checked until then.
+   */
+  choose?: string;
 }
 
 export const UNAVAILABLE = "Not available";
@@ -200,24 +212,34 @@ export function buildRows(
   });
 }
 
+/** The line a tier starts on: the shortest term, at the default deductible where it offers deductibles. */
+export function startingRate(tier: RowTier | undefined, setting: string = DEFAULT_DEDUCTIBLE): MenuRate | null {
+  if (!tier || tier.rates.length === 0) return null;
+  return defaultLineFor(tier.rates, tier.rates[0].term_months, setting);
+}
+
+/** A cell on a tier, as PS starts it: its starting line, or waiting for a deductible. */
+export function cellOnTier(tier: RowTier | undefined, checked: boolean, setting: string = DEFAULT_DEDUCTIBLE): Cell {
+  const rate = startingRate(tier, setting);
+  if (tier && tier.rates.length > 0 && !rate) {
+    return { checked: false, tier: tier.product_code, rate: null, options: [], choose: noDefaultNotice(setting) };
+  }
+  return { checked, tier: tier?.product_code ?? "", rate: rate?.rate_unique_id ?? null, options: [] };
+}
+
 /** A cell as the column starts it. */
-export function initialCell(row: MenuRow, column: MenuColumnSpec): Cell {
+export function initialCell(row: MenuRow, column: MenuColumnSpec, setting: string = DEFAULT_DEDUCTIBLE): Cell {
   if (row.purchased) {
     return { checked: true, tier: row.purchased.product_code, rate: row.purchased.rate_unique_id, options: row.purchased.options };
   }
   const available = row.tiers.filter((t) => t.available);
   if (available.length === 0) return { checked: false, tier: row.tiers[0]?.product_code ?? "", rate: null, options: [] };
   const tier = available[levelIndex(column.starting_level, available.length)];
-  return {
-    checked: row.category !== null && column.preset_categories.includes(row.category),
-    tier: tier.product_code,
-    rate: tier.rates[0]?.rate_unique_id ?? null,
-    options: [],
-  };
+  return cellOnTier(tier, row.category !== null && column.preset_categories.includes(row.category), setting);
 }
 
-export function initialCells(rows: MenuRow[], columns: MenuColumnSpec[]): Cell[][] {
-  return columns.map((c) => rows.map((r) => initialCell(r, c)));
+export function initialCells(rows: MenuRow[], columns: MenuColumnSpec[], setting: string = DEFAULT_DEDUCTIBLE): Cell[][] {
+  return columns.map((c) => rows.map((r) => initialCell(r, c, setting)));
 }
 
 /** A column's choice per category from Prepare menu, or the presets (fni-session-get menu_prepared). */
@@ -228,6 +250,8 @@ export interface MenuPrepared {
   terms?: Record<string, { months: number; rate: number }[]>;
   /** Products the customer removed from each column, by category. */
   removed?: Record<string, string[]>;
+  /** Cells waiting for staff to choose a deductible, with the notice to show. */
+  choose?: Record<string, Record<string, { provider_id: string; product_code: string; note: string }>>;
 }
 
 /**
@@ -236,15 +260,24 @@ export interface MenuPrepared {
  * the deal's surcharges the rate offers. A purchased row stays as it is.
  * Without a prepared menu, the columns' own rule (initialCells).
  */
-export function preparedCells(rows: MenuRow[], columns: MenuColumnSpec[], prepared: MenuPrepared | null | undefined): Cell[][] {
-  if (!prepared) return initialCells(rows, columns);
+export function preparedCells(
+  rows: MenuRow[],
+  columns: MenuColumnSpec[],
+  prepared: MenuPrepared | null | undefined,
+  setting: string = DEFAULT_DEDUCTIBLE,
+): Cell[][] {
+  if (!prepared) return initialCells(rows, columns, setting);
   return columns.map((column, i) =>
     rows.map((row) => {
-      if (row.purchased) return initialCell(row, column);
+      if (row.purchased) return initialCell(row, column, setting);
+      // Waiting for staff to choose a deductible: on that plan, unpriced, with the notice.
+      const waiting = row.category ? prepared.choose?.[String(i + 1)]?.[row.category] : undefined;
+      const waitingTier = waiting ? row.tiers.find((t) => t.product_code === waiting.product_code && t.available) : undefined;
+      if (waiting && waitingTier) return { checked: false, tier: waitingTier.product_code, rate: null, options: [], choose: waiting.note };
       const choice = row.category ? prepared.cells[String(i + 1)]?.[row.category] ?? null : null;
       const tier = choice ? row.tiers.find((t) => t.product_code === choice.product_code && t.available) : undefined;
       const rate = tier?.rates.find((r) => r.rate_unique_id === choice!.rate_unique_id);
-      if (!tier || !rate) return { ...initialCell(row, column), checked: false };
+      if (!tier || !rate) return { ...initialCell(row, column, setting), checked: false };
       const offered = new Set(rate.options.filter((o) => !o.mandatory).map((o) => o.code));
       return { checked: true, tier: tier.product_code, rate: rate.rate_unique_id, options: prepared.surcharges.filter((c) => offered.has(c)) };
     })
@@ -255,9 +288,14 @@ export function tierOf(row: MenuRow, cell: Cell): RowTier | undefined {
   return row.tiers.find((t) => t.product_code === cell.tier) ?? row.tiers[0];
 }
 
-export function rateOf(row: MenuRow, cell: Cell): MenuRate | undefined {
+/**
+ * The line in force for a cell: the one chosen, else the tier's starting line
+ * (startingRate). None while the cell waits for a deductible.
+ */
+export function rateOf(row: MenuRow, cell: Cell, setting: string = DEFAULT_DEDUCTIBLE): MenuRate | undefined {
+  if (cell.choose) return undefined;
   const t = tierOf(row, cell);
-  return t?.rates.find((r) => r.rate_unique_id === cell.rate) ?? t?.rates[0];
+  return t?.rates.find((r) => r.rate_unique_id === cell.rate) ?? startingRate(t, setting) ?? undefined;
 }
 
 /** Whether a cell can be changed at all. */
@@ -270,18 +308,18 @@ export function cellAvailable(row: MenuRow): boolean {
 }
 
 /** What a cell costs as configured, or null when it cannot be priced. */
-export function cellPrice(row: MenuRow, cell: Cell): number | null {
+export function cellPrice(row: MenuRow, cell: Cell, setting: string = DEFAULT_DEDUCTIBLE): number | null {
   if (row.purchased && row.purchased.price !== null) return row.purchased.price;
   const t = tierOf(row, cell);
-  const r = rateOf(row, cell);
+  const r = rateOf(row, cell, setting);
   if (!t?.available || !r || r.retail_price === null) return null;
   return r.retail_price + surchargeCost(r, cell.options);
 }
 
 /** The prices of a column's checked products, for planTotals. */
-export function columnPrices(rows: MenuRow[], cells: Cell[]): number[] {
+export function columnPrices(rows: MenuRow[], cells: Cell[], setting: string = DEFAULT_DEDUCTIBLE): number[] {
   return rows
-    .map((row, i) => (cells[i]?.checked ? cellPrice(row, cells[i]) : null))
+    .map((row, i) => (cells[i]?.checked ? cellPrice(row, cells[i], setting) : null))
     .filter((p): p is number => p !== null);
 }
 
@@ -291,16 +329,17 @@ export function declinedCells(rows: MenuRow[], cells: Cell[]): Cell[] {
 }
 
 /** The rows fni-session-save writes, the same shape the planner sends. */
-export function saveDecisions(rows: MenuRow[], cells: Cell[], presentedAt: string) {
+export function saveDecisions(rows: MenuRow[], cells: Cell[], presentedAt: string, setting: string = DEFAULT_DEDUCTIBLE) {
   return rows.flatMap((row, i) => {
     const cell = cells[i];
-    const included = cell.checked && cellPrice(row, cell) !== null;
+    const included = cell.checked && cellPrice(row, cell, setting) !== null;
     return row.tiers.map((t) => {
       const chosen = included && t.product_code === cell.tier;
-      const rate = chosen ? rateOf(row, cell) : t.rates[0];
+      // A tier not taken is recorded on its starting line: never another deductible in its place.
+      const rate = chosen ? rateOf(row, cell, setting) : startingRate(t, setting) ?? undefined;
       const options = chosen ? cell.options : [];
       const price = chosen
-        ? cellPrice(row, cell)
+        ? cellPrice(row, cell, setting)
         : rate && rate.retail_price !== null ? rate.retail_price + surchargeCost(rate, options) : null;
       return {
         provider_id: t.provider_id ?? row.provider_id,
@@ -328,7 +367,7 @@ export function saveDecisions(rows: MenuRow[], cells: Cell[], presentedAt: strin
  * level's own word ("Gold", "Level 2") with what every level of the product
  * shares taken off, or for a product with one level, its term.
  */
-export function cellCaption(row: MenuRow, cell: Cell): string {
+export function cellCaption(row: MenuRow, cell: Cell, setting: string = DEFAULT_DEDUCTIBLE): string {
   const t = tierOf(row, cell);
   if (!t) return "";
   if (row.tiers.length > 1) {
@@ -342,7 +381,7 @@ export function cellCaption(row: MenuRow, cell: Cell): string {
     const own = mine.slice(from).join(" ");
     return own || t.name;
   }
-  const r = rateOf(row, cell);
+  const r = rateOf(row, cell, setting);
   if (!r) return "";
   return [r.term_months ? `${r.term_months} months` : null, r.term_miles ? `${r.term_miles.toLocaleString("en-US")} miles` : null]
     .filter(Boolean)

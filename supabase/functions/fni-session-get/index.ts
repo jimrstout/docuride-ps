@@ -43,6 +43,7 @@ import { priceFamilies, sessionCap, sessionPaymentBasis } from "../_shared/plan-
 import { modeLabel } from "../_shared/session-mode.ts";
 import { loadSheet } from "../_shared/menu-prepare-rows.ts";
 import { applyDealPrices, preparedForMenu } from "../_shared/menu-prepare.ts";
+import { readDefaultDeductible } from "../_shared/default-deductible.ts";
 import {
   CatalogRow,
   classifyCoverage,
@@ -260,6 +261,9 @@ serve(async (req: Request) => {
     // Deal prices only while they fit the current rating (_shared/stale-offers.ts).
     if (prepared) applyDealPrices(pricedFamilies, prepared.input.prices, prepared.input.rules);
     const menuPrepared = prepared && prepared.sheet.categories.length > 0 ? preparedForMenu(prepared.sheet) : null;
+    // Administration's Default deductible: where the planner and the menu
+    // start a product that offers deductibles (_shared/default-deductible.ts).
+    const defaultDeductible = prepared ? prepared.sheet.default_deductible : await readDefaultDeductible(supabase, s.tenant_id);
 
     // Catalog copy is keyed on the product code, which is the tier.
     const tiers = allTiers(pricedFamilies);
@@ -535,6 +539,7 @@ serve(async (req: Request) => {
       // prepared menu, or the presets as they stand (_shared/menu-prepare.ts).
       // No price or cost: those are on the families, as before.
       menu_prepared: menuPrepared,
+      default_deductible: defaultDeductible,
       photos: s.dx1_photos ?? null,
       photos_cached_at: s.dx1_photos_cached_at ?? null,
     });

@@ -23,6 +23,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { OfferRate, SessionPayload, SurchargeOption } from "@/lib/types";
 import { num } from "@/lib/types";
 import { money, planTotals, toCents } from "@/lib/money";
+import { settingOf } from "@/lib/default-deductible";
 import { apiPath } from "@/lib/paths";
 import TierChooser from "@/components/TierChooser";
 import RateChooser from "@/components/RateChooser";
@@ -37,6 +38,7 @@ import {
   cellPrice,
   columnPrices,
   declinedCells,
+  cellOnTier,
   preparedCells,
   rateOf,
   saveDecisions,
@@ -93,7 +95,10 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
   // deal's prices already on the offers; else the columns' own rule.
   // `baseline` is the column as prepared; what the customer removed from it
   // shows dimmed with "Add back", never hidden (docs section 26).
-  const baseline = useMemo(() => preparedCells(rows, columns, initial.menu_prepared), [rows, columns, initial.menu_prepared]);
+  // A product that offers deductibles starts on Administration's Default
+  // deductible, or waits for staff to choose one (lib/default-deductible.ts).
+  const setting = settingOf(initial.default_deductible);
+  const baseline = useMemo(() => preparedCells(rows, columns, initial.menu_prepared, setting), [rows, columns, initial.menu_prepared, setting]);
   const [cells, setCells] = useState<Cell[][]>(() =>
     baseline.map((col, ci) => {
       const gone = new Set(initial.menu_prepared?.removed?.[String(ci + 1)] ?? []);
@@ -142,7 +147,7 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
   const [termPick, setTermPick] = useState<number[]>(() => columns.map(() => 0));
 
   const figures = cells.map((col, ci) => {
-    const prices = columnPrices(rows, col);
+    const prices = columnPrices(rows, col, setting);
     const total = toCents(prices.reduce((a, p) => a + p, 0));
     const payments = termsFor(ci).map((t) => ({ t, totals: planTotals(principal!, prices, t.rate, t.months, cap) }));
     const picked = payments[Math.min(termPick[ci] ?? 0, Math.max(payments.length - 1, 0))] ?? null;
@@ -177,7 +182,7 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          decisions: saveDecisions(rows, chosen, presentedAt.current),
+          decisions: saveDecisions(rows, chosen, presentedAt.current, setting),
           presented_at: presentedAt.current,
           complete: true,
           // The menu's own record: its path, staff-presented, and what was chosen.
@@ -199,11 +204,11 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
       await fetch(apiPath(`/api/session/${session.id}/acknowledgment`), { method: "POST" });
       const lines = rows
         .map((r, i) => ({ r, c: chosen[i] }))
-        .filter(({ r, c }) => c.checked && cellPrice(r, c) !== null)
+        .filter(({ r, c }) => c.checked && cellPrice(r, c, setting) !== null)
         .map(({ r, c }) => ({
           name: tierOf(r, c)?.name ?? r.label,
-          term: termLine(rateOf(r, c) as unknown as OfferRate),
-          price: cellPrice(r, c)!,
+          term: termLine(rateOf(r, c, setting) as unknown as OfferRate),
+          price: cellPrice(r, c, setting)!,
         }));
       setOutcome({ name, lines, total: toCents(lines.reduce((a, l) => a + l.price, 0)) });
       setPhase("done");
@@ -254,7 +259,7 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
   const editRow = editing ? rows[editing.row] : null;
   const editCell = editing ? cells[editing.col][editing.row] : null;
   const editTier = editRow && editCell ? tierOf(editRow, editCell) : undefined;
-  const editRate = editRow && editCell ? (rateOf(editRow, editCell) as unknown as OfferRate | undefined) : undefined;
+  const editRate = editRow && editCell ? (rateOf(editRow, editCell, setting) as unknown as OfferRate | undefined) : undefined;
 
   return (
     <div className="mn" style={{ ["--mn-rows" as string]: rows.length, ["--mn-cols" as string]: columns.length }}>
@@ -293,7 +298,7 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
               const cell = cells[ci][ri];
               const available = cellAvailable(row);
               const locked = cellLocked(row);
-              const price = cellPrice(row, cell);
+              const price = cellPrice(row, cell, setting);
               const t = tierOf(row, cell);
               return (
                 <div
@@ -319,7 +324,7 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
                           type="checkbox"
                           className="mn-box"
                           checked={cell.checked}
-                          disabled={locked || phase === "saving"}
+                          disabled={locked || phase === "saving" || !!cell.choose}
                           onChange={(e) => setCell(ci, ri, { checked: e.target.checked })}
                           aria-label={`${t?.name ?? row.label} in ${c.name}`}
                         />
@@ -334,7 +339,7 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
                           onPress={() => openCell(ci, ri)}
                         >
                           <span className="mn-phone-name">{row.label}</span>
-                          {cellCaption(row, cell) || "Change"}
+                          {cell.choose ?? (cellCaption(row, cell, setting) || "Change")}
                         </Control>
                       )}
                       {locked ? (
@@ -343,12 +348,12 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
                         // The price opens the same dialog: on narrower screens it is the only way in.
                         <Control
                           className="mn-cell-price"
-                          title={`${t?.name ?? row.label}${cellCaption(row, cell) ? `, ${cellCaption(row, cell)}` : ""}`}
+                          title={`${t?.name ?? row.label}${cellCaption(row, cell, setting) ? `, ${cellCaption(row, cell, setting)}` : ""}`}
                           aria-label={`Change ${t?.name ?? row.label} in ${c.name}, now ${price === null ? UNAVAILABLE : money(price)}`}
                           disabled={phase === "saving"}
                           onPress={() => openCell(ci, ri)}
                         >
-                          {price === null ? UNAVAILABLE : money(price)}
+                          {cell.choose ? "Choose a deductible" : price === null ? UNAVAILABLE : money(price)}
                         </Control>
                       )}
                     </>
@@ -417,14 +422,17 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
               chosen={editTier.product_code}
               onChoose={(code) => {
                 const next = editRow.tiers.find((t) => t.product_code === code);
-                setCell(editing.col, editing.row, { tier: code, rate: next?.rates[0]?.rate_unique_id ?? null, options: [] });
+                // The new plan on its starting line, or waiting for a deductible.
+                const c = cellOnTier(next, editCell.checked, setting);
+                setCell(editing.col, editing.row, { tier: code, rate: c.rate, options: [], checked: c.checked, choose: c.choose });
               }}
             />
             <RateChooser
               rates={editTier.rates as unknown as OfferRate[]}
               chosen={editRate}
-              onChoose={(id) => setCell(editing.col, editing.row, { rate: id })}
+              onChoose={(id) => setCell(editing.col, editing.row, { rate: id, choose: undefined })}
             />
+            {editCell.choose ? <p className="mn-error" role="alert">{editCell.choose}</p> : null}
             <ProductConfigurator
               productCode={editTier.product_code}
               productName={editTier.name}
@@ -437,7 +445,7 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
               }
             />
             <p className="mn-dialog-price">
-              {editTier.name}: <b>{(() => { const p = cellPrice(editRow, editCell); return p === null ? UNAVAILABLE : money(p); })()}</b>
+              {editTier.name}: <b>{(() => { const p = cellPrice(editRow, editCell, setting); return p === null ? UNAVAILABLE : money(p); })()}</b>
             </p>
             <div className="mn-dialog-actions">
               <Control className="mn-btn mn-btn--go" onPress={() => dialog.current?.close()}>Done</Control>

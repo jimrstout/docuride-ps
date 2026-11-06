@@ -68,6 +68,7 @@ export default function ProductScreen({
   onDecide,
   onOption,
   purchased = false,
+  deductibleNotice = null,
 }: {
   item: Presentable;
   /** 1-based, for "Option 2 of 5". */
@@ -96,6 +97,12 @@ export default function ProductScreen({
    * for, and none of the choices, since nothing about it can be changed.
    */
   purchased?: boolean;
+  /**
+   * The product offers deductibles but none at the default for this term
+   * (lib/default-deductible.ts): shown at the product, and it cannot be
+   * included until a deductible is chosen.
+   */
+  deductibleNotice?: string | null;
 }) {
   const { copy, tier } = chosenTier;
 
@@ -187,6 +194,7 @@ export default function ProductScreen({
           onChoose={onChooseRate}
         />
         )}
+        {deductibleNotice ? <p className="ps-deductible-notice" role="alert">{deductibleNotice}</p> : null}
 
         <div className="ps-price">
           <span className="ps-price-label">Price</span>
