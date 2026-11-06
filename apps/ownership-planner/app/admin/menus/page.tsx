@@ -59,7 +59,7 @@ function notice(params: Params): { tone: "good" | "warn"; text: string } | null 
  * change it per deal; a manager changes it here.
  */
 function DefaultDeductible({ payload }: { payload: TemplatesPayload }) {
-  const value = payload.default_deductible ?? "$100 disappearing";
+  const value = payload.default_deductible ?? "$100 disappearing deductible";
   const canEdit = payload.can_edit_presets === true;
   return (
     <section className="ad-panel" aria-labelledby="deductible-title">

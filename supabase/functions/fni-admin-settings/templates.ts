@@ -201,7 +201,8 @@ export async function writeTemplates(
   switch (body.action) {
     // ── The default deductible (_shared/default-deductible.ts) ────────────
     // One setting for every menu, a manager's to change like the presets,
-    // kept on the tenant's record in words and logged as a preset change.
+    // kept in fni.ps_settings in words (never on public.tenants). Saved
+    // first, and logged as a preset change only once the save succeeded.
     case "save_default_deductible": {
       if (!(await isManager(supabase, body.operator_id))) return { status: 403, body: { error: MANAGERS_ONLY } };
       const value = String(body.default_deductible ?? "").trim();
@@ -210,14 +211,14 @@ export async function writeTemplates(
       }
       const before = await readDefaultDeductible(supabase, tenantId);
       if (before === value) return { status: 200, body: { ok: true, changed: 0 } };
-      const { data: row, error: readErr } = await supabase.from("tenants").select("config").eq("id", tenantId).maybeSingle();
-      if (readErr || !row) return { status: 500, body: { error: "The setting could not be read, so nothing was saved." } };
-      const config = (row as { config?: Record<string, unknown> | null }).config ?? {};
+      const { error } = await supabase.schema("fni").from("ps_settings").upsert(
+        { tenant_id: tenantId, default_deductible: value, updated_at: new Date().toISOString(), updated_by: by },
+        { onConflict: "tenant_id" },
+      );
+      if (error) return { status: 500, body: { error: `The setting could not be saved: ${error.message}` } };
       await logChanges(supabase, tenantId, by, [
         { area: "Menu preset", record_key: "Default deductible", action: "Changed", before: { default_deductible: before }, after: { default_deductible: value } },
       ]);
-      const { error } = await supabase.from("tenants").update({ config: { ...config, default_deductible: value } }).eq("id", tenantId);
-      if (error) return { status: 500, body: { error: `The setting could not be saved: ${error.message}` } };
       return { status: 200, body: { ok: true, changed: 1 } };
     }
 

@@ -3,13 +3,16 @@
 // A copy of the picking part of supabase/functions/_shared/default-deductible.ts,
 // which says how it works; test/default-deductible.test.mjs holds the two equal.
 // The setting arrives with the deal (fni-session-get, fni-menu-prepare) in
-// words: "$100 disappearing", "$50", "No deductible".
+// the words staff see: "$100 disappearing deductible", "$50 deductible",
+// "No deductible".
 //
 // No imports, so a Node test can load it.
 
-export const DEFAULT_DEDUCTIBLE = "$100 disappearing";
+export const DEFAULT_DEDUCTIBLE = "$100 disappearing deductible";
 
-export const DEDUCTIBLE_CHOICES = ["No deductible", "$50", "$100", "$100 disappearing", "$250", "$500"] as const;
+export const DEDUCTIBLE_CHOICES = [
+  "No deductible", "$50 deductible", "$100 deductible", "$100 disappearing deductible", "$250 deductible", "$500 deductible",
+] as const;
 
 export interface DeductibleChoice {
   amount: number;
@@ -20,7 +23,7 @@ export function parseDeductible(text: unknown): DeductibleChoice | null {
   const t = String(text ?? "").trim();
   if (!(DEDUCTIBLE_CHOICES as readonly string[]).includes(t)) return null;
   if (t === "No deductible") return { amount: 0, disappearing: false };
-  const m = /^\$(\d+)( disappearing)?$/.exec(t);
+  const m = /^\$(\d+)( disappearing)? deductible$/.exec(t);
   return m ? { amount: Number(m[1]), disappearing: !!m[2] } : null;
 }
 
@@ -49,7 +52,7 @@ export function isDeductible(r: DeductibleLine, d: DeductibleChoice): boolean {
 export function noDefaultNotice(setting: string): string {
   const d = parseDeductible(setting);
   if (d && d.amount === 0) return "No option without a deductible is offered for this term. Choose a deductible.";
-  return `No ${d ? setting : DEFAULT_DEDUCTIBLE} deductible is offered for this term. Choose a deductible.`;
+  return `No ${d ? setting : DEFAULT_DEDUCTIBLE} is offered for this term. Choose a deductible.`;
 }
 
 export function defaultLineFor<R extends DeductibleLine>(rates: R[], months: number | null, setting: string): R | null {

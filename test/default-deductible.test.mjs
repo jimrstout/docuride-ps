@@ -51,19 +51,19 @@ const NOTICE = "No $100 disappearing deductible is offered for this term. Choose
 // ── The pick itself ─────────────────────────────────────────────────────────
 test("the default line at the term; none there and nothing in its place; no deductibles and the first, as before", () => {
   for (const m of [shared, app]) {
-    assert.equal(m.defaultLineFor(CARE, 12, "$100 disappearing").rate_unique_id, "c12-100d");
-    assert.equal(m.defaultLineFor(CARE, 48, "$100 disappearing"), null);
-    assert.equal(m.defaultLineFor(CARE, 48, "$50").rate_unique_id, "c48-50");
+    assert.equal(m.defaultLineFor(CARE, 12, "$100 disappearing deductible").rate_unique_id, "c12-100d");
+    assert.equal(m.defaultLineFor(CARE, 48, "$100 disappearing deductible"), null);
+    assert.equal(m.defaultLineFor(CARE, 48, "$50 deductible").rate_unique_id, "c48-50");
     assert.equal(m.defaultLineFor(CARE, 12, "No deductible").rate_unique_id, "c12-0");
-    assert.equal(m.defaultLineFor(TIRE, 36, "$100 disappearing").rate_unique_id, "t36");
-    assert.equal(m.defaultLineFor(TIRE, 24, "$100 disappearing").rate_unique_id, "t24");
+    assert.equal(m.defaultLineFor(TIRE, 36, "$100 disappearing deductible").rate_unique_id, "t36");
+    assert.equal(m.defaultLineFor(TIRE, 24, "$100 disappearing deductible").rate_unique_id, "t24");
     assert.equal(m.hasDeductibleLines(TIRE), false);
     // A price sheet's "$0 deductible" on every line is no deductible choice.
     const sheetOnly = [line("s12", 12, 0, false, 100, "$0 deductible"), line("s24", 24, 0, false, 150, "$0 deductible")];
     assert.equal(m.hasDeductibleLines(sheetOnly), false);
-    assert.equal(m.defaultLineFor(sheetOnly, 24, "$100 disappearing").rate_unique_id, "s24");
-    assert.equal(m.noDefaultNotice("$100 disappearing"), NOTICE);
-    assert.equal(m.noDefaultNotice("$50"), "No $50 deductible is offered for this term. Choose a deductible.");
+    assert.equal(m.defaultLineFor(sheetOnly, 24, "$100 disappearing deductible").rate_unique_id, "s24");
+    assert.equal(m.noDefaultNotice("$100 disappearing deductible"), NOTICE);
+    assert.equal(m.noDefaultNotice("$50 deductible"), "No $50 deductible is offered for this term. Choose a deductible.");
     // A negative amount from a provider is read as no deductible, never as -1.
     assert.equal(m.isDeductible({ term_months: 12, deductible: -1, disappearing_deductible: false }, { amount: 0, disappearing: false }), true);
   }
@@ -89,9 +89,9 @@ test("Prepare starts a product with deductibles on the default, and others as be
   assert.equal(optionOf(sheet, sheet.cells["1"][MP].key).rate_unique_id, "c12-100d");
   assert.equal(sheet.cells["1"][MP].note, null);
   assert.equal(optionOf(sheet, sheet.cells["1"]["Tire and Wheel"].key).rate_unique_id, "t24");
-  assert.equal(sheet.default_deductible, "$100 disappearing");
+  assert.equal(sheet.default_deductible, "$100 disappearing deductible");
   // Another setting is followed.
-  const fifty = sheetWith({ term_basis: { financed: true, months: 12 }, default_deductible: "$50" });
+  const fifty = sheetWith({ term_basis: { financed: true, months: 12 }, default_deductible: "$50 deductible" });
   assert.equal(optionOf(fifty, fifty.cells["1"][MP].key).rate_unique_id, "c12-50");
 });
 
@@ -141,12 +141,12 @@ test("the menu starts a product on the default; without one at the term it waits
   const cell = menu.initialCell(care, COLUMNS[0]);
   assert.equal(cell.rate, "c12-100d");
   assert.equal(menu.initialCell(tire, COLUMNS[0]).rate, "t24");
-  // The setting picks a line at the shortest term; "$250" has none there.
-  const waits = menu.initialCell(care, COLUMNS[0], "$250");
+  // The setting picks a line at the shortest term; "$250 deductible" has none there.
+  const waits = menu.initialCell(care, COLUMNS[0], "$250 deductible");
   assert.equal(waits.checked, false);
   assert.equal(waits.choose, "No $250 deductible is offered for this term. Choose a deductible.");
-  assert.equal(menu.rateOf(care, waits, "$250"), undefined);
-  assert.equal(menu.cellPrice(care, waits, "$250"), null);
+  assert.equal(menu.rateOf(care, waits, "$250 deductible"), undefined);
+  assert.equal(menu.cellPrice(care, waits, "$250 deductible"), null);
   // A waiting cell from Prepare: on its plan, with the notice, never included.
   const sheet = sheetWith({ term_basis: { financed: true, months: 48 } });
   const [cells] = menu.preparedCells(rows(), COLUMNS, preparedForMenu(sheet));
