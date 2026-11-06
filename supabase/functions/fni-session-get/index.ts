@@ -270,13 +270,15 @@ serve(async (req: Request) => {
 
     // ── The dealer group's name, and the copy that uses it ─────────────
     // Both were facts written into code until 0012. The name is what a buyer
-    // reads, not tenants.name, which is administrative. A tenant template row
+    // reads, not tenants.name, which is administrative. Kept in PS's own
+    // settings (fni.ps_settings, migration 0057). A tenant template row
     // overrides the platform default, exactly as store copy overrides
     // tenant-wide copy below.
     const { data: tenantRow } = await supabase
-      .from("tenants")
+      .schema("fni")
+      .from("ps_settings")
       .select("dealer_group_display_name")
-      .eq("id", s.tenant_id as string)
+      .eq("tenant_id", s.tenant_id as string)
       .maybeSingle();
 
     const dealerGroupName =
