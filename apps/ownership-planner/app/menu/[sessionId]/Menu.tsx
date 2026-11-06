@@ -23,7 +23,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { OfferRate, SessionPayload, SurchargeOption } from "@/lib/types";
 import { num } from "@/lib/types";
 import { money, planTotals, toCents } from "@/lib/money";
-import { settingOf } from "@/lib/default-deductible";
+import { hasDeductibleLines, settingOf } from "@/lib/default-deductible";
+import { deductibleLabel } from "@/lib/menu-labels";
 import { apiPath } from "@/lib/paths";
 import TierChooser from "@/components/TierChooser";
 import RateChooser from "@/components/RateChooser";
@@ -61,13 +62,16 @@ const DEFAULT_COLUMNS: MenuColumnSpec[] = [
 
 type Phase = "menu" | "saving" | "done" | "error";
 
-/** "36 months", "36 months, $100 deductible", or nothing. */
-function termLine(rate: OfferRate | undefined): string {
+/**
+ * "36 months", "36 months, $100 disappearing deductible", or nothing. The
+ * deductible only for a product that offers one (lib/default-deductible.ts).
+ */
+function termLine(rate: OfferRate | undefined, offersDeductibles: boolean): string {
   if (!rate) return "";
   const parts = [
     rate.term_months ? `${rate.term_months} months` : null,
     rate.term_miles ? `${rate.term_miles.toLocaleString("en-US")} miles` : null,
-    rate.deductible !== null && rate.deductible !== undefined ? `${money(rate.deductible)} deductible` : null,
+    offersDeductibles ? deductibleLabel(rate.deductible, rate.disappearing_deductible) : null,
   ].filter(Boolean);
   return parts.join(", ");
 }
@@ -207,7 +211,7 @@ export default function Menu({ initial }: { initial: SessionPayload }) {
         .filter(({ r, c }) => c.checked && cellPrice(r, c, setting) !== null)
         .map(({ r, c }) => ({
           name: tierOf(r, c)?.name ?? r.label,
-          term: termLine(rateOf(r, c, setting) as unknown as OfferRate),
+          term: termLine(rateOf(r, c, setting) as unknown as OfferRate, hasDeductibleLines(tierOf(r, c)?.rates ?? [])),
           price: cellPrice(r, c, setting)!,
         }));
       setOutcome({ name, lines, total: toCents(lines.reduce((a, l) => a + l.price, 0)) });
