@@ -32,7 +32,7 @@ const sheetWith = (prices = {}) => buildSheet({ families: FAMILIES, catalog: CAT
 const sheet = sheetWith();
 const prem = sheet.plans["Mechanical Protection"][0].options[0];
 const K = prem.key;
-const NAME = "Mechanical Protection, Premium, 2 years / Unlimited miles, $100 Disappearing Deductible";
+const NAME = "Mechanical Protection, Premium, 2 years / Unlimited miles, $100 disappearing deductible";
 const typed = (cents) => ({ ...model.initialState(sheet), prices: { [K]: cents } });
 const column = (sheet, state) => model.columnFigures(sheet, state, "1", (p) => p.reduce((a, b) => a + b, 0) / 60, [{ months: 60, rate: 5.9, deal_term: true }],
   (p, t) => p.reduce((a, b) => a + b, 0) / t.months);

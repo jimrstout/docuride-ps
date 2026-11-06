@@ -17,6 +17,7 @@
 
 import Control from "@/components/Control";
 import type { OfferRate } from "@/lib/types";
+import { deductibleLabel as wordsFor } from "@/lib/menu-labels";
 
 /**
  * The deductible, as a chip label.
@@ -28,8 +29,7 @@ import type { OfferRate } from "@/lib/types";
  * different choices and must not collapse into one chip.
  */
 function deductibleLabel(r: OfferRate): string {
-  if (r.deductible === null) return "None";
-  return r.disappearing_deductible ? `$${r.deductible} disappearing` : `$${r.deductible}`;
+  return wordsFor(r.deductible, r.disappearing_deductible);
 }
 
 function monthsLabel(months: number | null): string {

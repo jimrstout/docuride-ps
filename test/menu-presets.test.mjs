@@ -30,11 +30,11 @@ test("plain English for every option, the same on both sides", () => {
   }
   assert.equal(shared.milesLabel(0), "Unlimited miles");
   assert.equal(shared.milesLabel(36000), "36,000 miles");
-  assert.equal(shared.deductibleLabel(100, true), "$100 Disappearing Deductible");
-  assert.equal(shared.deductibleLabel(50, false), "$50 Deductible");
+  assert.equal(shared.deductibleLabel(100, true), "$100 disappearing deductible");
+  assert.equal(shared.deductibleLabel(50, false), "$50 deductible");
   assert.equal(shared.deductibleLabel(0), "No deductible");
   const r = rate("x", 48, 100, true);
-  assert.equal(optionLabel(r), "4 years / Unlimited miles, $100 Disappearing Deductible");
+  assert.equal(optionLabel(r), "4 years / Unlimited miles, $100 disappearing deductible");
   assert.equal(app.optionLabel(r), optionLabel(r));
   for (const f of ["milesLabel", "deductibleLabel"]) {
     for (const v of [0, 50, 100, 250, 12000]) assert.equal(app[f](v, true), shared[f](v, true), `${f}(${v})`);

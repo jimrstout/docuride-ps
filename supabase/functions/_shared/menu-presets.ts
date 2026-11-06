@@ -123,14 +123,22 @@ export function milesLabel(miles: number | null | undefined): string {
   return `${miles.toLocaleString("en-US")} miles`;
 }
 
-/** "$100 Disappearing Deductible", "$50 Deductible", "No deductible". */
-export function deductibleLabel(amount: number | null | undefined, disappearing?: boolean | null): string {
-  if (!amount) return "No deductible";
-  const dollars = Number.isInteger(amount) ? `$${amount}` : `$${amount.toFixed(2)}`;
-  return `${dollars} ${disappearing ? "Disappearing Deductible" : "Deductible"}`;
+/**
+ * "$100 disappearing deductible", "$50 deductible", "No deductible". The one
+ * way PS words a deductible for staff and customers. Nothing, zero, or a
+ * negative amount (a provider's "-1" for none) is "No deductible": never
+ * "-1" or "($1)".
+ */
+export function deductibleLabel(amount: number | string | null | undefined, disappearing?: boolean | null): string {
+  const n = Number(amount ?? 0);
+  if (!Number.isFinite(n) || n <= 0) return "No deductible";
+  const dollars = Number.isInteger(n)
+    ? `$${n.toLocaleString("en-US")}`
+    : `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `${dollars} ${disappearing ? "disappearing deductible" : "deductible"}`;
 }
 
-/** "4 years / Unlimited miles, $100 Disappearing Deductible". */
+/** "4 years / Unlimited miles, $100 disappearing deductible". */
 export function optionLabel(r: PresetRate): string {
   return `${termLabel(r.term_months)} / ${milesLabel(r.term_miles)}, ${deductibleLabel(r.deductible, r.disappearing_deductible)}`;
 }

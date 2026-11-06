@@ -33,6 +33,8 @@ import TierChooser from "./TierChooser";
 import { durationOf, renderTemplate, TEMPLATE_DISAPPEARING_DEDUCTIBLE } from "@/lib/copy";
 import type { CatalogEntry, Disposition, OfferRate, OfferTier } from "@/lib/types";
 import { PURCHASED_LABEL, PURCHASED_NOTE } from "@/lib/purchased";
+import { hasDeductibleLines } from "@/lib/default-deductible";
+import { deductibleLabel } from "@/lib/menu-labels";
 
 /** A tier that can honestly be shown: it has approved copy and a sellable rate. */
 export interface PresentableTier {
@@ -114,25 +116,28 @@ export default function ProductScreen({
   //   entirely if the group has no name set, because a sentence with a gap in
   //   it is worse than no sentence.
   //
-  //   A plain deductible gets the amount.
+  //   A product that offers deductibles gets the one chosen, in words:
+  //   "$50 deductible", "No deductible" (lib/menu-labels.ts).
   //
   //   Otherwise the catalog's note, which explains what a deductible is rather
-  //   than stating one.
+  //   than stating one; without a note, "No deductible". Never "-1" or "($1)".
   //
   // The fall-through matters: a disappearing deductible whose sentence cannot
   // be completed drops to stating the plain amount, which is true, rather than
   // promising a $0 repair at a group this planner cannot name.
   const deductible = chosenRate?.deductible ?? null;
+  const offersDeductibles = hasDeductibleLines(tier.rates);
 
   let deductibleLine: string | null = null;
-  if (chosenRate?.disappearing_deductible && deductible !== null) {
+  if (chosenRate?.disappearing_deductible && deductible !== null && deductible > 0) {
     deductibleLine = renderTemplate(copyTemplates[TEMPLATE_DISAPPEARING_DEDUCTIBLE], {
       deductible_amount: money(deductible),
       dealer_group_name: dealerGroupName,
     });
   }
-  if (!deductibleLine && deductible !== null) deductibleLine = money(deductible);
+  if (!deductibleLine && chosenRate && offersDeductibles) deductibleLine = deductibleLabel(deductible, chosenRate.disappearing_deductible);
   if (!deductibleLine && copy.deductible_note) deductibleLine = copy.deductible_note;
+  if (!deductibleLine && chosenRate && deductible !== null) deductibleLine = deductibleLabel(deductible, chosenRate.disappearing_deductible);
 
   // How long this cover lasts, from the chosen rate. Shared with the plan
   // summary so the two never disagree about the same choice.
