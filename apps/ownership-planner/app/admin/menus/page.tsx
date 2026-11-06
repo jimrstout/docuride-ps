@@ -29,7 +29,7 @@ import { Working } from "@/components/Working";
 import { currentOperator } from "@/lib/admin-session";
 import { edge, EdgeError } from "@/lib/edge";
 import type { MenuPresetRow, TemplateRow, TemplateSlotRow, TemplatesPayload } from "@/lib/types";
-import { moveSlot, saveMenuColumns, saveMenuPresets, saveSlot, saveTemplate } from "@/app/console-actions";
+import { moveSlot, saveDefaultDeductible, saveMenuColumns, saveMenuPresets, saveSlot, saveTemplate } from "@/app/console-actions";
 import { deductibleLabel, milesLabel, PRESET_DEDUCTIBLES, PRESET_MILES, PRESET_TERMS, termLabel } from "@/lib/menu-labels";
 import { rateText } from "@/lib/menu-terms";
 import ProgramLabel from "@/components/admin/ProgramLabel";
@@ -51,6 +51,40 @@ function notice(params: Params): { tone: "good" | "warn"; text: string } | null 
   if (typeof params.refused === "string") return { tone: "warn", text: params.refused };
   if (params.savefailed !== undefined) return { tone: "warn", text: "That could not be saved just now. Nothing was changed. Try again shortly." };
   return null;
+}
+
+/**
+ * The deductible every product that offers deductibles starts at, on every
+ * menu: the provider's own answer when nothing else is chosen. Staff can
+ * change it per deal; a manager changes it here.
+ */
+function DefaultDeductible({ payload }: { payload: TemplatesPayload }) {
+  const value = payload.default_deductible ?? "$100 disappearing";
+  const canEdit = payload.can_edit_presets === true;
+  return (
+    <section className="ad-panel" aria-labelledby="deductible-title">
+      <div className="ad-panel-head"><h2 id="deductible-title">Default deductible</h2></div>
+      <div className="ad-panel-body">
+        <p className="ad-help">
+          Every product that offers deductibles starts at this one, on every menu, unless a preset names another. Staff can
+          change it on each deal. When a product does not offer it for the term, staff are asked to choose.
+          {canEdit ? null : " Only a manager can change it."}
+        </p>
+        {canEdit ? (
+          <form action={saveDefaultDeductible} className="ad-inline-form">
+            <Working />
+            <label className="sr-only" htmlFor="default-deductible">Default deductible</label>
+            <select id="default-deductible" name="default_deductible" defaultValue={value}>
+              {(payload.deductible_choices ?? [value]).map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <Control type="submit" className="ad-btn ad-btn--secondary" busyText="Saving...">Save</Control>
+          </form>
+        ) : (
+          <p><span className="ad-strong">{value}</span></p>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function TemplateForm({ t, payload }: { t: TemplateRow | null; payload: TemplatesPayload }) {
@@ -673,6 +707,8 @@ export default async function MenusPage({ searchParams }: { searchParams: Promis
       ) : open ? (
         <MenuDetail t={open} payload={payload} params={params} />
       ) : (
+        <>
+        <DefaultDeductible payload={payload} />
         <section className="ad-panel" aria-label="Menus">
           <div className="ad-scroll">
             <table className="ad-table">
@@ -703,6 +739,7 @@ export default async function MenusPage({ searchParams }: { searchParams: Promis
             <p className="ad-help">The most specific menu that matches a deal wins, then the higher priority, then the most recently changed.</p>
           </div>
         </section>
+        </>
       )}
 
       {params.new === undefined && !open ? <NeedsDescription payload={payload} /> : null}

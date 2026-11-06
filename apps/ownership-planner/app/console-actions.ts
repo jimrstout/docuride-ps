@@ -1141,6 +1141,14 @@ export async function saveMenuPresets(fd: FormData): Promise<void> {
     }), "saved");
 }
 
+/** The deductible every product that offers deductibles starts at (Administration > Menus). Managers only. */
+export async function saveDefaultDeductible(fd: FormData): Promise<void> {
+  await adminWrite(MENUS, (by, operatorId) =>
+    edge.adminSaveTemplates({
+      action: "save_default_deductible", default_deductible: field(fd, "default_deductible"), updated_by: by, operator_id: operatorId,
+    }), "saved");
+}
+
 // ── Price sheets ──
 
 /**
