@@ -178,7 +178,7 @@ export interface SheetInput {
   term_basis?: TermBasis | null;
   /** Each menu row's preferred coverage term in months, by category (migration 0049). */
   preferred_terms?: Record<string, number>;
-  /** Administration's Default deductible, in words; "$100 disappearing" when absent. */
+  /** Administration's Default deductible, in words; "$100 disappearing deductible" when absent. */
   default_deductible?: string;
 }
 
