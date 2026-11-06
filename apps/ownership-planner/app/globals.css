@@ -345,6 +345,7 @@ button { cursor: pointer; }
 /* Including this product would take the plan past the finance company's
    maximum, so part of it becomes money down. Said under the price, plainly. */
 .ps-price-down { display: block; font-size: var(--fs-base); color: var(--warn-fg); font-weight: 600; margin-top: var(--s1); }
+.ps-deductible-notice { font-size: var(--fs-base); color: var(--warn-fg); font-weight: 600; margin: var(--s2) 0; }
 .ps-price-term { display: block; font-size: var(--fs-xs); color: var(--muted); margin-top: var(--s2); }
 
 /* A product already on a contract: shown, and locked (lib/purchased.ts). */

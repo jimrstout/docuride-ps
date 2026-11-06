@@ -19,6 +19,7 @@ import { priceFamilies, sessionPaymentBasis } from "./plan-prices.ts";
 import { columnsFor, isLevel } from "./menu-columns.ts";
 import { presetDealType, type Preset } from "./menu-presets.ts";
 import { PURCHASED_STATES } from "./purchased.ts";
+import { readDefaultDeductible } from "./default-deductible.ts";
 import { buildSheet, type DealPrice, type PrepareSheet, type SheetInput } from "./menu-prepare.ts";
 
 export interface SheetLoad {
@@ -43,7 +44,7 @@ export async function loadSheet(supabase: SupabaseClient, s: Record<string, unkn
   }
 
   const financed = presetDealType(s.finance_type) === "Financed";
-  const [{ data: ruleRows }, { data: catalogRows }, { data: columnRows }, { data: presetRows }, { data: priceRows }, { data: agreements }, { data: termRows }, { data: slotRows }] =
+  const [{ data: ruleRows }, { data: catalogRows }, { data: columnRows }, { data: presetRows }, { data: priceRows }, { data: agreements }, { data: termRows }, { data: slotRows }, defaultDeductible] =
     await Promise.all([
       supabase.schema("fni").from("pricing_rules").select("*")
         .eq("tenant_id", s.tenant_id as string).or(`store_id.eq.${s.store_id},store_id.is.null`).eq("active", true),
@@ -63,6 +64,8 @@ export async function loadSheet(supabase: SupabaseClient, s: Record<string, unkn
       templateId
         ? supabase.schema("fni").from("menu_template_slots").select("position, category, preferred_term_months").eq("template_id", templateId)
         : Promise.resolve({ data: [] }),
+      // Administration > Menus, "Default deductible" (_shared/default-deductible.ts).
+      readDefaultDeductible(supabase, s.tenant_id),
     ]);
 
   const rules = (ruleRows ?? []) as unknown as PricingRule[];
@@ -142,6 +145,7 @@ export async function loadSheet(supabase: SupabaseClient, s: Record<string, unkn
     removed: (s.menu_removed ?? {}) as Record<string, string[]>,
     term_basis: { financed, months: financed ? sessionPaymentBasis(s).termMonths : null },
     preferred_terms: preferredTerms,
+    default_deductible: defaultDeductible,
   };
   return { input, sheet: buildSheet(input), out_of_date: outOfDate };
 }

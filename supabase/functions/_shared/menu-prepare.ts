@@ -25,6 +25,7 @@ import type { MenuColumn } from "./menu-columns.ts";
 import { countGroups, plainLabel } from "./surcharge-display.ts";
 import { isServiceDriveName, serviceDrivePresetNote } from "./service-drive.ts";
 import { categoryOf } from "./product-category.ts";
+import { DEFAULT_DEDUCTIBLE } from "./default-deductible.ts";
 import { dealPriceFits, priceNotAppliedNotice, removedNotices, type StaleCell } from "./stale-offers.ts";
 import {
   CATEGORIES,
@@ -65,6 +66,8 @@ export interface SheetOption {
   term_months: number | null;
   term_miles: number | null;
   deductible: number | null;
+  /** The provider's deductible code; empty or null when the plan offers no deductible choice. */
+  deductible_code: string | null;
   disappearing_deductible: boolean;
   /** Cents: the rate's own dealer cost, and the surcharges it carries on this deal. */
   dealer_cost: number;
@@ -105,6 +108,12 @@ export interface SheetPlan {
 export interface SheetCell {
   key: string | null;
   note: string | null;
+  /**
+   * The plan staff must choose a deductible for: it has no line at the
+   * default deductible for the term (_shared/default-deductible.ts). Save
+   * stays blocked for the cell until staff choose one, or leave it out.
+   */
+  choose?: { provider_id: string; product_code: string };
 }
 
 export interface PrepareSheet {
@@ -134,6 +143,8 @@ export interface PrepareSheet {
    * prepared choices no longer offered, and prices that no longer fit.
    */
   notices: string[];
+  /** Administration's Default deductible, in words, for the screen's own picks. */
+  default_deductible: string;
 }
 
 /** One choice in the Surcharges dialog: a surcharge, or a count picker ("Additional batteries"). */
@@ -167,6 +178,8 @@ export interface SheetInput {
   term_basis?: TermBasis | null;
   /** Each menu row's preferred coverage term in months, by category (migration 0049). */
   preferred_terms?: Record<string, number>;
+  /** Administration's Default deductible, in words; "$100 disappearing" when absent. */
+  default_deductible?: string;
 }
 
 function surchargesOf(rate: RateVariant, chosen: Set<string>): { cost: number; codes: string[] } {
@@ -284,6 +297,7 @@ export function buildSheet(input: SheetInput): PrepareSheet {
             term_months: r.term_months,
             term_miles: r.term_miles,
             deductible: r.deductible,
+            deductible_code: r.deductible_code ?? null,
             disappearing_deductible: !!r.disappearing_deductible,
             dealer_cost: dealerCost,
             surcharge_cost: s.cost,
@@ -354,14 +368,18 @@ export function buildSheet(input: SheetInput): PrepareSheet {
       const ratedByPrice = usable.filter((p) => p.rates.length > 0)
         .sort((a, b) => Math.min(...a.rates.map((r) => r.price ?? Infinity)) - Math.min(...b.rates.map((r) => r.price ?? Infinity)));
       const level = ratedByPrice[levelIndex(col.starting_level, ratedByPrice.length)] ?? null;
-      const term = { preferred: input.preferred_terms?.[category] ?? null, basis: input.term_basis ?? null };
+      const term = { preferred: input.preferred_terms?.[category] ?? null, basis: input.term_basis ?? null, deductible: input.default_deductible ?? null };
+      const cellOf = (r: { rate: SheetOption | null; plan: { provider_id: string; product_code: string } | null; choose?: boolean }, note: string | null): SheetCell =>
+        r.choose && r.plan
+          ? { key: null, note, choose: { provider_id: r.plan.provider_id, product_code: r.plan.product_code } }
+          : { key: r.rate?.key ?? null, note };
       if (!preset) {
         // No preset: the column's own rule, as before (migration 0042).
         if (!(col.preset_categories as string[]).includes(category) || !level) {
           cells[pos][category] = { key: null, note: null };
         } else {
           const r = resolvePreset({ column_position: i + 1, category, provider_id: null, plan_name: null, term_months: null, term_miles: null, deductible: null, disappearing_deductible: null }, usable, level, term);
-          cells[pos][category] = { key: r.rate?.key ?? null, note: r.note };
+          cells[pos][category] = cellOf(r, r.note);
         }
         continue;
       }
@@ -370,7 +388,7 @@ export function buildSheet(input: SheetInput): PrepareSheet {
       // the fallback above picked the closest point-of-sale plan. The saved
       // preset is left for a manager to fix in Administration > Menus.
       const note = isServiceDriveName(preset.plan_name) ? serviceDrivePresetNote(r.plan?.plan_name ?? null) : r.note;
-      cells[pos][category] = { key: r.rate?.key ?? null, note };
+      cells[pos][category] = cellOf(r, note);
     }
   }
 
@@ -406,6 +424,7 @@ export function buildSheet(input: SheetInput): PrepareSheet {
       };
     })(),
     prepared: input.prepared !== null,
+    default_deductible: input.default_deductible ?? DEFAULT_DEDUCTIBLE,
   };
 }
 
@@ -466,6 +485,14 @@ export function checkPreparation(sheet: PrepareSheet, p: Preparation): Preparati
       const found = optionFor(sheet, key);
       if (!found || found.category !== category) errors.push(`${col.name}, ${category}: that option is not offered on this vehicle.`);
       else if (found.plan.purchased) errors.push(`${col.name}, ${category}: ${found.plan.plan_name} is already purchased, so it cannot be changed.`);
+    }
+  }
+  // A cell waiting for a deductible (SheetCell.choose) saves only once staff
+  // choose one, or leave the product out of the column: either way the
+  // screen sends the cell. Not sent, it is still waiting.
+  for (const col of sheet.columns) {
+    for (const [category, cell] of Object.entries(sheet.cells[String(col.position)] ?? {})) {
+      if (cell.choose && !(category in (p.cells?.[String(col.position)] ?? {}))) errors.push(`${col.name}, ${category}: ${cell.note}`);
     }
   }
   for (const [key, priceCents] of Object.entries(p.prices ?? {})) {
@@ -529,16 +556,20 @@ export function preparedForMenu(sheet: PrepareSheet): {
   terms: Record<string, { months: number; rate: number }[]>;
   /** Products the customer removed from each column, by category. */
   removed: Record<string, string[]>;
+  /** Cells waiting for staff to choose a deductible (SheetCell.choose), with the notice to show. */
+  choose: Record<string, Record<string, { provider_id: string; product_code: string; note: string }>>;
 } {
   const cells: Record<string, Record<string, PreparedChoice | null>> = {};
+  const choose: Record<string, Record<string, { provider_id: string; product_code: string; note: string }>> = {};
   for (const [pos, row] of Object.entries(sheet.cells)) {
     cells[pos] = {};
     for (const [category, cell] of Object.entries(row)) {
+      if (cell.choose) (choose[pos] ??= {})[category] = { ...cell.choose, note: cell.note ?? "" };
       const found = cell.key ? optionFor(sheet, cell.key) : null;
       cells[pos][category] = found
         ? { provider_id: found.plan.provider_id, product_code: found.plan.product_code, rate_unique_id: found.option.rate_unique_id }
         : null;
     }
   }
-  return { cells, surcharges: sheet.surcharges.chosen, terms: sheet.terms, removed: sheet.removed };
+  return { cells, surcharges: sheet.surcharges.chosen, terms: sheet.terms, removed: sheet.removed, choose };
 }

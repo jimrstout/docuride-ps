@@ -13,6 +13,7 @@
 // option that applies: each mandatory one, and each one the customer chose.
 // That is the planner's surchargeCost, and it is repeated here exactly.
 
+import { hasDeductibleLines } from "./default-deductible.ts";
 import type { NormalizedFamily, RateVariant } from "./planner-offers.ts";
 import { priceProduct, type PricingRule } from "./planner-pricing.ts";
 import {
@@ -84,9 +85,11 @@ export function customerPriceFor(
         (providerId === null || (t.provider_id ?? f.provider_id) === null || (t.provider_id ?? f.provider_id) === providerId)
     );
     if (!tier) continue;
+    // No line named: the first, but never for a product that offers
+    // deductibles, where that would choose a deductible nobody chose.
     const rate = rateUniqueId
       ? tier.rates.find((r) => r.rate_unique_id === rateUniqueId)
-      : tier.rates[0];
+      : hasDeductibleLines(tier.rates) ? undefined : tier.rates[0];
     if (!rate || rate.retail_price === null || rate.retail_price === undefined) return null;
     return rate.retail_price + surchargeCost(rate, chosenOptions);
   }

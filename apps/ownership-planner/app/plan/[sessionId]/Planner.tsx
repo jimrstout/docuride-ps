@@ -52,6 +52,7 @@ import {
 } from "@/lib/money";
 import { profileFor, relevanceScore } from "@/lib/profiles";
 import { apiPath } from "@/lib/paths";
+import { defaultLineFor, hasDeductibleLines, noDefaultNotice, settingOf } from "@/lib/default-deductible";
 import { purchasedKey, purchasedSet, purchasedTierOf, savedPrice } from "@/lib/purchased";
 
 import AppShell from "@/components/AppShell";
@@ -131,11 +132,14 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
   //
   // Both default rather than starting empty, because a family screen with no
   // tier and no length chosen cannot show a price, and a menu with no price is
-  // not a menu. The defaults are the least expensive end of each axis: the
-  // cheapest tier, the shortest term, the smallest deductible. Defaulting to
-  // the longest term and the lowest deductible would be defaulting to the most
-  // expensive configuration, which is a pressure pattern and not one this
-  // planner uses. The Include / I'll manage decision still starts empty.
+  // not a menu. The tier and the term default to the least expensive end: the
+  // cheapest tier, the shortest term. Defaulting to the longest term would be
+  // defaulting to the most expensive configuration, which is a pressure
+  // pattern and not one this planner uses. The deductible defaults to
+  // Administration's Default deductible (lib/default-deductible.ts); where the
+  // shortest term has no such line, none is put in its place and the product
+  // waits for a deductible to be chosen. The Include / I'll manage decision
+  // still starts empty.
   const [tierChoice, setTierChoice] = useState<Record<string, string>>({});
   const [rateChoice, setRateChoice] = useState<Record<string, string>>(() => {
     const resumed: Record<string, string> = {};
@@ -378,12 +382,14 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
     [lockedOf, decisions]
   );
 
-  /** The rate in force for a tier: the customer's, else the shortest. */
+  const deductibleSetting = settingOf(initial.default_deductible);
+  /** The rate in force for a tier: the customer's, else the shortest term at the default deductible. */
   const rateOf = useCallback(
     (t: PresentableTier): OfferRate | undefined =>
       t.tier.rates.find((r) => r.rate_unique_id === rateChoice[t.tier.product_code]) ??
-      t.tier.rates[0],
-    [rateChoice]
+      defaultLineFor(t.tier.rates, t.tier.rates[0]?.term_months ?? null, deductibleSetting) ??
+      undefined,
+    [rateChoice, deductibleSetting]
   );
 
   const priceOf = useCallback(
@@ -914,6 +920,7 @@ export default function Planner({ initial }: { initial: SessionPayload }) {
             total={presentable.length}
             tierOf={tierOf}
             rateOf={rateOf}
+            deductibleSetting={deductibleSetting}
             priceOf={priceOf}
             downImpactOf={downImpactOf}
             hasPayment={hasPayment}
@@ -1150,6 +1157,7 @@ function FamilyScreen({
   total,
   tierOf,
   rateOf,
+  deductibleSetting,
   priceOf,
   downImpactOf,
   hasPayment,
@@ -1170,6 +1178,8 @@ function FamilyScreen({
   total: number;
   tierOf: (p: Presentable) => PresentableTier;
   rateOf: (t: PresentableTier) => OfferRate | undefined;
+  /** Administration's Default deductible, in words. */
+  deductibleSetting: string;
   priceOf: (p: Presentable) => number | null;
   downImpactOf: (p: Presentable) => number;
   hasPayment: boolean;
@@ -1191,6 +1201,10 @@ function FamilyScreen({
   const chosenRate = rateOf(tier);
   const price = priceOf(family);
   const code = tier.tier.product_code;
+  // No line at the default deductible for the term: say so, and the product
+  // cannot be included until a deductible is chosen.
+  const deductibleNotice =
+    !purchased && !chosenRate && hasDeductibleLines(tier.tier.rates) ? noDefaultNotice(deductibleSetting) : null;
 
   return (
     <ProductScreen
@@ -1217,7 +1231,11 @@ function FamilyScreen({
       onChooseRate={(rateUniqueId) =>
         setRateChoice((st) => ({ ...st, [code]: rateUniqueId }))
       }
-      onDecide={(d) => setDecisions((st) => ({ ...st, [family.family_code]: d }))}
+      deductibleNotice={deductibleNotice}
+      onDecide={(d) => {
+        if (d === "Included" && deductibleNotice) return;
+        setDecisions((st) => ({ ...st, [family.family_code]: d }));
+      }}
       onOption={(optionCode, on) =>
         setOptions((st) => {
           const cur = st[code] ?? [];

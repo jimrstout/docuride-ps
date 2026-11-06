@@ -23,6 +23,8 @@ export interface SheetOption {
   term_months: number | null;
   term_miles: number | null;
   deductible: number | null;
+  /** The provider's deductible code; empty or null when the plan offers no deductible choice. Absent from an older server. */
+  deductible_code?: string | null;
   disappearing_deductible: boolean;
   dealer_cost: number;
   surcharge_cost: number;
@@ -70,7 +72,7 @@ export interface PrepareSheet {
   columns: { position: number; name: string }[];
   categories: string[];
   plans: Record<string, SheetPlan[]>;
-  cells: Record<string, Record<string, { key: string | null; note: string | null }>>;
+  cells: Record<string, Record<string, { key: string | null; note: string | null; choose?: PlanRef }>>;
   surcharges: { available: { code: string; label: string }[]; chosen: string[]; groups?: SurchargeGroup[]; labels?: Record<string, string> };
   prepared: boolean;
   purchased: { category: string; plan_name: string; price: number }[];
@@ -80,6 +82,14 @@ export interface PrepareSheet {
   removed?: Record<string, string[]>;
   /** What rating again took off the menu, and prices it no longer applies, in plain English. */
   notices?: string[];
+  /** Administration's Default deductible, in words. Absent from an older server. */
+  default_deductible?: string;
+}
+
+/** A plan on the sheet, by its provider and product code. */
+export interface PlanRef {
+  provider_id: string;
+  product_code: string;
 }
 
 export interface PreparePayload {
@@ -99,14 +109,48 @@ export interface PrepareState {
   surcharges: string[];
   /** Each column's extra terms, after the deal's own. */
   terms: Record<string, { months: number; rate: number }[]>;
+  /**
+   * Cells waiting for staff to choose a deductible: the plan has no line at
+   * the default deductible for the term. Save is blocked while any waits.
+   */
+  choose: Record<string, Record<string, PlanRef>>;
 }
 
 export function initialState(sheet: PrepareSheet): PrepareState {
   const cells: PrepareState["cells"] = {};
+  const choose: PrepareState["choose"] = {};
   for (const [pos, row] of Object.entries(sheet.cells)) {
     cells[pos] = Object.fromEntries(Object.entries(row).map(([cat, c]) => [cat, c.key]));
+    for (const [cat, c] of Object.entries(row)) if (c.choose) (choose[pos] ??= {})[cat] = c.choose;
   }
-  return { cells, prices: {}, surcharges: [...sheet.surcharges.chosen], terms: { ...(sheet.terms ?? {}) } };
+  return { cells, prices: {}, surcharges: [...sheet.surcharges.chosen], terms: { ...(sheet.terms ?? {}) }, choose };
+}
+
+/** A cell set by staff: no longer waiting for a deductible. */
+export function setCellIn(state: PrepareState, pos: string, category: string, key: string | null): PrepareState {
+  const { [category]: _done, ...still } = state.choose[pos] ?? {};
+  return { ...state, cells: { ...state.cells, [pos]: { ...state.cells[pos], [category]: key } }, choose: { ...state.choose, [pos]: still } };
+}
+
+/** A plan chosen for a cell, waiting for staff to choose its deductible. */
+export function chooseIn(state: PrepareState, pos: string, category: string, plan: PlanRef): PrepareState {
+  return {
+    ...state,
+    cells: { ...state.cells, [pos]: { ...state.cells[pos], [category]: null } },
+    choose: { ...state.choose, [pos]: { ...(state.choose[pos] ?? {}), [category]: plan } },
+  };
+}
+
+/** Every cell still waiting for a deductible, as "Column, Category". */
+export function waitingCells(sheet: PrepareSheet, state: PrepareState): { pos: string; category: string; plan: SheetPlan | null }[] {
+  const out: { pos: string; category: string; plan: SheetPlan | null }[] = [];
+  for (const [pos, row] of Object.entries(state.choose ?? {})) {
+    for (const [category, ref] of Object.entries(row)) {
+      const plan = (sheet.plans[category] ?? []).find((p) => p.provider_id === ref.provider_id && p.product_code === ref.product_code) ?? null;
+      out.push({ pos, category, plan });
+    }
+  }
+  return out;
 }
 
 /** The deal's surcharges with one turned on or off. One setting, whichever heading it is under. */
@@ -271,7 +315,7 @@ export function priceProblems(sheet: PrepareSheet, state: PrepareState): { key: 
 
 /** Save is blocked while any typed price is below dealer cost: no one may approve it. */
 export function saveBlocked(sheet: PrepareSheet, state: PrepareState): boolean {
-  return priceProblems(sheet, state).some((p) => p.kind === "below_cost");
+  return priceProblems(sheet, state).some((p) => p.kind === "below_cost") || waitingCells(sheet, state).length > 0;
 }
 
 export interface ColumnFigures {
@@ -329,8 +373,14 @@ export function payloadOf(
     const o = findOption(sheet, key)?.option;
     if (o && cents !== o.price) prices[key] = cents;
   }
+  // A cell waiting for a deductible is not sent: the server refuses the save
+  // while one waits (_shared/menu-prepare.ts checkPreparation).
+  const cells: PrepareState["cells"] = {};
+  for (const [pos, row] of Object.entries(state.cells)) {
+    cells[pos] = Object.fromEntries(Object.entries(row).filter(([cat]) => !state.choose?.[pos]?.[cat]));
+  }
   // Terms only on a financed deal: a cash deal has no payments.
-  return { cells: state.cells, prices, surcharges: state.surcharges, ...(financed ? { terms: state.terms } : {}) };
+  return { cells, prices, surcharges: state.surcharges, ...(financed ? { terms: state.terms } : {}) };
 }
 
 /**
@@ -398,6 +448,8 @@ export function applyToAllColumns(
     return !!found && found.category === category && !found.plan.purchased;
   });
   const cells = { ...state.cells };
+  const choose = { ...(state.choose ?? {}) };
+  const waiting = state.choose?.[fromPos]?.[category] ?? null;
   const skipped: string[] = [];
   for (const c of sheet.columns) {
     const pos = String(c.position);
@@ -411,6 +463,9 @@ export function applyToAllColumns(
       continue;
     }
     cells[pos] = { ...cells[pos], [category]: key };
+    // The same plan waiting for its deductible there too, or no longer waiting.
+    const { [category]: _was, ...rest } = choose[pos] ?? {};
+    choose[pos] = waiting ? { ...rest, [category]: waiting } : rest;
   }
-  return { state: { ...state, cells }, skipped };
+  return { state: { ...state, cells, choose }, skipped };
 }

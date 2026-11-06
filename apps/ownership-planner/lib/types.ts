@@ -242,7 +242,11 @@ export interface SessionPayload {
     surcharges: string[];
     terms?: Record<string, { months: number; rate: number }[]>;
     removed?: Record<string, string[]>;
+    /** Cells waiting for staff to choose a deductible, with the notice to show. */
+    choose?: Record<string, Record<string, { provider_id: string; product_code: string; note: string }>>;
   } | null;
+  /** Administration's Default deductible, in words (lib/default-deductible.ts). Absent from an older server. */
+  default_deductible?: string;
   photos: string[] | null;
   photos_cached_at: string | null;
 }

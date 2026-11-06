@@ -18,12 +18,14 @@
 import Control from "@/components/Control";
 import { useMemo, useRef, useState } from "react";
 import { planTotals } from "@/lib/money";
+import { defaultLineFor, noDefaultNotice, settingOf } from "@/lib/default-deductible";
 import {
   cellFigures,
   columnFigures,
   dollars,
   alsoAppliesTo,
   applyToAllColumns,
+  chooseIn,
   countChosen,
   findOption,
   initialState,
@@ -31,6 +33,8 @@ import {
   priceProblem,
   priceProblems,
   saveBlocked,
+  setCellIn,
+  waitingCells,
   offersSurcharges,
   payloadOf,
   priceOf,
@@ -104,7 +108,11 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
   const overBand = needsManager(sheet, state);
 
   const setCell = (pos: string, category: string, key: string | null) =>
-    setState((s) => ({ ...s, cells: { ...s.cells, [pos]: { ...s.cells[pos], [category]: key } } }));
+    setState((s) => setCellIn(s, pos, category, key));
+  // A product that offers deductibles starts on Administration's Default
+  // deductible, or waits for staff to choose one (lib/default-deductible.ts).
+  const setting = settingOf(sheet.default_deductible);
+  const waiting = waitingCells(sheet, state);
   const setPrice = (key: string, cents: number) => setState((s) => ({ ...s, prices: { ...s.prices, [key]: cents } }));
   const setTerms = (pos: string, terms: { months: number; rate: number }[]) =>
     setState((s) => ({ ...s, terms: { ...s.terms, [pos]: terms } }));
@@ -186,6 +194,11 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
   };
 
   const edited = editing ? findOption(sheet, state.cells[editing.pos]?.[editing.category] ?? null) : null;
+  // The plan in the dialog: the chosen option's, or the plan waiting for its deductible.
+  const waitingPlan = editing && !edited
+    ? waiting.find((w) => w.pos === editing.pos && w.category === editing.category)?.plan ?? null
+    : null;
+  const editedPlan = edited?.plan ?? waitingPlan;
   const editPlans = editing ? (sheet.plans[editing.category] ?? []).filter((p) => !p.purchased) : [];
 
   return (
@@ -237,6 +250,12 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
         ))}
         {message ? <p className={message.tone === "ok" ? "pm-note" : "pm-note pm-note--bad"} role="status">{message.text}</p> : null}
         {skipped.map((line) => <p key={line} className="pm-note" role="status">{line}</p>)}
+        {waiting.length > 0 ? (
+          <p className="pm-note pm-note--bad" role="alert">
+            Save is blocked until a deductible is chosen for{" "}
+            {waiting.map((w) => `${sheet.columns.find((c) => String(c.position) === w.pos)?.name ?? `Column ${w.pos}`}, ${w.category}`).join("; ")}.
+          </p>
+        ) : null}
         {problems.length > 0 ? (
           <div className="pm-note pm-note--bad" role="alert">
             {problems.map((p) => <p key={p.key} className="pm-problem">{p.text}</p>)}
@@ -279,6 +298,17 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
               }
               const found = findOption(sheet, state.cells[pos]?.[category] ?? null);
               const note = sheet.cells[pos]?.[category]?.note ?? null;
+              const waits = waiting.find((w) => w.pos === pos && w.category === category);
+              if (!found && waits) {
+                // The plan, with no deductible put in place of the default.
+                const notice = sheet.cells[pos]?.[category]?.choose && note ? note : noDefaultNotice(setting);
+                return (
+                  <Control key={pos} data-col={pos} className="pm-cell pm-cell--over" onPress={() => open(pos, category)} disabled={locked}>
+                    <span className="pm-plan" title={waits.plan?.plan_name}>{waits.plan?.plan_name}</span>
+                    <span className="pm-sub" title={notice}>{notice}</span>
+                  </Control>
+                );
+              }
               if (!found) {
                 return (
                   <Control key={pos} data-col={pos} className="pm-cell pm-cell--off" onPress={() => open(pos, category)} disabled={locked}>
@@ -345,10 +375,18 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
             <label className="pm-field">
               <span>Plan</span>
               <select
-                value={edited ? `${edited.plan.provider_id}|${edited.plan.product_code}` : ""}
+                value={editedPlan ? `${editedPlan.provider_id}|${editedPlan.product_code}` : ""}
                 onChange={(e) => {
                   const plan = editPlans.find((p) => `${p.provider_id}|${p.product_code}` === e.target.value);
-                  setCell(editing.pos, editing.category, plan ? plan.options[0].key : null);
+                  if (!plan) return setCell(editing.pos, editing.category, null);
+                  // The term in the dialog where the new plan offers it, else its
+                  // shortest; at the default deductible, and never another in its place.
+                  const months = plan.options.some((o) => o.term_months === edited?.option.term_months)
+                    ? edited!.option.term_months
+                    : plan.options[0].term_months;
+                  const line = defaultLineFor(plan.options, months, setting);
+                  if (line) setCell(editing.pos, editing.category, line.key);
+                  else setState((s) => chooseIn(s, editing.pos, editing.category, { provider_id: plan.provider_id, product_code: plan.product_code }));
                 }}
               >
                 <option value="">Not included</option>
@@ -357,6 +395,18 @@ export default function Prepare({ initial }: { initial: PreparePayload }) {
                 ))}
               </select>
             </label>
+            {waitingPlan ? (
+              <>
+                <p className="pm-note pm-note--bad" role="alert">{noDefaultNotice(setting)}</p>
+                <label className="pm-field">
+                  <span>Term, mileage and deductible</span>
+                  <select value="" onChange={(e) => e.target.value && setCell(editing.pos, editing.category, e.target.value)}>
+                    <option value="" disabled>Choose a deductible</option>
+                    {waitingPlan.options.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                  </select>
+                </label>
+              </>
+            ) : null}
             {edited ? (
               <>
                 <label className="pm-field">

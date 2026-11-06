@@ -64,12 +64,15 @@ export default function RateChooser({
 
   const hasDeductibleChoice = deductibles.length > 1;
 
-  /** The rate matching a length, keeping the deductible the customer already
-   *  chose where that combination exists. */
+  /** The rate matching a length, keeping the deductible already chosen. A
+   *  product that offers deductibles never gets another deductible put in its
+   *  place: a length without it, or with none chosen yet, is not offered here
+   *  until a deductible is chosen (lib/default-deductible.ts). */
   function rateFor(m: number | null, dLabel: string | null): OfferRate | undefined {
     const inLength = rates.filter((r) => r.term_months === m);
-    if (!dLabel) return inLength[0];
-    return inLength.find((r) => deductibleLabel(r) === dLabel) ?? inLength[0];
+    if (!hasDeductibleChoice) return inLength[0];
+    if (!dLabel) return undefined;
+    return inLength.find((r) => deductibleLabel(r) === dLabel);
   }
 
   const chosenDeductible = chosen ? deductibleLabel(chosen) : null;
@@ -103,9 +106,11 @@ export default function RateChooser({
           <legend>Deductible</legend>
           <div className="rate-row" role="radiogroup" aria-label="Deductible">
             {deductibles.map((d) => {
-              const target = rates.find(
-                (r) => r.term_months === (chosen?.term_months ?? months[0]) && deductibleLabel(r) === d
-              );
+              // At the length in force; where that length does not offer it, its
+              // shortest length that does.
+              const target =
+                rates.find((r) => r.term_months === (chosen?.term_months ?? months[0]) && deductibleLabel(r) === d) ??
+                rates.find((r) => deductibleLabel(r) === d);
               const on = chosenDeductible === d;
               return (
                 <Control

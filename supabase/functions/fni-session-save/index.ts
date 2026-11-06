@@ -71,6 +71,7 @@ import {
 } from "../_shared/plan-prices.ts";
 import { applyDealPrices, type DealPrice } from "../_shared/menu-prepare.ts";
 import { loadSheet } from "../_shared/menu-prepare-rows.ts";
+import { hasDeductibleLines } from "../_shared/default-deductible.ts";
 import { columnTerms, packageChosenEvent, type Term } from "../_shared/menu-terms.ts";
 import { CATEGORIES, presetDealType } from "../_shared/menu-presets.ts";
 import type { NormalizedFamily } from "../_shared/normalized-offer.ts";
@@ -441,6 +442,19 @@ serve(async (req: Request) => {
     const priced = writable.some((d) => d.disposition === "Included")
       ? await pricedForSession(supabase, session as Record<string, unknown>)
       : null;
+    // An included product that offers deductibles names its line: PS never
+    // chooses a deductible for it (_shared/default-deductible.ts).
+    if (priced !== null) {
+      const waiting = writable.filter((d) => {
+        if (d.disposition !== "Included" || d.rate_unique_id) return false;
+        const tier = priced.flatMap((f) => f.tiers.map((t) => ({ t, provider: t.provider_id ?? f.provider_id })))
+          .find(({ t, provider }) => t.product_code === String(d.product_code) && (provider === null || provider === providerOf(d)));
+        return !!tier && hasDeductibleLines(tier.t.rates);
+      });
+      if (waiting.length > 0) {
+        return json(400, { error: `Choose a deductible for ${waiting.map((d) => d.product_name ?? String(d.product_code)).join(", ")}.` });
+      }
+    }
     let adjusted = 0;
     const serverPrice = (d: Decision): number | null => {
       if (priced === null) return null;
