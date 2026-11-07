@@ -84,6 +84,7 @@ import {
   spentSelections,
   type SpentSelection,
   type VoidedContract,
+  FIRST_RATED_EVENT,
 } from "../_shared/spent-rates.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -104,7 +105,7 @@ interface RateRequest {
    * keep each selection that the fresh offer matches to the cent.
    */
   rate_again?: boolean;
-  /** The signed-in person's initials, for "Rated again by". */
+  /** The signed-in person's initials, for "Rated again by", and for the first rate's "Rated" event. */
   rated_by?: string;
 }
 
@@ -208,7 +209,8 @@ async function withDetails(
 // ─── Main handler ────────────────────────────────────────────────────────
 
 serve(async (req: Request) => {
-  // Step timing, kept in the "Rated again" event (_shared/rate-timing.ts).
+  // Step timing, kept in the "Rated again" event, and in the first rate's
+  // "Rated" event (_shared/rate-timing.ts).
   const timing = new RateTiming();
   timing.mark("request received");
   if (req.method !== "POST") return json(405, { error: "POST only" });
@@ -365,8 +367,22 @@ serve(async (req: Request) => {
     const { template, outcomes } = await rateSession(
       supabase,
       { id: sess.id, tenant_id: sess.tenant_id, store_id: sess.store_id },
-      rateSource
+      rateSource,
+      timing
     );
+    // The first rate's step timing, in a "Rated" event, as Rate again keeps
+    // its own (_shared/rate-timing.ts). Measuring only: written once the
+    // rating has written everything else, just before the answer, and read
+    // by nothing on any screen.
+    const recordRated = async (detail: Record<string, unknown>) => {
+      timing.mark("reply ready");
+      const who = renewedBy(body.rated_by);
+      const { error } = await supabase
+        .schema("fni")
+        .from("session_events")
+        .insert({ session_id, event: FIRST_RATED_EVENT, detail: { ...detail, timing: timing.detail() }, created_by: who });
+      if (error) console.error(`fni-rate-vehicle rated event not recorded for ${session_id}: ${error.message}`);
+    };
 
     if (outcomes.length === 0) {
       return json(400, {
@@ -392,6 +408,8 @@ serve(async (req: Request) => {
       .select("provider_id, provider_product_id, rate_unique_id")
       .eq("session_id", session_id)
       .eq("disposition", "Included");
+    timing.mark("selections read");
+    timing.note("selections_compared", (chosenRows ?? []).length);
     const offeredRates = new Set(
       rated.flatMap((o) =>
         o.result.state === "Rated"
@@ -433,6 +451,7 @@ serve(async (req: Request) => {
       .eq("id", session_id);
 
     if (statusErr) console.error(`Failed to update session status: ${statusErr.message}`);
+    timing.mark("session updated");
 
     const providers = outcomes.map((o) => ({
       provider: o.provider.name,
@@ -445,6 +464,7 @@ serve(async (req: Request) => {
     if (productCount === 0 && keptCount > 0) {
       // Nothing new, but the last good offers stand: the status and the
       // customer's choices are untouched, and staff are told why.
+      await recordRated({ outcome: "kept", product_count: keptCount, reason: warning });
       return await withDetails(supabase, session_id, 200, {
         session_id,
         status: sess.status,
@@ -461,6 +481,7 @@ serve(async (req: Request) => {
       // Nothing to present. Every provider's reason, in its own words, is what
       // a staff member needs to see.
       const missingVtype = !rateSource.vehicle_type_code && ta !== undefined;
+      await recordRated({ outcome: "failed", product_count: 0, reason: providers.map((p) => p.line).join(" ") });
       return await withDetails(supabase, session_id, 400, {
         error: providers.map((p) => p.line).join(" "),
         status: outcomes.some((o) => o.result.state === "Not Offered") ? "Not Offered" : "Failed",
@@ -472,6 +493,7 @@ serve(async (req: Request) => {
       });
     }
 
+    await recordRated({ outcome: "rated", product_count: productCount, ...(warning ? { reason: warning } : {}) });
     return await withDetails(supabase, session_id, 200, {
       session_id,
       status: nextStatus,

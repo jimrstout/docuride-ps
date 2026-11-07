@@ -2,13 +2,15 @@
 //
 // A rate in PS takes noticeably longer than in iTap (2 to 3 seconds there).
 // To see where the time goes, fni-rate-vehicle marks each step as it finishes
-// and keeps the marks in the "Rated again" event's detail, under "timing":
+// and keeps the marks in the "Rated again" event's detail, under "timing",
+// and for the first rate (the rating after Verify) in its "Rated" event:
 //
 //   steps   [{ step, ms }]: milliseconds since the request was received,
 //           in the order the steps finished
 //   facts   plain values about the run, under their own key: provider_login
 //           (cached, fresh or failed), provider_login_retried, response_bytes,
-//           rate_lines, crm_sale_date, selections_compared
+//           rate_lines, crm_sale_date, selections_compared, and the saved
+//           login's (saved_login_used, saved_login_from, saved_login_age_s)
 //
 // Measuring only. Nothing here changes what a rating does. Never holds a
 // credential, a token or a buyer's details: only step names, numbers and

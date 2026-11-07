@@ -181,8 +181,8 @@ export const edge = {
 
   // Staff re-rating a session by hand, after fixing whatever stopped it. The
   // planner only ever rates from "Pending", so this is the one way to ask again.
-  adminRate: <T>(sessionId: string) =>
-    call<T>("fni-rate-vehicle", { method: "POST", body: { session_id: sessionId } }),
+  adminRate: <T>(sessionId: string, ratedBy?: string) =>
+    call<T>("fni-rate-vehicle", { method: "POST", body: ratedBy ? { session_id: sessionId, rated_by: ratedBy } : { session_id: sessionId } }),
 
   // ── The Verify step ─────────────────────────────────────────────────
   // Staff only. The sheet, the two fields nobody else carries, the CRM refresh,
