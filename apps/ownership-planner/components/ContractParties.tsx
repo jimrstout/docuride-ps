@@ -12,6 +12,7 @@
 
 import Control from "@/components/Control";
 import { Working } from "@/components/Working";
+import { useHere } from "@/components/AnswerHere";
 import { DX1_REMINDER } from "@/lib/contract-parties";
 import type { ContractParties as Parties, Party, PartyField } from "@/lib/types";
 import {
@@ -82,6 +83,7 @@ function Row({ field, editable, idPrefix }: { field: PartyField; editable: boole
 
 /** Where the CRM changed after a staff edit: keep the staff value, or use the CRM's. */
 function CrmChoices({ party, sessionId, editable }: { party: Party; sessionId: string; editable: boolean }) {
+  const here = useHere();
   const changed = party.fields.filter((f) => f.crm_changed);
   if (changed.length === 0 || !editable) return null;
   return (
@@ -92,13 +94,13 @@ function CrmChoices({ party, sessionId, editable }: { party: Party; sessionId: s
             {party.party} {f.label.toLowerCase()}: staff value <strong>{f.value ?? "not set"}</strong>, CRM now
             says <strong>{f.crm_value ?? "nothing"}</strong>.
           </p>
-          <form action={keepStaffValue}>
+          <form action={here(keepStaffValue)} data-working-redraw="none">
             <Working />
             <input type="hidden" name="session_id" value={sessionId} />
             <input type="hidden" name="key" value={f.key} />
             <Control type="submit" busyText="Keeping...">Keep staff value</Control>
           </form>
-          <form action={useCrmValue}>
+          <form action={here(useCrmValue)} data-working-redraw="none">
             <Working />
             <input type="hidden" name="session_id" value={sessionId} />
             <input type="hidden" name="key" value={f.key} />
@@ -111,6 +113,7 @@ function CrmChoices({ party, sessionId, editable }: { party: Party; sessionId: s
 }
 
 function PartyPanel({ party, sessionId, editable }: { party: Party; sessionId: string; editable: boolean }) {
+  const here = useHere();
   const s = slug(party.party);
   const titleId = `vparty-${s}-title`;
   const removable = party.party !== "Buyer";
@@ -128,7 +131,7 @@ function PartyPanel({ party, sessionId, editable }: { party: Party; sessionId: s
               Removed by Staff: {party.removed.by}, {stamp(party.removed.at)}. The CRM deal has one.
             </p>
             {editable ? (
-              <form action={restoreParty}>
+              <form action={here(restoreParty)} data-working-redraw="none">
                 <Working />
                 <input type="hidden" name="session_id" value={sessionId} />
                 <input type="hidden" name="party" value={party.party} />
@@ -139,7 +142,7 @@ function PartyPanel({ party, sessionId, editable }: { party: Party; sessionId: s
         ) : editable ? (
           <details className="vparty-add">
             <summary>Add a {lower(party.party)}</summary>
-            <form action={savePartyFields} className="vparty-form" data-working-panel="">
+            <form action={here(savePartyFields)} data-working-redraw="none" className="vparty-form" data-working-panel="">
               <Working />
               <input type="hidden" name="session_id" value={sessionId} />
               <div className="vgroup-fields">
@@ -168,7 +171,7 @@ function PartyPanel({ party, sessionId, editable }: { party: Party; sessionId: s
       ) : party.heading ? (
         <p className="vparty-heading">{party.heading}</p>
       ) : null}
-      <form action={savePartyFields} className="vparty-form" data-working-panel="">
+      <form action={here(savePartyFields)} data-working-redraw="none" className="vparty-form" data-working-panel="">
         <Working />
         <input type="hidden" name="session_id" value={sessionId} />
         <div className="vgroup-fields">
@@ -186,7 +189,7 @@ function PartyPanel({ party, sessionId, editable }: { party: Party; sessionId: s
       {editable && removable ? (
         <details className="vparty-remove">
           <summary>Remove the {lower(party.party)}</summary>
-          <form action={removeParty} data-working-panel="">
+          <form action={here(removeParty)} data-working-redraw="none" data-working-panel="">
             <Working />
             <input type="hidden" name="session_id" value={sessionId} />
             <input type="hidden" name="party" value={party.party} />

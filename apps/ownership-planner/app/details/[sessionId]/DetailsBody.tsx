@@ -73,6 +73,7 @@ import DetailsTabs from "@/components/DetailsTabs";
 import { nextStep, PREPARE_FIRST, RATE_SAY } from "@/lib/next-step";
 import ProgramLabel from "@/components/admin/ProgramLabel";
 import { mergeOfferDetails, sheetFromReply } from "@/lib/details-offer";
+import { AnswerHereProvider, type Here } from "@/components/AnswerHere";
 
 const GROUPS: { group: FieldGroup; blurb: string }[] = [
   { group: "Deal", blurb: "Which deal this is, and how it is being paid for." },
@@ -301,12 +302,14 @@ function Field({ field, vendor }: { field: VerifyField; vendor: string }) {
   );
 }
 
-/** An answer the page updated from (Rate again, the first rate), kept against the sheet it was put over. */
+/** An answer the page updated from (an action, Rate again, the first rate), kept against the sheet it was put over. */
 interface RatedHere {
   base: VerifySheet;
   sheet: VerifySheet;
   flash: VerifyFlash;
   id: string;
+  /** The DX1 check an action ran again (Refresh from CRM, Discard); absent, the one the page loaded stands. */
+  dx1?: Dx1CheckResult | null;
 }
 
 export default function DetailsBody({
@@ -327,11 +330,13 @@ export default function DetailsBody({
 }) {
   const router = useRouter();
   const operator = { email: operatorEmail };
-  // What Rate again or the first rate put here, only while the page has not
-  // been drawn again since: a fresh sheet from the server replaces it.
+  // What an action, Rate again or the first rate put here, only while the
+  // page has not been drawn again since: a fresh sheet from the server
+  // replaces it.
   const [ratedHere, setRatedHere] = useState<RatedHere | null>(null);
   const rated = ratedHere && ratedHere.base === loaded ? ratedHere : null;
   const sheet = rated ? rated.sheet : loaded;
+  const dx1Shown = rated && rated.dx1 !== undefined ? rated.dx1 : dx1;
   // The one-shot message's id: the cookie's after a page draw, Rate again's after it.
   const answerId = rated ? rated.id : flashCookie;
 
@@ -354,16 +359,48 @@ export default function DetailsBody({
         flushSync(() =>
           setRatedHere({
             base: loaded,
-            sheet: mergeOfferDetails(loaded, answer.details!),
+            // Over the sheet on the screen: an action's answer may already be on it.
+            sheet: mergeOfferDetails(sheet, answer.details!),
             flash: { code: answer.code, detail: answer.detail },
             id: `${answer.code}:${Date.now()}`,
+            dx1: rated?.dx1,
           })
         );
       } finally {
         workingDone();
       }
     },
-    [loaded, router]
+    [loaded, sheet, rated, router]
+  );
+
+  // Every other action fni-session-verify takes, and Decode the VIN: the
+  // page updates from the whole sheet the action answered with
+  // (components/AnswerHere.tsx). When it cannot be used, the action has
+  // already asked for the page to be drawn again, with the message, as
+  // before. The DX1 check stays as it was unless the action ran it again.
+  const here = useCallback<Here>(
+    (action) => async (fd: FormData) => {
+      try {
+        const answer = await action(fd);
+        const next = answer.sheet ? sheetFromReply(answer.sheet, sheet) : null;
+        if (!next) {
+          router.refresh();
+          return;
+        }
+        flushSync(() =>
+          setRatedHere({
+            base: loaded,
+            sheet: next,
+            flash: { code: answer.code ?? "", detail: answer.detail },
+            id: `${answer.code}:${Date.now()}`,
+            dx1: answer.dx1 !== undefined ? (answer.dx1 as Dx1CheckResult | null) : rated?.dx1,
+          })
+        );
+      } finally {
+        workingDone();
+      }
+    },
+    [loaded, sheet, rated, router]
   );
 
   // Verify, then the first rate (verifyAndRate): the page updates from
@@ -374,7 +411,7 @@ export default function DetailsBody({
     async (fd: FormData) => {
       try {
         const answer = await verifyAndRate(fd);
-        const verifiedSheet = answer.verified ? sheetFromReply(answer.verified, loaded) : null;
+        const verifiedSheet = answer.verified ? sheetFromReply(answer.verified, sheet) : null;
         if (!verifiedSheet || !answer.details) {
           router.refresh();
           return;
@@ -385,13 +422,14 @@ export default function DetailsBody({
             sheet: mergeOfferDetails(verifiedSheet, answer.details!),
             flash: { code: answer.code, detail: answer.detail },
             id: `${answer.code}:${Date.now()}`,
+            dx1: rated?.dx1,
           })
         );
       } finally {
         workingDone();
       }
     },
-    [loaded, router]
+    [loaded, sheet, rated, router]
   );
 
   // ── A failed rating, in one plain line (lib/rating-error.ts) ──────────
@@ -455,6 +493,7 @@ export default function DetailsBody({
     : "tag--quiet";
 
   return (
+    <AnswerHereProvider value={here}>
     <WorkingArea>
     <div className="vh vh--fit">
       <header className="vh-top">
@@ -471,7 +510,7 @@ export default function DetailsBody({
         <div className="console-who">
           {/* Who is signed in: everything done here is credited to them. */}
           <span className="vh-me" title={operator.email}>{initialsFor(operator.email)}</span>
-          <form action={refreshFromCrm}>
+          <form action={here(refreshFromCrm)} data-working-redraw="none">
             <Working />
             <input type="hidden" name="session_id" value={sheet.session.id} />
             <Control type="submit" working="page" busyText="Refreshing from CRM...">
@@ -810,7 +849,8 @@ export default function DetailsBody({
                         a vehicle type choice sends it as a whole-deal change
                         (components/VehicleTypeChoice.tsx). */}
                     <form
-                      action={saveVerifyFields}
+                      action={here(saveVerifyFields)}
+                      data-working-redraw="none"
                       id="vsheet"
                       className="vsheet"
                       data-working="panel"
@@ -852,7 +892,8 @@ export default function DetailsBody({
 
                       <form
                         id="vin-decode"
-                        action={decodeVin}
+                        action={here(decodeVin)}
+                        data-working-redraw="none"
                         title={`Asks ${vendor} what this VIN is. Fills engine size and fuel type. It does not return warranty information, so that one is always typed. This page also does this once on its own, the first time it opens.`}
                       >
                         <Working />
@@ -870,7 +911,8 @@ export default function DetailsBody({
 
                       {sheet.edited.some((f) => f.in_crm) ? (
                         <form
-                          action={discardEdits}
+                          action={here(discardEdits)}
+                          data-working-redraw="none"
                           title="Puts the CRM deal back in charge of every field it carries. Engine size, factory warranty and fuel type are kept, since the CRM does not carry them and there would be nothing to reload them from."
                         >
                           <Working />
@@ -994,7 +1036,7 @@ export default function DetailsBody({
                     {sheet.contracts_panel ? (
                       <section className="vcontracts" aria-labelledby="vcontracts-title">
                         <h2 id="vcontracts-title">Contracts</h2>
-                        <Dx1Check result={dx1} />
+                        <Dx1Check result={dx1Shown} />
                         {/* A live contract sent with a date other than the CRM sale date.
                             Named only: nothing is changed or voided for it. */}
                         {(sheet.day?.contract_date_lines?.length ?? 0) > 0 ? (
@@ -1225,7 +1267,7 @@ export default function DetailsBody({
                         level of each product (Lowest, Middle or Highest) on this deal.
                         The template's level is the default (docs section 22). */}
                     {presentable && (sheet.menu_columns?.length ?? 0) > 0 ? (
-                      <form action={saveMenuLevels} className="vmenu-levels" data-working-panel="">
+                      <form action={here(saveMenuLevels)} className="vmenu-levels" data-working-panel="" data-working-redraw="none">
                         <Working />
                         <input type="hidden" name="session_id" value={sessionId} />
                         <p className="vmenu-levels-head">Menu coverage levels for this deal</p>
@@ -1384,5 +1426,6 @@ export default function DetailsBody({
       {renderStamp}
     </div>
     </WorkingArea>
+    </AnswerHereProvider>
   );
 }

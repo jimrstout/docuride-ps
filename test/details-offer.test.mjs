@@ -118,7 +118,7 @@ test("3. an answer missing any key is not used: the page is drawn again instead"
 test("Rate again on Details: no page drawn again, the job ends on the answer", () => {
   const body = read("apps/ownership-planner/app/details/[sessionId]/DetailsBody.tsx");
   assert.match(body, /<form action=\{rateAgainHere\} className="vrate-again" data-working-redraw="none">/);
-  assert.match(body, /sheet: mergeOfferDetails\(loaded, answer\.details!\),/);
+  assert.match(body, /sheet: mergeOfferDetails\(sheet, answer\.details!\),/);
   assert.match(body, /\} finally \{\s*workingDone\(\);\s*\}/);
   // A later server draw of the page wins over Rate again's answer.
   assert.match(body, /const rated = ratedHere && ratedHere\.base === loaded \? ratedHere : null;/);

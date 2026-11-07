@@ -137,7 +137,7 @@ test("Verify and rate on Details: no page drawn again, the job ends on the answe
   const body = read("apps/ownership-planner/app/details/[sessionId]/DetailsBody.tsx");
   assert.match(body, /<form action=\{verifyAndRateHere\} className="vgate" data-working-redraw="none">/);
   const here = between(body, "const verifyAndRateHere = useCallback(", "[loaded, router]");
-  assert.match(here, /const verifiedSheet = answer\.verified \? sheetFromReply\(answer\.verified, loaded\) : null;/);
+  assert.match(here, /const verifiedSheet = answer\.verified \? sheetFromReply\(answer\.verified, sheet\) : null;/);
   assert.match(here, /if \(!verifiedSheet \|\| !answer\.details\) \{\s*router\.refresh\(\);\s*return;\s*\}/);
   assert.match(here, /sheet: mergeOfferDetails\(verifiedSheet, answer\.details!\),/);
   assert.match(here, /\} finally \{\s*workingDone\(\);\s*\}/);

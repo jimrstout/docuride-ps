@@ -261,7 +261,7 @@ test("Details shows the latest check, refreshed on load, for signed-in staff onl
   // The page is signed in before it gets here (test/staff-sign-in.test.mjs).
   assert.match(page, /const dx1Promise: Promise<Dx1CheckResult \| null> = edge\.dx1Check<Dx1CheckResult>\(sessionId\)\.catch\(/);
   assert.ok(page.indexOf("if (!operator) {") < page.indexOf("edge.dx1Check<"));
-  assert.match(page, /<h2 id="vcontracts-title">Contracts<\/h2>\s*<Dx1Check result=\{dx1\} \/>/);
+  assert.match(page, /<h2 id="vcontracts-title">Contracts<\/h2>\s*<Dx1Check result=\{dx1Shown\} \/>/);
   const edge = read("apps/ownership-planner/lib/edge.ts");
   assert.match(edge, /call<T>\("fni-dx1-check", \{ method: "POST", body: \{ session_id: sessionId \} \}\)/);
   const view = read("apps/ownership-planner/components/Dx1Check.tsx");
