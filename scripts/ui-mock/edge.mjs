@@ -6,7 +6,10 @@
 // the busy state, and `delays` one function's ("POST fni-rate-vehicle");
 // `calls` counts each function's requests. Rate again rates the deal again in
 // the mock: the rating's time, product count and a notice move, and the
-// answer carries what changed (`details`), as fni-rate-vehicle's does.
+// answer carries what changed (`details`), as fni-rate-vehicle's does. Verify
+// and the first rate move a session that is not rated yet to verified and
+// rated; every fni-session-verify action answers with the whole sheet, and
+// the first rate with what it changed, as the Edge Functions do.
 
 import http from "node:http";
 import { menuParts, preparePayload } from "./layout-data.mjs";
@@ -45,16 +48,20 @@ const parties = {
 
 /** How many times each session has been rated again in this run. */
 const ratedAgain = new Map();
+/** Sessions not rated yet that Verify, then the first rate, moved on in this run. */
+const verifiedNow = new Set();
+const ratedNow = new Set();
 
 function sheet(id) {
   const variant = id.startsWith("1") ? "new" : id.startsWith("2") ? "rated" : "prepared";
-  const verified = variant !== "new";
+  const verified = variant !== "new" || verifiedNow.has(id);
+  const rated = variant !== "new" || ratedNow.has(id);
   const again = ratedAgain.get(id) ?? 0;
   return {
     session: { id, deal_number: "99901", stock_number: "ST-1234", status: "Open", is_test: true, vehicle: "2026 Mockmake Trail 1000 XT", deal_type: "Finance", vehicle_type_code: "UTV" },
     provider_name: "Mock Provider",
     verification: { state: verified ? "Verified" : "Needs Verification", verified_at: verified ? "2026-11-02T13:00:00Z" : null, verified_by: verified ? "JS" : null },
-    rating: verified
+    rating: rated
       ? { state: "Rated", product_count: 11 + again, out_of_date: false, rated_at: again ? `2026-11-02T14:0${again}:00Z` : "2026-11-02T13:00:05Z", detail: null, providers: [{ name: "Mock Provider", state: "Rated", line: `Mock Provider: Rated, ${11 + again} products.` }] }
       : { state: "Pending", product_count: 0, out_of_date: false, rated_at: null, detail: null, providers: [] },
     rating_differences: null,
@@ -150,7 +157,16 @@ export function startMockEdge({ port, delayMs = 0, rows = 6, delays = {} } = {})
     }
     if (fn === "fni-admin-settings") return json(200, { stores: STORES.map((name, i) => ({ id: `s${i}`, name })), rules: [], scope: "all" });
     if (fn === "fni-session-verify" && req.method === "GET") return json(200, sheet(u.searchParams.get("session_id")));
-    if (fn === "fni-session-verify") return json(200, { ok: true });
+    if (fn === "fni-session-verify") {
+      // Each action answers with the whole sheet, and its words beside it.
+      const body = raw ? JSON.parse(raw) : {};
+      if (body.action === "verify") {
+        verifiedNow.add(body.session_id);
+        return json(200, { ...sheet(body.session_id), verified: true });
+      }
+      if (body.action === "refresh") return json(200, { ...sheet(body.session_id), refreshed: true, changed_inputs: [] });
+      return json(200, { ...sheet(body.session_id), changed_inputs: [] });
+    }
     if (fn === "fni-dx1-check") return json(200, { status: "Nothing to check", blocking: [], warnings: [] });
     // The layout deal: seven rows, four columns, the longest names (scripts/layout-check.mjs).
     const sid = u.searchParams.get("session_id");
@@ -166,7 +182,9 @@ export function startMockEdge({ port, delayMs = 0, rows = 6, delays = {} } = {})
         const d = offerDetails(body.session_id);
         return json(200, { session_id: body.session_id, outcome: "rated", product_count: d.rating.product_count, lines: [], details: d });
       }
-      return json(200, { product_count: 11, outcome: "unchanged", lines: [] });
+      // The first rate, after Verify: with what it changed on Details.
+      ratedNow.add(body.session_id);
+      return json(200, { session_id: body.session_id, status: "Open", product_count: 11, details: offerDetails(body.session_id) });
     }
     return json(404, { error: "Not served by the mock." });
   });
