@@ -150,10 +150,13 @@ test("confirming records the snapshot, rates, then returns to Verify", () => {
 
   const verifyAt = body.indexOf('action: "verify"');
   const rateAt = body.indexOf("adminRate");
-  const backAt = body.indexOf("backToVerify(sessionId, rated");
+  // Back to Details after both: updated from the two answers, or drawn again
+  // with the message when they cannot be used (lib/details-offer.ts).
+  const answerAt = body.indexOf("if (details) return { code, detail, verified, details };");
+  const backAt = body.indexOf("await backToVerify(sessionId, code, detail);");
 
   assert.ok(verifyAt > 0 && rateAt > verifyAt, "verify is recorded before rating");
-  assert.ok(backAt > rateAt, "it returns to Verify after both");
+  assert.ok(answerAt > rateAt && backAt > answerAt, "it returns to Verify after both");
   // The presentation opens in its own tab from the Verify screen, never from
   // this action.
   assert.doesNotMatch(body, /redirect\(`\/plan\//, "it must not send this tab to the planner");
@@ -162,10 +165,13 @@ test("confirming records the snapshot, rates, then returns to Verify", () => {
 test("a failed rate still returns to Verify with a flash, not an error page", () => {
   const body = actionBody("verifyAndRate");
   const catchAt = body.indexOf("catch (err)", body.indexOf("adminRate"));
-  const backAt = body.indexOf("return backToVerify(sessionId, rated");
-  assert.ok(catchAt > 0 && backAt > catchAt, "the rate failure is caught before returning");
-  // Nothing between the catch and the return may throw or leave early.
-  assert.doesNotMatch(body.slice(catchAt, backAt), /throw|return|redirect\(/);
+  const codeAt = body.indexOf('const code = rated ? (warning ? "ratedkept" : "rated") : "notrated";');
+  const backAt = body.indexOf("await backToVerify(sessionId, code, detail);");
+  assert.ok(catchAt > 0 && codeAt > catchAt && backAt > codeAt, "the rate failure is caught before returning");
+  // Nothing between the catch and the message may throw or leave early.
+  assert.doesNotMatch(body.slice(catchAt, codeAt), /throw|return|redirect\(/);
+  // The failure answers with its message either way: updated in place, or drawn again.
+  assert.match(body.slice(codeAt), /if \(details\) return \{ code, detail, verified, details \};/);
   // The flash says so plainly, and says the presentation can still be opened.
   const flash = src("../apps/ownership-planner/lib/verify-flash.ts");
   assert.match(flash, /case "notrated"/);

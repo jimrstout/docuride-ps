@@ -35,7 +35,7 @@ test("the three steps, from the rating and the prepared record", () => {
 
 test("1. not rated: Rate is the one button, and there is nothing to present", () => {
   assert.match(rateBranch, /\{step === "rate" \? \(/);
-  assert.match(rateBranch, /<form action=\{verifyAndRate\} className="vgate">/);
+  assert.match(rateBranch, /<form action=\{verifyAndRateHere\} className="vgate" data-working-redraw="none">/);
   assert.match(rateBranch, /className="btn btn--go"[\s\S]*?>\s*Rate\s*<\/Control>/);
   for (const hidden of ["Present menu", "Present storyboard", "Prepare presentation", "/plan/", "/menu/", "/prepare/"]) {
     assert.ok(!rateBranch.includes(hidden), `${hidden} is not offered before a rating`);

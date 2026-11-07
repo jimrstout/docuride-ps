@@ -434,6 +434,17 @@ export async function saveMenuLevels(formData: FormData): Promise<void> {
   await verifyAction(formData, (session_id) => ({ session_id, action: "menu_levels", levels }), "menulevels");
 }
 
+/** What Verify and the first rate answer Details with (app/details/[sessionId]/DetailsBody.tsx). */
+export interface VerifyRateAnswer {
+  /** The page's one-shot message, as the flash cookie would have carried it. */
+  code: "rated" | "ratedkept" | "notrated" | "refused";
+  detail: string | null;
+  /** fni-session-verify's reply to Verify: the whole sheet, as verification left it. */
+  verified: unknown;
+  /** Everything the rating then changed on Details. With `verified`, the page updates from both; otherwise it is drawn again, as before. */
+  details: OfferDetails | null;
+}
+
 /**
  * Verify, then rate.
  *
@@ -441,15 +452,23 @@ export async function saveMenuLevels(formData: FormData): Promise<void> {
  * so a provider having a bad afternoon cannot cost a person credit for work they
  * actually did. A failed rate leaves the session Verified with a Failed rating,
  * which is a state the console can show and a person can retry.
+ *
+ * Answers with Verify's sheet and what the rating changed, and Details updates
+ * from them in place (lib/details-offer.ts), as it does for Rate again: nothing
+ * here asks for the page to be drawn again, which would read the deal and run
+ * the DX1 check again (neither depends on the rating). The planner and the
+ * sessions list are read fresh on every load (force-dynamic). Only when the
+ * answer cannot be used is the page drawn again, with the message, as before.
  */
-export async function verifyAndRate(formData: FormData): Promise<void> {
+export async function verifyAndRate(formData: FormData): Promise<VerifyRateAnswer> {
   const sessionId = String(formData.get("session_id") ?? "");
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
   const who = await signedInInitials(sessionId);
 
+  let verified: unknown = null;
   try {
-    await edge.verifyAction<unknown>({
+    verified = await edge.verifyAction<unknown>({
       session_id: sessionId,
       action: "verify",
       // The signed-in person. fni-session-verify takes it from the sign-in
@@ -460,7 +479,8 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
     const message =
       err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
     console.error(`console verify failed for ${sessionId}:`, err);
-    return backToVerify(sessionId, "refused", message);
+    await backToVerify(sessionId, "refused", message);
+    return { code: "refused", detail: message, verified: null, details: null };
   }
 
   // Now the rating. Its own failure is also recorded on the session by
@@ -469,8 +489,9 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
   let rated = false;
   let reason: string | null = null;
   let warning: string | null = null;
+  let details: OfferDetails | null = null;
   try {
-    const result = await edge.adminRate<{ product_count?: number; warning?: string | null }>(sessionId);
+    const result = await edge.adminRate<{ product_count?: number; warning?: string | null; details?: unknown }>(sessionId);
     if ((result?.product_count ?? 0) > 0) {
       rated = true;
       // A provider failed and its last good offers were kept: said in words.
@@ -478,11 +499,18 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
     } else {
       reason = "No provider offered any plans for this deal.";
     }
+    details = isOfferDetails(result?.details) ? result.details : null;
   } catch (err) {
     console.error(`rate after verify failed for ${sessionId}:`, err);
     reason = err instanceof EdgeError ? err.message : "The rate did not come back.";
+    const body = err instanceof EdgeError ? (err.body as { details?: unknown } | null) : null;
+    details = isOfferDetails(body?.details) ? body!.details : null;
   }
+  const code = rated ? (warning ? "ratedkept" : "rated") : "notrated";
+  const detail = warning ?? reason;
+  if (details) return { code, detail, verified, details };
 
+  // As before: the message in the flash cookie, and the page drawn again.
   revalidatePath(`/details/${sessionId}`);
   revalidatePath(`/plan/${sessionId}`);
   revalidatePath(SESSIONS);
@@ -497,7 +525,8 @@ export async function verifyAndRate(formData: FormData): Promise<void> {
   // Even when the rate failed, this comes back with a message rather than an
   // error page. The presentation can still be opened: the planner has a neutral
   // screen for a session with no rate, and that is what the customer sees.
-  return backToVerify(sessionId, rated ? (warning ? "ratedkept" : "rated") : "notrated", warning ?? reason);
+  await backToVerify(sessionId, code, detail);
+  return { code, detail, verified: null, details: null };
 }
 
 /**

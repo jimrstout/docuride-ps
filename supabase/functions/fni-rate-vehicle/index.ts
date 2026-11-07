@@ -181,6 +181,30 @@ function outcomeLine(o: ProviderOutcome): string {
   return `${o.provider.name}: ${o.result.reason}`;
 }
 
+/**
+ * The first rate's answer (the rating after Verify), with what the rating
+ * changed on Details (_shared/details-offer.ts): built by the same function
+ * Details loads with, from the session as it stands once everything the
+ * rating writes is written. Details puts it over the sheet Verify answered
+ * with, instead of drawing the whole page again. Null when it cannot be
+ * built; the page then reloads as before. The same as Rate again's answer.
+ */
+async function withDetails(
+  supabase: SupabaseClient,
+  sessionId: string,
+  status: number,
+  body: Record<string, unknown>
+): Promise<Response> {
+  const { data: fresh } = await supabase.schema("fni").from("sessions").select("*").eq("id", sessionId).maybeSingle();
+  const details = fresh
+    ? await offerParts(supabase, fresh as Record<string, unknown>).catch((err) => {
+        console.error(`fni-rate-vehicle details not built for ${sessionId}: ${err instanceof Error ? err.message : String(err)}`);
+        return null;
+      })
+    : null;
+  return json(status, { ...body, details });
+}
+
 // ─── Main handler ────────────────────────────────────────────────────────
 
 serve(async (req: Request) => {
@@ -421,7 +445,7 @@ serve(async (req: Request) => {
     if (productCount === 0 && keptCount > 0) {
       // Nothing new, but the last good offers stand: the status and the
       // customer's choices are untouched, and staff are told why.
-      return json(200, {
+      return await withDetails(supabase, session_id, 200, {
         session_id,
         status: sess.status,
         product_count: keptCount,
@@ -437,7 +461,7 @@ serve(async (req: Request) => {
       // Nothing to present. Every provider's reason, in its own words, is what
       // a staff member needs to see.
       const missingVtype = !rateSource.vehicle_type_code && ta !== undefined;
-      return json(400, {
+      return await withDetails(supabase, session_id, 400, {
         error: providers.map((p) => p.line).join(" "),
         status: outcomes.some((o) => o.result.state === "Not Offered") ? "Not Offered" : "Failed",
         providers,
@@ -448,7 +472,7 @@ serve(async (req: Request) => {
       });
     }
 
-    return json(200, {
+    return await withDetails(supabase, session_id, 200, {
       session_id,
       status: nextStatus,
       product_count: productCount,
@@ -476,7 +500,8 @@ serve(async (req: Request) => {
       });
     }
 
-    return json(500, { error: message });
+    // With the failed rating as Details now shows it, when that can be built.
+    return await withDetails(supabase, session_id, 500, { error: message }).catch(() => json(500, { error: message }));
   }
 });
 

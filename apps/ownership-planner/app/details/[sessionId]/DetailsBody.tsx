@@ -72,7 +72,7 @@ import OemContractRecord from "@/components/OemContractRecord";
 import DetailsTabs from "@/components/DetailsTabs";
 import { nextStep, PREPARE_FIRST, RATE_SAY } from "@/lib/next-step";
 import ProgramLabel from "@/components/admin/ProgramLabel";
-import { mergeOfferDetails } from "@/lib/details-offer";
+import { mergeOfferDetails, sheetFromReply } from "@/lib/details-offer";
 
 const GROUPS: { group: FieldGroup; blurb: string }[] = [
   { group: "Deal", blurb: "Which deal this is, and how it is being paid for." },
@@ -301,7 +301,7 @@ function Field({ field, vendor }: { field: VerifyField; vendor: string }) {
   );
 }
 
-/** Rate again's answer, kept against the sheet it was put over. */
+/** An answer the page updated from (Rate again, the first rate), kept against the sheet it was put over. */
 interface RatedHere {
   base: VerifySheet;
   sheet: VerifySheet;
@@ -327,8 +327,8 @@ export default function DetailsBody({
 }) {
   const router = useRouter();
   const operator = { email: operatorEmail };
-  // What Rate again put here, only while the page has not been drawn again
-  // since: a fresh sheet from the server replaces it.
+  // What Rate again or the first rate put here, only while the page has not
+  // been drawn again since: a fresh sheet from the server replaces it.
   const [ratedHere, setRatedHere] = useState<RatedHere | null>(null);
   const rated = ratedHere && ratedHere.base === loaded ? ratedHere : null;
   const sheet = rated ? rated.sheet : loaded;
@@ -355,6 +355,34 @@ export default function DetailsBody({
           setRatedHere({
             base: loaded,
             sheet: mergeOfferDetails(loaded, answer.details!),
+            flash: { code: answer.code, detail: answer.detail },
+            id: `${answer.code}:${Date.now()}`,
+          })
+        );
+      } finally {
+        workingDone();
+      }
+    },
+    [loaded, router]
+  );
+
+  // Verify, then the first rate (verifyAndRate): the page updates from
+  // Verify's sheet with what the rating changed put over it, as Rate again
+  // updates. When either cannot be used, the action has already asked for
+  // the page to be drawn again, with the message, as before.
+  const verifyAndRateHere = useCallback(
+    async (fd: FormData) => {
+      try {
+        const answer = await verifyAndRate(fd);
+        const verifiedSheet = answer.verified ? sheetFromReply(answer.verified, loaded) : null;
+        if (!verifiedSheet || !answer.details) {
+          router.refresh();
+          return;
+        }
+        flushSync(() =>
+          setRatedHere({
+            base: loaded,
+            sheet: mergeOfferDetails(verifiedSheet, answer.details!),
             flash: { code: answer.code, detail: answer.detail },
             id: `${answer.code}:${Date.now()}`,
           })
@@ -1286,8 +1314,10 @@ export default function DetailsBody({
           <div className="vnext-do">
             {step === "rate" ? (
               // Verify, then rate (verifyAndRate). The server refuses a second
-              // press while the first is running, as before.
-              <form action={verifyAndRate} className="vgate">
+              // press while the first is running, as before. Updates this page
+              // from the two answers instead of drawing it again
+              // (lib/details-offer.ts): no wait for a new render.
+              <form action={verifyAndRateHere} className="vgate" data-working-redraw="none">
                 <Working />
                 <input type="hidden" name="session_id" value={sheet.session.id} />
                 <Control type="submit"
