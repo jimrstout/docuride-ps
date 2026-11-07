@@ -45,6 +45,12 @@ export const REFRESHED_HELD_EVENT = "Rating refreshed after a void: prices chang
  * date, until staff choose again.
  */
 export const RATED_AGAIN_PREFIX = "Rated again by ";
+/**
+ * The first rate's event (the rating after Verify), with its step timing
+ * under detail.timing (_shared/rate-timing.ts). Who rated is the event's
+ * created_by. Not "Rated again by": nothing that reads those reads this.
+ */
+export const FIRST_RATED_EVENT = "Rated";
 export function ratedAgainEvent(by: string): string {
   return `${RATED_AGAIN_PREFIX}${by}`;
 }

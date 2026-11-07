@@ -97,3 +97,38 @@ test("Rate again reads in parallel what does not depend on what came before", ()
   const make = adapter.slice(adapter.indexOf("async function providerMake("), adapter.indexOf("async function readMakes("));
   assert.ok(make.indexOf('if (m.status !== "brand") return { refusal: m.message };') < make.indexOf("await makesList("));
 });
+
+// ── The first rate (after Verify): the same timing, in its "Rated" event ────
+test("the first rate keeps the same step timing, in a Rated event, before it answers", () => {
+  const fn = read("supabase/functions/fni-rate-vehicle/index.ts");
+  const first = fn.slice(fn.indexOf("// ── Step 3: Rate every provider the menu needs"), fn.indexOf("} catch (err) {", fn.indexOf("// ── Step 3: Rate every provider the menu needs")));
+  // The provider's own steps and facts, through rateSession and the adapter, as for Rate again.
+  assert.match(first, /await rateSession\(\s*supabase,\s*\{ id: sess\.id, tenant_id: sess\.tenant_id, store_id: sess\.store_id \},\s*rateSource,\s*timing\s*\);/);
+  for (const step of ["selections read", "session updated", "reply ready"]) assert.ok(first.includes(`timing.mark("${step}")`), step);
+  assert.match(first, /timing\.note\("selections_compared", \(chosenRows \?\? \[\]\)\.length\);/);
+  // The steps before the rating are shared with Rate again.
+  const shared = fn.slice(fn.indexOf("serve(async (req: Request) => {"), fn.indexOf("if (body.rate_again === true) {\n      return await rateAgain("));
+  for (const step of ["request received", "staff sign-in checked", "session loaded", "sale date read", "contracts read"]) {
+    assert.ok(shared.includes(`timing.mark("${step}")`), step);
+  }
+  // Written under detail.timing, in an event named for it, crediting who rated.
+  assert.match(first, /\.insert\(\{ session_id, event: FIRST_RATED_EVENT, detail: \{ \.\.\.detail, timing: timing\.detail\(\) \}, created_by: who \}\);/);
+  assert.match(read("supabase/functions/_shared/spent-rates.ts"), /export const FIRST_RATED_EVENT = "Rated";/);
+  // Every outcome after the rating records it, then answers.
+  const records = [...first.matchAll(/await recordRated\(\{ outcome: "(\w+)"/g)].map((m) => m[1]);
+  assert.deepEqual(records, ["kept", "failed", "rated"]);
+  for (const outcome of ["kept", "failed", "rated"]) {
+    const at = first.indexOf(`await recordRated({ outcome: "${outcome}"`);
+    assert.ok(first.indexOf("return await withDetails(", at) > at, outcome);
+  }
+  // The console says who rated.
+  assert.match(read("apps/ownership-planner/app/console-actions.ts"), /edge\.adminRate<[^>]*>\(sessionId, who\)/);
+  assert.match(read("apps/ownership-planner/lib/edge.ts"), /body: ratedBy \? \{ session_id: sessionId, rated_by: ratedBy \} : \{ session_id: sessionId \}/);
+});
+
+test("nothing reads the Rated event: it is not a Rated again event, and no screen asks for it", () => {
+  assert.equal("Rated".startsWith("Rated again by "), false);
+  for (const rel of ["supabase/functions/_shared/details-offer.ts", "supabase/functions/fni-session-verify/index.ts"]) {
+    assert.doesNotMatch(read(rel), /FIRST_RATED_EVENT|\.eq\("event", "Rated"\)/, rel);
+  }
+});

@@ -491,7 +491,8 @@ export async function verifyAndRate(formData: FormData): Promise<VerifyRateAnswe
   let warning: string | null = null;
   let details: OfferDetails | null = null;
   try {
-    const result = await edge.adminRate<{ product_count?: number; warning?: string | null; details?: unknown }>(sessionId);
+    // Who rated, for the "Rated" event that keeps the rating's step timing.
+    const result = await edge.adminRate<{ product_count?: number; warning?: string | null; details?: unknown }>(sessionId, who);
     if ((result?.product_count ?? 0) > 0) {
       rated = true;
       // A provider failed and its last good offers were kept: said in words.
