@@ -36,7 +36,7 @@ test("the panels show to a signed-in operator only", () => {
   assert.doesNotMatch(page, /Sign in to see and correct who goes on the contracts/);
   const actions = src("app/console-actions.ts");
   // Credited to the signed-in person's initials (test/verify-flow.test.mjs).
-  assert.match(actions, /const who = await signedInInitials\(sessionId\);\s*await verifyAction\(formData, \(session_id\) => \(\{ \.\.\.body\(session_id\), edited_by: who \}\), onOk\);/);
+  assert.match(actions, /const who = await signedInInitials\(sessionId\);\s*return verifyAction\(formData, \(session_id\) => \(\{ \.\.\.body\(session_id\), edited_by: who \}\), onOk\);/);
 });
 
 test("every field is editable, read-only when locked, with its history and the CRM's newer value", () => {

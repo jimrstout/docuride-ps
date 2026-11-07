@@ -89,7 +89,7 @@ test("both buttons: verified, rated and current; a live contract does not block 
 
 test("a manager sets each column's coverage level for this deal on Details", () => {
   const page = detailsSource();
-  assert.match(page, /\{presentable && \(sheet\.menu_columns\?\.length \?\? 0\) > 0 \? \(\s*<form action=\{saveMenuLevels\}/);
+  assert.match(page, /\{presentable && \(sheet\.menu_columns\?\.length \?\? 0\) > 0 \? \(\s*<form action=\{here\(saveMenuLevels\)\}/);
   assert.match(page, /<select name=\{`level_\$\{c\.position\}`\} defaultValue=\{c\.level\}>/);
   const verify = verifySource();
   assert.match(verify, /if \(action === "menu_levels"\) return await credited\(await setMenuLevels\(supabase, s, body\.levels\), MENU_LEVELS_EVENT\);/);

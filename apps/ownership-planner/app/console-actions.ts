@@ -19,6 +19,7 @@ import {
   mintConsoleCookie,
 } from "@/lib/admin-session";
 import { ratingInputsFrom } from "@/lib/verify-fields";
+import { shouldAutoDecode } from "@/lib/auto-decode";
 import { ADMIN_HOME, initialsFor, safeStaffPath, withNotice } from "@/lib/admin-sections";
 
 // The admin area's pages, as the actions below send people back to them.
@@ -267,16 +268,58 @@ async function backToVerify(
   revalidatePath(`/details/${sessionId}`);
 }
 
+/**
+ * What a Details action answers with (components/AnswerHere.tsx): the page's
+ * one-shot message, as the flash cookie would have carried it, and the whole
+ * sheet the action's Edge Function answered with. Details updates from it in
+ * place (lib/details-offer.ts sheetFromReply). With no sheet the action has
+ * already asked for the page to be drawn again, with the message, as before.
+ */
+export interface SheetAnswer {
+  code: string | null;
+  detail: string | null;
+  sheet: unknown;
+  /**
+   * The DX1 check, run again, for an action that changes what it reads
+   * (Refresh from CRM and Discard re-pull the deal). Absent: the one on the
+   * screen stands, as the action changed nothing it reads.
+   */
+  dx1?: unknown;
+}
+
+/** A refusal, or an answer the page cannot use: drawn again with the message, as before. */
+async function drawnAgain(sessionId: string, code: string | null, detail: string | null = null): Promise<SheetAnswer> {
+  revalidatePath(`/details/${sessionId}`);
+  await backToVerify(sessionId, code, detail);
+  return { code, detail, sheet: null };
+}
+
+/**
+ * The answer, or the page drawn again where a reload would do more than
+ * show it: a VIN never decoded nor tried is decoded by the page itself as it
+ * loads (lib/auto-decode.ts), so that one is still drawn again.
+ */
+async function answered(sessionId: string, code: string | null, sheet: unknown, extra: Partial<SheetAnswer> = {}): Promise<SheetAnswer> {
+  const s = sheet as { fields?: unknown; vin_decode_at?: unknown } | null;
+  if (!s || !Array.isArray(s.fields) || shouldAutoDecode(s as Parameters<typeof shouldAutoDecode>[0])) {
+    revalidatePath(SESSIONS);
+    return drawnAgain(sessionId, code);
+  }
+  return { code, detail: null, sheet, ...extra };
+}
+
 async function verifyAction(
   formData: FormData,
   build: (sessionId: string) => Record<string, unknown>,
-  onOk: string | null = null
-): Promise<void> {
+  onOk: string | null = null,
+  opts: { dx1?: boolean } = {}
+): Promise<SheetAnswer> {
   const sessionId = String(formData.get("session_id") ?? "");
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
+  let reply: unknown;
   try {
-    await edge.verifyAction<unknown>(build(sessionId));
+    reply = await edge.verifyAction<unknown>(build(sessionId));
   } catch (err) {
     // The Edge Function's own message, not a reworded one. It names the field
     // that is missing or quotes the provider, which is exactly what the person
@@ -285,12 +328,17 @@ async function verifyAction(
     const message =
       err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
     console.error(`console verify action failed for ${sessionId}:`, err);
-    return backToVerify(sessionId, "refused", message);
+    return drawnAgain(sessionId, "refused", message);
   }
 
-  revalidatePath(`/details/${sessionId}`);
-  revalidatePath(SESSIONS);
-  return backToVerify(sessionId, onOk);
+  // The answer is the whole sheet (fni-session-verify sheetFor, the function
+  // Details loads with): Details updates from it, with no second read of the
+  // deal and nothing that makes Next draw the page again. The sessions list
+  // is read fresh on every load (force-dynamic). Where the action re-pulled
+  // the deal, the DX1 check runs again after it, as a reload would run it,
+  // and answers with it; it never fails loudly.
+  const dx1 = opts.dx1 ? await edge.dx1Check<unknown>(sessionId).catch(() => null) : undefined;
+  return answered(sessionId, onOk, reply, opts.dx1 ? { dx1 } : {});
 }
 
 /**
@@ -305,7 +353,7 @@ async function verifyAction(
  * is sent through as an empty string on purpose: that is how a person puts the
  * original value back.
  */
-export async function saveVerifyFields(formData: FormData): Promise<void> {
+export async function saveVerifyFields(formData: FormData): Promise<SheetAnswer> {
   const sessionId = String(formData.get("session_id") ?? "");
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
   const who = await signedInInitials(sessionId);
@@ -317,7 +365,7 @@ export async function saveVerifyFields(formData: FormData): Promise<void> {
   // and it is not in the list.
   const entries = ratingInputsFrom(formData.entries());
 
-  await verifyAction(
+  return verifyAction(
     formData,
     (session_id) => ({
       session_id,
@@ -338,20 +386,24 @@ export async function saveVerifyFields(formData: FormData): Promise<void> {
  * size, factory warranty and fuel type survive, because the CRM does not carry
  * them and there would be nothing to reload them from.
  */
-export async function discardEdits(formData: FormData): Promise<void> {
-  await verifyAction(
+export async function discardEdits(formData: FormData): Promise<SheetAnswer> {
+  // Discard re-pulls the deal from the CRM, so the DX1 check runs again after it.
+  return verifyAction(
     formData,
     (session_id) => ({ session_id, action: "discard_edits" }),
-    "discarded"
+    "discarded",
+    { dx1: true }
   );
 }
 
 /** Ask TecAssured what the VIN is. Fills engine size and fuel type. */
-export async function decodeVin(formData: FormData): Promise<void> {
+export async function decodeVin(formData: FormData): Promise<SheetAnswer> {
   // fni-vin-decode rather than a verify action. It was the only part of this
   // screen that calls the provider, and keeping it on fni-session-verify made a
   // sheet endpoint bundle the entire TecAssured client. It returns the decode
-  // rather than the sheet, so the sheet is re-read the way any page load reads it.
+  // rather than the sheet, so the sheet is read the way any page load reads it
+  // (fni-session-verify GET) and Details updates from it in place. A decode
+  // changes nothing the DX1 check reads, so that is not run again.
   const sessionId = String(formData.get("session_id") ?? "");
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
 
@@ -361,16 +413,22 @@ export async function decodeVin(formData: FormData): Promise<void> {
     const message =
       err instanceof EdgeError ? err.message : "Something went wrong. Try again.";
     console.error(`vin decode failed for ${sessionId}:`, err);
-    return backToVerify(sessionId, "refused", message);
+    return drawnAgain(sessionId, "refused", message);
   }
 
-  revalidatePath(`/details/${sessionId}`);
-  return backToVerify(sessionId, "decoded");
+  let sheet: unknown = null;
+  try {
+    sheet = await edge.verifySheet<unknown>(sessionId, { fresh: true });
+  } catch (err) {
+    console.error(`sheet after vin decode failed for ${sessionId}:`, err);
+  }
+  return answered(sessionId, "decoded", sheet);
 }
 
 /** Re-pull the deal's rating inputs from the CRM. */
-export async function refreshFromCrm(formData: FormData): Promise<void> {
-  await verifyAction(formData, (session_id) => ({ session_id, action: "refresh" }), "refreshed");
+export async function refreshFromCrm(formData: FormData): Promise<SheetAnswer> {
+  // A re-pull of the deal can change what the DX1 check reads, so it runs again after it.
+  return verifyAction(formData, (session_id) => ({ session_id, action: "refresh" }), "refreshed", { dx1: true });
 }
 
 // ── Who goes on the contracts ─────────────────────────────────────────────
@@ -384,40 +442,40 @@ async function partyAction(
   formData: FormData,
   body: (sessionId: string) => Record<string, unknown>,
   onOk: string
-): Promise<void> {
+): Promise<SheetAnswer> {
   const sessionId = String(formData.get("session_id") ?? "");
   if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
   const who = await signedInInitials(sessionId);
-  await verifyAction(formData, (session_id) => ({ ...body(session_id), edited_by: who }), onOk);
+  return verifyAction(formData, (session_id) => ({ ...body(session_id), edited_by: who }), onOk);
 }
 
-export async function savePartyFields(formData: FormData): Promise<void> {
-  await partyAction(formData, (session_id) => ({ session_id, action: "party_save", entries: partyEntries(formData) }), "partysaved");
+export async function savePartyFields(formData: FormData): Promise<SheetAnswer> {
+  return partyAction(formData, (session_id) => ({ session_id, action: "party_save", entries: partyEntries(formData) }), "partysaved");
 }
 
-export async function removeParty(formData: FormData): Promise<void> {
+export async function removeParty(formData: FormData): Promise<SheetAnswer> {
   const party = String(formData.get("party") ?? "");
   if (formData.get("confirm") !== "1") {
     const sessionId = String(formData.get("session_id") ?? "");
     if (!UUID_RE.test(sessionId)) redirect(withNotice(SESSIONS, "bad"));
-    return backToVerify(sessionId, "refused", `Tick the box to confirm removing the ${party.toLowerCase()}.`);
+    return drawnAgain(sessionId, "refused", `Tick the box to confirm removing the ${party.toLowerCase()}.`);
   }
-  await partyAction(formData, (session_id) => ({ session_id, action: "party_remove", party }), "partyremoved");
+  return partyAction(formData, (session_id) => ({ session_id, action: "party_remove", party }), "partyremoved");
 }
 
-export async function restoreParty(formData: FormData): Promise<void> {
+export async function restoreParty(formData: FormData): Promise<SheetAnswer> {
   const party = String(formData.get("party") ?? "");
-  await partyAction(formData, (session_id) => ({ session_id, action: "party_restore", party }), "partyrestored");
+  return partyAction(formData, (session_id) => ({ session_id, action: "party_restore", party }), "partyrestored");
 }
 
-export async function keepStaffValue(formData: FormData): Promise<void> {
+export async function keepStaffValue(formData: FormData): Promise<SheetAnswer> {
   const key = String(formData.get("key") ?? "");
-  await partyAction(formData, (session_id) => ({ session_id, action: "party_keep_staff", key }), "partykept");
+  return partyAction(formData, (session_id) => ({ session_id, action: "party_keep_staff", key }), "partykept");
 }
 
-export async function useCrmValue(formData: FormData): Promise<void> {
+export async function useCrmValue(formData: FormData): Promise<SheetAnswer> {
   const key = String(formData.get("key") ?? "");
-  await partyAction(formData, (session_id) => ({ session_id, action: "party_use_crm", key }), "partycrm");
+  return partyAction(formData, (session_id) => ({ session_id, action: "party_use_crm", key }), "partycrm");
 }
 
 /**
@@ -425,13 +483,13 @@ export async function useCrmValue(formData: FormData): Promise<void> {
  * set by a manager before presenting. A level the same as the template's is
  * not kept, so the template still decides it.
  */
-export async function saveMenuLevels(formData: FormData): Promise<void> {
+export async function saveMenuLevels(formData: FormData): Promise<SheetAnswer> {
   const levels = Object.fromEntries(
     [1, 2, 3, 4, 5]
       .filter((n) => formData.has(`level_${n}`))
       .map((n) => [String(n), String(formData.get(`level_${n}`) ?? "")])
   );
-  await verifyAction(formData, (session_id) => ({ session_id, action: "menu_levels", levels }), "menulevels");
+  return verifyAction(formData, (session_id) => ({ session_id, action: "menu_levels", levels }), "menulevels");
 }
 
 /** What Verify and the first rate answer Details with (app/details/[sessionId]/DetailsBody.tsx). */
