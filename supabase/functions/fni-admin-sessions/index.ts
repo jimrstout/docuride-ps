@@ -110,18 +110,32 @@ function isExpired(expiresAt: unknown, now: number): boolean {
 
 type StoreRow = { id: string; name: string; zoho_store_location: string | null };
 
-/** The stores the person may see, by full name, alphabetical. */
-async function permittedStores(supabase: ReturnType<typeof admin>, access: PsAccess): Promise<StoreRow[]> {
-  if (access.storeIds !== null && access.storeIds.length === 0) return [];
-  let q = supabase.from("stores").select("id,name,zoho_store_location");
-  if (access.storeIds !== null) q = q.in("id", access.storeIds);
-  const { data, error } = await q;
+/** The stores turned on for DocuRide PS (fni.ps_stores, migration 0059). */
+async function storesUsingPs(supabase: ReturnType<typeof admin>): Promise<Set<string>> {
+  const settings = await psStores(supabase);
+  return new Set([...settings.values()].filter((s) => s.uses_ps).map((s) => s.store_id));
+}
+
+/**
+ * The person's access cut to the stores that use PS: an Administrator still
+ * sees every session (null), Staff only their stores that are turned on.
+ */
+function effectiveAccess(access: PsAccess, on: Set<string>): PsAccess {
+  return access.storeIds === null ? access : { ...access, storeIds: access.storeIds.filter((id) => on.has(id)) };
+}
+
+/** The stores the person may choose, by full name, alphabetical: only those that use PS. */
+async function permittedStores(supabase: ReturnType<typeof admin>, access: PsAccess, on: Set<string>): Promise<StoreRow[]> {
+  const ids = access.storeIds === null ? [...on] : access.storeIds.filter((id) => on.has(id));
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase.from("stores").select("id,name,zoho_store_location").in("id", ids);
   if (error) throw new Error(`stores: ${error.message}`);
   return ((data ?? []) as StoreRow[]).sort((a, b) => storeFullName(a).localeCompare(storeFullName(b)));
 }
 
 async function me(gate: PsGateOk): Promise<Response> {
-  const stores = await permittedStores(admin(), gate.access);
+  const supabase = admin();
+  const stores = await permittedStores(supabase, gate.access, await storesUsingPs(supabase));
   return json(200, {
     role: gate.access.role,
     email: gate.staff.email,
@@ -136,8 +150,11 @@ async function list(url: URL, gate: PsGateOk): Promise<Response> {
     : DEFAULT_LIMIT;
 
   const supabase = admin();
-  const access = gate.access;
-  const permitted = await permittedStores(supabase, access);
+  const on = await storesUsingPs(supabase);
+  // Staff see only their stores that use PS; an Administrator every session,
+  // a store turned off included, since its sessions stay as they were.
+  const access = effectiveAccess(gate.access, on);
+  const permitted = await permittedStores(supabase, access, on);
   const storeList = permitted.map((s) => ({ id: s.id, name: storeFullName(s) }));
 
   // Staff with no stores: nothing is read, and they are told why.
@@ -282,6 +299,8 @@ async function staffList(): Promise<Response> {
     supabase.schema("fni").from("staff_store_access").select("user_id, store_id, granted_by, granted_at"),
     supabase.from("stores").select("id,name,zoho_store_location"),
   ]);
+  // Only stores that use PS are offered for granting (fni.ps_stores).
+  const on = await storesUsingPs(supabase);
   if (usersErr) return json(500, { error: `The sign-ins could not be read: ${usersErr.message}` });
   const roleOf = new Map(((roles ?? []) as { user_id: string; role: string; granted_by: string; granted_at: string }[]).map((r) => [r.user_id, r]));
   const grantsOf = new Map<string, string[]>();
@@ -303,7 +322,7 @@ async function staffList(): Promise<Response> {
     .sort((a, b) => a.email.localeCompare(b.email));
   return json(200, {
     people,
-    stores: ((stores ?? []) as StoreRow[]).map((s) => ({ id: s.id, name: storeFullName(s) })).sort((a, b) => a.name.localeCompare(b.name)),
+    stores: ((stores ?? []) as StoreRow[]).filter((s) => on.has(s.id)).map((s) => ({ id: s.id, name: storeFullName(s) })).sort((a, b) => a.name.localeCompare(b.name)),
   });
 }
 

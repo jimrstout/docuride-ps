@@ -285,7 +285,18 @@ export interface BrandsPayload {
 
 export interface StoresPayload {
   time_zones: { zone: string; label: string }[];
-  stores: { id: string; name: string; place: string | null; time_zone: string; today: string }[];
+  stores: {
+    id: string;
+    /** The full name as the CRM writes it. */
+    name: string;
+    place: string | null;
+    time_zone: string;
+    today: string;
+    /** DocuRide PS is turned on for the store (migration 0059). */
+    uses_ps?: boolean;
+    /** Other stores the CRM keeps as the same dealer, by full name. */
+    same_dealer?: string[];
+  }[];
 }
 
 // What fni-admin-sessions returns. Deliberately narrow: no buyer, co-buyer,

@@ -44,3 +44,45 @@ test("a store without a CRM name shows its own name, never blank", () => {
   assert.equal(storeFullName({ name: "Bell Chevrolet", zoho_store_location: null }), "Bell Chevrolet");
   assert.equal(storeFullName({ name: "X", zoho_store_location: "  " }), "X");
 });
+
+// ── 4. DocuRide PS turned on or off per store ───────────────────────────────
+test("session start refuses a store that is off, after reopening an existing session and before any insert", () => {
+  const src = read("supabase/functions/fni-session-start/index.ts");
+  const check = src.indexOf("await usesPs(supabase, storeRow.id)");
+  assert.ok(check > 0, "usesPs check present");
+  assert.match(src.slice(check, check + 200), /json\(403, \{ error: PS_NOT_ON \}\)/);
+  const reopen = src.search(/existing/i);
+  const insert = src.indexOf('.from("sessions").insert');
+  assert.ok(reopen > 0 && reopen < check, "an existing session reopens first, whatever the switch says");
+  assert.ok(insert === -1 || check < insert, "the check comes before a new session is written");
+  assert.equal(read("supabase/functions/_shared/ps-stores.ts").match(/PS_NOT_ON = "([^"]+)"/)[1], "DocuRide PS isn't turned on for this store.");
+});
+
+test("the Sessions store choice and the Staff page offer only stores that are on; an Administrator still sees every session", () => {
+  const src = read("supabase/functions/fni-admin-sessions/index.ts");
+  assert.match(src, /async function storesUsingPs/);
+  assert.match(src, /access\.storeIds === null \? access : \{ \.\.\.access, storeIds: access\.storeIds\.filter\(\(id\) => on\.has\(id\)\) \}/);
+  assert.match(src, /const access = effectiveAccess\(gate\.access, on\);/);
+  assert.match(src, /permittedStores\(supabase, gate\.access, await storesUsingPs\(supabase\)\)/);
+  assert.match(src, /\.filter\(\(s\) => on\.has\(s\.id\)\)\.map\(\(s\) => \(\{ id: s\.id, name: storeFullName\(s\) \}\)\)/);
+});
+
+test("the switch saves to fni.ps_stores with who changed it, only for a store of the dealer group", () => {
+  const src = read("supabase/functions/fni-admin-settings/stores.ts");
+  const at = src.indexOf('typeof body.uses_ps === "boolean"');
+  assert.ok(at > 0);
+  const block = src.slice(at, at + 1200);
+  assert.match(block, /\.eq\("tenant_id", tenantId\)/);
+  assert.match(block, /schema\("fni"\)\.from\("ps_stores"\)\.upsert\(\s*\{ store_id: body\.store_id, uses_ps: body\.uses_ps, updated_at: [^,]+, updated_by: who \|\| null \}/);
+  assert.doesNotMatch(src, /\.from\("stores"\)\.(update|upsert|insert)/, "public.stores is never written");
+  assert.match(src, /same_dealer: sameDealer\(s\)/);
+});
+
+test("the Stores page lists stores that are on by default, with Show all stores and the shared-dealer note", () => {
+  const src = read("apps/ownership-planner/app/admin/stores/page.tsx");
+  assert.match(src, /const shown = showingAll \? payload\.stores : payload\.stores\.filter\(\(s\) => s\.uses_ps\);/);
+  assert.match(src, /Show all stores \(\$\{payload\.stores\.length\}\)/);
+  assert.match(src, /Same dealer as \{other\}/);
+  assert.match(src, /<UsesPsSwitch /);
+  assert.doesNotMatch(src, /—/, "no em dashes");
+});
