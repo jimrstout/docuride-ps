@@ -46,7 +46,7 @@ test("nothing on the list opens a customer presentation, rates, or opens a new t
 test("the Actions column is narrow, and the list fits a laptop screen", () => {
   const css = app("app/admin/admin.css");
   const block = css.slice(css.indexOf("/* ── Sessions on one screen"));
-  assert.match(block, /#ad-sessions th:nth-child\(9\) \{ width: 88px; \}/);
+  assert.match(block, /#ad-sessions th:nth-child\(9\) \{ width: 80px; \}/);
   assert.match(block, /#ad-sessions \{ table-layout: fixed; \}/);
   // The page is the window; more sessions than fit are paged, not scrolled
   // (test/sessions-paging.test.mjs).

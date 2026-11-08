@@ -15,7 +15,7 @@ const layout = read("apps/ownership-planner/app/admin/layout.tsx");
 test("a Customer column next to Deal #, with a co-buyer underneath, smaller and grey", () => {
   const heads = [...page.matchAll(/<th scope="col">([^<]+)<\/th>/g)].map((m) => m[1]);
   assert.deepEqual(heads, ["Deal #", "Customer", "Vehicle", "Store", "Status", "Rating", "Created", "Expires", "Actions"]);
-  assert.match(page, /<td data-label="Customer" className="ad-customer">\s*<span className="ad-clip ad-strong" title=\{row\.customer \?\? undefined\}>\{row\.customer \?\? "Not set"\}<\/span>\s*\{row\.co_buyer \? <small className="ad-clip" title=\{row\.co_buyer\}>\{row\.co_buyer\}<\/small> : null\}/);
+  assert.match(page, /<td data-label="Customer" className="ad-customer">[\s\S]{0,200}<span className="ad-strong ad-wrap">\{row\.customer \?\? "Not set"\}<\/span>\s*\{row\.co_buyer \? <small className="ad-wrap">\{row\.co_buyer\}<\/small> : null\}/);
   // small is the grey, smaller line in the admin stylesheet.
   assert.match(read("apps/ownership-planner/app/admin/admin.css"), /\.ad-table td small, \.ad-sub \{ display: block; margin-top: 4px; font-size: 11px; color: var\(--muted\); \}/);
 });
@@ -69,4 +69,13 @@ test("the sidebar, phone menu and breadcrumb follow the address on screen, not t
   assert.match(layout, /<AdminCrumbHere \/>/);
   assert.doesNotMatch(layout, /sectionFor\(/, "the layout no longer decides which page is open");
   assert.match(read("apps/ownership-planner/components/admin/AdminMenu.tsx"), /const here = useHere\(\)\?\.href \?\? null;/);
+});
+
+test("customer and store names wrap, never cut off; the vehicle gives up room first", () => {
+  assert.match(css, /#ad-sessions tr\[data-row\] td \.ad-wrap,[\s\S]{0,200}white-space: normal; overflow: visible; text-overflow: clip;/);
+  assert.match(css, /#ad-sessions th:nth-child\(2\) \{ width: 15%; \}\s*#ad-sessions th:nth-child\(3\) \{ width: 9%; \}\s*#ad-sessions th:nth-child\(4\) \{ width: 15%; \}/);
+  assert.match(page, /<StoreName name=\{row\.store_name\} \/>/);
+  assert.match(page, /title=\{vehicle\(row\)\}/, "the full vehicle on hover");
+  assert.match(page, /\? "Ended with sale date"/);
+  assert.match(css, /td\[data-label="Expires"\] small \{ white-space: nowrap; \}/);
 });

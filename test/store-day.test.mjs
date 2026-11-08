@@ -145,7 +145,7 @@ test("PS reads and writes the store time zone in fni.ps_stores only, never publi
 test("Sessions has no Renew for Today: a session runs through its CRM sale date", async () => {
   const page = src("apps/ownership-planner/app/admin/sessions/page.tsx");
   assert.doesNotMatch(page, /renewSession|Renew for Today|renewable|renew_to/);
-  assert.match(page, /\? "Ended with its sale date"/);
+  assert.match(page, /\? "Ended with sale date"/);
   assert.doesNotMatch(page, />\s*\+24h\s*<|extendSession|Adding 24 hours/);
   const actions = src("apps/ownership-planner/app/console-actions.ts");
   assert.doesNotMatch(actions, /adminRenew|renewSession|EXTEND_HOURS|adminExtend/);

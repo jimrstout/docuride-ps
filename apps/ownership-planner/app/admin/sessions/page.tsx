@@ -29,6 +29,7 @@ import { SIGN_IN_NOTICES } from "@/components/admin/SignIn";
 import { Badge, Notice, PageHead, type Tone } from "@/components/admin/Parts";
 import { SessionFilters } from "@/components/admin/SessionFilters";
 import { SessionPager } from "@/components/admin/SessionPager";
+import StoreName from "@/components/admin/StoreName";
 
 export const dynamic = "force-dynamic";
 
@@ -222,8 +223,9 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
 
         {/* The buyer as the session holds them; a co-buyer underneath, smaller and grey. */}
         <td data-label="Customer" className="ad-customer">
-          <span className="ad-clip ad-strong" title={row.customer ?? undefined}>{row.customer ?? "Not set"}</span>
-          {row.co_buyer ? <small className="ad-clip" title={row.co_buyer}>{row.co_buyer}</small> : null}
+          {/* Never cut off: a long name wraps onto a second line. */}
+          <span className="ad-strong ad-wrap">{row.customer ?? "Not set"}</span>
+          {row.co_buyer ? <small className="ad-wrap">{row.co_buyer}</small> : null}
         </td>
 
         <td className="ad-vehicle">
@@ -234,7 +236,7 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
         </td>
 
         <td data-label="Store">
-          <span className="ad-clip ad-clip--store" title={row.store_name ?? undefined}>{row.store_name ?? "Not set"}</span>
+          <StoreName name={row.store_name} />
         </td>
 
         <td data-label="Status">
@@ -259,7 +261,7 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
           )}
           <small>
           {row.expired
-            ? "Ended with its sale date"
+            ? "Ended with sale date"
             : row.time_zone ? `Until ${storeTime(row.expires_at, row.time_zone)}` : since(row.expires_at, now)}
         </small>
         </td>
