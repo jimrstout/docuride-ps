@@ -82,6 +82,23 @@ function sheet(id) {
 const STORES = ["Mock Store, Mocktown", "Second Store, Elsewhere"];
 /** The stores' ids, beside their full names. */
 export const STORE_IDS = ["5a000000-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "5b000000-aaaa-4aaa-8aaa-aaaaaaaaaaaa"];
+/**
+ * Every store, as Administration > Stores sees it (fni.ps_stores, migration
+ * 0059): the full name, whether it uses PS, and its CRM dealer. The first two
+ * are the stores the made-up sessions are at; four start on, and two pairs
+ * share a dealer, as on Test.
+ */
+export const ALL_STORES = [
+  { id: STORE_IDS[0], name: STORES[0], dealer: "d1", uses_ps: true },
+  { id: STORE_IDS[1], name: STORES[1], dealer: "d2", uses_ps: true },
+  { id: "5c000000-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Mock Powersports, Riverside", dealer: "d3", uses_ps: true },
+  { id: "5d000000-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Mock Powersports, Hilltop", dealer: "d4", uses_ps: true },
+  { id: "5e000000-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Mock Equipment, Riverside", dealer: "d3", uses_ps: false },
+  { id: "5f000000-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Mock Equipment, Hilltop", dealer: "d4", uses_ps: false },
+  { id: "50000000-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Mock Chevrolet", dealer: null, uses_ps: false },
+  { id: "51000000-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Mock Ford", dealer: null, uses_ps: false },
+  { id: "52000000-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Mock Rides", dealer: "d9", uses_ps: false },
+];
 const CUSTOMERS = [["Pat Example", null], ["Sam Sample", "Jo Sample"], ["Mock Trail Rentals LLC", null]];
 export function sessions(n) {
   const states = ["Rated", "Failed", "Pending", "Not Offered"];
@@ -144,7 +161,11 @@ export function startMockEdge({ port, delayMs = 0, rows = 6, delays = {} } = {})
   // `access` is who is signed in, as the server decides it: an Administrator
   // (every store), or Staff with the stores granted (migration 0058). The
   // list is filtered here the way fni-admin-sessions filters it.
-  const state = { delayMs, rows, calls: {}, delays, access: { role: "Administrator", storeIds: null } };
+  const state = {
+    delayMs, rows, calls: {}, delays, access: { role: "Administrator", storeIds: null },
+    // Each store's PS settings, changed by the Stores page's saves.
+    stores: ALL_STORES.map((st) => ({ ...st, time_zone: "America/New_York" })),
+  };
   const server = http.createServer(async (req, res) => {
     const u = new URL(req.url, "http://x");
     const fn = u.pathname.split("/").pop();
@@ -157,7 +178,8 @@ export function startMockEdge({ port, delayMs = 0, rows = 6, delays = {} } = {})
     const json = (s, b) => { res.writeHead(s, { "content-type": "application/json" }); res.end(JSON.stringify(b)); };
     if (fn === "fni-admin-sessions") {
       const { role, storeIds } = state.access;
-      const allowed = STORES.map((name, i) => ({ id: STORE_IDS[i], name })).filter((st) => storeIds === null || storeIds.includes(st.id));
+      // Only stores that use PS are offered (fni-admin-sessions).
+      const allowed = state.stores.filter((st) => st.uses_ps && (storeIds === null || storeIds.includes(st.id))).map((st) => ({ id: st.id, name: st.name }));
       const section = u.searchParams.get("section");
       if (section === "me") return json(200, { role, email: "test.person@example.com", stores: allowed });
       if (section === "staff") {
@@ -167,7 +189,7 @@ export function startMockEdge({ port, delayMs = 0, rows = 6, delays = {} } = {})
             { user_id: "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a", email: "test.person@example.com", role: "Administrator", role_granted_by: "claude", store_ids: [] },
             { user_id: "0b0b0b0b-0b0b-4b0b-8b0b-0b0b0b0b0b0b", email: "second.person@example.com", role: "Staff", role_granted_by: "test.person@example.com", store_ids: [STORE_IDS[0]] },
           ],
-          stores: STORES.map((name, i) => ({ id: STORE_IDS[i], name })).sort((a, b) => a.name.localeCompare(b.name)),
+          stores: state.stores.filter((st) => st.uses_ps).map((st) => ({ id: st.id, name: st.name })).sort((a, b) => a.name.localeCompare(b.name)),
         });
       }
       if (storeIds !== null && storeIds.length === 0) {
@@ -177,10 +199,24 @@ export function startMockEdge({ port, delayMs = 0, rows = 6, delays = {} } = {})
         .sort((a, b) => a.store_name.localeCompare(b.store_name) || Date.parse(b.created_at) - Date.parse(a.created_at));
       return json(200, { limit: 60, as_of: new Date().toISOString(), role, stores: allowed.sort((a, b) => a.name.localeCompare(b.name)), notice: null, sessions: rowsFor });
     }
+    // The Stores page's saves: DocuRide PS on or off, or the time zone.
+    if (fn === "fni-admin-settings" && req.method === "POST") {
+      const body = raw ? JSON.parse(raw) : {};
+      if (body.section === "stores") {
+        const st = state.stores.find((x) => x.id === body.store_id);
+        if (!st) return json(404, { error: "That store does not exist." });
+        if (typeof body.uses_ps === "boolean") st.uses_ps = body.uses_ps;
+        else st.time_zone = body.time_zone;
+        return json(200, { ok: true });
+      }
+    }
     if (fn === "fni-admin-settings" && u.searchParams.get("section") === "stores") {
       return json(200, {
-        time_zones: [{ zone: "America/New_York", label: "Eastern" }],
-        stores: STORES.map((name, i) => ({ id: `s${i}`, name, place: null, time_zone: "America/New_York", today: "2026-11-02" })),
+        time_zones: [{ zone: "America/New_York", label: "Eastern" }, { zone: "America/Chicago", label: "Central" }],
+        stores: state.stores.map((st) => ({
+          id: st.id, name: st.name, place: null, time_zone: st.time_zone, today: "2026-11-02", uses_ps: st.uses_ps,
+          same_dealer: st.dealer ? state.stores.filter((o) => o.id !== st.id && o.dealer === st.dealer).map((o) => o.name) : [],
+        })).sort((a, b) => a.name.localeCompare(b.name)),
       });
     }
     if (fn === "fni-admin-settings") return json(200, { stores: STORES.map((name, i) => ({ id: `s${i}`, name })), rules: [], scope: "all" });
