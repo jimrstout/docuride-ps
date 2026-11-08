@@ -53,8 +53,10 @@ async function ratingCase(label, session, button, expect) {
   const calls = () => ({ verify: edge.state.calls["GET fni-session-verify"] ?? 0, dx1: edge.state.calls["POST fni-dx1-check"] ?? 0 });
   const callsBefore = calls();
   let answeredAt = null;
-  const onFinished = (r) => { if (r.method() === "POST" && new URL(r.url()).pathname.startsWith("/details/")) answeredAt = Date.now(); };
-  page.on("requestfinished", onFinished);
+  // When the answer arrives: the response, not the request's "finished",
+  // which a streamed server-action reply can report seconds later.
+  const onFinished = (r) => { if (answeredAt === null && r.request().method() === "POST" && new URL(r.url()).pathname.startsWith("/details/")) answeredAt = Date.now(); };
+  page.on("response", onFinished);
 
   const pressedAt = Date.now();
   await page.getByRole("button", { name: button, exact: true }).click();
@@ -77,7 +79,7 @@ async function ratingCase(label, session, button, expect) {
   check(callsAfter.verify === callsBefore.verify, `${label}: the deal was not read again (${callsAfter.verify - callsBefore.verify} reads)`);
   check(callsAfter.dx1 === callsBefore.dx1, `${label}: the DX1 check was not run again (${callsAfter.dx1 - callsBefore.dx1} runs)`);
 
-  page.off("requestfinished", onFinished);
+  page.off("response", onFinished);
   await page.reload({ timeout: 60_000 });
   const reloaded = await screenText(page);
   check(reloaded === after, `${label}: every value on the screen is the same as after a full reload`);
