@@ -20,7 +20,8 @@ import Control from "@/components/Control";
 import HomeLink, { HOME_HREF } from "@/components/HomeLink";
 import { headers } from "next/headers";
 import { currentOperator } from "@/lib/admin-session";
-import { ADMIN_SECTIONS, initialsFor, safeAdminPath, sectionFor } from "@/lib/admin-sections";
+import { initialsFor, safeAdminPath, sectionFor, sectionsFor } from "@/lib/admin-sections";
+import { edge } from "@/lib/edge";
 import { SignIn, SIGN_IN_NOTICES } from "@/components/admin/SignIn";
 import { Brand } from "@/components/admin/Parts";
 import { Icon } from "@/components/admin/Icon";
@@ -46,6 +47,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   const here = sectionFor(path);
+  // The person's PS role decides the menu (migration 0058). If it cannot be
+  // read, the menu is as before; each page's own data is checked on the server.
+  const role = await edge.adminMe<{ role?: string }>().then((m) => m.role ?? null).catch(() => null);
+  const sections = sectionsFor(role);
 
   // Shown twice: in the sidebar, and in the top bar on a phone, where the
   // sidebar becomes a row of icons. CSS shows one of them.
@@ -65,9 +70,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <Brand />
         </Control>
         {/* A phone or a narrow tablet: the sections by name, behind a Menu button. */}
-        <AdminMenu sections={ADMIN_SECTIONS} here={here?.href ?? null} />
+        <AdminMenu sections={sections} here={here?.href ?? null} />
         <nav className="ad-nav" aria-label="Admin sections">
-          {ADMIN_SECTIONS.map((s) => (
+          {sections.map((s) => (
             <Control
               key={s.href}
               href={s.href}

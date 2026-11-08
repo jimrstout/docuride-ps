@@ -10,7 +10,7 @@ export interface AdminSection {
   href: string;
   label: string;
   /** Which of the menu's line icons to draw. See components/admin/Icon.tsx. */
-  icon: "sessions" | "pricing" | "wording" | "providers" | "menus" | "sheets" | "stores" | "brands";
+  icon: "sessions" | "pricing" | "wording" | "providers" | "menus" | "sheets" | "stores" | "brands" | "staff";
 }
 
 export const ADMIN_SECTIONS: readonly AdminSection[] = [
@@ -22,7 +22,19 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   { href: "/admin/wording", label: "Wording", icon: "wording" },
   { href: "/admin/stores", label: "Stores", icon: "stores" },
   { href: "/admin/brands", label: "Brands", icon: "brands" },
+  { href: "/admin/staff", label: "Staff", icon: "staff" },
 ];
+
+/**
+ * The sections a person's PS role shows (migration 0058): Staff see Sessions
+ * only, since the other pages are an administrator's; an Administrator sees
+ * them all. With the role unknown, every section but Staff, as before.
+ */
+export function sectionsFor(role: string | null | undefined): readonly AdminSection[] {
+  if (role === "Staff") return ADMIN_SECTIONS.filter((s) => s.href === ADMIN_HOME);
+  if (role === "Administrator") return ADMIN_SECTIONS;
+  return ADMIN_SECTIONS.filter((s) => s.href !== "/admin/staff");
+}
 
 /** Where the admin area opens, and where signing out lands. */
 export const ADMIN_HOME = "/admin/sessions";

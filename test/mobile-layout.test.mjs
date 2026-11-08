@@ -33,7 +33,7 @@ test("every admin section is reachable from the Menu button on a small screen", 
   assert.match(menu, /sections\.map\(\(s\) =>/);
   assert.match(menu, /aria-expanded=\{open\}/);
   assert.match(menu, /e\.key === "Escape"/);
-  assert.match(src("app/admin/layout.tsx"), /<AdminMenu sections=\{ADMIN_SECTIONS\}/);
+  assert.match(src("app/admin/layout.tsx"), /<AdminMenu sections=\{sections\}/);
   const css = src("app/admin/admin.css");
   assert.match(css, /\.ad-menu \{ display: none; \}/);
   assert.match(css, /@media \(max-width: 767px\) \{[\s\S]*?\.ad-menu \{ display: block; \}/);

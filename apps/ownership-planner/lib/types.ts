@@ -344,6 +344,20 @@ export interface ConsoleListPayload {
   notice?: string | null;
 }
 
+// ── Administration > Staff (fni-admin-sessions, section staff) ───────────
+export interface StaffPayload {
+  people: {
+    user_id: string;
+    email: string;
+    /** In words. No access: the sign-in has no PS role. */
+    role: "Administrator" | "Staff" | "No access";
+    role_granted_by: string | null;
+    store_ids: string[];
+  }[];
+  /** Every store, by full name, alphabetical. */
+  stores: { id: string; name: string }[];
+}
+
 // ── Console settings ──────────────────────────────────────────────────────
 // What fni-admin-settings returns. The dealer group's customer-facing name and
 // the sentences that use it, which are rows rather than string literals so a

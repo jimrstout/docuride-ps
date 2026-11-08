@@ -494,3 +494,10 @@
 .ad-pager { display: inline-flex; gap: 8px; }
 .ad-pager .ad-btn { min-height: 32px; padding-top: 5px; padding-bottom: 5px; }
 .ad-pager .ad-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Staff: each person's stores as ticks, three across ──────────────── */
+.ad-staff-stores { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 14px; }
+.ad-staff-store { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; }
+.ad-staff-store span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-staff-every { margin: 0 0 6px; }
+@media (max-width: 900px) { .ad-staff-stores { grid-template-columns: 1fr; } }

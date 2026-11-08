@@ -93,3 +93,29 @@ test("the store's full name is the CRM's, and the list comes by store, then most
   assert.match(fn, /"buyer_display_name",\s*"cobuyer_display_name",/);
   assert.doesNotMatch(fn.slice(fn.indexOf("const LIST_COLUMNS"), fn.indexOf("].join")), /buyer_(first|last|address|city|phone|email)|vin|lienholder/);
 });
+
+// ── Administration > Staff ──────────────────────────────────────────────────
+test("the Staff page: in the menu for Administrators, Sessions alone for Staff", async () => {
+  const { sectionsFor, ADMIN_SECTIONS } = await import("../apps/ownership-planner/lib/admin-sections.ts");
+  assert.deepEqual(sectionsFor("Staff").map((s) => s.label), ["Sessions"]);
+  assert.deepEqual(sectionsFor("Administrator").map((s) => s.label), ADMIN_SECTIONS.map((s) => s.label));
+  assert.ok(sectionsFor("Administrator").some((s) => s.href === "/admin/staff"));
+  assert.ok(!sectionsFor(null).some((s) => s.href === "/admin/staff"));
+});
+
+test("the Staff page lists each person's role and stores, and saves both, recording who", () => {
+  const page = read("apps/ownership-planner/app/admin/staff/page.tsx");
+  assert.match(page, /const ROLES = \["Administrator", "Staff", "No access"\] as const;/);
+  assert.match(page, /<input type="checkbox" name="store_id" value=\{s\.id\} form=\{form\} defaultChecked=\{p\.store_ids\.includes\(s\.id\)\} \/>/);
+  assert.match(page, /<span>\{p\.role\} \(you\)<\/span>/);
+  assert.match(page, /"Only an administrator can change who sees which stores\."/);
+  const action = read("apps/ownership-planner/app/console-actions.ts");
+  const save = action.slice(action.indexOf("export async function saveStaffAccess("), action.indexOf("// ── Brands ──"));
+  assert.match(save, /if \(fd\.get\("self"\) !== "1" && role !== "" && role !== before\) \{\s*await edge\.adminSaveStaff\(\{ action: "set_role", user_id: userId, role \}\);/);
+  assert.match(save, /return edge\.adminSaveStaff\(\{ action: "set_stores", user_id: userId, store_ids: storeIds \}\);/);
+  // granted_by is the signed-in administrator, on the server.
+  assert.match(fn, /const by = gate\.staff\.email;/);
+  assert.match(fn, /\{ user_id: userId, role, granted_by: by, granted_at: new Date\(\)\.toISOString\(\) \}/);
+  assert.match(fn, /add\.map\(\(store_id\) => \(\{ user_id: userId, store_id, granted_by: by, granted_at: new Date\(\)\.toISOString\(\) \}\)\)/);
+  assert.match(fn, /if \(userId === gate\.staff\.sub\) return json\(400, \{ error: "You cannot change your own role\. Ask another administrator\." \}\);/);
+});
