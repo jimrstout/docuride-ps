@@ -16,7 +16,16 @@
 // documents) never reach this; they carry the webhook secret alone and are
 // routed around it by the function that serves them.
 
-import { decideStaff, STAFF_HEADER, type DealScope, type StaffProfile, type StaffSession } from "./staff-auth.ts";
+import {
+  decideStaff,
+  SIGN_IN_REQUIRED,
+  STAFF_HEADER,
+  verifyStaffToken,
+  type DealScope,
+  type StaffProfile,
+  type StaffSession,
+} from "./staff-auth.ts";
+import { accessFrom, type PsAccess } from "./ps-access.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -83,3 +92,34 @@ export async function staffCheck(
     return { response: refuse(503, "Sign-in could not be checked right now. Try again shortly.") };
   }
 }
+
+// ── The PS admin area: role and stores (_shared/ps-access.ts) ─────────────
+
+export type PsGateOk = { staff: StaffSession; access: PsAccess };
+
+/**
+ * The signed-in person's PS access (migration 0058), or the Response to
+ * return: 401 when nobody is signed in, 403 when they have no PS role. Reads
+ * their role and stores from fni; the platform-administrator flag comes from
+ * the same profile read every staff check makes.
+ */
+export async function psCheck(req: Request): Promise<PsGateOk | { response: Response }> {
+  try {
+    const staff = await verifyStaffToken(req.headers.get(STAFF_HEADER), Deno.env.get("FNI_WEBHOOK_SECRET"));
+    if (!staff || !UUID.test(staff.sub)) return { response: refuse(401, SIGN_IN_REQUIRED) };
+    const [roles, grants, p] = await Promise.all([
+      rest<{ role: string }>(`staff_roles?user_id=eq.${staff.sub}&select=role`, "fni"),
+      rest<{ store_id: string }>(`staff_store_access?user_id=eq.${staff.sub}&select=store_id`, "fni"),
+      profile(staff.sub),
+    ]);
+    const access = accessFrom(roles[0]?.role ?? null, grants.map((g) => g.store_id), p?.is_platform_admin === true);
+    if (!access) return { response: refuse(403, NO_PS_ACCESS) };
+    return { staff, access };
+  } catch (err) {
+    console.error("ps access check failed:", err instanceof Error ? err.message : String(err));
+    return { response: refuse(503, "Sign-in could not be checked right now. Try again shortly.") };
+  }
+}
+
+/** Said to a signed-in person with no PS role. */
+export const NO_PS_ACCESS = "Your sign-in does not have access to DocuRide PS. Ask an administrator.";

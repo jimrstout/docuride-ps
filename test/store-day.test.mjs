@@ -81,7 +81,8 @@ test("the migration is additive and puts the day in Postgres", () => {
 
 test("Renew for Today is retired: the endpoint says so and renews nothing", () => {
   const f = src("supabase/functions/fni-admin-sessions/index.ts");
-  assert.match(f, /if \(req\.method === "POST"\) \{\s*return json\(410, \{/);
+  // A POST other than Administration > Staff's is still refused, as retired.
+  assert.match(f, /if \(body\.section === "staff"\) return await staffWrite\(body, gate\);\s*return json\(410, \{/);
   assert.doesNotMatch(f, /renew_session|session_renew_targets|renewable|planned_sale_date|staff_edits/);
 });
 
