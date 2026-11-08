@@ -14,10 +14,12 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import type { AdminSection } from "@/lib/admin-sections";
 import { Icon } from "@/components/admin/Icon";
+import { useHere } from "@/components/admin/AdminNav";
 
-export default function AdminMenu({ sections, here }: { sections: readonly AdminSection[]; here: string | null }) {
+export default function AdminMenu({ sections }: { sections: readonly AdminSection[] }) {
   const [open, setOpen] = useState(false);
   const path = usePathname();
+  const here = useHere()?.href ?? null;
 
   // A choice has been made and its page is up: the panel goes. It stays open
   // meanwhile, with the chosen section showing "Opening...".

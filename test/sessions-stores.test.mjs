@@ -62,3 +62,11 @@ test("the store choice reads All locations, still meaning every store the person
   assert.match(filters, /<option value="">All locations<\/option>/);
   assert.doesNotMatch(filters + page, /All my stores/);
 });
+
+test("the sidebar, phone menu and breadcrumb follow the address on screen, not the first page loaded", () => {
+  const nav = read("apps/ownership-planner/components/admin/AdminNav.tsx");
+  assert.match(nav, /return sectionFor\(usePathname\(\) \?\? ""\);/);
+  assert.match(layout, /<AdminCrumbHere \/>/);
+  assert.doesNotMatch(layout, /sectionFor\(/, "the layout no longer decides which page is open");
+  assert.match(read("apps/ownership-planner/components/admin/AdminMenu.tsx"), /const here = useHere\(\)\?\.href \?\? null;/);
+});
