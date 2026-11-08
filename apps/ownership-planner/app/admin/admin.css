@@ -452,23 +452,34 @@
      is clipped inside its own column, the whole of it in the tooltip. */
   #ad-sessions { table-layout: fixed; }
   #ad-sessions th:nth-child(1) { width: 6%; }
-  #ad-sessions th:nth-child(2) { width: 14%; }
-  #ad-sessions th:nth-child(3) { width: 19%; }
-  #ad-sessions th:nth-child(4) { width: 16%; }
+  /* Customer and Store never cut off, so they take the room; the vehicle
+     gives it up first (its full text shows on hover). Expires keeps its
+     whole line ("Until 11:59 PM, 2 Nov EST"). */
+  #ad-sessions th:nth-child(2) { width: 15%; }
+  #ad-sessions th:nth-child(3) { width: 9%; }
+  #ad-sessions th:nth-child(4) { width: 15%; }
   #ad-sessions th:nth-child(5) { width: 8%; }
-  #ad-sessions th:nth-child(6) { width: 12%; }
+  #ad-sessions th:nth-child(6) { width: 11%; }
   #ad-sessions th:nth-child(7) { width: 9%; }
-  #ad-sessions th:nth-child(8) { width: 11%; }
-  #ad-sessions th:nth-child(9) { width: 88px; }
+  #ad-sessions th:nth-child(8) { width: 15%; }
+  #ad-sessions th:nth-child(9) { width: 80px; }
   #ad-sessions tr[data-row] > td { overflow: hidden; }
   #ad-sessions td.ad-vehicle .ad-rowlink,
   #ad-sessions .ad-clip,
   #ad-sessions tr[data-row] td small { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* The expiry wraps rather than lose its date. */
-  #ad-sessions tr[data-row] td[data-label="Expires"] small { white-space: normal; }
-  #ad-sessions td { padding: 10px 14px; }
-  #ad-sessions th { padding: 9px 14px; }
-  #ad-sessions tr.ad-why-row > td { padding: 0 14px 10px; }
+  #ad-sessions tr[data-row] td[data-label="Expires"] small { white-space: nowrap; }
+  /* Customer names and store names wrap instead of being cut off. */
+  #ad-sessions tr[data-row] td .ad-wrap,
+  #ad-sessions tr[data-row] td small.ad-wrap,
+  #ad-sessions tr[data-row] td small.ad-store-group { display: block; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  #ad-sessions .ad-store-full, #ad-sessions .ad-store-place { display: block; white-space: normal; overflow-wrap: anywhere; }
+  #ad-sessions .ad-store-whole { display: inline-block; max-width: 100%; }
+  #ad-sessions td { padding: 10px; }
+  #ad-sessions th { padding: 9px 10px; }
+  #ad-sessions tr.ad-why-row > td { padding: 0 10px 10px; }
+  /* The day on one line, the time under it. */
+  #ad-sessions td[data-label="Created"] { white-space: nowrap; }
   #ad-sessions td small { margin-top: 2px; }
 }
 
