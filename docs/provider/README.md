@@ -15,6 +15,14 @@ header carrying `sessionId`, never a value.
 | `https://ratessys-qa.com/rs/application.wadl?detail=true` | 200, the full WADL the first one names in its own hint | `ratessys-qa-rs-application-detail.wadl` |
 | `https://ratessys-qa.com/rs/openapi.json` | 500, the server's error page | no |
 | `https://ratessys-qa.com/rs/swagger.json` | 404 | no |
+| `https://ratessys-qa.com/rs/openapi.yaml` (8 Nov, the YAML the WADL lists) | 500, text/html: the server's error page | no |
+| `https://ratessys-qa.com/rs/openapi.yml` (8 Nov) | 404, text/html | no |
+
+The OpenAPI answers fail on the provider's side, not ours: the 500 page for
+both openapi.json and openapi.yaml says the server could not build the
+description because two of its own Java libraries are at mismatched versions
+(a Jackson `NoSuchFieldError` inside Jersey). If the provider fixes that, the
+same addresses should serve a full description with field definitions.
 
 So the Test server publishes no SOAP description at the documented WSDL
 address, and the REST service describes itself only in WADL. The WADL has an
