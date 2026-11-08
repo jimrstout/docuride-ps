@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<application xmlns="http://wadl.dev.java.net/2009/02">
+    <doc xmlns:jersey="http://jersey.java.net/" jersey:generatedBy="Jersey: 2.46 2024-12-17 15:53:55"/>
+    <doc xmlns:jersey="http://jersey.java.net/" jersey:hint="This is simplified WADL with user and core resources only. To get full WADL with extended resources use the query parameter detail. Link: https://ratessys-qa.com/rs/application.wadl?detail=true"/>
+    <grammars/>
+    <resources base="https://ratessys-qa.com/rs/">
+        <resource path="/ps">
+            <resource path="/makes">
+                <method id="getMakes" name="POST">
+                    <request>
+                        <param xmlns:xs="http://www.w3.org/2001/XMLSchema" name="Cookie" style="header" type="xs:string" path="sessionId"/>
+                    </request>
+                    <response>
+                        <representation mediaType="*/*"/>
+                    </response>
+                </method>
+            </resource>
+            <resource path="/models">
+                <method id="getModels" name="POST">
+                    <request>
+                        <param xmlns:xs="http://www.w3.org/2001/XMLSchema" name="Cookie" style="header" type="xs:string" path="sessionId"/>
+                    </request>
+                    <response>
+                        <representation mediaType="*/*"/>
+                    </response>
+                </method>
+            </resource>
+        </resource>
+        <resource path="/auth">
+            <resource path="/loginrequest">
+                <method id="loginRequest" name="POST">
+                    <response>
+                        <representation mediaType="*/*"/>
+                    </response>
+                </method>
+            </resource>
+            <resource path="/logincert">
+                <method id="loginCertification" name="POST">
+                    <response>
+                        <representation mediaType="*/*"/>
+                    </response>
+                </method>
+            </resource>
+            <resource path="/loginassertion">
+                <method id="loginAssertion" name="POST">
+                    <response>
+                        <representation mediaType="*/*"/>
+                    </response>
+                </method>
+            </resource>
+        </resource>
+        <resource path="/contract">
+            <resource path="/submit">
+                <method id="contractSubmit" name="POST">
+                    <request>
+                        <param xmlns:xs="http://www.w3.org/2001/XMLSchema" name="Cookie" style="header" type="xs:string" path="sessionId"/>
+                    </request>
+                    <response>
+                        <representation mediaType="*/*"/>
+                    </response>
+                </method>
+            </resource>
+            <resource path="/document">
+                <method id="contractDocumentStream" name="POST">
+                    <request>
+                        <param xmlns:xs="http://www.w3.org/2001/XMLSchema" name="Cookie" style="header" type="xs:string" path="sessionId"/>
+                    </request>
+                    <response>
+                        <representation mediaType="application/json"/>
+                    </response>
+                </method>
+            </resource>
+            <resource path="/void">
+                <method id="contractVoid" name="POST">
+                    <request>
+                        <param xmlns:xs="http://www.w3.org/2001/XMLSchema" name="Cookie" style="header" type="xs:string" path="sessionId"/>
+                    </request>
+                    <response>
+                        <representation mediaType="*/*"/>
+                    </response>
+                </method>
+            </resource>
+        </resource>
+        <resource path="/rate">
+            <resource path="">
+                <method id="rateRequest" name="POST">
+                    <request>
+                        <param xmlns:xs="http://www.w3.org/2001/XMLSchema" name="Cookie" style="header" type="xs:string" path="sessionId"/>
+                    </request>
+                    <response>
+                        <representation mediaType="*/*"/>
+                    </response>
+                </method>
+            </resource>
+            <resource path="/requiredproperties">
+                <method id="requiredPropertiesRequest" name="POST">
+                    <request>
+                        <param xmlns:xs="http://www.w3.org/2001/XMLSchema" name="Cookie" style="header" type="xs:string" path="sessionId"/>
+                    </request>
+                    <response>
+                        <representation mediaType="*/*"/>
+                    </response>
+                </method>
+            </resource>
+        </resource>
+        <resource path="/dmslookup">
+            <resource path="">
+                <method id="dmsLookup" name="POST">
+                    <request>
+                        <param xmlns:xs="http://www.w3.org/2001/XMLSchema" name="Cookie" style="header" type="xs:string" path="sessionId"/>
+                    </request>
+                    <response>
+                        <representation mediaType="*/*"/>
+                    </response>
+                </method>
+            </resource>
+        </resource>
+        <resource path="/decode">
+            <resource path="">
+                <method id="decode" name="POST">
+                    <request>
+                        <param xmlns:xs="http://www.w3.org/2001/XMLSchema" name="Cookie" style="header" type="xs:string" path="sessionId"/>
+                    </request>
+                    <response>
+                        <representation mediaType="*/*"/>
+                    </response>
+                </method>
+            </resource>
+            <resource path="/ps">
+                <method id="decodeps" name="POST">
+                    <request>
+                        <param xmlns:xs="http://www.w3.org/2001/XMLSchema" name="Cookie" style="header" type="xs:string" path="sessionId"/>
+                    </request>
+                    <response>
+                        <representation mediaType="*/*"/>
+                    </response>
+                </method>
+            </resource>
+        </resource>
+        <resource path="/openapi.{type:json|yaml}">
+            <param xmlns:xs="http://www.w3.org/2001/XMLSchema" name="type" style="template" type="xs:string"/>
+            <method id="getOpenApi" name="GET">
+                <response>
+                    <representation mediaType="application/json"/>
+                    <representation mediaType="application/yaml"/>
+                </response>
+            </method>
+        </resource>
+        <resource path="/hello">
+            <resource path="/greet">
+                <method id="greeting" name="POST">
+                    <request>
+                        <param xmlns:xs="http://www.w3.org/2001/XMLSchema" name="name" style="query" type="xs:string" default="Nobody"/>
+                    </request>
+                    <response>
+                        <representation mediaType="*/*"/>
+                    </response>
+                </method>
+            </resource>
+        </resource>
+    </resources>
+</application>
