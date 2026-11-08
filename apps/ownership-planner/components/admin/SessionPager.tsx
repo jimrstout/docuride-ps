@@ -131,7 +131,9 @@ export function SessionPager({ tableId, total, byStore = false }: { tableId: str
   return (
     <>
       <span id={`${tableId}-count`} aria-live="polite">
-        {countLine({ first: view.first, last: view.last, matching: view.matching, total: view.total, paged })}
+        {countLine({ first: view.first, last: view.last, matching: view.matching, total: view.total, paged })}.{" "}
+        {/* The order, always: by store with every store, most recent first in one. */}
+        <span className="ad-order">{order === "store" ? "By store, most recent first" : "Most recent first"}</span>
       </span>
       {paged ? (
         <span className="ad-pager" role="group" aria-label="Pages">
@@ -150,9 +152,7 @@ export function SessionPager({ tableId, total, byStore = false }: { tableId: str
             Next
           </Control>
         </span>
-      ) : (
-        <span>{order === "store" ? "By store, most recent first" : "Most recent first"}</span>
-      )}
+      ) : null}
     </>
   );
 }
