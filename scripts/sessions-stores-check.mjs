@@ -46,7 +46,9 @@ try {
   const choice = page.locator("#ad-top-tools select");
   check(await choice.count() === 1, "Administrator: the store choice is in the top bar");
   const options = await choice.locator("option").allTextContents();
-  check(options[0] === "All my stores" && options.length === 3, `Administrator: options ${JSON.stringify(options)}`);
+  // The store choice offers only the stores using DocuRide PS (fni.ps_stores).
+  const onCount = edge.state.stores.filter((st) => st.uses_ps).length;
+  check(options[0] === "All my stores" && options.length === onCount + 1, `Administrator: options ${JSON.stringify(options)}`);
   const sorted = [...options.slice(1)].sort((a, b) => a.localeCompare(b));
   check(JSON.stringify(sorted) === JSON.stringify(options.slice(1)), "Administrator: stores alphabetical by full name");
   const leftOfEmail = await page.evaluate(() => {
@@ -86,7 +88,7 @@ try {
   await page.goto(`${app.base}/admin/staff`, { waitUntil: "networkidle" });
   const people = await page.$$eval("#ad-staff tbody tr", (trs) => trs.map((t) => t.querySelector(".ad-strong")?.textContent.trim()));
   check(people.length === 2, `Staff page: ${people.length} people`);
-  check(await page.locator("#ad-staff input[type=checkbox]").count() === 4, "Staff page: a tick per store per person");
+  check(await page.locator("#ad-staff input[type=checkbox]").count() === people.length * onCount, "Staff page: a tick per store using PS per person");
   check(await page.getByText("Administrator (you)").count() === 1, "Staff page: your own role is not editable");
   check(await page.locator(".ad-nav a", { hasText: "Staff" }).count() === 1, "Administrator: Staff is in the menu");
   check(await noScroll(page), "Staff page does not scroll");
