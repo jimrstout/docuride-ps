@@ -26,6 +26,7 @@ const EDGE_PORT = 9921;
 const APP_PORT = 3466;
 const APP = new URL("../apps/ownership-planner/", import.meta.url).pathname;
 const STORES = ["Mock Store, Mocktown", "Second Store, Elsewhere"];
+const STORE_IDS = ["5a000000-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "5b000000-aaaa-4aaa-8aaa-aaaaaaaaaaaa"];
 const STATES = ["Rated", "Failed", "Pending", "Not Offered"];
 
 let rows = 6;
@@ -33,7 +34,7 @@ function sessions(n) {
   return Array.from({ length: n }, (_, i) => ({
     id: `${(i + 1).toString(16).padStart(8, "0")}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
     deal_number: String(90000 + i), status: "Open", mode: "Finance",
-    store_name: STORES[i % 2], year: 2026, make: "Mockmake", model: "Trail 1000 XT", submodel: "Limited Edition",
+    store_name: STORES[i % 2], store_id: STORE_IDS[i % 2], customer: "Pat Example", year: 2026, make: "Mockmake", model: "Trail 1000 XT", submodel: "Limited Edition",
     stock_number: `ST-${1000 + i}`, created_at: "2026-11-02T13:00:00Z", expires_at: "2026-11-03T04:59:59Z",
     expired: false, time_zone: "America/New_York",
     rating: {
@@ -47,7 +48,14 @@ function sessions(n) {
 const edge = http.createServer((req, res) => {
   const fn = new URL(req.url, "http://x").pathname.split("/").pop();
   const json = (b) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify(b)); };
-  if (fn === "fni-admin-sessions") return json({ limit: 60, as_of: new Date().toISOString(), sessions: sessions(rows) });
+  // As fni-admin-sessions answers an Administrator (migration 0058): every
+  // store, by full name, and the list by store, then most recent first.
+  const stores = STORES.map((name, i) => ({ id: STORE_IDS[i], name }));
+  if (fn === "fni-admin-sessions" && new URL(req.url, "http://x").searchParams.get("section") === "me") return json({ role: "Administrator", stores });
+  if (fn === "fni-admin-sessions") {
+    const list = sessions(rows).sort((a, b) => a.store_name.localeCompare(b.store_name));
+    return json({ limit: 60, as_of: new Date().toISOString(), role: "Administrator", stores, notice: null, sessions: list });
+  }
   if (fn === "fni-admin-settings") return json({ stores: STORES.map((name, i) => ({ id: `s${i}`, name })), rules: [], scope: "all" });
   res.writeHead(404); res.end("{}");
 });
@@ -112,16 +120,18 @@ for (const n of [6, 60]) {
     if (pages > 1) {
       await p.goto(`http://localhost:${APP_PORT}/admin/sessions`, { waitUntil: "networkidle" });
       await next(p).click();
-      await p.selectOption(".ad-toolbar select >> nth=0", STORES[1]);
+      // The store choice, at the top right since 8 Nov.
+      await p.selectOption("#ad-top-tools select", STORE_IDS[1]);
       const firstMatch = sessions(n).filter((s) => s.store_name === STORES[1])[0].deal_number;
       const deals = await visibleDeals(p);
       check(deals[0] === firstMatch, `${w}x${h} ${n}: filter did not go back to page 1 (first ${deals[0]})`);
       check(deals.every((d) => sessions(n).find((s) => s.deal_number === d).store_name === STORES[1]), `${w}x${h} ${n}: filter not applied`);
       check(await nothingScrolls(p), `${w}x${h} ${n}: filtered page scrolls`);
       const c = await count(p);
-      check(/^1 to \d+ of \d+ sessions, from \d+$|^\d+ of \d+ sessions$/.test(c), `${w}x${h} ${n}: count "${c}"`);
-      await p.selectOption(".ad-toolbar select >> nth=0", "");
-      check((await visibleDeals(p))[0] === all[0], `${w}x${h} ${n}: clearing the filter did not go back to page 1`);
+      check(/^(1 to \d+ of \d+ sessions, from \d+|\d+ of \d+ sessions)\. Most recent first$/.test(c), `${w}x${h} ${n}: count "${c}"`);
+      await p.selectOption("#ad-top-tools select", "");
+      const byStore = sessions(n).sort((a, b) => a.store_name.localeCompare(b.store_name)).map((s) => s.deal_number);
+      check((await visibleDeals(p))[0] === byStore[0], `${w}x${h} ${n}: clearing the filter did not go back to page 1`);
     }
     console.log(`${w}x${h} ${String(n).padStart(2)} sessions: ${pages} page(s), ${new Set(seen).size} reached, count "${await count(p)}"`);
     await ctx.close();

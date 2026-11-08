@@ -80,11 +80,15 @@ function sheet(id) {
 
 
 const STORES = ["Mock Store, Mocktown", "Second Store, Elsewhere"];
+/** The stores' ids, beside their full names. */
+export const STORE_IDS = ["5a000000-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "5b000000-aaaa-4aaa-8aaa-aaaaaaaaaaaa"];
+const CUSTOMERS = [["Pat Example", null], ["Sam Sample", "Jo Sample"], ["Mock Trail Rentals LLC", null]];
 export function sessions(n) {
   const states = ["Rated", "Failed", "Pending", "Not Offered"];
   return Array.from({ length: n }, (_, i) => ({
     id: `${(i % 3) + 1}${(i + 1).toString(16).padStart(7, "0")}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`, deal_number: String(90000 + i), status: "Open", mode: "Finance",
-    store_name: STORES[i % 2], year: 2026, make: "Mockmake", model: "Trail 1000 XT", submodel: "Limited Edition", stock_number: `ST-${1000 + i}`,
+    store_name: STORES[i % 2], store_id: STORE_IDS[i % 2], customer: CUSTOMERS[i % 3][0], co_buyer: CUSTOMERS[i % 3][1],
+    year: 2026, make: "Mockmake", model: "Trail 1000 XT", submodel: "Limited Edition", stock_number: `ST-${1000 + i}`,
     created_at: "2026-11-02T13:00:00Z", expires_at: "2026-11-03T04:59:59Z", expired: false, time_zone: "America/New_York",
     rating: { state: states[i % 4], at: "2026-11-02T13:00:05Z", detail: states[i % 4] === "Failed" ? "Mock provider said no." : null,
       failures: states[i % 4] === "Failed" ? [{ provider: "Mock Provider", text: "Mock provider said no.", at: "2026-11-02T13:00:05Z" }] : [] },
@@ -137,7 +141,10 @@ function offerDetails(id) {
 }
 
 export function startMockEdge({ port, delayMs = 0, rows = 6, delays = {} } = {}) {
-  const state = { delayMs, rows, calls: {}, delays };
+  // `access` is who is signed in, as the server decides it: an Administrator
+  // (every store), or Staff with the stores granted (migration 0058). The
+  // list is filtered here the way fni-admin-sessions filters it.
+  const state = { delayMs, rows, calls: {}, delays, access: { role: "Administrator", storeIds: null } };
   const server = http.createServer(async (req, res) => {
     const u = new URL(req.url, "http://x");
     const fn = u.pathname.split("/").pop();
@@ -148,7 +155,28 @@ export function startMockEdge({ port, delayMs = 0, rows = 6, delays = {} } = {})
     const wait = state.delays[key] ?? state.delayMs;
     if (wait) await new Promise((r) => setTimeout(r, wait));
     const json = (s, b) => { res.writeHead(s, { "content-type": "application/json" }); res.end(JSON.stringify(b)); };
-    if (fn === "fni-admin-sessions") return json(200, { limit: 60, as_of: new Date().toISOString(), sessions: sessions(state.rows) });
+    if (fn === "fni-admin-sessions") {
+      const { role, storeIds } = state.access;
+      const allowed = STORES.map((name, i) => ({ id: STORE_IDS[i], name })).filter((st) => storeIds === null || storeIds.includes(st.id));
+      const section = u.searchParams.get("section");
+      if (section === "me") return json(200, { role, email: "test.person@example.com", stores: allowed });
+      if (section === "staff") {
+        if (role !== "Administrator") return json(403, { error: "Only an administrator can change who sees which stores." });
+        return json(200, {
+          people: [
+            { user_id: "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a", email: "test.person@example.com", role: "Administrator", role_granted_by: "claude", store_ids: [] },
+            { user_id: "0b0b0b0b-0b0b-4b0b-8b0b-0b0b0b0b0b0b", email: "second.person@example.com", role: "Staff", role_granted_by: "test.person@example.com", store_ids: [STORE_IDS[0]] },
+          ],
+          stores: STORES.map((name, i) => ({ id: STORE_IDS[i], name })).sort((a, b) => a.name.localeCompare(b.name)),
+        });
+      }
+      if (storeIds !== null && storeIds.length === 0) {
+        return json(200, { limit: 60, as_of: new Date().toISOString(), role, stores: [], notice: "No stores assigned. Ask an administrator for access.", sessions: [] });
+      }
+      const rowsFor = sessions(state.rows).filter((r) => storeIds === null || storeIds.includes(r.store_id))
+        .sort((a, b) => a.store_name.localeCompare(b.store_name) || Date.parse(b.created_at) - Date.parse(a.created_at));
+      return json(200, { limit: 60, as_of: new Date().toISOString(), role, stores: allowed.sort((a, b) => a.name.localeCompare(b.name)), notice: null, sessions: rowsFor });
+    }
     if (fn === "fni-admin-settings" && u.searchParams.get("section") === "stores") {
       return json(200, {
         time_zones: [{ zone: "America/New_York", label: "Eastern" }],
