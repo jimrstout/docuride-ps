@@ -36,12 +36,14 @@ import type { Reply } from "./providers.ts";
 import { CATEGORIES, DEAL_TYPES, parsePresets, presetLine, type Preset } from "../_shared/menu-presets.ts";
 import { isManager, logChanges, MANAGERS_ONLY, recentChanges, type Change } from "./managers.ts";
 import { parseTerms, rateText } from "../_shared/menu-terms.ts";
+import { storeFullName } from "../_shared/ps-access.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function context(supabase: SupabaseClient, tenantId: string) {
   const [{ data: stores, error: sErr }, { data: catalog, error: cErr }] = await Promise.all([
-    supabase.from("stores").select("id, name").eq("tenant_id", tenantId).order("name"),
+    // Each store by its full name as the CRM writes it (_shared/ps-access.ts storeFullName).
+    supabase.from("stores").select("id, name, zoho_store_location").eq("tenant_id", tenantId),
     supabase
       .schema("fni")
       .from("product_catalog")
@@ -65,7 +67,10 @@ async function context(supabase: SupabaseClient, tenantId: string) {
     program: c.provider_program_name,
     order: c.display_order ?? 0,
   }));
-  return { stores: (stores ?? []) as { id: string; name: string }[], products };
+  const named = ((stores ?? []) as { id: string; name: string; zoho_store_location: string | null }[])
+    .map((s) => ({ id: s.id, name: storeFullName(s) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { stores: named, products };
 }
 
 /**

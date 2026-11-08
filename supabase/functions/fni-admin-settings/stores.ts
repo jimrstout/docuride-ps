@@ -12,6 +12,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { DEFAULT_TIME_ZONE, isStoreTimeZone, STORE_TIME_ZONES, storeToday } from "../_shared/store-day.ts";
 import { psStores } from "../_shared/ps-stores.ts";
+import { storeFullName } from "../_shared/ps-access.ts";
 
 export interface Reply {
   status: number;
@@ -22,7 +23,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 
 export async function readStores(supabase: SupabaseClient, tenantId: string): Promise<Reply> {
   const [{ data, error }, settings] = await Promise.all([
-    supabase.from("stores").select("id, name, city, state").eq("tenant_id", tenantId).order("name"),
+    supabase.from("stores").select("id, name, zoho_store_location, city, state").eq("tenant_id", tenantId),
     psStores(supabase),
   ]);
   if (error) return { status: 500, body: { error: `Failed to read stores: ${error.message}` } };
@@ -31,17 +32,18 @@ export async function readStores(supabase: SupabaseClient, tenantId: string): Pr
     status: 200,
     body: {
       time_zones: STORE_TIME_ZONES,
-      stores: ((data ?? []) as { id: string; name: string; city: string | null; state: string | null }[]).map((s) => {
+      stores: ((data ?? []) as { id: string; name: string; zoho_store_location: string | null; city: string | null; state: string | null }[]).map((s) => {
         const zone = settings.get(s.id)?.time_zone ?? DEFAULT_TIME_ZONE;
         return {
           id: s.id,
-          name: s.name,
+          // The full name as the CRM writes it, never the short internal one.
+          name: storeFullName(s),
           place: [s.city, s.state].filter((v) => v && v.trim() !== "").join(", ") || null,
           time_zone: zone,
           // What day it is there now, so the page can show the zone is right.
           today: storeToday(zone, now),
         };
-      }),
+      }).sort((a, b) => a.name.localeCompare(b.name)),
     },
   };
 }

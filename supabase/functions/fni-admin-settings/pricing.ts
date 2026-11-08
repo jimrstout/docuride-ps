@@ -34,6 +34,7 @@ import {
   type StoredRule,
 } from "../_shared/pricing-admin.ts";
 import { isManager, logChanges, MANAGERS_ONLY, recentChanges, type Change } from "./managers.ts";
+import { storeFullName } from "../_shared/ps-access.ts";
 
 const RULE_COLUMNS =
   "id, tenant_id, store_id, provider_id, product_code, cost_floor, cost_ceiling, markup_percent, " +
@@ -99,14 +100,17 @@ async function menuStores(supabase: SupabaseClient, tenantId: string): Promise<S
   const ids = [...new Set((accounts ?? []).map((a) => String((a as { store_id: string }).store_id)))];
   if (ids.length === 0) return [];
 
+  // Each store by its full name as the CRM writes it (_shared/ps-access.ts storeFullName).
   const { data: stores, error: storeError } = await supabase
     .from("stores")
-    .select("id, name")
+    .select("id, name, zoho_store_location")
     .eq("tenant_id", tenantId)
     .in("id", ids);
   if (storeError) throw new Error(`Failed to read stores: ${storeError.message}`);
 
-  return ((stores ?? []) as Store[]).sort((a, b) => a.name.localeCompare(b.name));
+  return ((stores ?? []) as (Store & { zoho_store_location: string | null })[])
+    .map((s) => ({ ...s, name: storeFullName(s) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function tenantRules(supabase: SupabaseClient, tenantId: string): Promise<StoredRule[]> {
