@@ -97,6 +97,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <span className="ad-slash" aria-hidden="true">/</span>
             <strong>{here?.label ?? "Sessions"}</strong>
           </p>
+          {/* A page's own choice for the whole page (the Sessions store choice), left of the email. */}
+          <div className="ad-top-tools" id="ad-top-tools" />
           <div className="ad-me">
             <span className="ad-avatar" aria-hidden="true">{initialsFor(operator.email)}</span>
             <span className="ad-me-name">{operator.email}</span>

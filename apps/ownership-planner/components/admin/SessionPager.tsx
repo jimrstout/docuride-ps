@@ -31,8 +31,10 @@ export const FILTERED_EVENT = "ad-sessions:filtered";
 
 type View = { page: number; pages: number; first: number; last: number; matching: number; total: number };
 
-export function SessionPager({ tableId, total }: { tableId: string; total: number }) {
+export function SessionPager({ tableId, total, byStore = false }: { tableId: string; total: number; byStore?: boolean }) {
   const [view, setView] = useState<View>({ page: 0, pages: 1, first: 1, last: total, matching: total, total });
+  // "By store, most recent first" with every store; "Most recent first" in one (SessionFilters).
+  const [order, setOrder] = useState<"store" | "recent">(byStore ? "store" : "recent");
   const page = useRef(0);
   const pages = useRef<number[][]>([]);
   /** The row at the top of the page being shown, kept across a re-measure. */
@@ -43,6 +45,7 @@ export function SessionPager({ tableId, total }: { tableId: string; total: numbe
       const table = document.getElementById(tableId);
       const scroller = table?.closest<HTMLElement>(".ad-scroll");
       if (!table || !scroller) return;
+      setOrder(table.dataset.order === "store" ? "store" : "recent");
       const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>("tbody tr[data-row]"));
       const matching = rows.filter((r) => r.dataset.match !== "0");
       const none = table.querySelector<HTMLTableRowElement>("tbody tr[data-none]");
@@ -148,7 +151,7 @@ export function SessionPager({ tableId, total }: { tableId: string; total: numbe
           </Control>
         </span>
       ) : (
-        <span>Most recent first</span>
+        <span>{order === "store" ? "By store, most recent first" : "Most recent first"}</span>
       )}
     </>
   );
