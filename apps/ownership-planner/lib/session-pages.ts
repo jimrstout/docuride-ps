@@ -31,6 +31,21 @@ export function pagesFor(heights: number[], available: number): number[][] {
   return pages;
 }
 
+/**
+ * Pages as pagesFor makes them, but with a page starting exactly at row
+ * `start`: what Next and Previous use, so moving a page always lands on the
+ * row after the last one shown (or the first of the page before), even when
+ * the rows measured differently from the last time. Without it a fresh split
+ * could put a boundary one row on, and that row would never be shown.
+ * Returns the pages and the index of the page that starts at `start`.
+ */
+export function pagesFrom(heights: number[], available: number, start: number): { pages: number[][]; at: number } {
+  const s = Math.max(0, Math.min(start, heights.length));
+  const before = pagesFor(heights.slice(0, s), available);
+  const after = pagesFor(heights.slice(s), available).map((p) => p.map((i) => i + s));
+  return { pages: [...before, ...after], at: after.length > 0 ? before.length : Math.max(0, before.length - 1) };
+}
+
 /** The page that holds row `index`, or the first page. */
 export function pageHolding(pages: number[][], index: number | null): number {
   if (index === null) return 0;

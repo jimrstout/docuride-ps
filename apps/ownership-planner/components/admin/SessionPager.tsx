@@ -21,7 +21,7 @@
 
 import Control from "@/components/Control";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { countLine, pageHolding, pagesFor } from "@/lib/session-pages";
+import { countLine, pageHolding, pagesFor, pagesFrom } from "@/lib/session-pages";
 
 /** The same test the stylesheet uses for the one-screen list (admin.css). */
 const FITS = "(min-width: 900px) and (min-height: 600px)";
@@ -67,6 +67,17 @@ export function SessionPager({ tableId, total, byStore = false }: { tableId: str
           return r.getBoundingClientRect().height + extra;
         });
         split = pagesFor(heights, available);
+        // Next and Previous: from the rows actually shown, so none is skipped
+        // when the rows measure differently from the last time.
+        if (typeof to === "number") {
+          const shownNow = pages.current[page.current] ?? [];
+          const start = to > page.current
+            ? (shownNow.length ? shownNow[shownNow.length - 1] + 1 : 0)
+            : (pages.current[to]?.[0] ?? 0);
+          const from = pagesFrom(heights, available, start);
+          split = from.pages;
+          to = from.at;
+        }
       }
 
       const at =

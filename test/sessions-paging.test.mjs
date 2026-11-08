@@ -92,3 +92,20 @@ test("the list still has no Rate: rating starts only on Details", () => {
   assert.doesNotMatch(page, /rateSession|adminRate|>\s*Rate\s*</);
   assert.match(page, /<SessionPager tableId="ad-sessions" total=\{rows\.length\} byStore=\{stores\.length > 1\} \/>/);
 });
+
+// ── Next and Previous never skip a session (8 Nov 2026) ───────────────────
+test("moving a page starts at the row after the last one shown, even when rows measure differently", async () => {
+  const { pagesFor: pf, pagesFrom } = await import("../apps/ownership-planner/lib/session-pages.ts");
+  // Page 1 was laid out with 4 rows; measured again, 5 would fit, so a fresh
+  // split's second page would start at row 5 and row 4 would never show.
+  assert.deepEqual(pf([80, 80, 80, 80, 80, 80], 400)[1], [5]);
+  const { pages, at } = pagesFrom([80, 80, 80, 80, 80, 80], 400, 4);
+  assert.deepEqual(pages[at], [4, 5]);
+  assert.deepEqual(pages.flat(), [0, 1, 2, 3, 4, 5]);
+  // Back to the first row of the page before.
+  const back = pagesFrom([80, 80, 80, 80, 80, 80], 400, 0);
+  assert.equal(back.at, 0);
+  assert.deepEqual(back.pages[0], [0, 1, 2, 3, 4]);
+  // A start past the end lands on the last page.
+  assert.equal(pagesFrom([80, 80], 400, 2).at, 0);
+});
