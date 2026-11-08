@@ -50,6 +50,7 @@ import {
   type VerificationSource,
 } from "../_shared/verification.ts";
 import { parseRequiredProperties, readRateProperties } from "../_shared/rate-properties.ts";
+import { PS_NOT_ON, usesPs } from "../_shared/ps-stores.ts";
 import {
   contractsAlreadySubmittedMessage,
   describeContract,
@@ -430,6 +431,13 @@ serve(async (req: Request) => {
         record,
         menuBaseUrl
       );
+    }
+
+    // ── Step 3b: DocuRide PS turned on for the store (migration 0059) ───
+    // Only for a new session: a deal that already has one reopens it above,
+    // whatever the switch says now.
+    if (!(await usesPs(supabase, storeRow.id))) {
+      return json(403, { error: PS_NOT_ON });
     }
 
     // ── Step 4: public.deals linkage, when there is one ────────────────

@@ -1024,8 +1024,19 @@ const field = (fd: FormData, k: string) => String(fd.get(k) ?? "");
 
 /** One store's time zone, which decides when its day ends. */
 export async function saveStoreTimeZone(fd: FormData): Promise<void> {
-  await adminWrite(STORES, (by) =>
+  await adminWrite(storesBack(fd), (by) =>
     edge.adminSaveStore({ store_id: field(fd, "store_id"), time_zone: field(fd, "time_zone"), updated_by: by }), "saved");
+}
+
+/** Back to the Stores page as it was: every store, or only those using PS. */
+function storesBack(fd: FormData): string {
+  return fd.get("all") === "1" ? `${STORES}?all=1` : STORES;
+}
+
+/** DocuRide PS on or off for a store, saved as soon as the switch moves. */
+export async function saveStoreUsesPs(fd: FormData): Promise<void> {
+  await adminWrite(storesBack(fd), (by) =>
+    edge.adminSaveStore({ store_id: field(fd, "store_id"), uses_ps: fd.get("uses_ps") === "on", updated_by: by }), "saved");
 }
 
 // ── Staff ──
