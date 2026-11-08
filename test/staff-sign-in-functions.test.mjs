@@ -254,7 +254,8 @@ test("each deal function checks the sign-in for that deal before it reads anythi
 test("each admin function takes a platform admin, before it reads", () => {
   for (const name of ADMIN_FUNCTIONS) {
     const handler = fn(name).slice(fn(name).indexOf("serve("));
-    const gate = handler.indexOf("await staffGate(req, null)");
+    // The sessions list takes a PS role instead, with its stores (migration 0058).
+    const gate = name === "fni-admin-sessions" ? handler.indexOf("await psCheck(req)") : handler.indexOf("await staffGate(req, null)");
     assert.ok(gate > 0, name);
     const read = handler.indexOf(".from(");
     if (read >= 0) assert.ok(gate < read, name);

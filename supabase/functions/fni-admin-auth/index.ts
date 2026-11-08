@@ -113,13 +113,22 @@ serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("is_platform_admin")
-      .eq("user_id", userId)
-      .maybeSingle();
+    // A PS role (fni.staff_roles, migration 0058) admits: Administrator or
+    // Staff. Read beside the profile; neither is written here.
+    const [{ data: profile, error }, { data: psRole, error: roleErr }] = await Promise.all([
+      supabase.from("profiles").select("is_platform_admin").eq("user_id", userId).maybeSingle(),
+      supabase.schema("fni").from("staff_roles").select("role").eq("user_id", userId).maybeSingle(),
+    ]);
 
     await retire;
+
+    if (roleErr) {
+      console.error("fni-admin-auth role read failed:", roleErr.message);
+      return json(500, { error: "Could not check access" });
+    }
+    if (psRole && ["Administrator", "Staff"].includes((psRole as { role: string }).role)) {
+      return json(200, { user_id: userId, email: session.user?.email ?? email });
+    }
 
     if (error) {
       console.error("fni-admin-auth profile read failed:", error.message);
@@ -127,8 +136,8 @@ serve(async (req: Request) => {
     }
 
     // A valid dealership login is not access to a cross-tenant list of every
-    // session. Platform admin is the existing flag for exactly that
-    // distinction, so it is the one used here.
+    // session. Without a PS role, platform admin is the existing flag for
+    // exactly that distinction, so it is the one used here.
     if (!profile || (profile as { is_platform_admin: boolean }).is_platform_admin !== true) {
       console.warn(`fni-admin-auth refused non-admin sign-in for ${userId}`);
       return json(401, DENIED);
