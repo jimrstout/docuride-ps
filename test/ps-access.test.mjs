@@ -88,7 +88,7 @@ test("the store's full name is the CRM's, and the list comes by store, then most
   assert.equal(storeFullName({ name: "X", zoho_store_location: "  " }), "X");
   const rows = SESSIONS.map((s) => ({ ...s, store_name: storeFullName(STORE[s.store_id]) }));
   assert.deepEqual(byStoreThenRecent(rows).map((r) => r.deal_number), ["07982", "07976", "07888", "15010", "15088"]);
-  assert.match(fn, /select\("id,name,zoho_store_location,time_zone"\)/);
+  assert.match(fn, /select\("id,name,zoho_store_location"\)/);
   // The customer's names, and nothing else of theirs.
   assert.match(fn, /"buyer_display_name",\s*"cobuyer_display_name",/);
   assert.doesNotMatch(fn.slice(fn.indexOf("const LIST_COLUMNS"), fn.indexOf("].join")), /buyer_(first|last|address|city|phone|email)|vin|lienholder/);

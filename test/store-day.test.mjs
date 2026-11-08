@@ -115,7 +115,31 @@ test("Administration sets each store's time zone, from the listed zones only", (
   assert.match(settings, /if \(body\.section === "stores"\) \{/);
   const stores = src("supabase/functions/fni-admin-settings/stores.ts");
   assert.match(stores, /if \(!isStoreTimeZone\(body\.time_zone\)\) \{/);
-  assert.match(stores, /\.update\(\{ time_zone: body\.time_zone \}\)\s*\.eq\("id", body\.store_id\)\s*\.eq\("tenant_id", tenantId\)/);
+  // Saved in fni.ps_stores only (migration 0059), for a store of this dealer group.
+  assert.match(stores, /\.eq\("id", body\.store_id\)\.eq\("tenant_id", tenantId\)\.maybeSingle\(\);/);
+  assert.match(stores, /\.schema\("fni"\)\.from\("ps_stores"\)\.upsert\(\s*\{ store_id: body\.store_id, time_zone: body\.time_zone, updated_at: new Date\(\)\.toISOString\(\), updated_by: who \|\| null \},\s*\{ onConflict: "store_id" \},\s*\);/);
+});
+
+test("PS reads and writes the store time zone in fni.ps_stores only, never public.stores.time_zone", async () => {
+  const { readdirSync, statSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const root = new URL("../supabase/functions/", import.meta.url).pathname;
+  const files = [];
+  const walk = (d) => { for (const n of readdirSync(d)) { const p = join(d, n); if (statSync(p).isDirectory()) walk(p); else if (p.endsWith(".ts")) files.push(p); } };
+  walk(root);
+  for (const f of files) {
+    const s = src(f.slice(f.indexOf("supabase/")));
+    // A read or write of public.stores that names time_zone.
+    for (const m of s.matchAll(/\.from\("stores"\)[^;]*/g)) assert.doesNotMatch(m[0], /time_zone/, f);
+  }
+  const helper = src("supabase/functions/_shared/ps-stores.ts");
+  assert.match(helper, /\.schema\("fni"\)\.from\("ps_stores"\)\.select\("time_zone"\)\.eq\("store_id", storeId\)\.maybeSingle\(\);/);
+  assert.match(src("supabase/functions/fni-session-verify/index.ts"), /import \{ storeTimeZone \} from "\.\.\/_shared\/ps-stores\.ts";/);
+  assert.match(src("supabase/functions/fni-contract-submit/index.ts"), /const today = storeToday\(await storeTimeZone\(supabase, session\.store_id\)\);/);
+  // The database's store-day functions all go through this one, which reads fni.ps_stores.
+  const m = src("supabase/migrations/0059_ps_stores.sql");
+  assert.match(m, /create or replace function fni\.store_time_zone\(p_store uuid\)[\s\S]*?select coalesce\(\(select p\.time_zone from fni\.ps_stores p where p\.store_id = p_store\), 'America\/New_York'\)/);
+  assert.doesNotMatch(m, /update public\.stores|alter table public\.stores|drop /i);
 });
 
 test("Sessions has no Renew for Today: a session runs through its CRM sale date", async () => {
