@@ -282,7 +282,7 @@ async function list(url: URL, gate: PsGateOk): Promise<Response> {
     stores: storeList,
     notice: null,
     // By store, then most recent first within each store: the order for
-    // "All my stores", and, within one store, most recent first.
+    // "All locations", and, within one store, most recent first.
     sessions: byStoreThenRecent(out),
   });
 }
