@@ -102,7 +102,8 @@ test("signing in can only return to a page inside the admin area", () => {
 test("the menu renders from the one list in code", () => {
   // The one list, cut to what the person's PS role shows (lib/admin-sections.ts sectionsFor).
   assert.match(layout, /const sections = sectionsFor\(role\);/);
-  assert.match(layout, /\{sections\.map\(\(s\) => \(/);
+  assert.match(layout, /<AdminNav sections=\{sections\} \/>/);
+  assert.match(src("components/admin/AdminNav.tsx"), /\{sections\.map\(\(s\) => \(/);
   // The brand, and the signed-in email with Sign out beside it.
   assert.match(src("components/admin/Parts.tsx"), /DocuRide <span>PS<\/span>[\s\S]*Administration/);
   assert.match(layout, /<Brand \/>/);
@@ -120,7 +121,7 @@ test("the menu renders from the one list in code", () => {
   // The section in force is highlighted.
   assert.equal(sectionFor("/admin/wording")?.label, "Wording");
   assert.equal(sectionFor("/admin/sessions/anything")?.label, "Sessions");
-  assert.match(layout, /aria-current=\{s\.href === here\?\.href \? "page" : undefined\}/);
+  assert.match(src("components/admin/AdminNav.tsx"), /aria-current=\{s\.href === here\?\.href \? "page" : undefined\}/);
 });
 
 test("the old pages keep no copy of their own", () => {

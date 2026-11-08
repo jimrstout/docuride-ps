@@ -20,14 +20,14 @@ import Control from "@/components/Control";
 import HomeLink, { HOME_HREF } from "@/components/HomeLink";
 import { headers } from "next/headers";
 import { currentOperator } from "@/lib/admin-session";
-import { initialsFor, safeAdminPath, sectionFor, sectionsFor } from "@/lib/admin-sections";
+import { initialsFor, safeAdminPath, sectionsFor } from "@/lib/admin-sections";
 import { edge } from "@/lib/edge";
 import { SignIn, SIGN_IN_NOTICES } from "@/components/admin/SignIn";
 import { Brand } from "@/components/admin/Parts";
-import { Icon } from "@/components/admin/Icon";
 import { signOut } from "@/app/console-actions";
 import { WorkingArea } from "@/components/Working";
 import AdminMenu from "@/components/admin/AdminMenu";
+import AdminNav, { AdminCrumbHere } from "@/components/admin/AdminNav";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +46,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     );
   }
 
-  const here = sectionFor(path);
   // The person's PS role decides the menu (migration 0058). If it cannot be
   // read, the menu is as before; each page's own data is checked on the server.
   const role = await edge.adminMe<{ role?: string }>().then((m) => m.role ?? null).catch(() => null);
@@ -70,20 +69,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <Brand />
         </Control>
         {/* A phone or a narrow tablet: the sections by name, behind a Menu button. */}
-        <AdminMenu sections={sections} here={here?.href ?? null} />
-        <nav className="ad-nav" aria-label="Admin sections">
-          {sections.map((s) => (
-            <Control
-              key={s.href}
-              href={s.href}
-              className={s.href === here?.href ? "ad-nav-link is-here" : "ad-nav-link"}
-              aria-current={s.href === here?.href ? "page" : undefined}
-            >
-              <Icon name={s.icon} />
-              <span className="ad-nav-label">{s.label}</span>
-            </Control>
-          ))}
-        </nav>
+        <AdminMenu sections={sections} />
+        {/* The highlight and the breadcrumb follow the address on the client: this layout does not re-render between its pages. */}
+        <AdminNav sections={sections} />
         <div className="ad-side-foot">
           <span className="ad-side-email">{operator.email}</span>
           {signOutForm}
@@ -100,7 +88,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               Administration
             </span>
             <span className="ad-slash" aria-hidden="true">/</span>
-            <strong>{here?.label ?? "Sessions"}</strong>
+            <AdminCrumbHere />
           </p>
           {/* A page's own choice for the whole page (the Sessions store choice), left of the email. */}
           <div className="ad-top-tools" id="ad-top-tools" />
