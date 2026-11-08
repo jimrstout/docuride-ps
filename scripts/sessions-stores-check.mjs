@@ -5,7 +5,7 @@
 // answers as fni-admin-sessions does (migration 0058): an Administrator sees
 // every store, Staff only the stores granted. Checks that:
 //   - an Administrator sees every session, a store choice at the top right
-//     ("All my stores" first), by store then most recent, and the footer says so;
+//     ("All locations" first), by store then most recent, and the footer says so;
 //   - choosing one store shows only its sessions, most recent first, and the
 //     choice is remembered on a reload;
 //   - search finds a session by customer, and a co-buyer shows under the buyer;
@@ -48,7 +48,7 @@ try {
   const options = await choice.locator("option").allTextContents();
   // The store choice offers only the stores using DocuRide PS (fni.ps_stores).
   const onCount = edge.state.stores.filter((st) => st.uses_ps).length;
-  check(options[0] === "All my stores" && options.length === onCount + 1, `Administrator: options ${JSON.stringify(options)}`);
+  check(options[0] === "All locations" && options.length === onCount + 1, `Administrator: options ${JSON.stringify(options)}`);
   const sorted = [...options.slice(1)].sort((a, b) => a.localeCompare(b));
   check(JSON.stringify(sorted) === JSON.stringify(options.slice(1)), "Administrator: stores alphabetical by full name");
   const leftOfEmail = await page.evaluate(() => {

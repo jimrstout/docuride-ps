@@ -36,7 +36,7 @@ export function SessionFilters({
   ratings: FilterOption[];
 }) {
   const [q, setQ] = useState("");
-  // "" is "All my stores". Remembered in this browser for the session.
+  // "" is "All locations". Remembered in this browser for the session.
   const [store, setStore] = useState("");
   const [topBar, setTopBar] = useState<HTMLElement | null>(null);
   useEffect(() => {
@@ -91,7 +91,7 @@ export function SessionFilters({
       <label className="ad-store-choice">
         <span className="sr-only">Store</span>
         <select value={store} onChange={(e) => chooseStore(e.target.value)}>
-          <option value="">All my stores</option>
+          <option value="">All locations</option>
           {stores.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}

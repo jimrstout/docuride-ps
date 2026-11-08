@@ -33,7 +33,7 @@ test("the store choice: top right, left of the email, only for more than one sto
   // Not in the filter row any more.
   assert.doesNotMatch(filters, /label="Store" all="All stores"/);
   assert.match(filters, /const storeChoice =\s*stores\.length > 1 \? \(/);
-  assert.match(filters, /<option value="">All my stores<\/option>/);
+  assert.match(filters, /<option value="">All locations<\/option>/);
   assert.match(filters, /\{storeChoice && topBar \? createPortal\(storeChoice, topBar\) : storeChoice\}/);
   const top = layout.slice(layout.indexOf('<header className="ad-top">'));
   assert.ok(top.indexOf('id="ad-top-tools"') > 0 && top.indexOf('id="ad-top-tools"') < top.indexOf('className="ad-me-name"'));
@@ -53,4 +53,12 @@ test("the order: by store with every store, most recent first in one, and the fo
 
 test("no stores: the plain message instead of a list", () => {
   assert.match(page, /\{payload\.notice \? \(\s*<p className="ad-empty">\{payload\.notice\}<\/p>/);
+});
+
+// ── Sessions page label and layout fixes (9 Nov 2026) ───────────────────────
+const css = read("apps/ownership-planner/app/admin/admin.css");
+
+test("the store choice reads All locations, still meaning every store the person can see", () => {
+  assert.match(filters, /<option value="">All locations<\/option>/);
+  assert.doesNotMatch(filters + page, /All my stores/);
 });
