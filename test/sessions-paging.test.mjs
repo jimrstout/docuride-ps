@@ -90,5 +90,5 @@ test("nothing scrolls on a laptop, not even inside the panel", () => {
 test("the list still has no Rate: rating starts only on Details", () => {
   const page = app("app/admin/sessions/page.tsx");
   assert.doesNotMatch(page, /rateSession|adminRate|>\s*Rate\s*</);
-  assert.match(page, /<SessionPager tableId="ad-sessions" total=\{rows\.length\} \/>/);
+  assert.match(page, /<SessionPager tableId="ad-sessions" total=\{rows\.length\} byStore=\{stores\.length > 1\} \/>/);
 });

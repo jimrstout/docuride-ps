@@ -24,10 +24,10 @@ import { hasMoreDetail, ratingErrorHeadline, ratingFailures } from "@/lib/rating
 import { storeTime } from "@/lib/store-time";
 import { currentOperator } from "@/lib/admin-session";
 import { edge } from "@/lib/edge";
-import type { ConsoleListPayload, ConsoleSessionRow, PricingPayload } from "@/lib/types";
+import type { ConsoleListPayload, ConsoleSessionRow } from "@/lib/types";
 import { SIGN_IN_NOTICES } from "@/components/admin/SignIn";
 import { Badge, Notice, PageHead, type Tone } from "@/components/admin/Parts";
-import { SessionFilters, type FilterOption } from "@/components/admin/SessionFilters";
+import { SessionFilters } from "@/components/admin/SessionFilters";
 import { SessionPager } from "@/components/admin/SessionPager";
 
 export const dynamic = "force-dynamic";
@@ -184,7 +184,7 @@ function WhyRow({ row }: { row: ConsoleSessionRow }) {
   if (!failures.some(hasMoreDetail)) return null;
   return (
     <tr className="ad-why-row" id={whyRowId(row)} hidden>
-      <td colSpan={8}>
+      <td colSpan={9}>
         <RatingErrorText deal={row.deal_number} failures={failures} />
       </td>
     </tr>
@@ -196,7 +196,7 @@ function WhyRow({ row }: { row: ConsoleSessionRow }) {
 /** What the search box looks through, lower case. The VIN is not here: the
  *  Edge Function never sends it to the console. */
 function searchText(row: ConsoleSessionRow): string {
-  return [row.deal_number, row.stock_number, vehicle(row), row.store_name]
+  return [row.deal_number, row.customer, row.co_buyer, row.stock_number, vehicle(row), row.store_name]
     .filter((v) => v !== null && v !== undefined)
     .join(" ")
     .toLowerCase();
@@ -208,7 +208,7 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
     <>
       <tr
         data-row=""
-        data-store={row.store_name ?? ""}
+        data-store={row.store_id ?? ""}
         data-status={row.status ?? ""}
         data-rating={ratingState}
         data-search={searchText(row)}
@@ -218,6 +218,12 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
           <Control className="ad-rowlink" href={`/details/${row.id}`}>
             {row.deal_number ?? "Not set"}
           </Control>
+        </td>
+
+        {/* The buyer as the session holds them; a co-buyer underneath, smaller and grey. */}
+        <td data-label="Customer" className="ad-customer">
+          <span className="ad-clip ad-strong" title={row.customer ?? undefined}>{row.customer ?? "Not set"}</span>
+          {row.co_buyer ? <small className="ad-clip" title={row.co_buyer}>{row.co_buyer}</small> : null}
         </td>
 
         <td className="ad-vehicle">
@@ -272,23 +278,6 @@ function Row({ row, now }: { row: ConsoleSessionRow; now: number }) {
   );
 }
 
-/**
- * The stores the menu runs at, for the Store filter: those with an active
- * TecAssured account, read the same way the Pricing page reads them. If that
- * read fails, the stores that appear in the list stand in, so the filter
- * still works.
- */
-async function menuStores(rows: ConsoleSessionRow[]): Promise<FilterOption[]> {
-  try {
-    const pricing = await edge.adminPricing<PricingPayload>({ scope: "all" });
-    return pricing.stores.map((s) => ({ value: s.name, label: s.name }));
-  } catch (err) {
-    console.error("console store list failed:", err);
-    const names = [...new Set(rows.map((r) => r.store_name).filter((n): n is string => !!n))].sort();
-    return names.map((n) => ({ value: n, label: n }));
-  }
-}
-
 async function SessionList({ notice }: { notice: string | null }) {
   let payload: ConsoleListPayload;
   try {
@@ -305,7 +294,9 @@ async function SessionList({ notice }: { notice: string | null }) {
 
   const now = Date.parse(payload.as_of);
   const rows = payload.sessions;
-  const stores = await menuStores(rows);
+  // The stores this person may see, by full name (fni-admin-sessions). The
+  // list holds only their sessions, by store, then most recent first.
+  const stores = (payload.stores ?? []).map((s) => ({ value: s.id, label: s.name }));
 
   return (
     <>
@@ -324,17 +315,20 @@ async function SessionList({ notice }: { notice: string | null }) {
           ratings={Object.entries(RATING).map(([value, r]) => ({ value, label: r.label }))}
         />
 
-        {rows.length === 0 ? (
+        {payload.notice ? (
+          <p className="ad-empty">{payload.notice}</p>
+        ) : rows.length === 0 ? (
           <p className="ad-empty">
             No planning sessions yet. One appears here as soon as a deal starts
             one from the CRM.
           </p>
         ) : (
           <div className="ad-scroll">
-            <table className="ad-table" id="ad-sessions">
+            <table className="ad-table" id="ad-sessions" data-order={stores.length > 1 ? "store" : "recent"}>
               <thead>
                 <tr>
                   <th scope="col">Deal #</th>
+                  <th scope="col">Customer</th>
                   <th scope="col">Vehicle</th>
                   <th scope="col">Store</th>
                   <th scope="col">Status</th>
@@ -349,7 +343,7 @@ async function SessionList({ notice }: { notice: string | null }) {
                   <Row key={row.id} row={row} now={now} />
                 ))}
                 <tr data-none="" hidden>
-                  <td colSpan={8} className="ad-empty">
+                  <td colSpan={9} className="ad-empty">
                     No sessions match. Clear the search or a filter to see more.
                   </td>
                 </tr>
@@ -361,15 +355,16 @@ async function SessionList({ notice }: { notice: string | null }) {
         <footer className="ad-panel-foot">
           {/* The count and, when there is more than one screen of sessions,
               Previous and Next (components/admin/SessionPager.tsx). */}
-          <SessionPager tableId="ad-sessions" total={rows.length} />
+          <SessionPager tableId="ad-sessions" total={rows.length} byStore={stores.length > 1} />
         </footer>
       </section>
 
       <details className="ad-details">
         <summary>Session timing and ratings</summary>
         <p>
-          The list shows the {rows.length === 1 ? "most recent session" : `${rows.length} most recent sessions`},
-          newest first. Times are UTC. Extending adds 24 hours from now, which
+          The list shows the {rows.length === 1 ? "most recent session" : `${rows.length} most recent sessions`}
+          in your stores, by store and then newest first, or newest first in
+          the one store chosen at the top. Times are UTC. Extending adds 24 hours from now, which
           reopens a session that has already lapsed. Rating says whether the
           customer has a menu, and why not when they do not. Open, the deal
           number and the vehicle all go to the deal&apos;s Details, where it is

@@ -72,6 +72,10 @@
 .ad-crumb .ad-slash { color: var(--line-quiet); margin: 0 7px; }
 .ad-crumb strong { color: var(--ink); font-weight: 600; }
 .ad-me { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink); min-width: 0; }
+/* The page's own choice in the top bar, right-aligned beside the email. */
+.ad-top-tools { margin-left: auto; display: flex; align-items: center; min-width: 0; }
+.ad-top-tools:empty { display: none; }
+.ad-store-choice select { max-width: 340px; font: inherit; font-size: 12px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--ink); }
 .ad-me-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ad-avatar {
   flex: none; width: 29px; height: 29px; border-radius: 50%;
@@ -448,13 +452,14 @@
      is clipped inside its own column, the whole of it in the tooltip. */
   #ad-sessions { table-layout: fixed; }
   #ad-sessions th:nth-child(1) { width: 6%; }
-  #ad-sessions th:nth-child(2) { width: 25%; }
-  #ad-sessions th:nth-child(3) { width: 16%; }
-  #ad-sessions th:nth-child(4) { width: 8%; }
-  #ad-sessions th:nth-child(5) { width: 14%; }
-  #ad-sessions th:nth-child(6) { width: 10%; }
-  #ad-sessions th:nth-child(7) { width: 13%; }
-  #ad-sessions th:nth-child(8) { width: 88px; }
+  #ad-sessions th:nth-child(2) { width: 14%; }
+  #ad-sessions th:nth-child(3) { width: 19%; }
+  #ad-sessions th:nth-child(4) { width: 16%; }
+  #ad-sessions th:nth-child(5) { width: 8%; }
+  #ad-sessions th:nth-child(6) { width: 12%; }
+  #ad-sessions th:nth-child(7) { width: 9%; }
+  #ad-sessions th:nth-child(8) { width: 11%; }
+  #ad-sessions th:nth-child(9) { width: 88px; }
   #ad-sessions tr[data-row] > td { overflow: hidden; }
   #ad-sessions td.ad-vehicle .ad-rowlink,
   #ad-sessions .ad-clip,

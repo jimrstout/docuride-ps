@@ -297,7 +297,13 @@ export interface ConsoleSessionRow {
   deal_number: string | null;
   status: string | null;
   mode: SessionMode | null;
+  /** The store's full name as the CRM writes it ("All Seasons Powersports, Parkersburg"). */
   store_name: string | null;
+  store_id?: string | null;
+  /** The buyer as the session holds them: the CRM display name, a company's display name for a company. */
+  customer?: string | null;
+  /** The co-buyer the same way, when there is one. */
+  co_buyer?: string | null;
   year: number | null;
   make: string | null;
   model: string | null;
@@ -330,6 +336,12 @@ export interface ConsoleListPayload {
   limit: number;
   as_of: string;
   sessions: ConsoleSessionRow[];
+  /** The signed-in person's PS role (migration 0058). */
+  role?: "Administrator" | "Staff";
+  /** The stores they may see, by full name, alphabetical. */
+  stores?: { id: string; name: string }[];
+  /** Said instead of a list: "No stores assigned. Ask an administrator for access." */
+  notice?: string | null;
 }
 
 // ── Console settings ──────────────────────────────────────────────────────

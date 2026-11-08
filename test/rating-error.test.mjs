@@ -106,7 +106,7 @@ test("the session list shows the summary and opens the full text under the row",
   const page = src("app/admin/sessions/page.tsx");
   assert.match(page, /ratingErrorHeadline\(failures\)/);
   assert.match(page, /<RowDetailsToggle target=\{whyRowId\(row\)\} \/>/);
-  assert.match(page, /<tr className="ad-why-row" id=\{whyRowId\(row\)\} hidden>\s*<td colSpan=\{8\}>/);
+  assert.match(page, /<tr className="ad-why-row" id=\{whyRowId\(row\)\} hidden>\s*<td colSpan=\{9\}>/);
   const toggle = src("components/admin/RowDetailsToggle.tsx");
   assert.match(toggle, /aria-expanded=\{open\}/);
   assert.match(toggle, /open \? "Hide details" : "Show details"/);
