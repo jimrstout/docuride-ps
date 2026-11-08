@@ -195,7 +195,8 @@ export function startMockEdge({ port, delayMs = 0, rows = 6, delays = {} } = {})
       if (storeIds !== null && storeIds.length === 0) {
         return json(200, { limit: 60, as_of: new Date().toISOString(), role, stores: [], notice: "No stores assigned. Ask an administrator for access.", sessions: [] });
       }
-      const rowsFor = sessions(state.rows).filter((r) => storeIds === null || storeIds.includes(r.store_id))
+      // A check may dress the made-up rows (longer names, say) through state.dress.
+      const rowsFor = sessions(state.rows).map((r, i) => (state.dress ? state.dress(r, i) : r)).filter((r) => storeIds === null || storeIds.includes(r.store_id))
         .sort((a, b) => a.store_name.localeCompare(b.store_name) || Date.parse(b.created_at) - Date.parse(a.created_at));
       return json(200, { limit: 60, as_of: new Date().toISOString(), role, stores: allowed.sort((a, b) => a.name.localeCompare(b.name)), notice: null, sessions: rowsFor });
     }
