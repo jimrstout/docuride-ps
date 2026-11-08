@@ -17,6 +17,7 @@
 
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseProvider, parseStoreIds } from "../_shared/menu-admin.ts";
+import { storeFullName } from "../_shared/ps-access.ts";
 
 export interface Reply {
   status: number;
@@ -26,9 +27,12 @@ export interface Reply {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function stores(supabase: SupabaseClient, tenantId: string) {
-  const { data, error } = await supabase.from("stores").select("id, name").eq("tenant_id", tenantId).order("name");
+  // Each store by its full name as the CRM writes it (_shared/ps-access.ts storeFullName).
+  const { data, error } = await supabase.from("stores").select("id, name, zoho_store_location").eq("tenant_id", tenantId);
   if (error) throw new Error(`Failed to read stores: ${error.message}`);
-  return (data ?? []) as { id: string; name: string }[];
+  return ((data ?? []) as { id: string; name: string; zoho_store_location: string | null }[])
+    .map((s) => ({ id: s.id, name: storeFullName(s) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function readProviders(supabase: SupabaseClient, tenantId: string): Promise<Reply> {
