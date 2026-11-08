@@ -112,6 +112,7 @@ import { sessionPaymentBasis } from "../_shared/plan-prices.ts";
 import { capChange, editFor, MAX_AMOUNT_FINANCED } from "./save-edits.ts";
 import { onlySameMonthSaleDateMove, priceSheetBoundaries } from "../_shared/sale-date.ts";
 import { SUBMIT_ROW_COLUMNS, submitConfirmation, type SubmitRow } from "../_shared/saved-selections.ts";
+import { storeTimeZone } from "../_shared/ps-stores.ts";
 import {
   duplicateVinWarning,
   occupiesSlot,
@@ -939,11 +940,6 @@ async function partyAction(
 
 // ── The store's day ───────────────────────────────────────────────────────
 
-async function storeTimeZone(supabase: SupabaseClient, storeId: unknown): Promise<string | null> {
-  if (typeof storeId !== "string") return null;
-  const { data } = await supabase.from("stores").select("time_zone").eq("id", storeId).maybeSingle();
-  return (data as { time_zone?: string } | null)?.time_zone ?? null;
-}
 
 /**
  * The store's day, and what the CRM sale date blocks (docs section 24). The

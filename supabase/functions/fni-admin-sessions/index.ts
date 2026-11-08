@@ -43,6 +43,7 @@ import { presentedSecret } from "../_shared/presented-secret.ts";
 import { psCheck, type PsGateOk } from "../_shared/staff-gate.ts";
 import { byStoreThenRecent, isPsRole, NO_STORES_MESSAGE, storeFullName, type PsAccess } from "../_shared/ps-access.ts";
 import { currentRows, ratingSummary, type RatingFailure, type RatingRow } from "../_shared/rating-summary.ts";
+import { psStores } from "../_shared/ps-stores.ts";
 
 /** The columns the console renders. Explicit, so a new PII column on the table
  *  cannot widen this endpoint by accident. */
@@ -107,12 +108,12 @@ function isExpired(expiresAt: unknown, now: number): boolean {
   return Number.isFinite(t) && t <= now;
 }
 
-type StoreRow = { id: string; name: string; zoho_store_location: string | null; time_zone: string | null };
+type StoreRow = { id: string; name: string; zoho_store_location: string | null };
 
 /** The stores the person may see, by full name, alphabetical. */
 async function permittedStores(supabase: ReturnType<typeof admin>, access: PsAccess): Promise<StoreRow[]> {
   if (access.storeIds !== null && access.storeIds.length === 0) return [];
-  let q = supabase.from("stores").select("id,name,zoho_store_location,time_zone");
+  let q = supabase.from("stores").select("id,name,zoho_store_location");
   if (access.storeIds !== null) q = q.in("id", access.storeIds);
   const { data, error } = await q;
   if (error) throw new Error(`stores: ${error.message}`);
@@ -177,12 +178,14 @@ async function list(url: URL, gate: PsGateOk): Promise<Response> {
   const known = new Map(permitted.map((s) => [s.id, s]));
   const missing = storeIds.filter((id) => !known.has(id));
   if (missing.length > 0) {
-    const { data: stores } = await supabase.from("stores").select("id,name,zoho_store_location,time_zone").in("id", missing);
+    const { data: stores } = await supabase.from("stores").select("id,name,zoho_store_location").in("id", missing);
     for (const s of (stores ?? []) as StoreRow[]) known.set(s.id, s);
   }
+  // Each store's time zone is PS's own (fni.ps_stores, migration 0059).
+  const settings = await psStores(supabase);
   for (const [id, s] of known) {
     names.set(id, storeFullName(s));
-    zones.set(id, s.time_zone ?? null);
+    zones.set(id, settings.get(id)?.time_zone ?? null);
   }
 
   // ── Why a session has no menu ──────────────────────────────────────────
@@ -277,7 +280,7 @@ async function staffList(): Promise<Response> {
     supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     supabase.schema("fni").from("staff_roles").select("user_id, role, granted_by, granted_at"),
     supabase.schema("fni").from("staff_store_access").select("user_id, store_id, granted_by, granted_at"),
-    supabase.from("stores").select("id,name,zoho_store_location,time_zone"),
+    supabase.from("stores").select("id,name,zoho_store_location"),
   ]);
   if (usersErr) return json(500, { error: `The sign-ins could not be read: ${usersErr.message}` });
   const roleOf = new Map(((roles ?? []) as { user_id: string; role: string; granted_by: string; granted_at: string }[]).map((r) => [r.user_id, r]));

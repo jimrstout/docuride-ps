@@ -1,7 +1,8 @@
 // _shared/store-day.ts
 //
 // A deal is sold on a day, in a store. Which day it is depends on the store's
-// time zone (public.stores.time_zone, set in Administration > Stores).
+// time zone (fni.ps_stores.time_zone, migration 0059, set in Administration >
+// Stores).
 //
 // The session's expiry is worked out in Postgres (migrations 0038 and 0044:
 // fni.store_day_end, fni.session_sale_day_end), so a session made by any path ends at

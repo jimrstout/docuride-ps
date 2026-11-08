@@ -87,6 +87,7 @@ import { applyStaffEdits, parseStaffEdits } from "../_shared/staff-edits.ts";
 import { buyerPhoneKeys, cobuyerKeys } from "../_shared/submit-parties.ts";
 import { DX1_CONFIRMATION, partyChanges } from "../_shared/contract-parties.ts";
 import { savedSelections, SUBMIT_ROW_COLUMNS, type SubmitRow } from "../_shared/saved-selections.ts";
+import { storeTimeZone } from "../_shared/ps-stores.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -417,14 +418,9 @@ serve(async (req: Request) => {
 
     // ── Step 3d: Only on the day of the sale ───────────────────────────
     // The CRM sale date must be today in the store's own zone
-    // (public.stores.time_zone), and the unit cannot go into service after it
-    // was sold (_shared/store-day.ts).
-    const { data: storeRow } = await supabase
-      .from("stores")
-      .select("time_zone")
-      .eq("id", session.store_id)
-      .maybeSingle();
-    const today = storeToday((storeRow as { time_zone?: string } | null)?.time_zone ?? null);
+    // (fni.ps_stores.time_zone, migration 0059), and the unit cannot go into
+    // service after it was sold (_shared/store-day.ts).
+    const today = storeToday(await storeTimeZone(supabase, session.store_id));
     const dayProblem = submitDateProblem({
       sale: dates.sale,
       inService: dates.inService,
