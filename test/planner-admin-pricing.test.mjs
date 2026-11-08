@@ -81,7 +81,7 @@ const fields = (over = {}) => {
 
 test("Pricing is listed between Sessions and Wording", () => {
   // Providers, Menus and Price sheets joined in multi-provider Part 6; Stores with session dates; Brands with make normalization.
-  assert.deepEqual(ADMIN_SECTIONS.map((s) => s.label), ["Sessions", "Pricing", "Providers", "Menus", "Price sheets", "Wording", "Stores", "Brands"]);
+  assert.deepEqual(ADMIN_SECTIONS.map((s) => s.label), ["Sessions", "Pricing", "Providers", "Menus", "Price sheets", "Wording", "Stores", "Brands", "Staff"]);
   assert.equal(ADMIN_SECTIONS[1].href, "/admin/pricing");
 });
 

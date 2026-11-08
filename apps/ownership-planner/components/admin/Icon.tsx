@@ -47,6 +47,15 @@ const PATHS: Record<AdminSection["icon"], React.ReactNode> = {
       <path d="M4 19.5h10" />
     </>
   ),
+  // Two people: who sees which stores.
+  staff: (
+    <>
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M15.5 14.2A5 5 0 0 1 21 19" />
+    </>
+  ),
   // A sheet with a folded corner and rows.
   sheets: (
     <>

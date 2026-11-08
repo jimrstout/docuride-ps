@@ -100,7 +100,9 @@ test("signing in can only return to a page inside the admin area", () => {
 // ── The section list ─────────────────────────────────────────────────────────
 
 test("the menu renders from the one list in code", () => {
-  assert.match(layout, /\{ADMIN_SECTIONS\.map\(\(s\) => \(/);
+  // The one list, cut to what the person's PS role shows (lib/admin-sections.ts sectionsFor).
+  assert.match(layout, /const sections = sectionsFor\(role\);/);
+  assert.match(layout, /\{sections\.map\(\(s\) => \(/);
   // The brand, and the signed-in email with Sign out beside it.
   assert.match(src("components/admin/Parts.tsx"), /DocuRide <span>PS<\/span>[\s\S]*Administration/);
   assert.match(layout, /<Brand \/>/);

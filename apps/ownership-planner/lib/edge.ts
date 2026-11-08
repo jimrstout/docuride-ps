@@ -179,6 +179,14 @@ export const edge = {
       query: { limit: String(limit) },
     }),
 
+  /** The signed-in person's PS role and stores (migration 0058), for the admin menu. */
+  adminMe: <T>() => call<T>("fni-admin-sessions", { method: "GET", query: { section: "me" } }),
+
+  /** Administration > Staff: every sign-in, its role and stores. Administrators only. */
+  adminStaff: <T>() => call<T>("fni-admin-sessions", { method: "GET", query: { section: "staff" } }),
+  adminSaveStaff: <T>(body: Record<string, unknown>) =>
+    call<T>("fni-admin-sessions", { method: "POST", body: { section: "staff", ...body } }),
+
   // Staff re-rating a session by hand, after fixing whatever stopped it. The
   // planner only ever rates from "Pending", so this is the one way to ask again.
   adminRate: <T>(sessionId: string, ratedBy?: string) =>

@@ -1028,6 +1028,29 @@ export async function saveStoreTimeZone(fd: FormData): Promise<void> {
     edge.adminSaveStore({ store_id: field(fd, "store_id"), time_zone: field(fd, "time_zone"), updated_by: by }), "saved");
 }
 
+// ── Staff ──
+
+const STAFF = "/admin/staff";
+
+/**
+ * One person's PS role and stores (Administration > Staff). The role first,
+ * when it changed and is not the person's own; then the stores ticked. The
+ * Edge Function records who made each change and refuses anyone but an
+ * Administrator.
+ */
+export async function saveStaffAccess(fd: FormData): Promise<void> {
+  const userId = field(fd, "user_id");
+  const role = field(fd, "role");
+  const before = field(fd, "role_before");
+  const storeIds = fd.getAll("store_id").map(String);
+  await adminWrite(STAFF, async () => {
+    if (fd.get("self") !== "1" && role !== "" && role !== before) {
+      await edge.adminSaveStaff({ action: "set_role", user_id: userId, role });
+    }
+    return edge.adminSaveStaff({ action: "set_stores", user_id: userId, store_ids: storeIds });
+  }, "saved");
+}
+
 // ── Brands ──
 
 const BRANDS = "/admin/brands";
