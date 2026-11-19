@@ -11,7 +11,7 @@ import { redirect } from "next/navigation";
 import { isOfferDetails, type OfferDetails } from "@/lib/details-offer";
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
-import { clearSharedCookies } from "@/lib/shared-sign-in";
+import { clearSharedCookies, sharedSessionCookies, type SharedSession } from "@/lib/shared-sign-in";
 import { edge, EdgeError } from "@/lib/edge";
 import {
   CONSOLE_COOKIE,
@@ -47,9 +47,9 @@ export async function signIn(formData: FormData): Promise<void> {
 
   if (!email || !password) redirect(withNotice(next, "denied"));
 
-  let user: { user_id: string; email: string };
+  let user: { user_id: string; email: string; session?: SharedSession };
   try {
-    user = await edge.adminAuth<{ user_id: string; email: string }>(email, password);
+    user = await edge.adminSignIn<{ user_id: string; email: string; session?: SharedSession }>(email, password);
   } catch (err) {
     if (err instanceof EdgeError && err.status === 429) redirect(withNotice(next, "slow"));
     if (err instanceof EdgeError && err.status === 401) redirect(withNotice(next, "denied"));
@@ -61,6 +61,12 @@ export async function signIn(formData: FormData): Promise<void> {
   }
 
   const jar = await cookies();
+  // One DocuRide sign-in: hand the session to every other app, and keep the
+  // console signed in only while it lasts (lib/admin-session-rules.ts).
+  if (user.session) {
+    const host = (await headers()).get("host");
+    for (const w of sharedSessionCookies(user.session, host, jar.getAll().map((c) => c.name))) jar.set(w.name, w.value, w.options);
+  }
   jar.set(
     CONSOLE_COOKIE,
     mintConsoleCookie({ sub: user.user_id, email: user.email }),

@@ -8,6 +8,7 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { type ConsoleSession, CONSOLE_COOKIE, verifyConsoleCookie } from "./console-cookie";
+import { liveConsoleCookie } from "./admin-session-rules";
 
 export {
   CONSOLE_COOKIE,
@@ -28,5 +29,5 @@ export type { ConsoleSession } from "./console-cookie";
  */
 export const currentOperator = cache(async (): Promise<ConsoleSession | null> => {
   const jar = await cookies();
-  return verifyConsoleCookie(jar.get(CONSOLE_COOKIE)?.value);
+  return verifyConsoleCookie(liveConsoleCookie((name) => jar.get(name)?.value) ?? undefined);
 });
