@@ -13,7 +13,10 @@
 import "@/app/admin/admin.css";
 import "@fontsource-variable/plus-jakarta-sans";
 import "@/app/admin/look.css";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { signIn } from "@/app/console-actions";
+import { readSharedSession } from "@/lib/shared-sign-in";
 import Control from "@/components/Control";
 import { Working } from "@/components/Working";
 import { Brand, Notice } from "@/components/admin/Parts";
@@ -24,6 +27,8 @@ export const SIGN_IN_NOTICES: Record<string, string> = {
   slow: "Too many attempts. Wait a minute and try again.",
   broken: "Sign-in is unavailable right now. Try again shortly.",
   bad: "That wasn't a valid session.",
+  nosso: "Your DocuRide sign-in doesn't include PS. Sign in with an account that has PS access.",
+  expired: "Your DocuRide sign-in has expired. Sign in again.",
 };
 
 /** The notice signIn redirected back with (?denied=1 and the rest), from a page's query. */
@@ -32,7 +37,15 @@ export function signInNotice(query: Record<string, string | string[] | undefined
   return key ? SIGN_IN_NOTICES[key] : null;
 }
 
-export function SignIn({ notice, next }: { notice: string | null; next: string }) {
+export async function SignIn({ notice, next }: { notice: string | null; next: string }) {
+  const cookieJar = await cookies();
+  // Signed in at HQ or another DocuRide app? Use that sign-in instead of
+  // asking again (app/api/sso). It comes back with a notice when it can't,
+  // and a notice always shows this form, so it never loops.
+  if (!notice && readSharedSession((name) => cookieJar.get(name)?.value)) {
+    redirect(`/api/sso?next=${encodeURIComponent(next)}`);
+  }
+
   // The admin shell without the section links: nobody signed in has anywhere
   // to go yet.
   return (
