@@ -11,6 +11,8 @@
 // The admin look, which this form wears wherever it is shown. Its rules all
 // sit under .ad, so importing it on Details changes nothing else there.
 import "@/app/admin/admin.css";
+import "@fontsource-variable/plus-jakarta-sans";
+import "@/app/admin/look.css";
 import { signIn } from "@/app/console-actions";
 import Control from "@/components/Control";
 import { Working } from "@/components/Working";
@@ -34,7 +36,8 @@ export function SignIn({ notice, next }: { notice: string | null; next: string }
   // The admin shell without the section links: nobody signed in has anywhere
   // to go yet.
   return (
-    <div className="ad">
+    <div className="ad ad--gate">
+      <div className="ad-aurora" aria-hidden="true"><span /><span /><span /></div>
       <aside className="ad-side">
         <Brand />
       </aside>
