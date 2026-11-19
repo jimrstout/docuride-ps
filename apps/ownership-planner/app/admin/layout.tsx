@@ -13,9 +13,12 @@
 // ── The look ────────────────────────────────────────────────────────────
 // admin.css, imported here and only here. Its rules all sit under .ad, the
 // class on the root element below, so nothing of it reaches the planner or
-// Verify.
+// Verify. look.css, right after it and under .ad too, is the DocuRide family
+// look from HQ.
 
 import "./admin.css";
+import "@fontsource-variable/plus-jakarta-sans";
+import "./look.css";
 import Control from "@/components/Control";
 import HomeLink, { HOME_HREF } from "@/components/HomeLink";
 import { headers } from "next/headers";

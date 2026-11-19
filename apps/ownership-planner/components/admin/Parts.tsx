@@ -6,10 +6,19 @@
 export function Brand() {
   return (
     <span className="ad-brand">
-      <span className="ad-brand-name">
-        DocuRide <span>PS</span>
+      <span className="ad-brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 16a8 8 0 1 1 16 0" />
+          <path d="M12 16l4-5" />
+          <path d="M4 20h16" />
+        </svg>
       </span>
-      <span className="ad-brand-sub">Administration</span>
+      <span>
+        <span className="ad-brand-name">
+          DocuRide <span>PS</span>
+        </span>
+        <span className="ad-brand-sub">Administration</span>
+      </span>
     </span>
   );
 }

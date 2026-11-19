@@ -1,0 +1,161 @@
+/* app/admin/look.css: the DocuRide family look from HQ, for the admin area.
+
+   Loaded right after admin.css wherever that is (the admin layout and the
+   staff sign-in), and like it every rule hangs off .ad, so the planner and
+   Verify keep their own look. It only restyles: layout, markup and behavior
+   are admin.css's and the pages'. PS wears its green from the HQ launcher.
+   The tokens below are set on .ad, so they reach nothing outside it. */
+
+.ad {
+  --app-c1: #10b981;
+  --app-c2: #14b8a6;
+  --brand-grad: linear-gradient(135deg, #047857 0%, #059669 55%, #14b8a6 130%);
+  --night: #070a14;
+
+  --font-sans: "Plus Jakarta Sans Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --page: #f3f5fa;
+  --ink: #0e1324;
+  --ink-soft: #4a5268;
+  --muted: #5b6478;
+  --line: #e3e7ef;
+  --line-strong: #cfd5e2;
+  --tint: #f8f9fc;
+  --wash: #f8f9fc;
+  --shadow-panel: 0 1px 2px rgba(14, 19, 36, .05), 0 8px 24px -8px rgba(14, 19, 36, .12);
+  --shadow-raised: 0 4px 14px -4px rgba(14, 19, 36, .25);
+
+  /* The admin's accent, "copper" by name in admin.css, is PS green here. */
+  --copper: #047857;
+  --copper-hover: #065f46;
+  --copper-ink: #047857;
+  --copper-edge: #a7e3cc;
+  --copper-edge-hover: #6fd1ad;
+  --copper-ink-hover: #065f46;
+  --copper-wash: #ecfdf5;
+  --brand-ps: #6ee7b7;
+
+  --nav: #0b1020;
+  --nav-raised: rgba(255, 255, 255, .09);
+  --nav-line: rgba(255, 255, 255, .12);
+  --nav-line-hover: rgba(255, 255, 255, .3);
+  --nav-hover: rgba(255, 255, 255, .06);
+  --nav-text: #aeb6cc;
+  --nav-sub: #8f98ae;
+  --nav-faint: #8f98ae;
+  --nav-bright: #e9ecf5;
+
+  font-size: 14px;
+}
+.ad ::selection { background: color-mix(in srgb, var(--app-c1) 28%, transparent); }
+
+/* ── brand ───────────────────────────────────────────────────────────── */
+
+.ad .ad-brand { display: flex; align-items: center; gap: 11px; padding: 2px 6px 0; }
+.ad .ad-brand-mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; flex: none; color: #fff;
+  background: linear-gradient(135deg, var(--app-c1), var(--app-c2));
+  box-shadow: 0 1px 0 rgba(255,255,255,.35) inset, 0 8px 24px -6px color-mix(in srgb, var(--app-c1) 75%, transparent); }
+.ad .ad-brand-mark svg { width: 54%; height: 54%; }
+.ad .ad-brand-name { text-transform: none; font-size: 17px; letter-spacing: -.02em; color: #fff; }
+.ad .ad-brand-name span { background: linear-gradient(90deg, #6ee7b7, #5eead4); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.ad .ad-brand-sub { font-size: 10px; letter-spacing: .14em; font-weight: 700; color: var(--nav-sub); margin-top: 1px; }
+
+/* ── sidebar: the dark glowing band, standing up ─────────────────────── */
+
+.ad .ad-side { isolation: isolate; background: var(--night); }
+.ad .ad-side::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(160% 40% at 0% 0%, rgba(16, 185, 129, .36), transparent 60%),
+              radial-gradient(160% 30% at 100% 55%, rgba(99, 102, 241, .22), transparent 60%),
+              radial-gradient(160% 35% at 20% 105%, rgba(20, 184, 166, .24), transparent 60%); }
+.ad .ad-side::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+  background-size: 48px 48px; }
+.ad .ad-nav-link { border-radius: 10px; font-weight: 600; }
+.ad .ad-nav-link.is-here, .ad .ad-menu-link.is-here { background: #fff; color: #0e1324; box-shadow: 0 4px 14px -4px rgba(0,0,0,.5); }
+.ad .ad-nav-link.is-here .ad-icon { color: var(--copper); }
+.ad .ad-signout { border-radius: 10px; font-weight: 600; background: rgba(255,255,255,.06); }
+.ad .ad-menu-button { border-radius: 10px; }
+.ad .ad-menu-panel { background: var(--night); }
+
+/* ── top bar ─────────────────────────────────────────────────────────── */
+
+.ad .ad-top { background: color-mix(in srgb, #fff 86%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.ad .ad-crumb strong { font-weight: 700; }
+.ad .ad-avatar { width: 32px; height: 32px; font-size: 11px; color: #fff; background: linear-gradient(135deg, var(--app-c1), #6366f1); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--line); }
+.ad .ad-top .ad-signout { background: #fff; }
+.ad .ad-store-choice select { border-radius: 10px; padding: 8px 10px; }
+
+/* ── content ─────────────────────────────────────────────────────────── */
+
+.ad .ad-head h1 { font-size: clamp(26px, 3vw, 32px); font-weight: 800; letter-spacing: -.035em; }
+.ad .ad-head-sub { font-size: 13px; }
+.ad .ad-panel { border-radius: 16px; }
+.ad .ad-panel-head h2 { font-size: 15px; font-weight: 800; letter-spacing: -.01em; }
+.ad .ad-table th { font-weight: 700; letter-spacing: .08em; }
+.ad .ad-table tbody tr { transition: background .12s; }
+.ad .ad-table tbody tr:hover > td { background: color-mix(in srgb, var(--app-c1) 4%, #fff); }
+.ad .ad-badge { border-radius: 999px; padding: 5px 9px; font-weight: 700; }
+.ad .ad-seg { border-radius: 12px; }
+.ad .ad-seg a { border-radius: 9px; }
+.ad .ad-quote, .ad .ad-fieldset { border-radius: 12px; }
+.ad .ad-cover-seg { border-radius: 8px; }
+
+.ad .ad-input, .ad select, .ad textarea, .ad input[type="text"], .ad input[type="email"],
+.ad input[type="password"], .ad input:not([type]), .ad input[type="date"], .ad input[type="number"] {
+  border-color: var(--line-strong); border-radius: 10px; transition: border-color .15s, box-shadow .15s;
+}
+.ad input:focus, .ad select:focus, .ad textarea:focus { box-shadow: 0 0 0 4px color-mix(in srgb, var(--copper) 16%, transparent); }
+
+.ad .ad-btn { transition: transform .12s, box-shadow .15s, background .15s, border-color .15s; }
+.ad .ad-btn:active:not(:disabled) { transform: translateY(1px); }
+.ad .ad-btn--primary { border: 0; border-radius: 10px; background: var(--brand-grad); font-weight: 700;
+  box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 6px 18px -6px color-mix(in srgb, var(--app-c1) 75%, transparent); }
+.ad .ad-btn--primary:hover { background: var(--brand-grad); box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 10px 26px -6px color-mix(in srgb, var(--app-c1) 90%, transparent); }
+.ad .ad-btn--secondary { border-radius: 9px; border-color: var(--line-strong); font-weight: 600; }
+.ad .ad-switch input:checked + .ad-switch-track { background: var(--brand-grad); }
+
+/* ── sign-in: dark, glowing, centered ────────────────────────────────── */
+
+.ad.ad--gate { position: relative; overflow: hidden; isolation: isolate; background: var(--night); color: #e9ecf5; align-content: center;
+  min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 32px 16px; }
+.ad.ad--gate::before { content: ""; position: absolute; inset: 0; z-index: -1;
+  background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px);
+  background-size: 56px 56px; -webkit-mask-image: radial-gradient(ellipse at center, #000 20%, transparent 70%); mask-image: radial-gradient(ellipse at center, #000 20%, transparent 70%); }
+.ad--gate .ad-aurora { position: absolute; inset: -20%; z-index: -2; filter: blur(70px); opacity: .8; pointer-events: none; }
+.ad--gate .ad-aurora span { position: absolute; border-radius: 50%; mix-blend-mode: screen; animation: ad-drift 18s ease-in-out infinite alternate; }
+.ad--gate .ad-aurora span:nth-child(1) { width: 46vmax; height: 46vmax; left: 8%; top: 4%; background: radial-gradient(circle, var(--app-c1) 0%, transparent 65%); opacity: .7; }
+.ad--gate .ad-aurora span:nth-child(2) { width: 40vmax; height: 40vmax; right: 6%; top: 18%; background: radial-gradient(circle, #6366f1 0%, transparent 65%); animation-delay: -6s; animation-duration: 22s; }
+.ad--gate .ad-aurora span:nth-child(3) { width: 38vmax; height: 38vmax; left: 30%; bottom: 0; background: radial-gradient(circle, var(--app-c2) 0%, transparent 62%); animation-delay: -12s; animation-duration: 26s; opacity: .55; }
+@keyframes ad-drift { 0% { transform: translate(0, 0) scale(1); } 50% { transform: translate(6vmax, -4vmax) scale(1.12); } 100% { transform: translate(-5vmax, 5vmax) scale(.94); } }
+@keyframes ad-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+.ad--gate .ad-side { position: static; inset: auto; width: auto; height: auto; padding: 0; background: none; overflow: visible; display: grid; justify-items: center; gap: 0; animation: ad-rise .6s cubic-bezier(.2,.8,.2,1) both; }
+.ad--gate .ad-side::before, .ad--gate .ad-side::after { display: none; }
+.ad--gate .ad-brand { flex-direction: column; gap: 20px; text-align: center; padding: 0; }
+.ad--gate .ad-brand-mark { width: 64px; height: 64px; border-radius: 18px; }
+.ad--gate .ad-brand-name { font-size: 40px; line-height: 1.05; font-weight: 800; letter-spacing: -.035em; }
+.ad--gate .ad-brand-sub { display: block !important; margin-top: 10px; font-size: 12px; letter-spacing: .16em; color: #a9b2c8; }
+.ad--gate .ad-body { margin: 0; width: 100%; }
+.ad--gate .ad-gate { min-height: 0; padding: 26px 0 0; }
+.ad--gate .ad-signin { width: min(420px, 100%); animation: ad-rise .6s .05s cubic-bezier(.2,.8,.2,1) both; }
+.ad--gate .ad-panel { border-radius: 22px; color: #e9ecf5;
+  background: linear-gradient(180deg, rgba(255,255,255,.085), rgba(255,255,255,.035));
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 1px 0 rgba(255,255,255,.12) inset, 0 30px 80px -20px rgba(0,0,0,.7);
+  -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%); }
+.ad--gate .ad-signin h1 { font-size: 22px; font-weight: 800; color: #fff; }
+.ad--gate .ad-help { color: #a9b2c8; font-size: 13px; }
+.ad--gate label.ad-field { color: #c4cbe0; font-size: 13px; }
+.ad--gate input[type="email"], .ad--gate input[type="password"] { height: 46px; border-radius: 12px; font-size: 15px; color: #fff; background: rgba(5, 8, 18, .55); border-color: rgba(255,255,255,.14); }
+.ad--gate input:focus { border-color: var(--app-c1); box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-c1) 28%, transparent); }
+.ad--gate .ad-btn--primary { height: 48px; border-radius: 12px; font-size: 15px; }
+
+@media (max-width: 767px) {
+  .ad .ad-side::before { background: radial-gradient(60% 200% at 0% 0%, rgba(16, 185, 129, .4), transparent 60%), radial-gradient(50% 200% at 100% 0%, rgba(99, 102, 241, .25), transparent 60%); }
+  .ad .ad-brand-mark { width: 30px; height: 30px; border-radius: 9px; }
+  .ad--gate .ad-brand-mark { width: 56px; height: 56px; }
+  .ad--gate .ad-brand-name { font-size: 32px !important; }
+  .ad--gate .ad-gate { padding-top: 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ad *, .ad *::before, .ad *::after { animation: none !important; transition: none !important; }
+}
