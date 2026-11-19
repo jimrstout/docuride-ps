@@ -105,28 +105,28 @@ serve(async (req: Request) => {
           return json(429, { error: "Too many attempts. Wait a minute and try again." });
         }
         return json(401, DENIED);
-    }
+      }
 
-    const session = (await grant.json()) as {
-      access_token?: string;
-      user?: { id?: string; email?: string };
-    };
+      const session = (await grant.json()) as {
+        access_token?: string;
+        user?: { id?: string; email?: string };
+      };
 
-    userId = session.user?.id;
-    userEmail = session.user?.email ?? email;
-    const accessToken = session.access_token;
-    if (!userId || !accessToken) return json(401, DENIED);
+      userId = session.user?.id;
+      userEmail = session.user?.email ?? email;
+      const accessToken = session.access_token;
+      if (!userId || !accessToken) return json(401, DENIED);
 
-    // The grant leaves a refresh token behind that nothing will ever use: the
-    // console carries its own short-lived cookie, not a Supabase session. Retire
-    // it rather than accumulating one per sign-in.
-    retire = fetch(`${supabaseUrl}/auth/v1/logout`, {
-      method: "POST",
-      headers: { apikey: apiKey, Authorization: `Bearer ${accessToken}` },
-    }).catch(() => {
-      // A refresh token that outlives its usefulness is untidy, not unsafe.
-      // It must never cost a valid operator their sign-in.
-    });
+      // The grant leaves a refresh token behind that nothing will ever use: the
+      // console carries its own short-lived cookie, not a Supabase session. Retire
+      // it rather than accumulating one per sign-in.
+      retire = fetch(`${supabaseUrl}/auth/v1/logout`, {
+        method: "POST",
+        headers: { apikey: apiKey, Authorization: `Bearer ${accessToken}` },
+      }).catch(() => {
+        // A refresh token that outlives its usefulness is untidy, not unsafe.
+        // It must never cost a valid operator their sign-in.
+      });
     }
 
     const supabase = createClient(
