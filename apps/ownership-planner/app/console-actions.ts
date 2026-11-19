@@ -10,7 +10,8 @@
 import { redirect } from "next/navigation";
 import { isOfferDetails, type OfferDetails } from "@/lib/details-offer";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { clearSharedCookies } from "@/lib/shared-sign-in";
 import { edge, EdgeError } from "@/lib/edge";
 import {
   CONSOLE_COOKIE,
@@ -72,6 +73,10 @@ export async function signIn(formData: FormData): Promise<void> {
 export async function signOut(): Promise<void> {
   const jar = await cookies();
   jar.delete(CONSOLE_COOKIE);
+  // One DocuRide sign-in: signing out here signs out of every app, and keeps
+  // the sign-in form from signing straight back in with it.
+  const host = (await headers()).get("host");
+  for (const w of clearSharedCookies(jar.getAll().map((c) => c.name), host)) jar.set(w.name, w.value, w.options);
   redirect(SESSIONS);
 }
 

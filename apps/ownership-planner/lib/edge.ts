@@ -173,6 +173,10 @@ export const edge = {
   adminAuth: <T>(email: string, password: string) =>
     call<T>("fni-admin-auth", { method: "POST", body: { email, password } }),
 
+  /** The same check for the shared DocuRide sign-in (lib/shared-sign-in.ts): whose token it is, and whether they may use PS. */
+  adminAuthToken: <T>(accessToken: string) =>
+    call<T>("fni-admin-auth", { method: "POST", body: { access_token: accessToken } }),
+
   adminSessions: <T>(limit: number) =>
     call<T>("fni-admin-sessions", {
       method: "GET",
