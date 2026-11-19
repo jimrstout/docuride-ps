@@ -12,6 +12,8 @@
 // Input (POST): { email, password }, or { access_token } from the one DocuRide
 // sign-in every app shares (signed in at HQ, FX, DC or R&R). The token is
 // checked with Supabase Auth here, and the same access rule applies.
+// With { share: true } a password sign-in that is admitted also returns the
+// Supabase session, so PS can hand it to every other app (one sign-in).
 // Auth: FNI_WEBHOOK_SECRET via x-webhook-secret header or ?secret=.
 //
 // The password check runs here rather than in the Next server layer for the
@@ -62,6 +64,7 @@ serve(async (req: Request) => {
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";
   const sharedToken = typeof body.access_token === "string" ? body.access_token : "";
+  const share = body.share === true;
   if (!sharedToken && (!email || !password)) return json(400, { error: "Email and password are required" });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -77,7 +80,9 @@ serve(async (req: Request) => {
   try {
     let userId: string | undefined;
     let userEmail: string | undefined;
-    let retire: Promise<unknown> = Promise.resolve();
+    // The password grant's session: returned when PS shares it, otherwise retired.
+    let granted: Record<string, unknown> | null = null;
+    let retire: () => Promise<unknown> = () => Promise.resolve();
 
     if (sharedToken) {
       // The shared DocuRide sign-in: ask Supabase Auth whose token it is. It
@@ -109,18 +114,20 @@ serve(async (req: Request) => {
 
       const session = (await grant.json()) as {
         access_token?: string;
+        refresh_token?: string;
         user?: { id?: string; email?: string };
       };
+      granted = session as Record<string, unknown>;
 
       userId = session.user?.id;
       userEmail = session.user?.email ?? email;
       const accessToken = session.access_token;
       if (!userId || !accessToken) return json(401, DENIED);
 
-      // The grant leaves a refresh token behind that nothing will ever use: the
-      // console carries its own short-lived cookie, not a Supabase session. Retire
-      // it rather than accumulating one per sign-in.
-      retire = fetch(`${supabaseUrl}/auth/v1/logout`, {
+      // Unless PS shares it with the other apps, the grant leaves a refresh token
+      // behind that nothing will ever use: the console carries its own
+      // short-lived cookie. Retire it rather than accumulating one per sign-in.
+      retire = () => fetch(`${supabaseUrl}/auth/v1/logout`, {
         method: "POST",
         headers: { apikey: apiKey, Authorization: `Bearer ${accessToken}` },
       }).catch(() => {
@@ -141,19 +148,30 @@ serve(async (req: Request) => {
       supabase.schema("fni").from("staff_roles").select("role").eq("user_id", userId).maybeSingle(),
     ]);
 
-    await retire;
+    // Refused: the grant's session goes. Admitted: shared when asked, else retired.
+    const refuse = async (status: number, out: unknown) => {
+      await retire();
+      return json(status, out);
+    };
+    const admitted = async () => {
+      if (share && granted && typeof granted.refresh_token === "string") {
+        return { user_id: userId, email: userEmail ?? email, session: granted };
+      }
+      await retire();
+      return { user_id: userId, email: userEmail ?? email };
+    };
 
     if (roleErr) {
       console.error("fni-admin-auth role read failed:", roleErr.message);
-      return json(500, { error: "Could not check access" });
+      return refuse(500, { error: "Could not check access" });
     }
     if (psRole && ["Administrator", "Staff"].includes((psRole as { role: string }).role)) {
-      return json(200, { user_id: userId, email: userEmail ?? email });
+      return json(200, await admitted());
     }
 
     if (error) {
       console.error("fni-admin-auth profile read failed:", error.message);
-      return json(500, { error: "Could not check access" });
+      return refuse(500, { error: "Could not check access" });
     }
 
     // A valid dealership login is not access to a cross-tenant list of every
@@ -161,10 +179,10 @@ serve(async (req: Request) => {
     // exactly that distinction, so it is the one used here.
     if (!profile || (profile as { is_platform_admin: boolean }).is_platform_admin !== true) {
       console.warn(`fni-admin-auth refused non-admin sign-in for ${userId}`);
-      return json(401, DENIED);
+      return refuse(401, DENIED);
     }
 
-    return json(200, { user_id: userId, email: userEmail ?? email });
+    return json(200, await admitted());
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("fni-admin-auth error:", message);
