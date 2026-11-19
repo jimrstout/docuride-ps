@@ -9,7 +9,9 @@
 // credential of its own to set, rotate or leak, and revoking someone is still
 // one change in one place.
 //
-// Input (POST): { email, password }
+// Input (POST): { email, password }, or { access_token } from the one DocuRide
+// sign-in every app shares (signed in at HQ, FX, DC or R&R). The token is
+// checked with Supabase Auth here, and the same access rule applies.
 // Auth: FNI_WEBHOOK_SECRET via x-webhook-secret header or ?secret=.
 //
 // The password check runs here rather than in the Next server layer for the
@@ -59,7 +61,8 @@ serve(async (req: Request) => {
 
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";
-  if (!email || !password) return json(400, { error: "Email and password are required" });
+  const sharedToken = typeof body.access_token === "string" ? body.access_token : "";
+  if (!sharedToken && (!email || !password)) return json(400, { error: "Email and password are required" });
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 
@@ -72,20 +75,36 @@ serve(async (req: Request) => {
     Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
   try {
-    const grant = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-      method: "POST",
-      headers: { apikey: apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    let userId: string | undefined;
+    let userEmail: string | undefined;
+    let retire: Promise<unknown> = Promise.resolve();
 
-    if (!grant.ok) {
-      // GoTrue rate-limits this endpoint per IP, which is the brute-force
-      // control; 429 is forwarded so the console can say so rather than
-      // claiming the password is wrong.
-      if (grant.status === 429) {
-        return json(429, { error: "Too many attempts. Wait a minute and try again." });
-      }
-      return json(401, DENIED);
+    if (sharedToken) {
+      // The shared DocuRide sign-in: ask Supabase Auth whose token it is. It
+      // stays the person's session in every other app, so it is not retired.
+      const who = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        headers: { apikey: apiKey, Authorization: `Bearer ${sharedToken}` },
+      });
+      if (!who.ok) return json(401, DENIED);
+      const u = (await who.json()) as { id?: string; email?: string };
+      userId = u.id;
+      userEmail = u.email;
+      if (!userId) return json(401, DENIED);
+    } else {
+      const grant = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: { apikey: apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!grant.ok) {
+        // GoTrue rate-limits this endpoint per IP, which is the brute-force
+        // control; 429 is forwarded so the console can say so rather than
+        // claiming the password is wrong.
+        if (grant.status === 429) {
+          return json(429, { error: "Too many attempts. Wait a minute and try again." });
+        }
+        return json(401, DENIED);
     }
 
     const session = (await grant.json()) as {
@@ -93,20 +112,22 @@ serve(async (req: Request) => {
       user?: { id?: string; email?: string };
     };
 
-    const userId = session.user?.id;
+    userId = session.user?.id;
+    userEmail = session.user?.email ?? email;
     const accessToken = session.access_token;
     if (!userId || !accessToken) return json(401, DENIED);
 
     // The grant leaves a refresh token behind that nothing will ever use: the
     // console carries its own short-lived cookie, not a Supabase session. Retire
     // it rather than accumulating one per sign-in.
-    const retire = fetch(`${supabaseUrl}/auth/v1/logout`, {
+    retire = fetch(`${supabaseUrl}/auth/v1/logout`, {
       method: "POST",
       headers: { apikey: apiKey, Authorization: `Bearer ${accessToken}` },
     }).catch(() => {
       // A refresh token that outlives its usefulness is untidy, not unsafe.
       // It must never cost a valid operator their sign-in.
     });
+    }
 
     const supabase = createClient(
       supabaseUrl,
@@ -127,7 +148,7 @@ serve(async (req: Request) => {
       return json(500, { error: "Could not check access" });
     }
     if (psRole && ["Administrator", "Staff"].includes((psRole as { role: string }).role)) {
-      return json(200, { user_id: userId, email: session.user?.email ?? email });
+      return json(200, { user_id: userId, email: userEmail ?? email });
     }
 
     if (error) {
@@ -143,7 +164,7 @@ serve(async (req: Request) => {
       return json(401, DENIED);
     }
 
-    return json(200, { user_id: userId, email: session.user?.email ?? email });
+    return json(200, { user_id: userId, email: userEmail ?? email });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("fni-admin-auth error:", message);
