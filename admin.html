@@ -293,11 +293,14 @@ td.act button.danger{color:var(--stamp);border-color:var(--stamp)}
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/docuride-session.js"></script>
 <script>
 const SUPABASE_URL = "https://fovccigwlcmmzfubpfny.supabase.co";
 const SUPABASE_KEY = "sb_publishable_s4cFTF1i1Wff1m3n7zmg5A_9re6X7yj";
 const FN = SUPABASE_URL + "/functions/v1";
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { detectSessionInUrl: true, flowType: "implicit" } });
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { detectSessionInUrl: true, flowType: "implicit",
+  // One DocuRide sign-in for every app (docuride-session.js).
+  storage: window.DocuRideSession ? DocuRideSession.browserSessionStorage() : undefined } });
 
 const $ = (id) => document.getElementById(id);
 let session = null, lastPeriod = null, lastReport = null;
@@ -326,6 +329,7 @@ async function boot(){
   session = data.session;
   render();
   sb.auth.onAuthStateChange((_e,s)=>{ session=s; render(); });
+  if (window.DocuRideSession) DocuRideSession.followOtherApps(sb, () => session);
 }
 
 function render(){
