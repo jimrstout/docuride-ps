@@ -16,7 +16,7 @@
 
 import "server-only";
 import { cookies } from "next/headers";
-import { CONSOLE_COOKIE } from "./console-cookie";
+import { liveConsoleCookie } from "./admin-session-rules";
 
 /** Where the staff sign-in travels to the Edge Functions (_shared/staff-auth.ts). */
 const STAFF_HEADER = "x-staff-session";
@@ -32,7 +32,8 @@ const STAFF_HEADER = "x-staff-session";
  */
 async function staffSession(): Promise<string | null> {
   try {
-    return (await cookies()).get(CONSOLE_COOKIE)?.value ?? null;
+    const jar = await cookies();
+    return liveConsoleCookie((name) => jar.get(name)?.value);
   } catch {
     return null;
   }
@@ -172,6 +173,15 @@ export const edge = {
 
   adminAuth: <T>(email: string, password: string) =>
     call<T>("fni-admin-auth", { method: "POST", body: { email, password } }),
+
+  /**
+   * The console's own sign-in form: the same check, and when admitted the
+   * Supabase session comes back too, so it becomes the one DocuRide sign-in
+   * every app shares (lib/shared-sign-in.ts). Only the console form uses this;
+   * a manager approving on someone else's screen must not sign that screen in.
+   */
+  adminSignIn: <T>(email: string, password: string) =>
+    call<T>("fni-admin-auth", { method: "POST", body: { email, password, share: true } }),
 
   /** The same check for the shared DocuRide sign-in (lib/shared-sign-in.ts): whose token it is, and whether they may use PS. */
   adminAuthToken: <T>(accessToken: string) =>

@@ -129,3 +129,15 @@ export async function refreshSharedSession(
     return null;
   }
 }
+
+/** Whose shared session this is: the user Supabase stored with it, else the access token's subject. */
+export function sharedUserId(s: SharedSession): string | null {
+  const user = s.user as { id?: unknown } | undefined;
+  if (user && typeof user.id === "string" && user.id) return user.id;
+  try {
+    const claims = JSON.parse(Buffer.from(s.access_token.split(".")[1] ?? "", "base64url").toString("utf8")) as { sub?: unknown };
+    return typeof claims.sub === "string" && claims.sub ? claims.sub : null;
+  } catch {
+    return null;
+  }
+}

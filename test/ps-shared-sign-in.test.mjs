@@ -120,3 +120,62 @@ test("fni-admin-auth checks a shared token with Supabase Auth, applies the same 
   assert.doesNotMatch(shared, /logout/);
   assert.match(shared, /if \(!who\.ok\) return json\(401, DENIED\);/);
 });
+
+// ── One sign-in, both ways ──────────────────────────────────────────────────
+
+import { liveConsoleCookie } from "../apps/ownership-planner/lib/admin-session-rules.ts";
+import { mintConsoleCookie, CONSOLE_COOKIE } from "../apps/ownership-planner/lib/console-cookie.ts";
+import { sharedUserId } from "../apps/ownership-planner/lib/shared-sign-in.ts";
+
+const SECRET = "a-webhook-secret-of-realistic-length-0123456789";
+const jarWith = (consoleFor, sharedSession) => {
+  const jar = sharedSession ? hqCookies(sharedSession) : new Map();
+  if (consoleFor) jar.set(CONSOLE_COOKIE, mintConsoleCookie({ sub: consoleFor, email: "test.person@example.com" }, SECRET, NOW));
+  return (n) => jar.get(n);
+};
+
+test("the console counts while the shared sign-in is there and is the same person", () => {
+  assert.ok(liveConsoleCookie(jarWith("u1", SESSION), SECRET, NOW));
+});
+
+test("signed out in another app (shared sign-in gone): signed out of PS too", () => {
+  assert.equal(liveConsoleCookie(jarWith("u1", null), SECRET, NOW), null);
+});
+
+test("someone else signed in on this computer: the last person's console doesn't count", () => {
+  assert.equal(liveConsoleCookie(jarWith("u1", { ...SESSION, user: { id: "u2" } }), SECRET, NOW), null);
+});
+
+test("no console cookie, or a forged one, still isn't a sign-in", () => {
+  assert.equal(liveConsoleCookie(jarWith(null, SESSION), SECRET, NOW), null);
+  const forged = jarWith("u1", SESSION);
+  assert.equal(liveConsoleCookie((n) => (n === CONSOLE_COOKIE ? "v1.abc.def" : forged(n)), SECRET, NOW), null);
+});
+
+test("whose shared session: the stored user, else the access token's subject", () => {
+  assert.equal(sharedUserId(SESSION), "u1");
+  const tok = `x.${Buffer.from(JSON.stringify({ sub: "u9" })).toString("base64url")}.y`;
+  assert.equal(sharedUserId({ access_token: tok, refresh_token: "r", expires_at: 0 }), "u9");
+  assert.equal(sharedUserId({ access_token: "nope", refresh_token: "r", expires_at: 0 }), null);
+});
+
+test("signing in on the PS form shares the session with every app; a manager's approval does not", () => {
+  const edge = read("apps/ownership-planner/lib/edge.ts");
+  assert.match(edge, /adminSignIn: <T>\(email: string, password: string\) =>\s*call<T>\("fni-admin-auth", \{ method: "POST", body: \{ email, password, share: true \} \}\)/);
+  const actions = read("apps/ownership-planner/app/console-actions.ts");
+  assert.match(actions, /edge\.adminSignIn</);
+  assert.match(actions, /sharedSessionCookies\(user\.session, host,/);
+  assert.doesNotMatch(read("apps/ownership-planner/app/prepare/[sessionId]/actions.ts"), /adminSignIn/);
+  // The page gate and the staff header both use the same rule.
+  assert.match(read("apps/ownership-planner/lib/admin-session.ts"), /liveConsoleCookie\(/);
+  assert.match(edge, /return liveConsoleCookie\(\(name\) => jar\.get\(name\)\?\.value\);/);
+});
+
+test("fni-admin-auth returns the session only when asked and admitted; otherwise it is retired", () => {
+  const fn = read("supabase/functions/fni-admin-auth/index.ts");
+  assert.match(fn, /const share = body\.share === true;/);
+  assert.match(fn, /if \(share && granted && typeof granted\.refresh_token === "string"\) \{\s*return \{ user_id: userId, email: userEmail \?\? email, session: granted \};\s*\}\s*await retire\(\);/);
+  // Every refusal after the grant retires it.
+  assert.equal((fn.match(/return refuse\(/g) ?? []).length, 3);
+  assert.doesNotMatch(fn, /return json\(401, DENIED\);\s*\}\s*\n\s*return json\(200/);
+});
