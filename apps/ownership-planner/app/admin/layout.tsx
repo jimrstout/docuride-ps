@@ -22,6 +22,7 @@ import "./look.css";
 import Control from "@/components/Control";
 import HomeLink, { HOME_HREF } from "@/components/HomeLink";
 import { headers } from "next/headers";
+import Script from "next/script";
 import { currentOperator } from "@/lib/admin-session";
 import { initialsFor, safeAdminPath, sectionsFor } from "@/lib/admin-sections";
 import { edge } from "@/lib/edge";
@@ -103,6 +104,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </header>
         <main className="ad-main">{children}</main>
       </div>
+      {/* The DocuRide app switcher: staff with two or more DocuRide apps get a rail on the left (public/docuride-switcher.js). Admin only, never on the customer-facing planner. */}
+      <Script src="/docuride-switcher.js" strategy="afterInteractive" />
     </div>
     </WorkingArea>
   );

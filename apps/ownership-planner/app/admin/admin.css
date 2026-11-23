@@ -27,6 +27,8 @@
 /* ── Sidebar ─────────────────────────────────────────────────────────── */
 .ad-side {
   position: fixed; inset: 0 auto 0 0; width: var(--side); z-index: 10;
+  /* Beside the DocuRide app switcher's rail when it shows (0 otherwise). */
+  left: var(--docuride-switcher-width, 0px);
   display: flex; flex-direction: column; gap: 22px;
   padding: 22px 14px 18px;
   background: var(--nav); color: var(--panel);
