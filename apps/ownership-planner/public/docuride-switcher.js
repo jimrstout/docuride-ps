@@ -18,8 +18,8 @@
 // icons) matches the HQ launcher. The list is cached for a few minutes per
 // person in this tab, so moving between apps doesn't flash.
 //
-// The button at the bottom of the rail opens it over the page to show each
-// app's name and what it is for, with an arrow on each to open it in a new
+// The button at the bottom of the rail opens it beside the page to show each
+// app's name and what it is for (it stays open, in every app, until closed), with an arrow on each to open it in a new
 // tab. Every tile is a plain link, so Ctrl or Cmd click works too.
 (function (root) {
   "use strict";
@@ -30,6 +30,9 @@
   var SESSION_KEY = "sb-fovccigwlcmmzfubpfny-auth-token";
   var MAX_CHUNKS = 10;
   var CACHE_KEY = "docuride-switcher:v1";
+  // Open or closed, shared by every DocuRide app (a docuride.com cookie), so
+  // the opened rail stays open from app to app until the person closes it.
+  var OPEN_COOKIE = "docuride-switcher-open";
   var CACHE_MS = 5 * 60 * 1000;
   var CHECK_MS = 3 * 1000; // only reads the cookie; it asks the server only when the person changes or the list is old
   var WIDTH = 60;
@@ -135,6 +138,20 @@
     return null;
   }
 
+  /** True when the person left the rail open, from document.cookie text. */
+  function readOpen(cookieText) {
+    return String(cookieText || "").split(";").some(function (part) {
+      return part.trim() === OPEN_COOKIE + "=1";
+    });
+  }
+
+  /** The cookie that remembers open or closed: on docuride.com for every app, else this host only. */
+  function openCookie(open, hostname, secure) {
+    var host = String(hostname).toLowerCase();
+    var domain = host === "docuride.com" || /\.docuride\.com$/.test(host) ? "; Domain=.docuride.com" : "";
+    return OPEN_COOKIE + "=" + (open ? "1; Max-Age=31536000" : "; Max-Age=0") + domain + "; Path=/; SameSite=Lax" + (secure ? "; Secure" : "");
+  }
+
   /** The rail shows only for two or more apps. */
   function shouldShow(apps) {
     return apps.length >= 2;
@@ -148,7 +165,7 @@
     ".rail{position:fixed;z-index:2147483000;left:0;top:0;bottom:0;width:" + WIDTH + "px;display:flex;flex-direction:column;padding:14px 10px 10px;overflow:hidden;" +
     "background:linear-gradient(180deg,rgba(13,17,32,.97),rgba(7,10,20,.97));border-right:1px solid rgba(255,255,255,.08);" +
     "box-shadow:1px 0 24px rgba(0,0,0,.25);transition:width .18s ease,box-shadow .18s;font-family:'Plus Jakarta Sans Variable','Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}" +
-    ".rail.wide{width:" + WIDE + "px;background:#0a0d1a;box-shadow:12px 0 48px rgba(0,0,0,.45)}" +
+    ".rail.wide{width:" + WIDE + "px;background:#0a0d1a}" +
     ".list{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}" +
     ".item{position:relative;display:flex;align-items:center;gap:4px;border-radius:13px}" +
     ".app{position:relative;display:flex;align-items:center;gap:12px;flex:1;min-width:0;border-radius:12px;outline:none;color:#f5f7ff;text-decoration:none;-webkit-tap-highlight-color:transparent}" +
@@ -208,9 +225,13 @@
   // Room for the rail, set on the page itself (outside the shadow root). A page
   // with its own fixed left-hand panel moves it over by
   // var(--docuride-switcher-width, 0px).
+  // Opened, the rail sits beside the page (the page moves over) rather than
+  // covering it, since it stays open until the person closes it.
   var PAGE_STYLE =
     "@media (min-width:721px){html.docuride-switcher-on{--docuride-switcher-width:" + WIDTH + "px}" +
-    "html.docuride-switcher-on body{padding-left:" + WIDTH + "px!important}}" +
+    "html.docuride-switcher-on body{padding-left:" + WIDTH + "px!important}" +
+    "html.docuride-switcher-on.docuride-switcher-wide{--docuride-switcher-width:" + WIDE + "px}" +
+    "html.docuride-switcher-on.docuride-switcher-wide body{padding-left:" + WIDE + "px!important}}" +
     "@media print{html.docuride-switcher-on{--docuride-switcher-width:0px}html.docuride-switcher-on body{padding-left:0!important}}";
 
   var SVG_NS = "http://www.w3.org/2000/svg";
@@ -335,15 +356,23 @@
     toggle.type = "button";
     toggle.appendChild(svg(doc, OPEN_ICON));
     toggle.appendChild(text(doc, "span", "", "Close"));
-    function setWide(wide) {
+    function setWide(wide, remember) {
       rail.classList.toggle("wide", wide);
+      doc.documentElement.classList.toggle("docuride-switcher-wide", wide);
+      if (remember) {
+        try {
+          doc.cookie = openCookie(wide, win.location.hostname, win.location.protocol === "https:");
+        } catch (e) {
+          /* fine: it just won't be remembered */
+        }
+      }
       toggle.setAttribute("aria-expanded", wide ? "true" : "false");
       toggle.setAttribute("aria-label", wide ? "Close the app list" : "Show app names");
       toggle.title = wide ? "" : "Show app names";
     }
-    setWide(false);
+    setWide(readOpen(doc.cookie), false);
     toggle.addEventListener("click", function () {
-      setWide(!rail.classList.contains("wide"));
+      setWide(!rail.classList.contains("wide"), true);
     });
     rail.appendChild(toggle);
     shadow.appendChild(rail);
@@ -374,16 +403,10 @@
       setOpen(!sheet.classList.contains("open"));
     });
     function onDocClick(e) {
-      if (e.target !== host) {
-        setOpen(false);
-        setWide(false);
-      }
+      if (e.target !== host) setOpen(false);
     }
     function onKey(e) {
-      if (e.key === "Escape") {
-        setOpen(false);
-        setWide(false);
-      }
+      if (e.key === "Escape") setOpen(false);
     }
     doc.addEventListener("click", onDocClick);
     doc.addEventListener("keydown", onKey);
@@ -392,12 +415,18 @@
 
     doc.body.appendChild(host);
     doc.documentElement.classList.add("docuride-switcher-on");
-    return function unmount() {
+    function unmount() {
       doc.removeEventListener("click", onDocClick);
       doc.removeEventListener("keydown", onKey);
       if (host.parentNode) host.parentNode.removeChild(host);
-      doc.documentElement.classList.remove("docuride-switcher-on");
+      doc.documentElement.classList.remove("docuride-switcher-on", "docuride-switcher-wide");
+    }
+    // Opened or closed in another app or tab: follow it.
+    unmount.sync = function () {
+      var open = readOpen(doc.cookie);
+      if (open !== rail.classList.contains("wide")) setWide(open, false);
     };
+    return unmount;
   }
 
   function readCache(win, user) {
@@ -454,6 +483,7 @@
         return;
       }
       if (shownFor && shownFor.indexOf(s.user + "|") !== 0) hide(); // someone else signed in
+      if (unmount) unmount.sync();
       var cached = readCache(win, s.user);
       if (cached) {
         show(s.user, cached);
@@ -502,6 +532,8 @@
     readSession: readSession,
     tokenExpired: tokenExpired,
     tagOf: tagOf,
+    readOpen: readOpen,
+    openCookie: openCookie,
     cleanApps: cleanApps,
     currentKey: currentKey,
     shouldShow: shouldShow,

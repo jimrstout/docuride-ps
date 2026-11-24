@@ -116,3 +116,13 @@ test("each app has a line on what it is for; unknown apps have none", () => {
   for (const key of ["HQ", "DC", "FX", "PS", "R&R Reporting", "MX", "RT"]) assert.ok(sw.tagOf(key).length > 5, key);
   assert.equal(sw.tagOf("ZZ"), "");
 });
+
+test("remembers the open rail across every DocuRide app", () => {
+  const sw = load();
+  assert.equal(sw.readOpen(""), false);
+  assert.equal(sw.readOpen("a=1; docuride-switcher-open=1"), true);
+  assert.equal(sw.readOpen("docuride-switcher-open="), false);
+  assert.equal(sw.openCookie(true, "fx.docuride.com", true), "docuride-switcher-open=1; Max-Age=31536000; Domain=.docuride.com; Path=/; SameSite=Lax; Secure");
+  assert.equal(sw.openCookie(false, "rt.docuride.com", true), "docuride-switcher-open=; Max-Age=0; Domain=.docuride.com; Path=/; SameSite=Lax; Secure");
+  assert.equal(sw.openCookie(true, "localhost", false), "docuride-switcher-open=1; Max-Age=31536000; Path=/; SameSite=Lax");
+});
