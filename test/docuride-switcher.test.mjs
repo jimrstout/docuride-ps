@@ -110,3 +110,9 @@ test("is the same file in every DocuRide app", () => {
   const hash = createHash("sha256").update(source).digest("hex");
   assert.equal(hash, readFileSync(new URL("./docuride-switcher.sha256", import.meta.url), "utf8").trim());
 });
+
+test("each app has a line on what it is for; unknown apps have none", () => {
+  const sw = load();
+  for (const key of ["HQ", "DC", "FX", "PS", "R&R Reporting", "MX", "RT"]) assert.ok(sw.tagOf(key).length > 5, key);
+  assert.equal(sw.tagOf("ZZ"), "");
+});

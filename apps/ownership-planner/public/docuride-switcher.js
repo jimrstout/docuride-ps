@@ -17,6 +17,10 @@
 // Which app is "here" comes from the page's address. The look (colors and
 // icons) matches the HQ launcher. The list is cached for a few minutes per
 // person in this tab, so moving between apps doesn't flash.
+//
+// The button at the bottom of the rail opens it over the page to show each
+// app's name and what it is for, with an arrow on each to open it in a new
+// tab. Every tile is a plain link, so Ctrl or Cmd click works too.
 (function (root) {
   "use strict";
 
@@ -29,24 +33,30 @@
   var CACHE_MS = 5 * 60 * 1000;
   var CHECK_MS = 3 * 1000; // only reads the cookie; it asks the server only when the person changes or the list is old
   var WIDTH = 60;
+  var WIDE = 288; // the opened rail, laid over the page
 
   // The HQ launcher's colors and icons (docuride-hq app/hq-app.tsx LOOKS): each
   // app's own header mark, in its own colors. Keep the two lists the same.
   var DEFAULT_LOOK = { c1: "#4f5bf5", c2: "#8b5cf6", icon: ["M4 4h7v7H4z", "M13 4h7v7h-7z", "M4 13h7v7H4z", "M13 13h7v7h-7z"] };
   var LOOKS = {
-    HQ: { c1: "#6366f1", c2: "#a855f7", icon: ["M6 4h5.5a8 8 0 0 1 0 16H6z", "M10 9.5h2a2.5 2.5 0 0 1 0 5h-2"] },
-    DC: { c1: "#2563eb", c2: "#06b6d4", icon: ["M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z", "M14 3v5h5", "M9 13h6", "M9 17h4"] },
-    FX: { c1: "#f97316", c2: "#f59e0b", icon: ["M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a2.1 2.1 0 0 0 3 3l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"] },
-    PS: { c1: "#10b981", c2: "#14b8a6", icon: ["M4 16a8 8 0 1 1 16 0", "M12 16l4-5", "M4 20h16"] },
-    "R&R Reporting": { c1: "#e11d48", c2: "#f97316", icon: ["M3 21h18", "M6 17v-5", "M11 17V7", "M16 17v-8", "M21 17V4"] },
-    MX: { c1: "#0e9f8e", c2: "#0ea5e9", icon: ["M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z", "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"] },
-    RT: { c1: "#eab308", c2: "#65a30d", icon: ["M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "M8 2v4", "M16 2v4", "M3 10h18", "M9 16l2 2 4-4"] },
+    HQ: { tag: "People, enterprises and who gets which app.", c1: "#6366f1", c2: "#a855f7", icon: ["M6 4h5.5a8 8 0 0 1 0 16H6z", "M10 9.5h2a2.5 2.5 0 0 1 0 5h-2"] },
+    DC: { tag: "Deal documents, generated and checked.", c1: "#2563eb", c2: "#06b6d4", icon: ["M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z", "M14 3v5h5", "M9 13h6", "M9 17h4"] },
+    FX: { tag: "Fixed ops: parts and service.", c1: "#f97316", c2: "#f59e0b", icon: ["M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a2.1 2.1 0 0 0 3 3l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"] },
+    PS: { tag: "The ownership planner.", c1: "#10b981", c2: "#14b8a6", icon: ["M4 16a8 8 0 1 1 16 0", "M12 16l4-5", "M4 20h16"] },
+    "R&R Reporting": { tag: "Reports sent on to your DMS.", c1: "#e11d48", c2: "#f97316", icon: ["M3 21h18", "M6 17v-5", "M11 17V7", "M16 17v-8", "M21 17V4"] },
+    MX: { tag: "Facilities, rental fleet and vehicle upkeep.", c1: "#0e9f8e", c2: "#0ea5e9", icon: ["M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z", "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"] },
+    RT: { tag: "Reservations, renters and the rental fleet.", c1: "#eab308", c2: "#65a30d", icon: ["M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "M8 2v4", "M16 2v4", "M3 10h18", "M12 12v8.5", "M14.25 13.25h-3a1.5 1.5 0 0 0 0 3h1.5a1.5 1.5 0 0 1 0 3h-3"] },
   };
 
   // ── pure parts (tested in test/docuride-switcher.test.mjs) ─────────────
 
   function lookOf(key) {
     return LOOKS[key] || DEFAULT_LOOK;
+  }
+
+  /** A line on what the app is for, shown when the rail is opened. */
+  function tagOf(key) {
+    return (LOOKS[key] && LOOKS[key].tag) || "";
   }
 
   function shortName(label) {
@@ -135,22 +145,47 @@
   var STYLE =
     ":host{all:initial}" +
     "*{box-sizing:border-box}" +
-    ".rail{position:fixed;z-index:2147483000;left:0;top:0;bottom:0;width:" + WIDTH + "px;display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 0;" +
+    ".rail{position:fixed;z-index:2147483000;left:0;top:0;bottom:0;width:" + WIDTH + "px;display:flex;flex-direction:column;padding:14px 10px 10px;overflow:hidden;" +
     "background:linear-gradient(180deg,rgba(13,17,32,.97),rgba(7,10,20,.97));border-right:1px solid rgba(255,255,255,.08);" +
-    "box-shadow:1px 0 24px rgba(0,0,0,.25);font-family:'Plus Jakarta Sans Variable','Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}" +
-    ".app{position:relative;display:block;width:40px;height:40px;border-radius:12px;outline:none;text-decoration:none;-webkit-tap-highlight-color:transparent}" +
-    ".ico{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;color:#fff;background:linear-gradient(135deg,var(--c1),var(--c2));" +
+    "box-shadow:1px 0 24px rgba(0,0,0,.25);transition:width .18s ease,box-shadow .18s;font-family:'Plus Jakarta Sans Variable','Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}" +
+    ".rail.wide{width:" + WIDE + "px;background:#0a0d1a;box-shadow:12px 0 48px rgba(0,0,0,.45)}" +
+    ".list{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}" +
+    ".item{position:relative;display:flex;align-items:center;gap:4px;border-radius:13px}" +
+    ".app{position:relative;display:flex;align-items:center;gap:12px;flex:1;min-width:0;border-radius:12px;outline:none;color:#f5f7ff;text-decoration:none;-webkit-tap-highlight-color:transparent}" +
+    ".ico{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:12px;color:#fff;background:linear-gradient(135deg,var(--c1),var(--c2));" +
     "opacity:.72;filter:saturate(.85);transition:opacity .15s,transform .15s,filter .15s,box-shadow .15s}" +
     ".ico svg{width:20px;height:20px}" +
     ".app:hover .ico,.app:focus-visible .ico{opacity:1;filter:none;transform:translateY(-1px);box-shadow:0 6px 18px -6px var(--c1)}" +
     ".app:focus-visible .ico{box-shadow:0 0 0 2px #070a14,0 0 0 4px #fff}" +
     ".app[aria-current=page] .ico{opacity:1;filter:none;box-shadow:0 0 0 2px #070a14,0 0 0 4px var(--c1),0 8px 22px -8px var(--c1)}" +
-    ".app[aria-current=page]::before{content:'';position:absolute;left:-10px;top:9px;bottom:9px;width:4px;border-radius:0 4px 4px 0;background:linear-gradient(180deg,var(--c1),var(--c2))}" +
-    ".tip{position:absolute;left:52px;top:50%;transform:translate(-4px,-50%);white-space:nowrap;pointer-events:none;opacity:0;" +
+    ".rail .app[aria-current=page]::before{content:'';position:absolute;left:-10px;top:9px;bottom:9px;width:4px;border-radius:0 4px 4px 0;background:linear-gradient(180deg,var(--c1),var(--c2))}" +
+    ".tip{position:fixed;left:" + (WIDTH - 6) + "px;transform:translate(-4px,-50%);white-space:nowrap;pointer-events:none;opacity:0;" +
     "padding:6px 10px;border-radius:8px;font-size:13px;font-weight:600;letter-spacing:.01em;color:#f5f7ff;background:#151a2e;border:1px solid rgba(255,255,255,.1);" +
     "box-shadow:0 8px 24px rgba(0,0,0,.35);transition:opacity .12s,transform .12s}" +
     ".app:hover .tip,.app:focus-visible .tip{opacity:1;transform:translate(0,-50%)}" +
     ".here{display:block;font-size:11px;font-weight:500;color:#a5adcb;margin-top:1px}" +
+    ".txt,.nt,.hint{display:none}" +
+    ".wide .tip{display:none}" +
+    ":is(.wide,.sheet) .item:hover,:is(.wide,.sheet) .item:focus-within{background:rgba(255,255,255,.06)}" +
+    ":is(.wide,.sheet) .item:has(.app[aria-current=page]){background:rgba(255,255,255,.07)}" +
+    ":is(.wide,.sheet) .app{padding:4px 0 4px 4px}" +
+    ":is(.wide,.sheet) .txt{display:block;min-width:0;line-height:1.3}" +
+    ".txt b{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;white-space:nowrap}" +
+    ".txt b i{font-style:normal;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#0d1120;background:#c7cde3;border-radius:5px;padding:1px 5px}" +
+    ".txt small{display:block;margin-top:2px;font-size:12px;font-weight:500;color:#a5adcb}" +
+    ":is(.wide,.sheet) .nt{display:grid;flex:none;place-items:center;width:32px;height:32px;margin-right:4px;border-radius:9px;color:#8a93b4;text-decoration:none;outline:none}" +
+    ".nt:hover,.nt:focus-visible{color:#fff;background:rgba(255,255,255,.1)}" +
+    ".nt:focus-visible{box-shadow:0 0 0 2px #fff}" +
+    ".nt svg{width:16px;height:16px}" +
+    ".toggle{flex:none;display:flex;align-items:center;gap:12px;width:100%;height:40px;margin-top:10px;padding:0 10px;border:0;border-radius:12px;" +
+    "background:transparent;color:#8a93b4;font:inherit;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;-webkit-tap-highlight-color:transparent}" +
+    ".toggle:hover,.toggle:focus-visible{color:#fff;background:rgba(255,255,255,.07);outline:none}" +
+    ".toggle:focus-visible{box-shadow:0 0 0 2px #fff}" +
+    ".toggle svg{flex:none;width:20px;height:20px;transition:transform .18s}" +
+    ".wide .toggle svg{transform:rotate(180deg)}" +
+    ".toggle span{display:none}.wide .toggle span{display:inline}" +
+    ":is(.wide,.sheet) .hint{display:block;padding:10px 8px 2px;font-size:11.5px;line-height:1.45;color:#7b84a6}" +
+    ".hint kbd{font:inherit;font-weight:700;color:#c7cde3}" +
     ".fab,.sheet{display:none}" +
     "@media (max-width:720px){" +
     ".rail{display:none}" +
@@ -158,18 +193,16 @@
     "color:#fff;background:linear-gradient(135deg,var(--c1),var(--c2));box-shadow:0 10px 28px -8px rgba(0,0,0,.55),0 6px 18px -8px var(--c1);cursor:pointer;-webkit-tap-highlight-color:transparent}" +
     ".fab svg{width:22px;height:22px}" +
     ".fab:focus-visible{outline:2px solid #fff;outline-offset:2px}" +
-    ".sheet{position:fixed;z-index:2147483001;left:14px;bottom:70px;min-width:210px;max-width:calc(100vw - 28px);padding:8px;border-radius:16px;" +
+    ".sheet{position:fixed;z-index:2147483001;left:14px;bottom:70px;width:300px;max-width:calc(100vw - 28px);max-height:calc(100vh - 100px);overflow-y:auto;padding:8px;border-radius:16px;" +
     "background:#0d1120;border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 48px rgba(0,0,0,.5);font-family:'Plus Jakarta Sans Variable','Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif}" +
-    ".sheet.open{display:block}" +
+    ".sheet.open{display:flex;flex-direction:column;gap:2px}" +
     ".sheet .head{padding:6px 8px 8px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8a93b4}" +
-    ".row{display:flex;align-items:center;gap:12px;padding:8px;border-radius:11px;color:#f5f7ff;text-decoration:none;font-size:15px;font-weight:600}" +
-    ".row:hover,.row:focus-visible{background:rgba(255,255,255,.06);outline:none}" +
-    ".row .ico{width:34px;height:34px;border-radius:10px;opacity:1;filter:none}" +
-    ".row .ico svg{width:18px;height:18px}" +
-    ".row[aria-current=page]{background:rgba(255,255,255,.07)}" +
-    ".row .here{margin-left:auto;font-size:12px}" +
+    ".sheet .ico{width:36px;height:36px;border-radius:10px;opacity:1;filter:none}" +
+    ".sheet .ico svg{width:18px;height:18px}" +
+    ".sheet .nt{width:40px;height:40px}" +
+    ".sheet .hint{display:none}" +
     "}" +
-    "@media (prefers-reduced-motion:reduce){.ico,.tip{transition:none}}" +
+    "@media (prefers-reduced-motion:reduce){.rail,.ico,.tip,.toggle svg{transition:none}}" +
     "@media print{.rail,.fab,.sheet{display:none!important}}";
 
   // Room for the rail, set on the page itself (outside the shadow root). A page
@@ -181,6 +214,8 @@
     "@media print{html.docuride-switcher-on{--docuride-switcher-width:0px}html.docuride-switcher-on body{padding-left:0!important}}";
 
   var SVG_NS = "http://www.w3.org/2000/svg";
+  var NEW_TAB_ICON = ["M15 3h6v6", "M10 14 21 3", "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"];
+  var OPEN_ICON = ["M6 17l5-5-5-5", "M13 17l5-5-5-5"];
 
   function svg(doc, paths) {
     var el = doc.createElementNS(SVG_NS, "svg");
@@ -225,22 +260,92 @@
     style.textContent = STYLE;
     shadow.appendChild(style);
 
-    // Wide screens: the rail.
-    var rail = doc.createElement("nav");
-    rail.className = "rail";
-    rail.setAttribute("aria-label", "DocuRide apps");
-    apps.forEach(function (a) {
+    // One app: its link (same tab) and, when the list is open, a small
+    // button that opens it in a new tab. Ctrl or Cmd click, or a middle
+    // click, opens a new tab anywhere, since every tile is a plain link.
+    function item(a, withTip) {
+      var name = shortName(a.label);
+      var isHere = a.key === here;
+      var wrap = doc.createElement("div");
+      wrap.className = "item";
       var link = doc.createElement("a");
       link.className = "app";
       link.href = a.url;
-      link.setAttribute("aria-label", shortName(a.label) + (a.key === here ? " (this app)" : ""));
-      if (a.key === here) link.setAttribute("aria-current", "page");
+      link.setAttribute("aria-label", name + (isHere ? " (this app)" : ""));
+      if (isHere) link.setAttribute("aria-current", "page");
       link.appendChild(icon(doc, a.key));
-      var tip = text(doc, "span", "tip", shortName(a.label));
-      if (a.key === here) tip.appendChild(text(doc, "span", "here", "You're here"));
-      link.appendChild(tip);
-      rail.appendChild(link);
+      var txt = doc.createElement("span");
+      txt.className = "txt";
+      var b = text(doc, "b", "", name);
+      if (isHere) b.appendChild(text(doc, "i", "", "Here"));
+      txt.appendChild(b);
+      if (tagOf(a.key)) txt.appendChild(text(doc, "small", "", tagOf(a.key)));
+      link.appendChild(txt);
+      if (withTip) {
+        var tip = text(doc, "span", "tip", name);
+        if (isHere) tip.appendChild(text(doc, "span", "here", "You're here"));
+        link.appendChild(tip);
+        link.addEventListener("mouseenter", function () {
+          var r = link.getBoundingClientRect();
+          tip.style.top = r.top + r.height / 2 + "px";
+        });
+        link.addEventListener("focus", function () {
+          var r = link.getBoundingClientRect();
+          tip.style.top = r.top + r.height / 2 + "px";
+        });
+      }
+      wrap.appendChild(link);
+      var nt = doc.createElement("a");
+      nt.className = "nt";
+      nt.href = a.url;
+      nt.target = "_blank";
+      nt.rel = "noopener";
+      nt.title = "Open " + name + " in a new tab";
+      nt.setAttribute("aria-label", "Open " + name + " in a new tab");
+      nt.appendChild(svg(doc, NEW_TAB_ICON));
+      wrap.appendChild(nt);
+      return wrap;
+    }
+
+    function hint() {
+      var p = doc.createElement("p");
+      p.className = "hint";
+      p.appendChild(doc.createTextNode("Click an app to go there, or its arrow to open it in a new tab. "));
+      var k = doc.createElement("kbd");
+      k.textContent = /Mac|iPhone|iPad/.test(win.navigator.platform || "") ? "\u2318 click" : "Ctrl click";
+      p.appendChild(k);
+      p.appendChild(doc.createTextNode(" works too."));
+      return p;
+    }
+
+    // Wide screens: the rail. The button at the bottom opens it over the
+    // page to show each app's name and what it is for.
+    var rail = doc.createElement("nav");
+    rail.className = "rail";
+    rail.setAttribute("aria-label", "DocuRide apps");
+    var list = doc.createElement("div");
+    list.className = "list";
+    apps.forEach(function (a) {
+      list.appendChild(item(a, true));
     });
+    rail.appendChild(list);
+    rail.appendChild(hint());
+    var toggle = doc.createElement("button");
+    toggle.className = "toggle";
+    toggle.type = "button";
+    toggle.appendChild(svg(doc, OPEN_ICON));
+    toggle.appendChild(text(doc, "span", "", "Close"));
+    function setWide(wide) {
+      rail.classList.toggle("wide", wide);
+      toggle.setAttribute("aria-expanded", wide ? "true" : "false");
+      toggle.setAttribute("aria-label", wide ? "Close the app list" : "Show app names");
+      toggle.title = wide ? "" : "Show app names";
+    }
+    setWide(false);
+    toggle.addEventListener("click", function () {
+      setWide(!rail.classList.contains("wide"));
+    });
+    rail.appendChild(toggle);
     shadow.appendChild(rail);
 
     // Phones: a button in the corner that opens the list.
@@ -258,14 +363,7 @@
     sheet.setAttribute("aria-label", "DocuRide apps");
     sheet.appendChild(text(doc, "div", "head", "Your apps"));
     apps.forEach(function (a) {
-      var row = doc.createElement("a");
-      row.className = "row";
-      row.href = a.url;
-      if (a.key === here) row.setAttribute("aria-current", "page");
-      row.appendChild(icon(doc, a.key));
-      row.appendChild(doc.createTextNode(shortName(a.label)));
-      if (a.key === here) row.appendChild(text(doc, "span", "here", "Here"));
-      sheet.appendChild(row);
+      sheet.appendChild(item(a, false));
     });
     function setOpen(open) {
       sheet.classList.toggle("open", open);
@@ -276,10 +374,16 @@
       setOpen(!sheet.classList.contains("open"));
     });
     function onDocClick(e) {
-      if (e.target !== host) setOpen(false);
+      if (e.target !== host) {
+        setOpen(false);
+        setWide(false);
+      }
     }
     function onKey(e) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        setWide(false);
+      }
     }
     doc.addEventListener("click", onDocClick);
     doc.addEventListener("keydown", onKey);
@@ -397,6 +501,7 @@
   var api = {
     readSession: readSession,
     tokenExpired: tokenExpired,
+    tagOf: tagOf,
     cleanApps: cleanApps,
     currentKey: currentKey,
     shouldShow: shouldShow,
