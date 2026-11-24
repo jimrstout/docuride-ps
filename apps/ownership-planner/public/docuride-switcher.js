@@ -30,14 +30,17 @@
   var CHECK_MS = 3 * 1000; // only reads the cookie; it asks the server only when the person changes or the list is old
   var WIDTH = 60;
 
-  // The HQ launcher's colors and icons (docuride-hq app/hq-app.tsx LOOKS).
+  // The HQ launcher's colors and icons (docuride-hq app/hq-app.tsx LOOKS): each
+  // app's own header mark, in its own colors. Keep the two lists the same.
   var DEFAULT_LOOK = { c1: "#4f5bf5", c2: "#8b5cf6", icon: ["M4 4h7v7H4z", "M13 4h7v7h-7z", "M4 13h7v7H4z", "M13 13h7v7h-7z"] };
   var LOOKS = {
-    HQ: { c1: "#6366f1", c2: "#a855f7", icon: ["M12 3l8 3.5V12c0 4.6-3.4 8-8 9-4.6-1-8-4.4-8-9V6.5z", "M8.5 12l2.5 2.5 4.5-5"] },
+    HQ: { c1: "#6366f1", c2: "#a855f7", icon: ["M6 4h5.5a8 8 0 0 1 0 16H6z", "M10 9.5h2a2.5 2.5 0 0 1 0 5h-2"] },
     DC: { c1: "#2563eb", c2: "#06b6d4", icon: ["M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z", "M14 3v5h5", "M9 13h6", "M9 17h4"] },
     FX: { c1: "#f97316", c2: "#f59e0b", icon: ["M14.7 6.3a4 4 0 0 0-5.4 5.4L3.5 17.5a2.1 2.1 0 0 0 3 3l5.8-5.8a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"] },
     PS: { c1: "#10b981", c2: "#14b8a6", icon: ["M4 16a8 8 0 1 1 16 0", "M12 16l4-5", "M4 20h16"] },
     "R&R Reporting": { c1: "#e11d48", c2: "#f97316", icon: ["M3 21h18", "M6 17v-5", "M11 17V7", "M16 17v-8", "M21 17V4"] },
+    MX: { c1: "#0e9f8e", c2: "#0ea5e9", icon: ["M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z", "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"] },
+    RT: { c1: "#eab308", c2: "#65a30d", icon: ["M3 17h2l3-8h6l2 4h3a2 2 0 0 1 2 2v2h-2", "M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z", "M17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z", "M14 9l3-5h2"] },
   };
 
   // ── pure parts (tested in test/docuride-switcher.test.mjs) ─────────────
