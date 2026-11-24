@@ -97,7 +97,12 @@ test("names and colors match the HQ launcher", () => {
   assert.equal(sw.shortName("R&R Reporting"), "R&R Reporting");
   assert.equal(sw.lookOf("FX").c1, "#f97316");
   assert.equal(sw.lookOf("PS").c1, "#10b981");
-  assert.equal(sw.lookOf("MX").c1, "#4f5bf5");
+  assert.equal(sw.lookOf("MX").c1, "#0e9f8e");
+  assert.equal(sw.lookOf("RT").c1, "#eab308");
+  assert.equal(sw.lookOf("NEW").c1, "#4f5bf5");
+  // Every app has its own icon.
+  const icons = ["HQ", "DC", "FX", "PS", "R&R Reporting", "MX", "RT"].map((k) => sw.lookOf(k).icon.join("|"));
+  assert.equal(new Set(icons).size, icons.length);
 });
 
 test("is the same file in every DocuRide app", () => {
